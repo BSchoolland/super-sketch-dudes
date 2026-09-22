@@ -1,3 +1,4 @@
+import { inkArc, inkLine, inkPath, INK, PENCIL } from "./paper";
 import type { GameEvent, State } from "../../../shared/types";
 import type { Camera } from "./camera";
 
@@ -144,48 +145,34 @@ export class Fx {
   drawWorld(ctx: CanvasRenderingContext2D): void {
     ctx.save();
     for (const p of this.particles) {
-      const t = p.age / p.life;
-      const a = 1 - t;
+      const t = p.age / p.life, a = 1 - t;
+      const color = p.color.includes("255,255,255") || p.color === "#fff" || p.color === "#ffffff" || p.color === "#f4f0ff" ? INK : p.color;
+      ctx.globalAlpha = a;
       if (p.kind === "ring") {
-        ctx.globalAlpha = a * 0.9;
-        ctx.strokeStyle = p.color;
-        ctx.lineWidth = Math.max(2, 10 * (1 - t));
-        ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (0.3 + t * 0.9), 0, Math.PI * 2); ctx.stroke();
+        inkArc(ctx, p.x, p.y, p.size * (0.3 + t * 0.9), 0.1, Math.PI * 1.95, color, Math.max(1.5, 4 * a));
+        inkArc(ctx, p.x + 2, p.y - 1, p.size * (0.3 + t * 0.9) + 4, 0.5, 2.4, color, 1);
       } else if (p.kind === "line") {
-        ctx.globalAlpha = a;
-        ctx.strokeStyle = p.color;
-        ctx.lineWidth = p.size * (1 - t) + 1;
-        ctx.lineCap = "round";
         const len = (p.len ?? 40) * (1 - t * 0.5);
-        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - Math.cos(p.ang!) * len, p.y - Math.sin(p.ang!) * len); ctx.stroke();
-      } else if (p.kind === "ember") {
-        ctx.globalAlpha = a;
-        ctx.fillStyle = p.color;
-        ctx.beginPath(); ctx.ellipse(p.x, p.y, p.size * 0.5 * (1 - t * 0.5), p.size * (1 - t * 0.5), 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = "#ffc43a";
-        ctx.beginPath(); ctx.ellipse(p.x, p.y + 2, p.size * 0.25, p.size * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+        inkLine(ctx, p.x, p.y, p.x - Math.cos(p.ang!) * len, p.y - Math.sin(p.ang!) * len, color, p.size * a + 1);
       } else if (p.kind === "dust") {
-        ctx.globalAlpha = a * 0.7;
-        ctx.fillStyle = p.color;
-        ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (0.6 + t * 0.8), 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha *= 0.5;
+        inkArc(ctx, p.x, p.y, p.size * (0.6 + t * 0.8), Math.PI * 1.05, Math.PI * 1.9, PENCIL, 1);
       } else {
-        ctx.globalAlpha = a;
-        ctx.fillStyle = p.color;
-        const s = p.size * (1 - t * 0.6);
-        ctx.beginPath(); ctx.arc(p.x, p.y, s, 0, Math.PI * 2); ctx.fill();
+        const r = p.size * (1 - t * 0.6);
+        inkPath(ctx, [[p.x - r, p.y], [p.x - r * 0.3, p.y - r], [p.x + r * 0.8, p.y - r * 0.6], [p.x + r, p.y + r], [p.x, p.y + r * 0.4]], true);
+        ctx.fillStyle = color; ctx.fill();
+        if (p.kind === "ember") inkLine(ctx, p.x - r, p.y, p.x + r, p.y - r, "#ffc43a", 2);
       }
     }
-    ctx.globalAlpha = 1;
     for (const b of this.bursts) {
-      const t = b.age / b.life;
+      const t = b.age / b.life, r = 60 + t * 500;
       ctx.globalAlpha = 1 - t;
-      ctx.strokeStyle = b.color;
-      ctx.lineWidth = 14 * (1 - t) + 2;
-      const r = 60 + t * 500;
-      ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI * 2); ctx.stroke();
-      ctx.lineWidth = 6 * (1 - t) + 1;
-      ctx.strokeStyle = "#fff";
-      ctx.beginPath(); ctx.arc(b.x, b.y, r * 0.7, 0, Math.PI * 2); ctx.stroke();
+      inkArc(ctx, b.x, b.y, r, 0, Math.PI * 2, b.color, 8 * (1 - t) + 2);
+      inkArc(ctx, b.x + 3, b.y - 2, r * 0.7, 0, Math.PI * 2, INK, 2);
+      for (let i = 0; i < 14; i++) {
+        const a = i * Math.PI / 7;
+        inkLine(ctx, b.x + Math.cos(a) * r, b.y + Math.sin(a) * r, b.x + Math.cos(a) * (r + 35), b.y + Math.sin(a) * (r + 35), b.color, 4);
+      }
     }
     ctx.restore();
   }
@@ -195,7 +182,7 @@ export class Fx {
     for (const f of this.flashes) {
       const t = f.age / f.life;
       ctx.globalAlpha = f.alpha * (1 - t);
-      ctx.fillStyle = f.color;
+      ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, w, h);
     }
     ctx.globalAlpha = 1;
@@ -206,7 +193,7 @@ export class Fx {
       ctx.translate(p.x, p.y);
       ctx.rotate(l.ang);
       ctx.globalAlpha = 1 - t;
-      ctx.fillStyle = "#fff";
+      ctx.fillStyle = INK;
       const len = 2600 * Math.min(1, t * 4);
       const thick = 26 * (1 - t) + 2;
       ctx.beginPath();

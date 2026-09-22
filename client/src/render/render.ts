@@ -1,3 +1,4 @@
+import { FONT, INK, PENCIL, inkArc, inkLine, inkRect, hatch } from "./paper";
 import type { Fighter, State } from "../../../shared/types";
 import { roster } from "../../../shared/fighters/index";
 import { defOf, currentMove } from "../../../shared/fighter";
@@ -80,7 +81,7 @@ export class Renderer {
       ctx.save();
       ctx.translate(g.x, g.y);
       ctx.scale(g.facing, 1);
-      drawRig(ctx, g.rp, g.colors, "rgba(255,255,255,0)", { alpha: 0.35 * (1 - g.age / 0.22), flash: "#ffffff", outlineWidth: 0 });
+      drawRig(ctx, g.rp, g.colors, "rgba(255,255,255,0)", { alpha: 0.35 * (1 - g.age / 0.22), flash: PENCIL, outlineWidth: 0 });
       ctx.restore();
     }
     // projectiles
@@ -118,8 +119,7 @@ export class Renderer {
       ctx.translate((Math.random() - 0.5) * 6 * c, 0);
       ctx.save();
       ctx.globalAlpha = 0.25 + c * 0.35;
-      ctx.fillStyle = "#fff";
-      ctx.beginPath(); ctx.ellipse(0, -def.stats.height / 2, def.stats.width + 30 * c, def.stats.height * 0.65 + 30 * c, 0, 0, Math.PI * 2); ctx.fill();
+      inkArc(ctx, 0, -def.stats.height / 2, def.stats.height * 0.65 + 30 * c, 0, Math.PI * 2, INK, 1.5);
       ctx.restore();
     }
     ctx.scale(f.facing, 1);
@@ -127,8 +127,7 @@ export class Renderer {
     if (vis?.glow) {
       ctx.save();
       ctx.globalAlpha = 0.18 + vis.glow * 0.3;
-      ctx.fillStyle = colors[def.palette.accent] ?? "#fff";
-      ctx.beginPath(); ctx.ellipse(0, -def.stats.height / 2, def.stats.width * (0.8 + vis.glow), def.stats.height * (0.5 + vis.glow * 0.4), 0, 0, Math.PI * 2); ctx.fill();
+      inkArc(ctx, 0, -def.stats.height / 2, def.stats.width * (0.8 + vis.glow), 0, Math.PI * 1.8, PENCIL, 1);
       ctx.restore();
     }
     if (vis?.scale) ctx.scale(vis.scale, vis.scale);
@@ -140,8 +139,7 @@ export class Renderer {
         ctx.scale(1 - 0.08 * k, 1 + 0.06 * k);
         ctx.save();
         ctx.globalAlpha = 0.18 + 0.22 * k;
-        ctx.fillStyle = colors[def.palette.accent] ?? "#fff";
-        ctx.beginPath(); ctx.ellipse(0, -def.stats.height / 2, def.stats.width * 0.9, def.stats.height * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+        inkArc(ctx, 0, -def.stats.height / 2, def.stats.height * 0.6, -1, 1, INK, 1.5);
         ctx.restore();
       } else if (mvNow.hitboxes.some((h) => !h.grab && f.frame >= h.frames[0] && f.frame <= h.frames[0] + 2)) {
         ctx.scale(1.1, 0.94);
@@ -162,7 +160,7 @@ export class Renderer {
       ctx.fillStyle = c;
       ctx.beginPath(); ctx.arc(pos.x + (sc.x - f.x), pos.y + (sc.y - f.y), sc.r, 0, Math.PI * 2); ctx.fill();
       ctx.globalAlpha = 0.9;
-      ctx.strokeStyle = "#fff"; ctx.lineWidth = 3;
+      ctx.strokeStyle = INK; ctx.lineWidth = 2;
       ctx.stroke();
       ctx.restore();
     }
@@ -179,8 +177,8 @@ export class Renderer {
     ctx.strokeStyle = "#12101a"; ctx.lineWidth = 3;
     const my = pos.y - def.stats.height - 22 - Math.sin(this.time * 6 + f.slot) * 3;
     ctx.beginPath(); ctx.moveTo(pos.x - 9, my - 12); ctx.lineTo(pos.x + 9, my - 12); ctx.lineTo(pos.x, my); ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.font = "900 14px 'Trebuchet MS', sans-serif"; ctx.textAlign = "center"; ctx.lineWidth = 3;
-    ctx.strokeText(`P${f.slot + 1}`, pos.x, my - 18); ctx.fillText(`P${f.slot + 1}`, pos.x, my - 18);
+    ctx.font = `900 18px ${FONT}`; ctx.textAlign = "center"; ctx.lineWidth = 3;
+    ctx.fillText(`P${f.slot + 1}`, pos.x, my - 18);
     ctx.restore();
   }
 
@@ -217,59 +215,15 @@ function capsulePath(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: 
 }
 
 export function drawProjectile(ctx: CanvasRenderingContext2D, kind: string, x: number, y: number, vx: number, vy: number, r: number, color: string, time: number): void {
-  ctx.save();
-  ctx.translate(x, y);
-  if (kind === "ember" || kind === "emberTrail") {
-    const k = 0.7 + Math.sin(time * 30 + x) * 0.3;
-    ctx.fillStyle = "#ff4d2e"; ctx.globalAlpha = 0.7;
-    ctx.beginPath(); ctx.ellipse(0, 0, r * k, r * 1.3 * k, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#ffc43a"; ctx.globalAlpha = 0.9;
-    ctx.beginPath(); ctx.ellipse(0, 2, r * 0.6 * k, r * 0.9 * k, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-    return;
-  }
-  if (kind === "wave") {
-    ctx.globalAlpha = 0.85;
-    ctx.fillStyle = "#12101a";
-    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.4 + 4, r + 4, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#35e0ff";
-    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.4, r, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#eef7ff";
-    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.18, r * 0.8, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-    return;
-  }
+  ctx.save(); ctx.translate(x, y); ctx.rotate(Math.atan2(vy, vx));
+  const marker = kind === "ember" || kind === "emberTrail" ? "#ee5825" : kind === "chunk" || kind === "shock" ? "#ed7e20" : "#00bfdc";
   if (kind === "chunk") {
-    ctx.rotate(time * 4 + x * 0.01);
-    ctx.fillStyle = "#12101a";
-    ctx.beginPath(); ctx.moveTo(-r - 4, -r * 0.6); ctx.lineTo(r * 0.2, -r - 4); ctx.lineTo(r + 4, -r * 0.1); ctx.lineTo(r * 0.5, r + 4); ctx.lineTo(-r * 0.7, r * 0.7); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = "#7fa6c7";
-    ctx.beginPath(); ctx.moveTo(-r, -r * 0.6); ctx.lineTo(r * 0.2, -r); ctx.lineTo(r, -r * 0.1); ctx.lineTo(r * 0.5, r); ctx.lineTo(-r * 0.7, r * 0.7); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = "#ff8c1a";
-    ctx.fillRect(-r * 0.3, -r * 0.3, r * 0.5, r * 0.4);
-    ctx.restore();
-    return;
+    ctx.rotate(time * 4); ctx.fillStyle = "#f4efe4"; ctx.fillRect(-r, -r, r * 2, r * 2);
+    hatch(ctx, -r, -r, r * 2, r * 2, marker); inkRect(ctx, -r, -r, r * 2, r * 2);
+  } else {
+    inkArc(ctx, 0, 0, r * 0.75, 0, Math.PI * 2, marker, Math.max(3, r * 0.5));
+    inkLine(ctx, -r, 0, r, 0, color, 3, 0, true);
+    for (let i = -1; i <= 1; i++) inkLine(ctx, -r * 1.4, i * r * 0.5, -r * 2.7, i * r * 0.7, marker, 1.5, i, true);
   }
-  if (kind === "shock") {
-    ctx.fillStyle = "#12101a";
-    ctx.beginPath(); ctx.ellipse(0, 4, r + 4, r * 0.8 + 4, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#f4884a";
-    ctx.beginPath(); ctx.ellipse(0, 4, r, r * 0.8, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#f2e6c8";
-    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.5, r * 0.4, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-    return;
-  }
-  ctx.rotate(Math.atan2(vy, vx));
-  ctx.fillStyle = "#12101a";
-  ctx.beginPath(); ctx.ellipse(0, 0, r + 4, r * 0.7 + 4, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = color;
-  ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.7, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = "#fff";
-  ctx.beginPath(); ctx.ellipse(r * 0.3, -r * 0.2, r * 0.4, r * 0.25, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.globalAlpha = 0.5;
-  ctx.fillStyle = color;
-  ctx.beginPath(); ctx.moveTo(-r, 0); ctx.lineTo(-r * 3 - Math.sin(time * 40) * 4, -r * 0.5); ctx.lineTo(-r * 3, r * 0.5); ctx.closePath(); ctx.fill();
   ctx.restore();
-  void kind;
 }

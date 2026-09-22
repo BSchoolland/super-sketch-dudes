@@ -1,3 +1,4 @@
+import { hatch, inkArc, inkLine, inkPath, inkRect, INK, PAPER, PENCIL } from "./paper";
 import type { Bone, Fighter, FighterDef, Pose, PoseKey } from "../../../shared/types";
 import { currentMove } from "../../../shared/fighter";
 
@@ -92,7 +93,7 @@ export function resolvePose(def: FighterDef, pose: Pose): ResolvedPose {
     const ex = jx + Math.sin(ang * DEG) * b.len;
     const ey = jy + Math.cos(ang * DEG) * b.len;
     joints.set(b.name, { x: jx, y: jy, ang, len: b.len });
-    if (b.thick > 0 || b.shape === "circle") segs.push({ x1: jx, y1: jy, x2: ex, y2: ey, thick: b.thick, color: b.color, z: b.z ?? 0, shape: b.shape ?? "capsule", size: b.size, name: b.name });
+    if (b.thick > 0 || b.shape === "circle" || b.shape === "slab") segs.push({ x1: jx, y1: jy, x2: ex, y2: ey, thick: b.thick, color: b.color, z: b.z ?? 0, shape: b.shape ?? "capsule", size: b.size, name: b.name });
   }
   segs.sort((a, b) => a.z - b.z);
   return { segs, sx: pose.sx ?? 1, sy: pose.sy ?? 1, dx: pose.dx ?? 0, dy: pose.dy ?? 0 };
@@ -100,84 +101,69 @@ export function resolvePose(def: FighterDef, pose: Pose): ResolvedPose {
 
 export function tintColors(def: FighterDef, slot: number, accents: string[]): Record<string, string> {
   const c = { ...def.palette.colors };
-  if (accents[slot]) c[def.palette.accent] = accents[slot];
+  if (accents[slot]) { c[def.palette.accent] = accents[slot]; c.marker = accents[slot]; }
   return c;
 }
 
-function drawSeg(ctx: CanvasRenderingContext2D, s: Seg, color: string, widen: number): void {
-  if (s.shape === "circle") {
-    const r = (typeof s.size === "number" ? s.size : s.thick) + widen;
-    if (r <= 0) return;
-    const cx = (s.x1 + s.x2) / 2, cy = (s.y1 + s.y2) / 2;
-    ctx.fillStyle = color;
-    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
-    return;
-  }
-  if (s.shape === "blade") {
-    const dx = s.x2 - s.x1, dy = s.y2 - s.y1;
-    const len = Math.hypot(dx, dy) || 1;
-    const nx = -dy / len, ny = dx / len;
-    const w = s.thick + widen;
-    const guard = 5 + widen;
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(s.x1 + nx * guard, s.y1 + ny * guard);
-    ctx.lineTo(s.x1 - nx * guard, s.y1 - ny * guard);
-    ctx.lineTo(s.x1 - nx * w + dx * 0.08, s.y1 - ny * w + dy * 0.08);
-    ctx.lineTo(s.x2 - nx * 0.4, s.y2 - ny * 0.4);
-    ctx.lineTo(s.x2 + nx * 0.4, s.y2 + ny * 0.4);
-    ctx.lineTo(s.x1 + nx * w + dx * 0.08, s.y1 + ny * w + dy * 0.08);
-    ctx.closePath(); ctx.fill();
-    return;
-  }
-  if (s.shape === "slab") {
-    const [w, h] = Array.isArray(s.size) ? s.size : [s.thick * 2, s.thick * 2];
-    const dx = s.x2 - s.x1, dy = s.y2 - s.y1;
-    const ang = Math.atan2(dy, dx);
-    ctx.save();
-    ctx.translate(s.x1, s.y1);
-    ctx.rotate(ang);
-    ctx.fillStyle = color;
-    const r = 4;
-    const W = h + widen * 2, H = w + widen * 2;
-    ctx.beginPath();
-    ctx.roundRect(-widen, -H / 2, Math.max(1, Math.hypot(dx, dy) + widen * 2), H, r);
-    void W;
-    ctx.fill();
-    ctx.restore();
-    return;
-  }
-  if (s.shape === "flame") {
-    // a teardrop along the bone: round at the joint, pointed at the tip, with a wobble
-    const dx = s.x2 - s.x1, dy = s.y2 - s.y1;
-    const len = Math.hypot(dx, dy) || 1;
-    const nx = -dy / len, ny = dx / len;
-    const w = s.thick + widen;
-    const t = performance.now() / 90;
-    const wob = Math.sin(t + s.x1 * 0.1) * w * 0.25;
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(s.x2 + nx * wob, s.y2 + ny * wob);
-    ctx.bezierCurveTo(s.x2 + nx * w * 0.6 + dx * -0.35, s.y2 + ny * w * 0.6 + dy * -0.35, s.x1 + nx * w * 1.05, s.y1 + ny * w * 1.05, s.x1 + nx * w * 0.2 - dx * 0.16, s.y1 + ny * w * 0.2 - dy * 0.16);
-    ctx.bezierCurveTo(s.x1 - nx * w * 0.2 - dx * 0.16, s.y1 - ny * w * 0.2 - dy * 0.16, s.x1 - nx * w * 1.05, s.y1 - ny * w * 1.05, s.x2 - nx * w * 0.6 + dx * -0.35, s.y2 - ny * w * 0.6 + dy * -0.35);
-    ctx.closePath(); ctx.fill();
-    return;
-  }
-  // capsule
-  ctx.strokeStyle = color;
-  ctx.lineCap = "round";
-  ctx.lineWidth = (s.thick + widen) * 2;
-  ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
-}
-
-/** Draw a resolved pose at the current transform (origin at the feet, +x already facing). */
-export function drawRig(ctx: CanvasRenderingContext2D, rp: ResolvedPose, colors: Record<string, string>, outline: string, opts: { alpha?: number; flash?: string; outlineWidth?: number } = {}): void {
+export function drawRig(ctx: CanvasRenderingContext2D, rp: ResolvedPose, colors: Record<string, string>, _outline: string, opts: { alpha?: number; flash?: string; outlineWidth?: number } = {}): void {
   ctx.save();
-  if (opts.alpha !== undefined) ctx.globalAlpha = opts.alpha;
-  ctx.scale(rp.sx, rp.sy);
-  ctx.translate(rp.dx, rp.dy);
-  const ow = opts.outlineWidth ?? 3;
-  for (const s of rp.segs) drawSeg(ctx, s, outline, ow);
-  for (const s of rp.segs) drawSeg(ctx, s, opts.flash ?? (colors[s.color] ?? s.color), 0);
+  if (opts.alpha !== undefined) ctx.globalAlpha *= opts.alpha;
+  ctx.scale(rp.sx, rp.sy); ctx.translate(rp.dx, rp.dy);
+  const ghost = opts.outlineWidth === 0;
+  const brick = rp.segs.some((s) => s.name === "slab1");
+  const wick = rp.segs.some((s) => s.name === "body");
+  const pilot = rp.segs.some((s) => s.name === "nose");
+  const marker = ghost ? PENCIL : opts.flash ?? colors.marker ?? (brick ? colors.brick : wick ? colors.flame : pilot ? colors.cyan : colors.coat);
+  const line = ghost ? PENCIL : INK;
+  for (const [i, s] of rp.segs.entries()) {
+    const x = (s.x1 + s.x2) / 2, y = (s.y1 + s.y2) / 2;
+    const dx = s.x2 - s.x1, dy = s.y2 - s.y1, len = Math.hypot(dx, dy) || 1;
+    if (s.name === "inner" || s.name === "visor" || s.name === "collar") continue;
+    if (s.shape === "circle" && s.size === 0) continue;
+    ctx.save();
+    if (brick && (s.name === "legB" || s.name === "legF")) {
+      const offset = s.name === "legB" ? -12 : 12;
+      inkLine(ctx, s.x1 + offset, s.y1, s.x2 + offset, s.y2, line, 2.3, i, true);
+      inkLine(ctx, s.x2 + offset, s.y2, s.x2 + offset + 6, s.y2, line, 2);
+    } else if (s.name.startsWith("eye")) {
+      ctx.fillStyle = line; ctx.beginPath(); ctx.arc(x, y, 2.3, 0, Math.PI * 2); ctx.fill();
+    } else if (s.name.startsWith("fist") || s.shape === "slab") {
+      const size = Array.isArray(s.size) ? s.size : [22, 20];
+      ctx.translate(x, y); ctx.rotate(-Math.atan2(dx, dy));
+      ctx.fillStyle = PAPER; ctx.fillRect(-size[0] / 2, -size[1] / 2, size[0], size[1]);
+      if (s.name.startsWith("slab")) hatch(ctx, -size[0] / 2, -size[1] / 2, size[0], size[1], marker);
+      inkRect(ctx, -size[0] / 2, -size[1] / 2, size[0], size[1], line, 2.3);
+    } else if (s.shape === "circle") {
+      const r = typeof s.size === "number" ? s.size : s.thick;
+      ctx.fillStyle = PAPER; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      inkArc(ctx, x, y, r, 0, Math.PI * 2, line, 2.3, i);
+    } else if (s.shape === "flame") {
+      ctx.translate(s.x1, s.y1); ctx.rotate(-Math.atan2(dx, dy));
+      const w = s.thick;
+      ctx.beginPath(); ctx.moveTo(0, len);
+      ctx.bezierCurveTo(-w * 0.2, len * 0.6, -w * 1.25, len * 0.35, -w * 0.75, 3);
+      ctx.bezierCurveTo(-w * 0.5, -10, w * 0.65, -9, w * 0.9, 4);
+      ctx.bezierCurveTo(w * 1.15, len * 0.3, w * 0.3, len * 0.65, 0, len); ctx.closePath();
+      ctx.fillStyle = ghost ? PAPER : marker; ctx.fill();
+      ctx.strokeStyle = line; ctx.lineWidth = 2.3; ctx.stroke();
+      ctx.save(); ctx.clip(); ctx.globalAlpha *= 0.45;
+      for (let j = 0; j < 6; j++) {
+        inkLine(ctx, -w + j * 3, 0, w - j * 2, len * 0.65 - j * 4, line, 0.8, j * 47, true);
+      }
+      ctx.restore();
+    } else if (s.name === "nose" || s.name === "chest" || s.name.startsWith("coat") || (!pilot && !brick && !wick && s.name === "torso")) {
+      const nx = -dy / len, ny = dx / len, w = s.name === "nose" ? 9 : s.thick * 0.7;
+      inkPath(ctx, [[s.x1 + nx * w, s.y1 + ny * w], [s.x2, s.y2], [s.x1 - nx * w, s.y1 - ny * w]], true, i, true);
+      ctx.fillStyle = s.name === "nose" || ghost ? PAPER : marker; ctx.fill();
+      ctx.strokeStyle = line; ctx.lineWidth = 2.3; ctx.stroke();
+    } else {
+      inkLine(ctx, s.x1, s.y1, s.x2, s.y2, line, 2.3, i * 23, true);
+      if (s.name.startsWith("nacelle")) {
+        for (let j = -1; j <= 1; j++) inkLine(ctx, s.x2 + j * 5, s.y2 + 3, s.x2 + j * 6 - dx / len * 15, s.y2 + dy / len * 15, line, 1.2, i + j, true);
+      }
+      if (s.shape === "blade") inkLine(ctx, s.x1 - dy / len * 6, s.y1 + dx / len * 6, s.x1 + dy / len * 6, s.y1 - dx / len * 6, line, 2);
+    }
+    ctx.restore();
+  }
   ctx.restore();
 }
