@@ -4,6 +4,7 @@ import { roster } from "../../../shared/fighters/index";
 import { drawRig, poseAt, resolvePose } from "../render/rig";
 import { hitboxWorld, hurtbox } from "../../../shared/hits";
 import { label, type Screen } from "./ui";
+import { drawStrikes } from "../render/strikes";
 import type { Fighter } from "../../../shared/types";
 
 /**
@@ -48,15 +49,18 @@ export class SheetScreen implements Screen {
       drawRig(ctx, rp, def.palette.colors, def.palette.outline);
       if (e.move) {
         const mv = def.moves[e.move];
-        const fake = { x: 0, y: 0, moveFacing: 1, frame: e.frame, action: "attack", id: def.id, move: e.move } as unknown as Fighter;
+        const fake = { x: 0, y: 0, moveFacing: 1, facing: 1, frame: e.frame, action: "attack", id: def.id, move: e.move, hitlag: 0, slot: 0 } as unknown as Fighter;
+        drawStrikes(ctx, fake, { x: 0, y: 0 }, "#ff4d4d", this.t);
         const hb = hurtbox({ ...fake, action: "idle" } as Fighter);
         ctx.strokeStyle = "#ffe066"; ctx.lineWidth = 1.5;
         capsule(ctx, hb.x1, hb.y1, hb.x2, hb.y2, hb.r); ctx.stroke();
         for (const h of mv.hitboxes) {
           if (e.frame < h.frames[0] || e.frame > h.frames[1]) continue;
           const c = hitboxWorld(fake, h);
-          ctx.strokeStyle = h.grab ? "#c77dff" : "#ff3b3b"; ctx.fillStyle = h.priority === 0 ? "rgba(255,255,255,0.35)" : "rgba(255,59,59,0.25)";
-          capsule(ctx, c.x1, c.y1, c.x2, c.y2, c.r); ctx.fill(); ctx.stroke();
+          ctx.strokeStyle = h.grab ? "#c77dff" : h.priority === 0 ? "#ffffff" : "#ff3b3b";
+          ctx.setLineDash([4, 4]);
+          capsule(ctx, c.x1, c.y1, c.x2, c.y2, c.r); ctx.stroke();
+          ctx.setLineDash([]);
         }
       }
       ctx.restore();

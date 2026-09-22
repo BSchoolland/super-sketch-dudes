@@ -8,6 +8,7 @@ import { Fx } from "./fx";
 import { animFor, drawRig, poseAt, resolvePose, tintColors, type ResolvedPose } from "./rig";
 import { drawBackdrop, drawShadow, drawStage } from "./stage";
 import { SLOT_COLORS, createHud, drawHud, type HudState } from "./hud";
+import { drawStrikes, inWindup } from "./strikes";
 
 interface Ghost { x: number; y: number; facing: number; rp: ResolvedPose; age: number; colors: Record<string, string> }
 
@@ -41,7 +42,8 @@ export class Renderer {
     // afterimages for fast moves
     state.fighters.forEach((f, i) => {
       const mv = f.action === "attack" ? currentMove(f) : null;
-      const fast = (mv?.fx === "trail") || f.action === "dash" || f.action === "roll" || (f.action === "air" && Math.abs(f.vx) > 9) || f.action === "airDodge";
+      const striking = !!mv && !mv.throwFrame && mv.hitboxes.some((h) => !h.grab && f.frame >= h.frames[0] && f.frame <= h.frames[1]);
+      const fast = (mv?.fx === "trail") || striking || f.action === "dash" || f.action === "roll" || (f.action === "air" && Math.abs(f.vx) > 9) || f.action === "airDodge";
       if (fast && state.frame % 2 === 0) {
         const def = defOf(f);
         const a = animFor(f, def);
@@ -90,6 +92,7 @@ export class Renderer {
     // fighters, back to front by slot (the one who was hit last draws on top)
     const order = state.fighters.map((f) => f).sort((a, b) => a.lastHitFrame - b.lastHitFrame);
     for (const f of order) this.drawFighter(ctx, state, f, interp[f.slot]);
+    for (const f of order) if (f.action === "attack") drawStrikes(ctx, f, interp[f.slot], SLOT_COLORS[f.slot] ?? "#fff", this.time);
     this.fx.drawWorld(ctx);
     if (this.showHitboxes) this.drawBoxes(ctx, state);
     ctx.restore();
@@ -129,6 +132,21 @@ export class Renderer {
       ctx.restore();
     }
     if (vis?.scale) ctx.scale(vis.scale, vis.scale);
+    const mvNow = f.action === "attack" ? currentMove(f) : null;
+    if (mvNow && !mvNow.throwFrame) {
+      if (inWindup(f, mvNow)) {
+        // windup: coil back and glow so the strike is announced
+        const k = Math.min(1, f.frame / 6);
+        ctx.scale(1 - 0.08 * k, 1 + 0.06 * k);
+        ctx.save();
+        ctx.globalAlpha = 0.18 + 0.22 * k;
+        ctx.fillStyle = colors[def.palette.accent] ?? "#fff";
+        ctx.beginPath(); ctx.ellipse(0, -def.stats.height / 2, def.stats.width * 0.9, def.stats.height * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      } else if (mvNow.hitboxes.some((h) => !h.grab && f.frame >= h.frames[0] && f.frame <= h.frames[0] + 2)) {
+        ctx.scale(1.1, 0.94);
+      }
+    }
     const dodging = f.action === "airDodge" || f.action === "spotDodge" || f.action === "roll" || f.action === "getupRoll" || f.action === "techRoll" || f.action === "ledgeRoll";
     const blink = f.invuln > 0 && !dodging && f.action !== "respawn" && (state.frame >> 2) % 2 === 0;
     const alpha = f.action === "respawn" ? 0.8 : dodging && f.invuln > 0 ? 0.45 : blink ? 0.7 : 1;
