@@ -77,7 +77,9 @@ optional list of "windows" (interruptible-as-soon-as, cancel-into) and a pose tr
 `{ frame, pose }` where a pose is joint angles + root offset + scale (squash/stretch). The rig
 (`rig.ts`) says what bones exist, their lengths, thickness, draw order, and how each is drawn.
 Specials that need state (charge, fuel, heat, counters) keep it in `fighter.special` which
-is a fighter-specific plain object, and `fighter.ts` hooks named in the fighter's `index.ts`
+is a fighter-specific plain object whose **every key must exist from `special()` onward** (the state
+hash walks its keys in insertion order, so a key that appears mid-match on one client and not the
+other is a desync), and `fighter.ts` hooks named in the fighter's `index.ts`
 (`onFrame`, `onHit`, `onHurt`, `onLand`) implement the mechanic.
 
 The training mode hitbox view and the pose sheet both read the same data, so what's

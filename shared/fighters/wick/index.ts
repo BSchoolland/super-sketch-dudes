@@ -127,7 +127,7 @@ export const wick: FighterDef = {
     accent: "core",
     outline: "#ff4d2e",
   },
-  special: () => ({ heat: 30, emberTimer: 0 }),
+  special: () => ({ heat: 30, flickerUsed: 0, blinkX: 0, blinkY: 0 }),
   hooks: {
     flare: ({ f, state }) => {
       if (f.frame === 1 && f.special.heat >= HEAT_MAX) {
