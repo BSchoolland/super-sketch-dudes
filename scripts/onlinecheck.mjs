@@ -1,6 +1,6 @@
 import { chromium } from "playwright";
 
-const base = process.argv[2] ?? "http://localhost:5175/ringout/";
+const base = process.argv[2] ?? "http://localhost:5175/sketch-battle/";
 const server = process.argv[3] ?? base;
 const health = new URL("api/health", server.endsWith("/") ? server : `${server}/`);
 
@@ -31,18 +31,18 @@ try {
 
   async function openOnline(page) {
     await page.goto(base);
-    await page.waitForFunction(() => window.ringout?.screen);
+    await page.waitForFunction(() => window.sketchbattle?.screen);
     await press(page, "ArrowDown");
     await press(page, "KeyJ");
-    await page.waitForFunction(() => "roomCode" in window.ringout.screen);
+    await page.waitForFunction(() => "roomCode" in window.sketchbattle.screen);
     await page.waitForTimeout(200);
   }
 
   await openOnline(pageA);
   await press(pageA, "ArrowDown");
   await press(pageA, "Space");
-  await pageA.waitForFunction(() => window.ringout.screen.roomCode !== null);
-  const code = await pageA.evaluate(() => window.ringout.screen.roomCode);
+  await pageA.waitForFunction(() => window.sketchbattle.screen.roomCode !== null);
+  const code = await pageA.evaluate(() => window.sketchbattle.screen.roomCode);
   if (!/^[A-Z2-9]{4}$/.test(code)) fail(`invalid room code ${code}`);
 
   await openOnline(pageB);
@@ -53,28 +53,28 @@ try {
   await press(pageB, "Enter");
 
   await Promise.all([
-    pageA.waitForFunction(() => window.ringout.screen.lobbyDebug?.()?.members.length === 2),
-    pageB.waitForFunction(() => window.ringout.screen.lobbyDebug?.()?.members.length === 2),
+    pageA.waitForFunction(() => window.sketchbattle.screen.lobbyDebug?.()?.members.length === 2),
+    pageB.waitForFunction(() => window.sketchbattle.screen.lobbyDebug?.()?.members.length === 2),
   ]);
   await press(pageA, "Space");
   await press(pageB, "Space");
   await Promise.all([
-    pageA.waitForFunction(() => window.ringout.screen.lobbyDebug?.()?.members.every((member) => member.ready)),
-    pageB.waitForFunction(() => window.ringout.screen.lobbyDebug?.()?.members.every((member) => member.ready)),
+    pageA.waitForFunction(() => window.sketchbattle.screen.lobbyDebug?.()?.members.every((member) => member.ready)),
+    pageB.waitForFunction(() => window.sketchbattle.screen.lobbyDebug?.()?.members.every((member) => member.ready)),
   ]);
   await press(pageA, "Escape");
 
   await Promise.all([
-    pageA.waitForFunction(() => typeof window.ringout.screen.netDebug === "function"),
-    pageB.waitForFunction(() => typeof window.ringout.screen.netDebug === "function"),
+    pageA.waitForFunction(() => typeof window.sketchbattle.screen.netDebug === "function"),
+    pageB.waitForFunction(() => typeof window.sketchbattle.screen.netDebug === "function"),
   ]);
   await pageA.waitForTimeout(20_000);
 
-  const currentA = await pageA.evaluate(() => window.ringout.screen.netDebug());
-  const currentB = await pageB.evaluate(() => window.ringout.screen.netDebug());
+  const currentA = await pageA.evaluate(() => window.sketchbattle.screen.netDebug());
+  const currentB = await pageB.evaluate(() => window.sketchbattle.screen.netDebug());
   const frame = Math.min(currentA.frame, currentB.frame);
-  const stateA = await pageA.evaluate((target) => window.ringout.screen.netDebug(target), frame);
-  const stateB = await pageB.evaluate((target) => window.ringout.screen.netDebug(target), frame);
+  const stateA = await pageA.evaluate((target) => window.sketchbattle.screen.netDebug(target), frame);
+  const stateB = await pageB.evaluate((target) => window.sketchbattle.screen.netDebug(target), frame);
   if (stateA.hash === null || stateB.hash === null) fail(`frame ${frame} fell outside a rollback history`);
   if (stateA.hash !== stateB.hash) fail(`hash mismatch at frame ${frame}: ${stateA.hash} !== ${stateB.hash}`);
   if (errors.length) fail(errors.join("\n"));

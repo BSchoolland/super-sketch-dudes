@@ -3,7 +3,7 @@ const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
 const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
-await page.goto("http://localhost:5175/ringout/?quick=1&training=1&f=pilot,brick&stage=proving");
+await page.goto("http://localhost:5175/sketch-battle/?quick=1&training=1&f=pilot,brick&stage=proving");
 await page.waitForTimeout(600);
 await page.keyboard.down("KeyD"); await page.waitForTimeout(500); await page.keyboard.up("KeyD");
 await page.keyboard.down("KeyU"); await page.keyboard.down("KeyD"); await page.keyboard.press("KeyJ"); await page.waitForTimeout(180);

@@ -1,6 +1,6 @@
 // Fakes a standard gamepad in the page and checks the fighter obeys it: stick right runs, X jumps, A attacks, right stick smashes.
 import { chromium } from "playwright";
-const base = process.argv[2] ?? "http://localhost:5175/ringout/";
+const base = process.argv[2] ?? "http://localhost:5175/sketch-battle/";
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
 const errors = [];
@@ -13,7 +13,7 @@ await page.addInitScript(() => {
 await page.goto(`${base}?quick=1&p1=pad0&p2=cpu&cpu=0&f=sable,brick&stage=proving`);
 await page.waitForTimeout(500);
 const setPad = (axes, buttons) => page.evaluate(([a, b]) => { const p = window.__pad; p.axes = a; p.buttons.forEach((x, i) => { x.pressed = b.includes(i); x.value = b.includes(i) ? 1 : 0; }); }, [axes, buttons]);
-const fighter = () => page.evaluate(() => { const f = window.ringout.screen.match.state.fighters[0]; return { action: f.action, move: f.move, x: Math.round(f.x), vx: +f.vx.toFixed(1), grounded: f.grounded }; });
+const fighter = () => page.evaluate(() => { const f = window.sketchbattle.screen.match.state.fighters[0]; return { action: f.action, move: f.move, x: Math.round(f.x), vx: +f.vx.toFixed(1), grounded: f.grounded }; });
 const results = {};
 await setPad([1, 0, 0, 0], []); await page.waitForTimeout(400); results.run = await fighter();
 await setPad([0, 0, 0, 0], []); await page.waitForTimeout(400);

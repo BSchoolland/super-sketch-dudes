@@ -1,11 +1,11 @@
-# RINGOUT — Architecture
+# SKETCH BATTLE — Architecture
 
 TypeScript, Vite, Canvas 2D on the client; Express + `ws` on the server; a shared deterministic
 sim used by both. Same shape as Kessler so it deploys the same way (pm2 process behind Apache
-at bschoolland.dev/ringout).
+at bschoolland.dev/sketch-battle).
 
 ```
-ringout/
+sketch-battle/
   shared/            the sim. Pure, deterministic, no DOM, no Date, no Math.random
     sim.ts           step(state, inputs) -> state ; the only entry
     state.ts         the whole match state as one plain object (rollback snapshots clone it)
@@ -20,7 +20,7 @@ ringout/
     cpu.ts           bot controller: reads state, returns an input record
     rules.ts         stocks, time, KO, sudden death
   client/
-    index.html, vite.config.ts (base "/ringout/")
+    index.html, vite.config.ts (base "/sketch-battle/")
     src/main.ts      boot, screen router
     src/render/      canvas renderer: camera, rigs, effects, particles, stages, hud
     src/input/       keyboard + gamepad -> input records per slot; device assignment
@@ -144,7 +144,7 @@ empty. Quick match pairs the two oldest queued clients.
 
 ## Tooling
 
-- `npm run dev`: Vite on 5175 + server on 3008 with the /ringout/api and /ringout/ws proxies.
+- `npm run dev`: Vite on 5175 + server on 3008 with the /sketch-battle/api and /sketch-battle/ws proxies.
 - `npm run build`, `npm start`: same as Kessler.
 - `npm run ladder`: every fighter vs every fighter, CPU level 9, N matches each, prints a
   win-rate matrix and average stock length; fails if any matchup is outside 40/60 (warn only
@@ -158,19 +158,19 @@ empty. Quick match pairs the two oldest queued clients.
 - URL params for testing: `?quick=1&p2=cpu&cpu=9&f=brick,wick&stage=rooftops&seed=3&boxes=1`
   skips the menus; `&training=1` starts training mode; `?sheet=sable` opens the pose sheet.
 - `npm run check`: typecheck + lint-determinism + vitest.
-- `scripts/deploy.sh`: build, rsync to personal-server:~/ringout, pm2 `ringout` on 3008.
+- `scripts/deploy.sh`: build, rsync to personal-server:~/sketch-battle, pm2 `sketch-battle` on 3008.
 
 ## Deploy
 
 Apache on personal-server (bschoolland.dev vhost) gets, before the /kessler rule:
 
 ```
-RedirectMatch 301 ^/ringout$ /ringout/
-ProxyPass /ringout/ws ws://localhost:3008/ws
-ProxyPassReverse /ringout/ws ws://localhost:3008/ws
-ProxyPass /ringout/ http://localhost:3008/
-ProxyPassReverse /ringout/ http://localhost:3008/
+RedirectMatch 301 ^/sketch-battle$ /sketch-battle/
+ProxyPass /sketch-battle/ws ws://localhost:3008/ws
+ProxyPassReverse /sketch-battle/ws ws://localhost:3008/ws
+ProxyPass /sketch-battle/ http://localhost:3008/
+ProxyPassReverse /sketch-battle/ http://localhost:3008/
 ```
 
-The server serves the client from `dist/client` at `/` and at `/ringout/` so it works both
+The server serves the client from `dist/client` at `/` and at `/sketch-battle/` so it works both
 proxied and direct.

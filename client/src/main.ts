@@ -104,4 +104,4 @@ function frame(now: number): void {
 }
 requestAnimationFrame(frame);
 
-(window as any).ringout = { get screen() { return screen; } };
+(window as any).sketchbattle = { get screen() { return screen; } };

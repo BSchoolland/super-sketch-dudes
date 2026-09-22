@@ -9,14 +9,14 @@ import { attachLobby } from "./lobby";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
 const PORT = Number(process.env.PORT ?? 3008);
-const BASE = (process.env.RINGOUT_BASE ?? "/ringout/").replace(/\/$/, "");
-const DATA_DIR = process.env.RINGOUT_DATA ?? path.join(root, "server-data");
+const BASE = (process.env.SKETCHBATTLE_BASE ?? "/sketch-battle/").replace(/\/$/, "");
+const DATA_DIR = process.env.SKETCHBATTLE_DATA ?? path.join(root, "server-data");
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const app = express();
 app.use(express.json({ limit: "8kb" }));
 const api = express.Router();
-// Apache proxies /ringout/* to / here; when hit directly the prefix is still present, so mount both.
+// Apache proxies /sketch-battle/* to / here; when hit directly the prefix is still present, so mount both.
 app.use("/api", api);
 app.use(`${BASE}/api`, api);
 
@@ -49,4 +49,4 @@ server.on("upgrade", (req, socket, head) => {
 });
 attachLobby(wss);
 
-server.listen(PORT, () => console.log(`ringout on :${PORT} serving ${clientDir}`));
+server.listen(PORT, () => console.log(`sketch-battle on :${PORT} serving ${clientDir}`));

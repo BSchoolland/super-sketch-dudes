@@ -1,4 +1,4 @@
-# RINGOUT — Design
+# SKETCH BATTLE — Design
 
 A platform fighter in the browser. Two to four fighters, percent damage, knockback, blast zones,
 stocks. Keyboard or controller. Local couch play and online play. Four fighters at launch, a
@@ -18,7 +18,9 @@ roster format built for thirty.
 
 ## The name
 
-Ring out: you don't win by emptying a health bar, you win by throwing them out of the ring.
+Sketch Battle: a fight drawn on paper. It started life as RINGOUT (ring out: you don't win by
+emptying a health bar, you win by throwing them out of the ring); the win condition stayed, the
+look became pencil and ink, and the name followed.
 
 ## Art direction: paper-cut stage show
 

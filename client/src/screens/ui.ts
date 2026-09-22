@@ -50,8 +50,8 @@ export function hint(ctx: CanvasRenderingContext2D, text: string): void {
 export interface Settings { volume: number; music: number; shake: number; tapJump: boolean; rumble: boolean; stocks: number; time: number; cpuLevel: number; name: string }
 export const settings: Settings = { volume: 0.8, music: 0.5, shake: 1, tapJump: true, rumble: true, stocks: 3, time: 0, cpuLevel: 5, name: "" };
 export function loadSettings(): void {
-  try { Object.assign(settings, JSON.parse(localStorage.getItem("ringout.settings") ?? "{}")); } catch { /* ignore */ }
+  try { Object.assign(settings, JSON.parse(localStorage.getItem("sketchbattle.settings") ?? "{}")); } catch { /* ignore */ }
 }
 export function saveSettings(): void {
-  localStorage.setItem("ringout.settings", JSON.stringify(settings));
+  localStorage.setItem("sketchbattle.settings", JSON.stringify(settings));
 }

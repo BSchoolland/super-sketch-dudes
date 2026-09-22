@@ -1,9 +1,9 @@
-# RINGOUT
+# SKETCH BATTLE
 
 A platform fighter in the browser. Two to four fighters, percent damage, knockback, blast zones,
 stocks. Keyboard or controller, couch or online.
 
-**Play:** https://bschoolland.dev/ringout/
+**Play:** https://bschoolland.dev/sketch-battle/
 
 - `DESIGN.md` is what this is and why.
 - `CHARACTERS.md` is the roster: every fighter's fantasy, stats and frame data.
@@ -41,14 +41,14 @@ dodge; shield just before a hit lands parries.
 
 ```
 npm install
-npm run dev          # Vite on :5175 + server on :3008, open http://localhost:5175/ringout/
+npm run dev          # Vite on :5175 + server on :3008, open http://localhost:5175/sketch-battle/
 npm run check        # typecheck + determinism lint + tests
 npm run ladder       # CPU vs CPU win-rate matrix
 npx tsx scripts/killpercents.ts   # kill percent per move, centre and ledge
 node scripts/posesheets.mjs       # pose contact sheets into shots/sheets/
 node scripts/menushots.mjs        # walk the menus and screenshot them
 node scripts/padcheck.mjs         # gamepad smoke test with a fake pad
-scripts/deploy.sh    # build, ship to personal-server, restart pm2 "ringout"
+scripts/deploy.sh    # build, ship to personal-server, restart pm2 "sketch-battle"
 ```
 
 Testing URLs: `?quick=1&p2=cpu&cpu=9&f=brick,wick&stage=rooftops` skips the menus

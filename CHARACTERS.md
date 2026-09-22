@@ -1,4 +1,4 @@
-# RINGOUT — Fighters
+# SKETCH BATTLE — Fighters
 
 Every fighter is a folder in `shared/fighters/<id>/` (stats, moves, rig, palette) and nothing
 else has to know it exists: the roster is the list in `shared/fighters/index.ts`. Adding a fighter
