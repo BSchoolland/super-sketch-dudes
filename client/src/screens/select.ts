@@ -58,8 +58,15 @@ export class SelectScreen implements Screen {
       if (edge(B.SPECIAL) && !s.ready) {
         const c = this.slots[this.cpuCursor];
         if (c && !c.device) {
+          const wasOff = c.cpu === 0;
           c.cpu = c.cpu === 0 ? settings.cpuLevel : c.cpu >= 9 ? 0 : c.cpu + 1;
-          c.fighter = c.cpu ? (this.cpuCursor + 1) % rosterList.length : 0;
+          if (wasOff) {
+            // a fighter nobody has taken yet, else anyone
+            const taken = new Set(this.slots.filter((x) => x !== c && (x.device || x.cpu)).map((x) => x.fighter));
+            const free = rosterList.map((_, i) => i).filter((i) => !taken.has(i));
+            const pool = free.length ? free : rosterList.map((_, i) => i);
+            c.fighter = pool[(Math.floor(this.t * 1000) + this.cpuCursor * 7) % pool.length];
+          }
           c.ready = c.cpu > 0;
           sfx.menuMove();
         }
@@ -104,7 +111,10 @@ export class SelectScreen implements Screen {
       title(ctx, def.name, x + w / 2, y + 530, 44, "#fff");
       label(ctx, def.tagline, x + w / 2, y + 566, 16, "rgba(255,255,255,0.9)", "center", 600);
       if (!s.ready) { label(ctx, "◀", x + 30, y + 300, 40, "#fff"); label(ctx, "▶", x + w - 30, y + 300, 40, "#fff"); }
-      label(ctx, s.ready ? "READY" : s.cpu ? "" : "attack: ready · shield: leave", x + w / 2, y + h - 24, 20, s.ready ? "#fff" : "rgba(255,255,255,0.85)");
+      if (s.cpu) {
+        label(ctx, "grab: change fighter", x + w / 2, y + h - 46, 18, "#fff");
+        label(ctx, "special: level / remove", x + w / 2, y + h - 24, 18, "#fff");
+      } else label(ctx, s.ready ? "READY" : "attack: ready · shield: leave", x + w / 2, y + h - 24, 20, s.ready ? "#fff" : "rgba(255,255,255,0.85)");
     });
     const filled = this.slots.filter((s) => s.device || s.cpu);
     const allReady = filled.length >= (this.training ? 1 : 2) && filled.every((s) => s.ready);
