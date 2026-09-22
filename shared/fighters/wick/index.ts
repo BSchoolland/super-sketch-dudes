@@ -77,18 +77,18 @@ const moves: Record<string, Move> = {
     hb([6, 8], 30, -40, 26, 3, 60, 20, 30, { ...F, group: 1 }), hb([10, 12], 30, -40, 26, 3, 60, 20, 30, { ...F, group: 2 }), hb([14, 16], 34, -40, 28, 3, 60, 40, 60, { ...F, group: 3 }),
   ], [key(0, W({ body: 40, tail: 30 }, { sx: 1.25, sy: 0.85 })), key(6, W({ body: 60, tail: 40 }, { dx: 10, sx: 1.4, sy: 0.8 })), key(16, W({ body: 60, tail: 40 }, { dx: 10, sx: 1.4, sy: 0.8 })), key(32, W({}))], { motion: [[1, 11, 0], [6, 8, 0], [16, 1, 0]], fx: "trail" }),
   fsmash: mv("fsmash", 42, [cap([12, 15], 20, -46, 96, -44, 16, 14, 42, 48, 108, F)], [key(0, W({ body: -20, tail: -10, armF: -40, armB: -40 }, { dx: -10, sx: 0.85, sy: 1.15 })), key(11, W({ body: 80, tail: 30, armF: 90, armB: 90 }, { dx: 24, sx: 1.6, sy: 0.7 })), key(18, W({ body: 80, tail: 30, armF: 90, armB: 90 }, { dx: 24, sx: 1.6, sy: 0.7 })), key(42, W({}))], { smash: true, motion: [[11, 6, 0], [15, 0, 0]], fx: "trail" }),
-  usmash: mv("usmash", 40, [cap([8, 15], -14, -60, 14, -170, 24, 12, 90, 36, 116, F)], [key(0, W({}, { dy: 4, sx: 1.3, sy: 0.7 })), key(7, W({ armF: 170, armB: -170 }, { dy: -30, sx: 0.6, sy: 2.0 })), key(16, W({ armF: 170, armB: -170 }, { dy: -30, sx: 0.6, sy: 2.0 })), key(40, W({}))], { smash: true }),
+  usmash: mv("usmash", 46, [cap([11, 14], -12, -60, 12, -150, 17, 9, 90, 34, 116, F)], [key(0, W({}, { dy: 4, sx: 1.3, sy: 0.7 })), key(10, W({ armF: 170, armB: -170 }, { dy: -30, sx: 0.6, sy: 2.0 })), key(16, W({ armF: 170, armB: -170 }, { dy: -30, sx: 0.6, sy: 2.0 })), key(46, W({}))], { smash: true }),
   dsmash: mv("dsmash", 38, [
     hb([10, 12], 60, -22, 24, 11, 35, 40, 102, { ...F, group: 0 }),
     hb([16, 18], -60, -22, 24, 11, 35, 40, 102, { ...F, group: 1 }),
   ], [key(0, W({}, { dy: 2, sx: 1.2, sy: 0.8 })), key(9, W({ armF: 110, body: 20 }, { dx: 10, dy: 4, sx: 1.5, sy: 0.65 })), key(15, W({ armB: -110, body: -20 }, { dx: -10, dy: 4, sx: 1.5, sy: 0.65 })), key(38, W({}))], { smash: true }),
-  nair: mv("nair", 30, [hb([4, 8], 0, -46, 42, 8, 50, 25, 65, { ...F, group: 0 }), hb([9, 18], 0, -46, 40, 5, 50, 20, 55, { ...F, group: 1, priority: 2 })], [key(0, W({})), key(4, W({ body: 90, armF: 90, armB: -90 }, { sx: 1.2, sy: 1.2 })), key(18, W({ body: 450, armF: 90, armB: -90 }, { sx: 1.2, sy: 1.2 })), key(30, W({ body: 720 }))], { aerial: true, landingLag: 6 }),
+  nair: mv("nair", 30, [hb([4, 8], 0, -46, 40, 7, 50, 25, 65, { ...F, group: 0 }), hb([9, 18], 0, -46, 36, 4, 50, 20, 55, { ...F, group: 1, priority: 2 })], [key(0, W({})), key(4, W({ body: 90, armF: 90, armB: -90 }, { sx: 1.2, sy: 1.2 })), key(18, W({ body: 450, armF: 90, armB: -90 }, { sx: 1.2, sy: 1.2 })), key(30, W({ body: 720 }))], { aerial: true, landingLag: 6 }),
   fair: mv("fair", 34, [
-    hb([7, 9], 50, -46, 16, 3, 45, 20, 40, { ...F, group: 1 }), hb([13, 15], 50, -46, 16, 3, 45, 20, 40, { ...F, group: 2 }), hb([19, 21], 56, -46, 18, 6, 45, 30, 85, { ...F, group: 3 }),
+    hb([7, 9], 50, -46, 16, 3, 45, 20, 40, { ...F, group: 1 }), hb([13, 15], 50, -46, 16, 3, 45, 20, 40, { ...F, group: 2 }), hb([19, 21], 56, -46, 18, 5, 45, 30, 85, { ...F, group: 3 }),
   ], [key(0, W({ armF: 30 })), key(7, W({ armF: 120, body: 10 })), key(13, W({ armB: 120, armF: 40, body: 10 })), key(19, W({ armF: 130, armB: 130, body: 20 }, { dx: 6, sx: 1.2 })), key(34, W({}))], { aerial: true, landingLag: 8 }),
   bair: mv("bair", 28, [cap([6, 8], -30, -50, -80, -40, 16, 10, 40, 42, 108, F)], [key(0, W({ tail: 10 })), key(5, W({ body: -40, tail: -80, armB: -120 }, { dx: -6, sx: 1.2 })), key(10, W({ body: -40, tail: -80, armB: -120 }, { dx: -6 })), key(28, W({}))], { aerial: true, landingLag: 8 }),
   uair: mv("uair", 24, [cap([5, 8], -20, -90, 20, -100, 18, 7, 85, 30, 96, F)], [key(0, W({})), key(4, W({ armF: 170, armB: -170 }, { dy: -16, sy: 1.25, sx: 0.85 })), key(9, W({ armF: 170, armB: -170 }, { dy: -14 })), key(24, W({}))], { aerial: true, landingLag: 6 }),
-  dair: mv("dair", 40, [hb([9, 12], 0, 4, 20, 9, 270, 20, 80, { ...F, spike: true })], [key(0, W({})), key(8, W({ armF: 60, armB: 60, body: 0 }, { dy: 6, sx: 1.1, sy: 0.9 })), key(14, W({ armF: 60, armB: 60 }, { dy: 6 })), key(40, W({}))], { aerial: true, landingLag: 12, hover: [5, 8] }),
+  dair: mv("dair", 42, [hb([11, 13], 0, 4, 18, 9, 270, 20, 80, { ...F, spike: true })], [key(0, W({})), key(8, W({ armF: 60, armB: 60, body: 0 }, { dy: 6, sx: 1.1, sy: 0.9 })), key(14, W({ armF: 60, armB: 60 }, { dy: 6 })), key(40, W({}))], { aerial: true, landingLag: 12, hover: [5, 8] }),
   grab: mv("grab", 30, [hb([6, 7], 40, -44, 18, 0, 0, 0, 0, { grab: true })], [key(0, W({})), key(5, W({ armF: 100, armB: 100, body: 12 }, { dx: 6 })), key(10, W({ armF: 100, armB: 100 }, { dx: 6 })), key(30, W({}))], { isGrab: true }),
   dashGrab: mv("dashGrab", 36, [hb([8, 9], 52, -44, 20, 0, 0, 0, 0, { grab: true })], [key(0, W({ body: 20 })), key(7, W({ armF: 100, armB: 100, body: 30 }, { dx: 12 })), key(12, W({ armF: 100, armB: 100 }, { dx: 12 })), key(36, W({}))], { isGrab: true, motion: [[1, 6, 0], [8, 0, 0]] }),
   pummel: mv("pummel", 12, [], [key(0, W({ armF: 100, armB: 60 })), key(4, W({ armF: 100, armB: 120 })), key(12, W({ armF: 100, armB: 60 }))]),
@@ -176,8 +176,8 @@ export const wick: FighterDef = {
     },
   },
   onHit: ({ f, state }, victim, hbx) => {
-    f.special.heat = Math.min(HEAT_MAX, f.special.heat + hbx.damage * 1.2);
-    if (f.special.heat >= 60 && hbx.damage >= 5) {
+    f.special.heat = Math.min(HEAT_MAX, f.special.heat + hbx.damage * 1.0);
+    if (f.special.heat >= 60 && hbx.damage >= 7) {
       spawnProjectile(state, f, "ember", victim.x, victim.y - 30, 0, 0, 12, { frames: [0, 999], x: 0, y: 0, r: 16, damage: 2, angle: 80, base: 20, growth: 30, fx: "fire" });
     }
   },

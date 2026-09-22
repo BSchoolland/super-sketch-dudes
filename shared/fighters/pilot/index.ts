@@ -55,7 +55,7 @@ const moves: Record<string, Move> = {
   taunt: mv("taunt", 60, [], [key(0, S({})), key(20, S({ torso: -8, armF: 30, armF2: -80, legF: 10 }, { dy: -4 })), key(40, S({ torso: -8, armF: 30, armF2: -80 }, { dy: -4 })), key(60, S({}))]),
 };
 
-const ROUNDS = 6, RELOAD = 90, FUEL_MAX = 100;
+const ROUNDS = 6, RELOAD = 120, FUEL_MAX = 100;
 
 export const pilot: FighterDef = {
   id: "pilot",
@@ -94,13 +94,13 @@ export const pilot: FighterDef = {
       if (f.frame === 12) {
         if (f.special.rounds <= 0) { state.events.push({ t: "sfx", frame: state.frame, slot: f.slot, name: "click", x: f.x, y: f.y - 80 }); return; }
         f.special.rounds--;
-        spawnProjectile(state, f, "slug", f.x + f.moveFacing * 40, f.y - 84, f.moveFacing * 9, -0.5, 110, { frames: [0, 999], x: 0, y: 0, r: 11, damage: 8, angle: 40, base: 35, growth: 60, fx: "energy" }, { homing: 0.08, homeFrames: 60, g: 0.05 });
+        spawnProjectile(state, f, "slug", f.x + f.moveFacing * 40, f.y - 84, f.moveFacing * 9, -0.5, 110, { frames: [0, 999], x: 0, y: 0, r: 11, damage: 6, angle: 40, base: 30, growth: 55, fx: "energy" }, { homing: 0.05, homeFrames: 45, g: 0.06 });
       }
     },
     wave: ({ f, state }) => {
       if (f.frame === 10) {
         const air = !f.grounded;
-        spawnProjectile(state, f, "wave", f.x + f.moveFacing * 50, f.y - (air ? 60 : 70), f.moveFacing * 8, air ? 2.5 : 0, air ? 14 : 24, { frames: [0, 999], x: 0, y: 0, r: air ? 40 : 70, damage: 10, angle: 30, base: 50, growth: 55, fx: "energy" }, { reflector: 1, g: air ? 0.4 : 0 });
+        spawnProjectile(state, f, "wave", f.x + f.moveFacing * 50, f.y - (air ? 60 : 70), f.moveFacing * 8, air ? 2.5 : 0, air ? 14 : 24, { frames: [0, 999], x: 0, y: 0, r: air ? 40 : 70, damage: 9, angle: 35, base: 30, growth: 42, fx: "energy" }, { reflector: 1, g: air ? 0.4 : 0 });
       }
     },
     launch: ({ f, input, state }) => {
