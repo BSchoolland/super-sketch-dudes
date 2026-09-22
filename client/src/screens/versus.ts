@@ -1,0 +1,125 @@
+import { VIEW_H, VIEW_W } from "../render/camera";
+import type { MenuInput } from "../input/devices";
+import { rumble } from "../input/devices";
+import { LocalMatch, type SlotSource } from "../match";
+import { Renderer } from "../render/render";
+import { drawBanner, SLOT_COLORS } from "../render/hud";
+import { Music, playEvents, sfx } from "../audio/audio";
+import { card, label, title, type Screen, INK, settings } from "./ui";
+import type { MatchConfig } from "../../../shared/sim";
+import { B } from "../../../shared/input";
+import { roster } from "../../../shared/fighters/index";
+
+const STEP = 1000 / 60;
+
+export class VersusScreen implements Screen {
+  match: LocalMatch;
+  renderer: Renderer;
+  music = new Music();
+  acc = 0;
+  countdown = 3.2;
+  bannerT = 0;
+  endedFor = 0;
+  pauseSel = 0;
+  training: boolean;
+  constructor(cfg: MatchConfig, sources: SlotSource[], private onExit: () => Screen, private onRematch: () => Screen, training = false) {
+    this.match = new LocalMatch(cfg, sources);
+    this.training = training;
+    const names = sources.map((s, i) => (s.cpu ? "CPU" : `P${i + 1}`));
+    this.renderer = new Renderer(this.match.state, names);
+    this.renderer.showHitboxes = training;
+    if (training) this.match.state.fighters.forEach((f) => (f.stocks = 99));
+  }
+  enter(): void { this.music.start(); }
+  update(dt: number, m: MenuInput): Screen | null {
+    const st = this.match.state;
+    if (this.countdown > 0) {
+      const before = Math.ceil(this.countdown);
+      this.countdown -= dt;
+      if (Math.ceil(this.countdown) !== before && this.countdown > 0) sfx.countdown();
+      if (this.countdown <= 0) sfx.go();
+      // let players move during the countdown? No: hold them, but keep the renderer alive.
+      this.renderer.fx.update(dt);
+      return null;
+    }
+    if (st.ended) {
+      this.endedFor += dt;
+      if (this.endedFor > 1.2 && (m.confirm || m.start)) { this.music.stop(); return this.onRematch(); }
+      if (this.endedFor > 1.2 && m.back) { this.music.stop(); return this.onExit(); }
+    }
+    if (this.match.paused) {
+      if (m.up || m.down) { this.pauseSel = 1 - this.pauseSel; sfx.menuMove(); }
+      if (m.confirm) { if (this.pauseSel === 0) { this.match.paused = false; } else { this.music.stop(); return this.onExit(); } }
+      if (m.back) this.match.paused = false;
+    }
+    const slow = st.slowmo > 0 ? 0.25 : 1;
+    this.acc += dt * 1000 * slow;
+    let n = 0;
+    while (this.acc >= STEP && n < 4) {
+      if (this.match.tick()) this.renderer.snapshot(this.match.state);
+      this.acc -= STEP;
+      n++;
+    }
+    // training helpers: reset with taunt+shield, hitboxes toggle with grab+shield
+    if (this.training) {
+      const inp = this.match.lastInputs[0];
+      if ((inp.b & B.TAUNT) && (inp.b & B.SHIELD)) this.resetTraining();
+    }
+    const events = this.match.takeEvents();
+    this.renderer.fx.consume(st, events, this.renderer.cam);
+    playEvents(events);
+    if (settings.rumble) for (const e of events) {
+      if (e.t === "hit") { const s = this.match.sources[e.victim]; if (s.device) rumble(s.device, Math.min(1, e.damage / 20), 0.5, 80 + e.damage * 8); const a = this.match.sources[e.attacker]; if (a.device) rumble(a.device, 0.2, 0.6, 60); }
+      if (e.t === "ko") for (const s of this.match.sources) if (s.device) rumble(s.device, 1, 1, 400);
+    }
+    const maxP = Math.max(0, ...st.fighters.map((f) => f.percent));
+    this.music.update(dt, Math.min(1, maxP / 150 + (st.fighters.some((f) => f.stocks === 1) ? 0.3 : 0)));
+    return null;
+  }
+  resetTraining(): void {
+    const st = this.match.state;
+    st.fighters.forEach((f, i) => { f.percent = 0; f.x = i === 0 ? -200 : 200; f.y = 0; f.vx = 0; f.vy = 0; f.action = "idle"; f.frame = 0; f.grounded = true; f.platform = 0; f.hitlag = 0; f.pending = null; f.hitstun = 0; f.move = null; f.ledge = -1; f.grabbing = -1; f.grabbedBy = -1; f.facing = i === 0 ? 1 : -1; });
+    st.projectiles = [];
+  }
+  draw(ctx: CanvasRenderingContext2D, dt: number): void {
+    const st = this.match.state;
+    const alpha = this.match.paused || this.countdown > 0 ? 1 : Math.min(1, this.acc / STEP);
+    this.renderer.draw(ctx, st, alpha, dt);
+    if (this.countdown > 0) {
+      const n = Math.ceil(this.countdown - 0.2);
+      const text = n >= 1 ? `${n}` : "GO!";
+      const frac = 1 - ((this.countdown - 0.2) % 1);
+      ctx.save();
+      ctx.translate(VIEW_W / 2, VIEW_H / 2 - 60);
+      const s = 1.6 - frac * 0.5;
+      ctx.scale(s, s);
+      title(ctx, text, 0, 40, 140, n >= 1 ? "#ffc43a" : "#4dff88");
+      ctx.restore();
+      if (this.training) label(ctx, "TRAINING: taunt+shield resets · F2 toggles hitboxes", VIEW_W / 2, VIEW_H / 2 + 80, 22, "#fff");
+    } else if (st.ended) {
+      this.bannerT += dt;
+      const w = st.winner;
+      drawBanner(ctx, w >= 0 ? "GAME!" : "DRAW", w >= 0 ? `${this.renderer.names[w]} wins` : "", w >= 0 ? SLOT_COLORS[w] : "#fff", this.bannerT);
+      if (this.endedFor > 1.2) {
+        // results
+        const y = VIEW_H / 2 + 90;
+        st.fighters.forEach((f, i) => {
+          const x = VIEW_W / 2 - (st.fighters.length * 220) / 2 + i * 220;
+          card(ctx, x, y, 200, 130, SLOT_COLORS[i], i === w);
+          label(ctx, this.renderer.names[i], x + 100, y + 32, 22, INK, "center", 900);
+          label(ctx, roster[f.id].name, x + 100, y + 56, 16, INK, "center", 700);
+          label(ctx, `KOs ${f.kos}   falls ${f.falls}`, x + 100, y + 86, 18, INK);
+          label(ctx, `dealt ${Math.round(f.dealt)}%`, x + 100, y + 112, 18, INK);
+        });
+        label(ctx, "attack: rematch · shield: back to menu", VIEW_W / 2, y + 180, 24, "#fff");
+      }
+    } else if (this.match.paused) {
+      drawBanner(ctx, "PAUSED", "", "#fff", 1);
+      const y = VIEW_H / 2 + 80;
+      ["RESUME", "QUIT TO MENU"].forEach((t, i) => {
+        card(ctx, VIEW_W / 2 - 200, y + i * 80, 400, 64, this.pauseSel === i ? "#ffc43a" : "rgba(18,16,26,0.8)", this.pauseSel === i);
+        label(ctx, t, VIEW_W / 2, y + i * 80 + 44, 28, this.pauseSel === i ? INK : "#fff", "center", 900);
+      });
+    }
+  }
+}

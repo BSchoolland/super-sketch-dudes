@@ -50,7 +50,8 @@ const q = (v: number): number => Math.round(v * 100);
 export function readDevice(dev: DeviceId, opts: { tapJump: boolean } = { tapJump: true }): InputFrame {
   if (dev === "kb1" || dev === "kb2") {
     const b = dev === "kb1" ? KB1 : KB2;
-    const down = (list: string[]) => list.some((k) => keys.has(k));
+    // a tap that started and ended between two frames still counts for one frame
+    const down = (list: string[]) => list.some((k) => keys.has(k) || pressedThisFrame.has(k));
     const x = (down(b.right) ? 100 : 0) - (down(b.left) ? 100 : 0);
     const y = (down(b.down) ? 100 : 0) - (down(b.up) && !down(b.jump.filter((k) => !b.up.includes(k))) ? 0 : 0) - (down(b.up) ? 100 : 0);
     let bits = 0;

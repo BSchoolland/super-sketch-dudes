@@ -17,6 +17,8 @@ export interface HumanoidSpec {
   thick: number;
   colors: { torso: string; head: string; arms: string; legs: string };
   weapon?: { len: number; thick: number; color: string; shape?: Bone["shape"] };
+  /** Extra bones appended after the standard set (coats, hats, boots, tails). */
+  extras?: Bone[];
 }
 
 export function humanoidBones(s: HumanoidSpec): Bone[] {
@@ -34,6 +36,7 @@ export function humanoidBones(s: HumanoidSpec): Bone[] {
     { name: "armF2", parent: "armF", len: s.foreArm, thick: s.thick * 0.8, rest: 12, color: s.colors.arms, z: 6 },
   ];
   if (s.weapon) bones.push({ name: "weapon", parent: "armF2", len: s.weapon.len, thick: s.weapon.thick, rest: 0, at: 1, color: s.weapon.color, shape: s.weapon.shape ?? "blade", z: 7 });
+  if (s.extras) bones.push(...s.extras);
   return bones;
 }
 
