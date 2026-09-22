@@ -1,0 +1,179 @@
+import { C } from "./config";
+import { cosDeg, sinDeg } from "./fixed";
+import { defOf, grabLedge, hitWall, land, setAction } from "./fighter";
+import type { InputFrame } from "./input";
+import { STICK_RUN } from "./input";
+import type { Fighter, Platform, Stage, State } from "./types";
+
+export function platformOffset(state: State, i: number): { dx: number; dy: number } {
+  return state.platOffsets[i] ?? { dx: 0, dy: 0 };
+}
+
+export function updatePlatforms(state: State, stage: Stage): void {
+  for (let i = 0; i < stage.platforms.length; i++) {
+    const p = stage.platforms[i];
+    const prev = state.platOffsets[i] ?? { dx: 0, dy: 0 };
+    let dx = 0, dy = 0;
+    if (p.motion?.kind === "orbit") {
+      const m = p.motion;
+      const a = ((state.frame + m.phase) * 360) / m.period;
+      dx = m.cx + cosDeg(a) * m.rx - (p.x1 + p.x2) / 2;
+      dy = m.cy + sinDeg(a) * m.ry - p.y;
+    }
+    state.platOffsets[i] = { dx, dy };
+    // carry riders
+    for (const f of state.fighters) if (f.grounded && f.platform === i) { f.x += dx - prev.dx; f.y += dy - prev.dy; }
+  }
+}
+
+function platTop(state: State, stage: Stage, i: number): { x1: number; x2: number; y: number; p: Platform } {
+  const p = stage.platforms[i];
+  const o = platformOffset(state, i);
+  return { x1: p.x1 + o.dx, x2: p.x2 + o.dx, y: p.y + o.dy, p };
+}
+
+const FALL_THROUGH_ACTIONS = new Set(["air", "helpless", "tumble", "hitstun", "attack", "airDodge", "thrown", "shieldBreak", "wallTech", "respawn"]);
+
+export function stepPhysics(state: State, f: Fighter, input: InputFrame, stage: Stage): void {
+  if (f.action === "dead" || f.hitlag > 0) return;
+  if (f.action === "respawn") { f.x = stage.respawn.x; f.y = stage.respawn.y; f.vx = 0; f.vy = 0; return; }
+  if (f.ledge >= 0) return;
+  if (f.action === "grabbed" || f.action === "thrown") return;
+  const def = defOf(f);
+  const s = def.stats;
+  const halfW = s.width * 0.5;
+
+  const px = f.x, py = f.y;
+  f.x += f.vx;
+  f.y += f.vy;
+
+  if (f.grounded) {
+    const t = platTop(state, stage, f.platform);
+    f.y = t.y;
+    // walk off the edge
+    if (f.x < t.x1 - 2 || f.x > t.x2 + 2) {
+      const keep = f.action === "attack" || f.action === "hitstun" || f.action === "roll" || f.action === "techRoll" || f.action === "getupRoll" || f.action === "ledgeRoll";
+      if (f.action === "dash" || f.action === "run" || f.action === "walk" || f.action === "idle" || f.action === "skid" || f.action === "runTurn") {
+        // idle-ish states teeter instead of falling unless moving
+        if (f.action !== "run" && f.action !== "dash" && Math.abs(f.vx) < 1.5) { f.x = f.x < t.x1 ? t.x1 : t.x2; f.vx = 0; return; }
+      }
+      if (keep && (f.action === "roll" || f.action === "techRoll" || f.action === "getupRoll" || f.action === "ledgeRoll")) { f.x = f.x < t.x1 ? t.x1 : t.x2; f.vx = 0; return; }
+      f.grounded = false;
+      f.platform = -1;
+      f.jumpsLeft = s.jumps - 1;
+      if (!keep) setAction(f, "air");
+      if (f.action === "hitstun") setAction(f, "air");
+    }
+    return;
+  }
+
+  // airborne: walls and ceilings of solid platforms
+  for (let i = 0; i < stage.platforms.length; i++) {
+    const t = platTop(state, stage, i);
+    if (!t.p.solid) continue;
+    const bottom = t.p.bottom! + platformOffset(state, i).dy;
+    const feetInside = f.y > t.y + 1 && f.y - s.height < bottom;
+    // left wall
+    if (feetInside && px + halfW <= t.x1 + 0.5 && f.x + halfW > t.x1) { f.x = t.x1 - halfW; hitWall(state, f, def, 1, input); }
+    else if (feetInside && px - halfW >= t.x2 - 0.5 && f.x - halfW < t.x2) { f.x = t.x2 + halfW; hitWall(state, f, def, -1, input); }
+    // ceiling
+    if (f.vy < 0 && f.x > t.x1 && f.x < t.x2 && py - s.height >= bottom && f.y - s.height < bottom) { f.y = bottom + s.height; f.vy = 0; }
+  }
+  // landing
+  if (f.vy >= 0) {
+    let best = -1, bestY = Infinity;
+    for (let i = 0; i < stage.platforms.length; i++) {
+      const t = platTop(state, stage, i);
+      if (f.x < t.x1 || f.x > t.x2) continue;
+      if (!t.p.solid && (f.dropTimer > 0 || (input.y >= STICK_RUN && (f.action === "air" || f.action === "helpless") && f.flickY > 0 && f.flickT > 0))) continue;
+      if (py <= t.y + 0.01 && f.y >= t.y && t.y < bestY) { best = i; bestY = t.y; }
+    }
+    if (best >= 0 && (FALL_THROUGH_ACTIONS.has(f.action) || f.action === "air")) {
+      f.y = bestY;
+      f.x = Math.max(platTop(state, stage, best).x1, Math.min(platTop(state, stage, best).x2, f.x));
+      if (f.action === "hitstun" && f.pending === null && f.hitstun > 0 && f.vy > 3) { f.vy = 0; }
+      land(state, f, best);
+      return;
+    }
+  }
+  // ledges
+  if (f.ledgeCooldown === 0 && f.vy > -2.5) {
+    const ok = f.action === "air" || f.action === "helpless" || (f.action === "airDodge" && f.frame > 20) || (f.action === "tumble" && f.frame >= f.hitstun) || (f.action === "attack" && (defOf(f).moves[f.move!]?.ledgeOk ?? false));
+    if (ok) {
+      for (let i = 0; i < stage.ledges.length; i++) {
+        const L = stage.ledges[i];
+        const o = platformOffset(state, L.platform);
+        const lx = L.x + o.dx, ly = L.y + o.dy;
+        // the fighter must be outside the stage on the ledge's side
+        const outside = L.side === -1 ? f.x <= lx + 6 && f.x >= lx - 48 : f.x >= lx - 6 && f.x <= lx + 48;
+        const handsY = f.y - s.height * 0.75;
+        const inY = handsY >= ly - s.ledgeReach && handsY <= ly + s.height * 0.6;
+        if (!outside || !inY) continue;
+        // ledge trump
+        for (const other of state.fighters) {
+          if (other !== f && other.ledge === i) {
+            other.ledge = -1;
+            other.ledgeCooldown = C.LEDGE_COOLDOWN;
+            setAction(other, "air");
+            other.vx = L.side * 2;
+            other.vy = -3;
+            other.invuln = Math.max(other.invuln, 12);
+          }
+        }
+        grabLedge(state, f, i, stage);
+        return;
+      }
+    }
+  }
+}
+
+export function stepProjectiles(state: State, stage: Stage): void {
+  for (const p of state.projectiles) {
+    if (p.dead) continue;
+    p.age++;
+    if (p.data.g) p.vy += p.data.g;
+    if (p.data.homing && state.fighters.length) {
+      // turn toward the nearest opponent, rate in degrees per frame; uses only arithmetic
+      let best: Fighter | null = null, bd = Infinity;
+      for (const f of state.fighters) {
+        if (f.slot === p.owner || f.action === "dead" || f.action === "respawn") continue;
+        if (state.rules.teams && f.team === state.fighters[p.owner].team) continue;
+        const dx = f.x - p.x, dy = f.y - 60 - p.y;
+        const d = dx * dx + dy * dy;
+        if (d < bd) { bd = d; best = f; }
+      }
+      if (best && p.age < (p.data.homeFrames ?? 60)) {
+        const dx = best.x - p.x, dy = best.y - 60 - p.y;
+        const dl = Math.sqrt(dx * dx + dy * dy) || 1;
+        const sp = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+        const k = p.data.homing;
+        let vx = p.vx + (dx / dl) * sp * k, vy = p.vy + (dy / dl) * sp * k;
+        const nl = Math.sqrt(vx * vx + vy * vy) || 1;
+        p.vx = (vx / nl) * sp; p.vy = (vy / nl) * sp;
+        p.facing = (p.vx >= 0 ? 1 : -1) as 1 | -1;
+      }
+    }
+    p.x += p.vx;
+    p.y += p.vy;
+    if (p.data.bounce) {
+      for (let i = 0; i < stage.platforms.length; i++) {
+        const t = platTop(state, stage, i);
+        if (p.x >= t.x1 && p.x <= t.x2 && p.y >= t.y && p.y - p.vy < t.y && p.vy > 0) {
+          p.y = t.y; p.vy = -p.vy * 0.55; p.vx *= 0.8; p.data.bounces = (p.data.bounces ?? 0) + 1;
+          if (p.data.bounces > p.data.bounce) p.dead = true;
+        }
+      }
+    } else {
+      for (let i = 0; i < stage.platforms.length; i++) {
+        const t = platTop(state, stage, i);
+        if (!t.p.solid) continue;
+        const bottom = t.p.bottom! + platformOffset(state, i).dy;
+        if (p.x >= t.x1 && p.x <= t.x2 && p.y >= t.y && p.y <= bottom) p.dead = true;
+      }
+    }
+    if (p.age >= p.life) p.dead = true;
+    const b = stage.blast;
+    if (p.x < b.left || p.x > b.right || p.y < b.top || p.y > b.bottom) p.dead = true;
+  }
+  state.projectiles = state.projectiles.filter((p) => !p.dead);
+}

@@ -1,0 +1,4 @@
+:root { color-scheme: dark; }
+html, body { margin: 0; height: 100%; background: #0b0a12; overflow: hidden; font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif; }
+#game { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; image-rendering: auto; }
+#overlay { position: fixed; inset: 0; pointer-events: none; }

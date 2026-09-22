@@ -1,0 +1,5 @@
+node_modules
+dist
+shots
+server-data
+.DS_Store
