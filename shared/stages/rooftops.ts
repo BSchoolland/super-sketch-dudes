@@ -13,8 +13,8 @@ export const rooftops: Stage = {
     { x: -480, y: 0, side: -1, platform: 0 },
     { x: 480, y: 0, side: 1, platform: 0 },
   ],
-  blast: { left: -1250, right: 1250, top: -960, bottom: 540 },
-  camera: { left: -1050, right: 1050, top: -860, bottom: 400, minWidth: 900 },
+  blast: { left: -1250, right: 1250, top: -1200, bottom: 540 },
+  camera: { left: -1050, right: 1050, top: -1050, bottom: 400, minWidth: 900 },
   spawns: [
     { x: -260, y: 0, facing: 1 },
     { x: 260, y: 0, facing: -1 },

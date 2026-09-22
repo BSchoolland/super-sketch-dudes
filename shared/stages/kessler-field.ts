@@ -13,8 +13,8 @@ export const kesslerField: Stage = {
     { x: -420, y: 0, side: -1, platform: 0 },
     { x: 420, y: 0, side: 1, platform: 0 },
   ],
-  blast: { left: -1200, right: 1200, top: -900, bottom: 520 },
-  camera: { left: -1000, right: 1000, top: -820, bottom: 380, minWidth: 900 },
+  blast: { left: -1200, right: 1200, top: -1150, bottom: 520 },
+  camera: { left: -1000, right: 1000, top: -1000, bottom: 380, minWidth: 900 },
   spawns: [
     { x: -240, y: 0, facing: 1 },
     { x: 240, y: 0, facing: -1 },

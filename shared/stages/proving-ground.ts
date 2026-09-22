@@ -9,8 +9,8 @@ export const provingGround: Stage = {
     { x: -560, y: 0, side: -1, platform: 0 },
     { x: 560, y: 0, side: 1, platform: 0 },
   ],
-  blast: { left: -1300, right: 1300, top: -900, bottom: 560 },
-  camera: { left: -1100, right: 1100, top: -800, bottom: 420, minWidth: 900 },
+  blast: { left: -1300, right: 1300, top: -1150, bottom: 560 },
+  camera: { left: -1100, right: 1100, top: -1000, bottom: 420, minWidth: 900 },
   spawns: [
     { x: -300, y: 0, facing: 1 },
     { x: 300, y: 0, facing: -1 },
