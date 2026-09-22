@@ -101,7 +101,8 @@ export function resolvePose(def: FighterDef, pose: Pose): ResolvedPose {
 
 export function tintColors(def: FighterDef, slot: number, accents: string[]): Record<string, string> {
   const c = { ...def.palette.colors };
-  if (accents[slot]) { c[def.palette.accent] = accents[slot]; c.marker = accents[slot]; }
+  // on paper each fighter keeps its own marker colour; the slot colour lives on the label and HUD
+  void slot; void accents;
   return c;
 }
 
