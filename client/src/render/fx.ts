@@ -45,8 +45,11 @@ export class Fx {
     for (const e of events) {
       switch (e.t) {
         case "hit": {
-          const c = this.colors[e.attacker] ?? "#fff";
+          const family = e.fx === "fire" ? "#ffc43a" : e.fx === "energy" ? "#35e0ff" : e.fx === "slash" || e.fx === "tip" ? "#f4f0ff" : null;
+          const c = family ?? this.colors[e.attacker] ?? "#fff";
           const big = e.damage >= 12;
+          if (e.fx === "fire") for (let i = 0; i < 6; i++) this.particles.push({ x: e.x, y: e.y, vx: this.rnd(-80, 80), vy: this.rnd(-260, -80), life: this.rnd(0.3, 0.6), age: 0, size: this.rnd(6, 12), color: "#ff4d2e", kind: "ember", grav: -120, drag: 2 });
+          if (e.fx === "energy") { this.ring(e.x, e.y, 90, "#35e0ff", 0.3); this.lineBurst(e.x, e.y, 0, 6, "#35e0ff", 90); }
           const ang = Math.atan2(-Math.sin(e.angle * Math.PI / 180), Math.cos(e.angle * Math.PI / 180) * e.facing);
           this.spark(e.x, e.y, Math.min(26, 6 + e.damage * 1.2), 300 + e.damage * 30, "#fff", 5, 0.3);
           this.spark(e.x, e.y, Math.min(18, 4 + e.damage), 200 + e.damage * 20, c, 4, 0.4);
@@ -155,6 +158,12 @@ export class Fx {
         ctx.lineCap = "round";
         const len = (p.len ?? 40) * (1 - t * 0.5);
         ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - Math.cos(p.ang!) * len, p.y - Math.sin(p.ang!) * len); ctx.stroke();
+      } else if (p.kind === "ember") {
+        ctx.globalAlpha = a;
+        ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.ellipse(p.x, p.y, p.size * 0.5 * (1 - t * 0.5), p.size * (1 - t * 0.5), 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#ffc43a";
+        ctx.beginPath(); ctx.ellipse(p.x, p.y + 2, p.size * 0.25, p.size * 0.5, 0, 0, Math.PI * 2); ctx.fill();
       } else if (p.kind === "dust") {
         ctx.globalAlpha = a * 0.7;
         ctx.fillStyle = p.color;

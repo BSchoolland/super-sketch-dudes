@@ -24,6 +24,7 @@ export class VersusScreen implements Screen {
   endedFor = 0;
   pauseSel = 0;
   training: boolean;
+  suddenT = 0;
   dummyToggled = false;
   constructor(cfg: MatchConfig, sources: SlotSource[], private onExit: () => Screen, private onRematch: () => Screen, training = false) {
     this.match = new LocalMatch(cfg, sources);
@@ -76,6 +77,8 @@ export class VersusScreen implements Screen {
       if (!((inp.b & B.TAUNT) && (inp.b & B.GRAB))) this.dummyToggled = false;
     }
     const events = this.match.takeEvents();
+    if (events.some((e) => e.t === "suddenDeath")) this.suddenT = 2.5;
+    this.suddenT = Math.max(0, this.suddenT - dt);
     this.renderer.fx.consume(st, events, this.renderer.cam);
     playEvents(events);
     if (settings.rumble) for (const e of events) {
@@ -126,6 +129,7 @@ export class VersusScreen implements Screen {
     } else if (this.training) {
       this.drawTrainingOverlay(ctx);
     }
+    if (this.suddenT > 0 && !st.ended) drawBanner(ctx, "SUDDEN DEATH", "300% · one stock · first hit wins", "#ff3b3b", Math.min(1, (2.5 - this.suddenT) * 2 + 0.2));
     if (st.ended) {
       this.bannerT += dt;
       const w = st.winner;

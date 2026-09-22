@@ -73,9 +73,11 @@ export function drawHud(ctx: CanvasRenderingContext2D, state: State, hud: HudSta
     // meters
     const meters = def.meters ?? [];
     meters.forEach((m, mi) => {
-      const mx = x + 20, my = y + 102 - mi * 8 - (meters.length - 1) * 0;
-      ctx.fillStyle = INK; ctx.fillRect(mx - 1, my - 1, 122, 6);
-      ctx.fillStyle = m.color; ctx.fillRect(mx, my, 120 * Math.max(0, Math.min(1, m.get(f))), 4);
+      const mx = x + 20, my = y + 104 - mi * 9;
+      ctx.fillStyle = INK; ctx.fillRect(mx - 1, my - 1, 122, 7);
+      ctx.fillStyle = m.color; ctx.fillRect(mx, my, 120 * Math.max(0, Math.min(1, m.get(f))), 5);
+      ctx.fillStyle = m.color; ctx.font = "700 9px 'Trebuchet MS', sans-serif"; ctx.textAlign = "left";
+      ctx.fillText(m.label, mx + 124, my + 6);
     });
     if (f.cpu) { ctx.fillStyle = "#cfc8e0"; ctx.font = "600 12px 'Trebuchet MS', sans-serif"; ctx.textAlign = "left"; ctx.fillText(`CPU ${f.cpu}`, x + 120, y + 34); }
   });
