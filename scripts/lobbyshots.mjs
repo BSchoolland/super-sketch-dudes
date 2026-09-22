@@ -1,0 +1,20 @@
+import { chromium } from "playwright";
+import { mkdirSync } from "node:fs";
+const base = process.argv[2] ?? "http://localhost:5175/ringout/";
+const out = process.argv[3] ?? "shots/lobby";
+mkdirSync(out, { recursive: true });
+const browser = await chromium.launch();
+const a = await browser.newPage({ viewport: { width: 1600, height: 900 } });
+const b = await browser.newPage({ viewport: { width: 1600, height: 900 } });
+const press = async (p, k) => { await p.keyboard.press(k); await p.waitForTimeout(120); };
+for (const p of [a, b]) { await p.goto(base); await p.waitForFunction(() => window.ringout?.screen); await press(p, "ArrowDown"); await press(p, "KeyJ"); await p.waitForTimeout(400); }
+await a.screenshot({ path: `${out}/0-online-menu.png` });
+await press(a, "ArrowDown"); await press(a, "Space"); await a.waitForFunction(() => window.ringout.screen.roomCode !== null);
+await a.waitForTimeout(300); await a.screenshot({ path: `${out}/1-room-created.png` });
+const code = await a.evaluate(() => window.ringout.screen.roomCode);
+await press(b, "ArrowDown"); await press(b, "ArrowDown"); await press(b, "Space"); await b.waitForTimeout(200); await b.screenshot({ path: `${out}/2-join-entry.png` });
+await b.keyboard.type(code, { delay: 40 }); await press(b, "Enter"); await b.waitForTimeout(600);
+await a.screenshot({ path: `${out}/3-room-two.png` });
+await press(a, "Space"); await press(b, "Space"); await a.waitForTimeout(400); await a.screenshot({ path: `${out}/4-ready.png` });
+await press(a, "Escape"); await a.waitForTimeout(5000); await a.screenshot({ path: `${out}/5-match.png` });
+await browser.close();
