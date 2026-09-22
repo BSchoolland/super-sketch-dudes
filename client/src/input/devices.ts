@@ -17,11 +17,15 @@ export const KB2: KeyBindings = {
 
 const keys = new Set<string>();
 const pressedThisFrame = new Set<string>();
+const typedThisFrame: string[] = [];
 let anyPress = false;
 window.addEventListener("keydown", (e) => {
   if (e.repeat) return;
   keys.add(e.code);
   pressedThisFrame.add(e.code);
+  if (/^[a-z0-9]$/i.test(e.key)) typedThisFrame.push(e.key.toUpperCase());
+  if (e.key === "Backspace") typedThisFrame.push("\b");
+  if (e.key === "Enter") typedThisFrame.push("\n");
   anyPress = true;
   if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Tab"].includes(e.code)) e.preventDefault();
 });
@@ -145,8 +149,13 @@ export function readMenu(devices: DeviceId[]): MenuInput {
   return m;
 }
 
+export function consumeTypedChars(): string[] {
+  return typedThisFrame.splice(0);
+}
+
 export function endInputFrame(): void {
   pressedThisFrame.clear();
+  typedThisFrame.length = 0;
   anyPress = false;
 }
 

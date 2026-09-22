@@ -6,6 +6,7 @@ import { rosterList } from "../../shared/fighters/index";
 import { TitleScreen, type Mode } from "./screens/title";
 import { SelectScreen, type SlotPick } from "./screens/select";
 import { StageScreen } from "./screens/stage";
+import { OnlineScreen } from "./screens/online";
 import { SettingsScreen } from "./screens/settings";
 import { VersusScreen } from "./screens/versus";
 import { loadSettings, settings, type Screen } from "./screens/ui";
@@ -51,7 +52,7 @@ function startMatch(picks: SlotPick[], setup: { stage: string; stocks: number; t
 function titleScreen(): Screen {
   return new TitleScreen((mode: Mode) => {
     if (mode === "settings") return new SettingsScreen(() => titleScreen());
-    if (mode === "online") return new SettingsScreen(() => titleScreen()); // placeholder until the lobby screen lands
+    if (mode === "online") return new OnlineScreen(() => titleScreen());
     const training = mode === "training";
     return new SelectScreen((picks) => new StageScreen((setup) => startMatch(picks, setup, training), () => titleScreen(), training), () => titleScreen(), training);
   });

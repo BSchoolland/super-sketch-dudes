@@ -6,11 +6,22 @@ import { readDevice, type DeviceId } from "./input/devices";
 
 export interface SlotSource { device: DeviceId | null; cpu: number }
 
+export interface MatchDriver {
+  readonly state: State;
+  readonly sources: SlotSource[];
+  paused: boolean;
+  readonly stalled: boolean;
+  lastInputs: InputFrame[];
+  tick(): boolean;
+  takeEvents(): GameEvent[];
+}
+
 /** Drives a local match: input sampling, fixed-step sim, events out. Online swaps the input source. */
-export class LocalMatch {
+export class LocalMatch implements MatchDriver {
   state: State;
   sources: SlotSource[];
   paused = false;
+  readonly stalled = false;
   pauseEdge = false;
   events: GameEvent[] = [];
   lastInputs: InputFrame[];

@@ -1,7 +1,7 @@
 import { VIEW_H, VIEW_W } from "../render/camera";
 import type { MenuInput } from "../input/devices";
 import { rumble } from "../input/devices";
-import { LocalMatch, type SlotSource } from "../match";
+import { LocalMatch, type MatchDriver, type SlotSource } from "../match";
 import { Renderer } from "../render/render";
 import { drawBanner, SLOT_COLORS } from "../render/hud";
 import { Music, playEvents, sfx } from "../audio/audio";
@@ -15,7 +15,7 @@ import { knockback } from "../../../shared/hits";
 const STEP = 1000 / 60;
 
 export class VersusScreen implements Screen {
-  match: LocalMatch;
+  match: MatchDriver;
   renderer: Renderer;
   music = new Music();
   acc = 0;
@@ -26,8 +26,8 @@ export class VersusScreen implements Screen {
   training: boolean;
   suddenT = 0;
   dummyToggled = false;
-  constructor(cfg: MatchConfig, sources: SlotSource[], private onExit: () => Screen, private onRematch: () => Screen, training = false) {
-    this.match = new LocalMatch(cfg, sources);
+  constructor(cfg: MatchConfig, sources: SlotSource[], private onExit: () => Screen, private onRematch: () => Screen, training = false, driver?: MatchDriver) {
+    this.match = driver ?? new LocalMatch(cfg, sources);
     this.training = training;
     const names = sources.map((s, i) => (s.cpu ? "CPU" : `P${i + 1}`));
     this.renderer = new Renderer(this.match.state, names);
@@ -36,7 +36,7 @@ export class VersusScreen implements Screen {
   }
   enter(): void { this.music.start(stageOf(this.match.state).theme); }
   update(dt: number, m: MenuInput): Screen | null {
-    const st = this.match.state;
+    let st = this.match.state;
     if (this.countdown > 0) {
       const before = Math.ceil(this.countdown);
       this.countdown -= dt;
@@ -60,10 +60,19 @@ export class VersusScreen implements Screen {
     this.acc += dt * 1000 * slow;
     let n = 0;
     while (this.acc >= STEP && n < 4) {
-      if (this.match.tick()) this.renderer.snapshot(this.match.state);
-      this.acc -= STEP;
-      n++;
+      if (this.match.tick()) {
+        this.renderer.snapshot(this.match.state);
+        this.acc -= STEP;
+        n++;
+      } else if (this.match.stalled) {
+        this.acc = Math.min(this.acc, STEP);
+        break;
+      } else {
+        this.acc -= STEP;
+        n++;
+      }
     }
+    st = this.match.state;
     // training helpers: reset with taunt+shield, hitboxes toggle with grab+shield
     if (this.training) {
       const inp = this.match.lastInputs[0];

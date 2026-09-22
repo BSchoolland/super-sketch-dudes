@@ -4,6 +4,7 @@ import { execSync } from "node:child_process";
 
 let build = "dev";
 try { build = execSync("git rev-parse --short HEAD").toString().trim(); } catch { /* no git */ }
+const serverTarget = process.env.RINGOUT_SERVER ?? "http://localhost:3008";
 
 export default defineConfig({
   root: path.resolve(__dirname),
@@ -13,8 +14,8 @@ export default defineConfig({
   server: {
     port: 5175,
     proxy: {
-      "/ringout/api": { target: "http://localhost:3008", rewrite: (p) => p.replace(/^\/ringout/, "") },
-      "/ringout/ws": { target: "ws://localhost:3008", ws: true, rewrite: (p) => p.replace(/^\/ringout/, "") },
+      "/ringout/api": { target: serverTarget, rewrite: (p) => p.replace(/^\/ringout/, "") },
+      "/ringout/ws": { target: serverTarget, ws: true, rewrite: (p) => p.replace(/^\/ringout/, "") },
     },
   },
 });
