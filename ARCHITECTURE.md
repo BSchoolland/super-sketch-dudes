@@ -80,8 +80,27 @@ Specials that need state (charge, fuel, heat, counters) keep it in `fighter.spec
 is a fighter-specific plain object, and `fighter.ts` hooks named in the fighter's `index.ts`
 (`onFrame`, `onHit`, `onHurt`, `onLand`) implement the mechanic.
 
-The training mode hitbox view and the `frames` script both read the same data, so what's
+The training mode hitbox view and the pose sheet both read the same data, so what's
 documented is what ships.
+
+### Rig conventions (get these right or every pose is wrong)
+
+- Bone angles are degrees relative to the parent bone. World angle 0 points **down**, 90 points
+  **forward** (toward the fighter's facing), 180 **up**, 270 **backward**.
+- The humanoid rig (`shared/fighters/humanoid.ts`): an invisible `hip` bone runs from the feet up
+  to the hip (rest 180). `torso` continues up (rest 0). Arms hang from the torso with rest 188
+  (front) and 172 (back), so their world angle at rest is ~8° / ~352° (hanging). Legs hang from
+  the hip tip with rest 188 / 172.
+- A pose angle is **added** to the rest. For the front arm that means: forward thrust ≈ `armF: 82`,
+  straight up ≈ `armF: 172`, straight down ≈ `armF: -8`, backward ≈ `armF: -98` (or 262). For the
+  back arm: forward ≈ `armB: 98`, up ≈ `armB: -172`, backward ≈ `armB: -82`. A torso lean adds to
+  every child, so subtract it if the arm must end up at an exact world angle.
+- Hitboxes are **not** attached to bones. They live in fighter space (+x facing, +y down, feet at
+  the origin), so an arm can be posed wrong without changing the game; the pose sheet is how you
+  catch it.
+- `?sheet=<fighter>&page=<n>` on the client renders every animation and every move at its first
+  active frame with hitboxes drawn. `node scripts/posesheets.mjs` screenshots them all into
+  `shots/sheets/`. Review the sheet before calling a fighter done.
 
 ## Client loop
 
@@ -130,8 +149,12 @@ empty. Quick match pairs the two oldest queued clients.
   until the roster settles).
 - `npm run frames <fighter>`: prints the move table from data so it can be diffed against
   CHARACTERS.md.
-- `npm run shots`: Playwright screenshots of every screen and one action shot per fighter into
-  `shots/`. This is how anyone (including agents) looks at the game.
+- `npm run shots`: Playwright screenshots of a quick match into `shots/`. `scripts/menushots.mjs`
+  walks the menu flow, `scripts/fightershots.mjs` takes action shots per fighter and stage,
+  `scripts/posesheets.mjs` renders the pose contact sheets. This is how anyone (including agents)
+  looks at the game.
+- URL params for testing: `?quick=1&p2=cpu&cpu=9&f=brick,wick&stage=rooftops&seed=3&boxes=1`
+  skips the menus; `&training=1` starts training mode; `?sheet=sable` opens the pose sheet.
 - `npm run check`: typecheck + lint-determinism + vitest.
 - `scripts/deploy.sh`: build, rsync to personal-server:~/ringout, pm2 `ringout` on 3008.
 

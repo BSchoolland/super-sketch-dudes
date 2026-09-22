@@ -9,6 +9,7 @@ import { StageScreen } from "./screens/stage";
 import { SettingsScreen } from "./screens/settings";
 import { VersusScreen } from "./screens/versus";
 import { loadSettings, settings, type Screen } from "./screens/ui";
+import { SheetScreen } from "./screens/sheet";
 import { setVolume } from "./audio/audio";
 import { logClient } from "./telemetry";
 
@@ -59,7 +60,9 @@ function titleScreen(): Screen {
 // URL quick start for screenshots and testing: ?quick=1&p2=cpu&cpu=9&f=sable,sable&stage=proving&seed=3
 const params = new URLSearchParams(location.search);
 let screen: Screen;
-if (params.get("quick")) {
+if (params.get("sheet")) {
+  screen = new SheetScreen(params.get("sheet")!, Number(params.get("page") ?? 0));
+} else if (params.get("quick")) {
   const p2 = params.get("p2") ?? "cpu";
   const fighters = (params.get("f") ?? "sable,sable").split(",").map((f) => (roster[f] ? f : "sable"));
   const cpu = Number(params.get("cpu") ?? 6);

@@ -45,12 +45,14 @@ export function drawHud(ctx: CanvasRenderingContext2D, state: State, hud: HudSta
     ctx.fillStyle = "#cfc8e0";
     ctx.font = "600 14px 'Trebuchet MS', sans-serif";
     ctx.fillText(def.name, x + 20, y + 54);
-    // stocks
-    for (let s = 0; s < f.stocks; s++) {
+    // stocks: dots up to five, a number past that
+    const dots = Math.min(5, f.stocks);
+    for (let s = 0; s < dots; s++) {
       ctx.fillStyle = def.palette.colors[def.palette.accent] ?? "#fff";
       ctx.beginPath(); ctx.arc(x + 28 + s * 24, y + 88, 8, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.stroke();
     }
+    if (f.stocks > 5) { ctx.fillStyle = "#fff"; ctx.font = "700 16px 'Trebuchet MS', sans-serif"; ctx.textAlign = "left"; ctx.fillText(`×${f.stocks}`, x + 28 + dots * 24, y + 94); }
     // percent
     const shake = b * 6;
     const scale = 1 + b * 0.35;

@@ -31,7 +31,7 @@ export class VersusScreen implements Screen {
     const names = sources.map((s, i) => (s.cpu ? "CPU" : `P${i + 1}`));
     this.renderer = new Renderer(this.match.state, names);
     this.renderer.showHitboxes = training;
-    if (training) { this.match.state.fighters.forEach((f) => (f.stocks = 99)); if (this.match.sources[1]) this.match.sources[1].cpu = 0; }
+    if (training) { this.match.state.fighters.forEach((f) => (f.stocks = 99)); if (this.match.sources[1]) { this.match.sources[1].cpu = 0; this.match.state.fighters[1].cpu = 0; this.renderer.names[1] = "DUMMY"; } }
   }
   enter(): void { this.music.start(); }
   update(dt: number, m: MenuInput): Screen | null {
@@ -72,7 +72,7 @@ export class VersusScreen implements Screen {
         if (inp.y <= -60) d.percent = Math.min(999, d.percent + 1);
         if (inp.y >= 60) d.percent = Math.max(0, d.percent - 1);
       }
-      if (d && (inp.b & B.TAUNT) && (inp.b & B.GRAB) && !this.dummyToggled) { this.match.sources[1].cpu = this.match.sources[1].cpu ? 0 : 5; this.dummyToggled = true; }
+      if (d && (inp.b & B.TAUNT) && (inp.b & B.GRAB) && !this.dummyToggled) { const on = !this.match.sources[1].cpu; this.match.sources[1].cpu = on ? 5 : 0; d.cpu = on ? 5 : 0; this.renderer.names[1] = on ? "CPU" : "DUMMY"; this.dummyToggled = true; }
       if (!((inp.b & B.TAUNT) && (inp.b & B.GRAB))) this.dummyToggled = false;
     }
     const events = this.match.takeEvents();
