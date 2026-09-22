@@ -147,7 +147,23 @@ function drawSeg(ctx: CanvasRenderingContext2D, s: Seg, color: string, widen: nu
     ctx.restore();
     return;
   }
-  // capsule (also flame for now)
+  if (s.shape === "flame") {
+    // a teardrop along the bone: round at the joint, pointed at the tip, with a wobble
+    const dx = s.x2 - s.x1, dy = s.y2 - s.y1;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len;
+    const w = s.thick + widen;
+    const t = performance.now() / 90;
+    const wob = Math.sin(t + s.x1 * 0.1) * w * 0.25;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(s.x2 + nx * wob, s.y2 + ny * wob);
+    ctx.bezierCurveTo(s.x2 + nx * w * 0.6 + dx * -0.35, s.y2 + ny * w * 0.6 + dy * -0.35, s.x1 + nx * w * 1.05, s.y1 + ny * w * 1.05, s.x1 + nx * w * 0.2 - dx * 0.16, s.y1 + ny * w * 0.2 - dy * 0.16);
+    ctx.bezierCurveTo(s.x1 - nx * w * 0.2 - dx * 0.16, s.y1 - ny * w * 0.2 - dy * 0.16, s.x1 - nx * w * 1.05, s.y1 - ny * w * 1.05, s.x2 - nx * w * 0.6 + dx * -0.35, s.y2 - ny * w * 0.6 + dy * -0.35);
+    ctx.closePath(); ctx.fill();
+    return;
+  }
+  // capsule
   ctx.strokeStyle = color;
   ctx.lineCap = "round";
   ctx.lineWidth = (s.thick + widen) * 2;

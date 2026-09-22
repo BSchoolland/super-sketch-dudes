@@ -192,6 +192,8 @@ export interface FighterDef {
   onFrame?: (ctx: HookCtx) => void;
   /** HUD meters: label + value getter, 0..1. */
   meters?: { label: string; color: string; get: (f: Fighter) => number; max?: (f: Fighter) => number }[];
+  /** Renderer-only per-frame look: overall scale and glow strength 0..1 (e.g. WICK's heat). */
+  visual?: (f: Fighter) => { scale?: number; glow?: number };
 }
 
 export interface HookCtx {

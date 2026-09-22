@@ -237,24 +237,50 @@ export function resolveHits(state: State): void {
         if (tryHit(state, a, v, hb, cap, key, v.hitLog, hb.rehit)) break;
       }
     }
-    // reflectors and projectile clashes
-    if (mv.reflect) {
-      for (const p of state.projectiles) {
-        if (p.dead || p.owner === a.slot) continue;
-        for (const hb of active) {
-          const cap = hitboxWorld(a, hb);
-          if (capsuleCircle(cap, p.x, p.y, p.hb.r)) {
-            p.owner = a.slot;
-            p.vx = -p.vx * 1.2;
-            p.facing = (-p.facing) as 1 | -1;
-            p.reflected++;
-            p.hitLog = {};
-            p.hb = { ...p.hb, damage: p.hb.damage * 1.3 };
-            state.events.push({ t: "parry", frame: state.frame, slot: a.slot, x: p.x, y: p.y });
-            break;
-          }
+    // reflectors, and hittable projectiles (debris chunks) that any attack can launch
+    for (const p of state.projectiles) {
+      if (p.dead) continue;
+      const canReflect = mv.reflect && p.owner !== a.slot;
+      const canHit = p.data.hittable && !(p.hitLog[`h${a.slot}:${a.moveInstance}`]);
+      if (!canReflect && !canHit) continue;
+      for (const hb of active) {
+        if (hb.grab) continue;
+        const cap = hitboxWorld(a, hb);
+        if (!capsuleCircle(cap, p.x, p.y, p.hb.r)) continue;
+        if (canReflect) {
+          p.owner = a.slot;
+          p.vx = -p.vx * 1.2;
+          p.facing = (-p.facing) as 1 | -1;
+          p.reflected++;
+          p.hitLog = {};
+          p.hb = { ...p.hb, damage: p.hb.damage * 1.3 };
+          state.events.push({ t: "parry", frame: state.frame, slot: a.slot, x: p.x, y: p.y });
+        } else {
+          const speed = 6 + hb.damage * 0.7;
+          p.owner = a.slot;
+          p.facing = a.moveFacing;
+          p.vx = cosDeg(hb.angle) * a.moveFacing * speed;
+          p.vy = -sinDeg(hb.angle) * speed;
+          p.hitLog = { [`h${a.slot}:${a.moveInstance}`]: state.frame };
+          p.hb = { ...p.hb, damage: Math.max(p.hb.damage, 9), base: 40, growth: 70 };
+          p.data.bounces = 0;
+          p.age = Math.min(p.age, p.life - 90);
+          a.hitlag = Math.max(a.hitlag, 4);
+          state.events.push({ t: "hit", frame: state.frame, attacker: a.slot, victim: -1, damage: 4, kb: 0, x: p.x, y: p.y, fx: "heavy", angle: hb.angle, facing: a.moveFacing });
         }
+        break;
       }
+    }
+  }
+  // reflector projectiles (the crescent wave) turn other projectiles around
+  for (const p of state.projectiles) {
+    if (p.dead || !p.data.reflector) continue;
+    for (const q of state.projectiles) {
+      if (q === p || q.dead || q.owner === p.owner || q.data.reflector) continue;
+      const dx = q.x - p.x, dy = q.y - p.y;
+      if (dx * dx + dy * dy > (p.hb.r + q.hb.r) * (p.hb.r + q.hb.r)) continue;
+      q.owner = p.owner; q.vx = -q.vx * 1.2; q.facing = (-q.facing) as 1 | -1; q.reflected++; q.hitLog = {};
+      state.events.push({ t: "parry", frame: state.frame, slot: p.owner, x: q.x, y: q.y });
     }
   }
   // projectiles

@@ -120,6 +120,15 @@ export class Renderer {
       ctx.restore();
     }
     ctx.scale(f.facing, 1);
+    const vis = def.visual?.(f);
+    if (vis?.glow) {
+      ctx.save();
+      ctx.globalAlpha = 0.18 + vis.glow * 0.3;
+      ctx.fillStyle = colors[def.palette.accent] ?? "#fff";
+      ctx.beginPath(); ctx.ellipse(0, -def.stats.height / 2, def.stats.width * (0.8 + vis.glow), def.stats.height * (0.5 + vis.glow * 0.4), 0, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+    if (vis?.scale) ctx.scale(vis.scale, vis.scale);
     const dodging = f.action === "airDodge" || f.action === "spotDodge" || f.action === "roll" || f.action === "getupRoll" || f.action === "techRoll" || f.action === "ledgeRoll";
     const blink = f.invuln > 0 && !dodging && f.action !== "respawn" && (state.frame >> 2) % 2 === 0;
     const alpha = f.action === "respawn" ? 0.8 : dodging && f.invuln > 0 ? 0.45 : blink ? 0.7 : 1;
@@ -192,6 +201,47 @@ function capsulePath(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: 
 export function drawProjectile(ctx: CanvasRenderingContext2D, kind: string, x: number, y: number, vx: number, vy: number, r: number, color: string, time: number): void {
   ctx.save();
   ctx.translate(x, y);
+  if (kind === "ember" || kind === "emberTrail") {
+    const k = 0.7 + Math.sin(time * 30 + x) * 0.3;
+    ctx.fillStyle = "#ff4d2e"; ctx.globalAlpha = 0.7;
+    ctx.beginPath(); ctx.ellipse(0, 0, r * k, r * 1.3 * k, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#ffc43a"; ctx.globalAlpha = 0.9;
+    ctx.beginPath(); ctx.ellipse(0, 2, r * 0.6 * k, r * 0.9 * k, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    return;
+  }
+  if (kind === "wave") {
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = "#12101a";
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.4 + 4, r + 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#35e0ff";
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.4, r, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#eef7ff";
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.18, r * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    return;
+  }
+  if (kind === "chunk") {
+    ctx.rotate(time * 4 + x * 0.01);
+    ctx.fillStyle = "#12101a";
+    ctx.beginPath(); ctx.moveTo(-r - 4, -r * 0.6); ctx.lineTo(r * 0.2, -r - 4); ctx.lineTo(r + 4, -r * 0.1); ctx.lineTo(r * 0.5, r + 4); ctx.lineTo(-r * 0.7, r * 0.7); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#7fa6c7";
+    ctx.beginPath(); ctx.moveTo(-r, -r * 0.6); ctx.lineTo(r * 0.2, -r); ctx.lineTo(r, -r * 0.1); ctx.lineTo(r * 0.5, r); ctx.lineTo(-r * 0.7, r * 0.7); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#ff8c1a";
+    ctx.fillRect(-r * 0.3, -r * 0.3, r * 0.5, r * 0.4);
+    ctx.restore();
+    return;
+  }
+  if (kind === "shock") {
+    ctx.fillStyle = "#12101a";
+    ctx.beginPath(); ctx.ellipse(0, 4, r + 4, r * 0.8 + 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#f4884a";
+    ctx.beginPath(); ctx.ellipse(0, 4, r, r * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#f2e6c8";
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.5, r * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    return;
+  }
   ctx.rotate(Math.atan2(vy, vx));
   ctx.fillStyle = "#12101a";
   ctx.beginPath(); ctx.ellipse(0, 0, r + 4, r * 0.7 + 4, 0, 0, Math.PI * 2); ctx.fill();
