@@ -3,8 +3,8 @@ import { pollJoinPresses, readDevice, type DeviceId, type MenuInput } from "../i
 import { B, EMPTY_INPUT, type InputFrame } from "../../../shared/input";
 import { rosterList } from "../../../shared/fighters/index";
 import { sfx } from "../audio/audio";
-import { drawRig, poseAt, resolvePose, tintColors } from "../render/rig";
 import { SLOT_COLORS } from "../render/hud";
+import { drawFighterPortrait } from "./portrait";
 import { bg, card, hint, label, title, type Screen, INK, settings } from "./ui";
 
 export interface SlotPick { device: DeviceId | null; cpu: number; fighter: number; ready: boolean }
@@ -99,17 +99,7 @@ export class SelectScreen implements Screen {
         return;
       }
       const def = rosterList[s.fighter];
-      // portrait
-      ctx.save();
-      ctx.beginPath(); ctx.roundRect(x + 16, y + 70, w - 32, 400, 12); ctx.clip();
-      ctx.fillStyle = "rgba(18,16,26,0.75)"; ctx.fillRect(x, y, w, h);
-      const anim = s.ready ? (def.rig.anims.taunt ?? def.rig.anims.idle) : def.rig.anims.idle;
-      const loop = s.ready ? 60 : def.rig.loops.idle;
-      const rp = resolvePose(def, poseAt(anim, Math.floor(this.t * 60), loop));
-      ctx.translate(x + w / 2, y + 440);
-      ctx.scale(2.4, 2.4);
-      drawRig(ctx, rp, tintColors(def, i, SLOT_COLORS), def.palette.outline);
-      ctx.restore();
+      drawFighterPortrait(ctx, def, i, this.t, s.ready, { x: x + 16, y: y + 70, w: w - 32, h: 400 });
       label(ctx, s.cpu ? `CPU ${s.cpu}` : `P${i + 1}`, x + w / 2, y + 44, 30, INK, "center", 900);
       title(ctx, def.name, x + w / 2, y + 530, 44, "#fff");
       label(ctx, def.tagline, x + w / 2, y + 566, 16, "rgba(255,255,255,0.9)", "center", 600);
