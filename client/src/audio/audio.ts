@@ -92,6 +92,15 @@ export const sfx = {
   respawn(): void { tone({ freq: 700, dur: 0.3, gain: 0.15, sweepTo: 1400, type: "triangle" }); },
   projectile(): void { burst({ freq: 2000, q: 1, dur: 0.12, gain: 0.2, sweepTo: 600 }); tone({ freq: 800, dur: 0.08, gain: 0.1, type: "square", sweepTo: 300 }); },
   charge(t: number): void { tone({ freq: 200 + t * 600, dur: 0.05, gain: 0.05, type: "square" }); },
+  named(name: string): void {
+    switch (name) {
+      case "nova": tone({ freq: 200, dur: 0.5, gain: 0.4, type: "sawtooth", sweepTo: 1600 }); burst({ freq: 1200, q: 0.4, dur: 0.5, gain: 0.4, type: "highpass" }); break;
+      case "reignite": burst({ freq: 900, q: 0.5, dur: 0.25, gain: 0.3, type: "bandpass", sweepTo: 2600 }); tone({ freq: 300, dur: 0.2, gain: 0.15, type: "triangle", sweepTo: 900 }); break;
+      case "thrust": burst({ freq: 260, q: 0.7, dur: 0.09, gain: 0.12, type: "lowpass" }); break;
+      case "click": tone({ freq: 1400, dur: 0.03, gain: 0.12, type: "square" }); break;
+      default: break;
+    }
+  },
   menuMove(): void { tone({ freq: 900, dur: 0.05, gain: 0.12, type: "square" }); },
   menuConfirm(): void { tone({ freq: 600, dur: 0.12, gain: 0.18, type: "square", sweepTo: 1200 }); },
   menuBack(): void { tone({ freq: 600, dur: 0.12, gain: 0.14, type: "square", sweepTo: 300 }); },
@@ -118,6 +127,7 @@ export function playEvents(events: GameEvent[]): void {
       case "respawn": sfx.respawn(); break;
       case "projectile": sfx.projectile(); break;
       case "move": if (/smash|special|dashAttack|fair|bair|dair/.test(e.move)) sfx.swing(/smash/.test(e.move) ? "heavy" : "light"); break;
+      case "sfx": sfx.named(e.name); break;
       default: break;
     }
   }

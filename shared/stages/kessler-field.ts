@@ -6,8 +6,8 @@ export const kesslerField: Stage = {
   name: "Kessler Field",
   platforms: [
     { x1: -420, x2: 420, y: 0, solid: true, bottom: 240 },
-    { x1: -80, x2: 80, y: -200, motion: { kind: "orbit", cx: 0, cy: -190, rx: 560, ry: 130, period: 1500, phase: 0 } },
-    { x1: -80, x2: 80, y: -200, motion: { kind: "orbit", cx: 0, cy: -190, rx: 560, ry: 130, period: 1500, phase: 750 } },
+    { x1: -80, x2: 80, y: -200, motion: { kind: "orbit", cx: 0, cy: -270, rx: 560, ry: 120, period: 1500, phase: 0 } },
+    { x1: -80, x2: 80, y: -200, motion: { kind: "orbit", cx: 0, cy: -270, rx: 560, ry: 120, period: 1500, phase: 750 } },
   ],
   ledges: [
     { x: -420, y: 0, side: -1, platform: 0 },

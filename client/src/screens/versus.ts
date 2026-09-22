@@ -9,6 +9,8 @@ import { card, label, title, type Screen, INK, settings } from "./ui";
 import type { MatchConfig } from "../../../shared/sim";
 import { B } from "../../../shared/input";
 import { roster } from "../../../shared/fighters/index";
+import { currentMove } from "../../../shared/fighter";
+import { knockback } from "../../../shared/hits";
 
 const STEP = 1000 / 60;
 
@@ -22,13 +24,14 @@ export class VersusScreen implements Screen {
   endedFor = 0;
   pauseSel = 0;
   training: boolean;
+  dummyToggled = false;
   constructor(cfg: MatchConfig, sources: SlotSource[], private onExit: () => Screen, private onRematch: () => Screen, training = false) {
     this.match = new LocalMatch(cfg, sources);
     this.training = training;
     const names = sources.map((s, i) => (s.cpu ? "CPU" : `P${i + 1}`));
     this.renderer = new Renderer(this.match.state, names);
     this.renderer.showHitboxes = training;
-    if (training) this.match.state.fighters.forEach((f) => (f.stocks = 99));
+    if (training) { this.match.state.fighters.forEach((f) => (f.stocks = 99)); if (this.match.sources[1]) this.match.sources[1].cpu = 0; }
   }
   enter(): void { this.music.start(); }
   update(dt: number, m: MenuInput): Screen | null {
@@ -64,6 +67,13 @@ export class VersusScreen implements Screen {
     if (this.training) {
       const inp = this.match.lastInputs[0];
       if ((inp.b & B.TAUNT) && (inp.b & B.SHIELD)) this.resetTraining();
+      const d = st.fighters[1];
+      if (d && (inp.b & B.TAUNT) && !(inp.b & B.SHIELD)) {
+        if (inp.y <= -60) d.percent = Math.min(999, d.percent + 1);
+        if (inp.y >= 60) d.percent = Math.max(0, d.percent - 1);
+      }
+      if (d && (inp.b & B.TAUNT) && (inp.b & B.GRAB) && !this.dummyToggled) { this.match.sources[1].cpu = this.match.sources[1].cpu ? 0 : 5; this.dummyToggled = true; }
+      if (!((inp.b & B.TAUNT) && (inp.b & B.GRAB))) this.dummyToggled = false;
     }
     const events = this.match.takeEvents();
     this.renderer.fx.consume(st, events, this.renderer.cam);
@@ -81,6 +91,23 @@ export class VersusScreen implements Screen {
     st.fighters.forEach((f, i) => { f.percent = 0; f.x = i === 0 ? -200 : 200; f.y = 0; f.vx = 0; f.vy = 0; f.action = "idle"; f.frame = 0; f.grounded = true; f.platform = 0; f.hitlag = 0; f.pending = null; f.hitstun = 0; f.move = null; f.ledge = -1; f.grabbing = -1; f.grabbedBy = -1; f.facing = i === 0 ? 1 : -1; });
     st.projectiles = [];
   }
+  private drawTrainingOverlay(ctx: CanvasRenderingContext2D): void {
+    const st = this.match.state;
+    const f = st.fighters[0], d = st.fighters[1];
+    if (!f || !d) return;
+    const mv = f.action === "attack" ? currentMove(f) : null;
+    const lines = [
+      `${roster[f.id].name}  ${f.action}${f.move ? ` · ${f.move}` : ""}  frame ${f.frame}${mv ? `/${mv.total}` : ""}`,
+      mv ? `active ${mv.hitboxes.filter((h) => !h.grab).map((h) => `${h.frames[0]}-${h.frames[1]}`).join(", ") || "none"} · iasa ${mv.iasa ?? mv.total + 1}${mv.landingLag ? ` · landing lag ${mv.landingLag}` : ""}` : `vx ${f.vx.toFixed(1)} vy ${f.vy.toFixed(1)}${f.grounded ? " grounded" : " airborne"}${f.hitlag ? ` hitlag ${f.hitlag}` : ""}`,
+      `dummy ${roster[d.id].name} ${d.percent}%  ${d.action}${d.hitstun && (d.action === "hitstun" || d.action === "tumble") ? ` hitstun ${d.hitstun - d.frame}` : ""}${d.shieldHeld ? ` shield ${d.shield.toFixed(0)}` : ""}`,
+      mv && mv.hitboxes.length && !mv.hitboxes[0].grab ? `${mv.hitboxes[0].damage} dmg · kb at ${d.percent}%: ${knockback(d.percent + mv.hitboxes[0].damage, mv.hitboxes[0].damage, roster[d.id].stats.weight, mv.hitboxes[0].growth, mv.hitboxes[0].base).toFixed(0)}` : "",
+    ];
+    ctx.save();
+    ctx.fillStyle = "rgba(18,16,26,0.75)";
+    ctx.beginPath(); ctx.roundRect(20, 20, 620, 26 + lines.length * 26, 10); ctx.fill();
+    lines.forEach((t, i) => label(ctx, t, 36, 46 + i * 26, 18, "#fff", "left", 600));
+    ctx.restore();
+  }
   draw(ctx: CanvasRenderingContext2D, dt: number): void {
     const st = this.match.state;
     const alpha = this.match.paused || this.countdown > 0 ? 1 : Math.min(1, this.acc / STEP);
@@ -95,8 +122,11 @@ export class VersusScreen implements Screen {
       ctx.scale(s, s);
       title(ctx, text, 0, 40, 140, n >= 1 ? "#ffc43a" : "#4dff88");
       ctx.restore();
-      if (this.training) label(ctx, "TRAINING: taunt+shield resets · F2 toggles hitboxes", VIEW_W / 2, VIEW_H / 2 + 80, 22, "#fff");
-    } else if (st.ended) {
+      if (this.training) label(ctx, "TRAINING: taunt+shield resets · taunt+up/down sets dummy % · taunt+grab toggles dummy CPU · F2 hitboxes", VIEW_W / 2, VIEW_H / 2 + 80, 22, "#fff");
+    } else if (this.training) {
+      this.drawTrainingOverlay(ctx);
+    }
+    if (st.ended) {
       this.bannerT += dt;
       const w = st.winner;
       drawBanner(ctx, w >= 0 ? "GAME!" : "DRAW", w >= 0 ? `${this.renderer.names[w]} wins` : "", w >= 0 ? SLOT_COLORS[w] : "#fff", this.bannerT);
