@@ -25,7 +25,7 @@ export function drawFighterPortrait(
   ctx.beginPath();
   ctx.roundRect(bounds.x, bounds.y, bounds.w, bounds.h, 12);
   ctx.clip();
-  ctx.fillStyle = "rgba(18,16,26,0.75)";
+  ctx.fillStyle = "rgba(119,114,103,0.04)";
   ctx.fillRect(bounds.x, bounds.y, bounds.w, bounds.h);
   ctx.translate(bounds.x + bounds.w / 2, bounds.y + bounds.h - 30);
   ctx.scale(scale, scale);

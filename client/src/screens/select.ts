@@ -100,21 +100,21 @@ export class SelectScreen implements Screen {
       const empty = !s.device && !s.cpu;
       card(ctx, x, y, w, h, empty ? "rgba(18,16,26,0.55)" : color, s.ready, empty ? 0.8 : 1);
       if (empty) {
-        label(ctx, "PRESS A BUTTON", x + w / 2, y + h / 2 - 10, 28, "rgba(255,255,255,0.7)");
-        label(ctx, "TO JOIN", x + w / 2, y + h / 2 + 26, 28, "rgba(255,255,255,0.7)");
-        if (this.cpuCursor === i && this.cursor.size) label(ctx, "▲ special: add CPU ▼", x + w / 2, y + h - 30, 20, "#ffc43a");
+        label(ctx, "PRESS A BUTTON", x + w / 2, y + h / 2 - 10, 28, "rgba(41,39,34,0.7)");
+        label(ctx, "TO JOIN", x + w / 2, y + h / 2 + 26, 28, "rgba(41,39,34,0.7)");
+        if (this.cpuCursor === i && this.cursor.size) label(ctx, "▲ special: add CPU ▼", x + w / 2, y + h - 30, 20, INK);
         return;
       }
       const def = rosterList[s.fighter];
       drawFighterPortrait(ctx, def, i, this.t, s.ready, { x: x + 16, y: y + 70, w: w - 32, h: 400 });
-      label(ctx, s.cpu ? `CPU ${s.cpu}` : `P${i + 1}`, x + w / 2, y + 44, 30, INK, "center", 900);
-      title(ctx, def.name, x + w / 2, y + 530, 44, "#fff");
-      label(ctx, def.tagline, x + w / 2, y + 566, 16, "rgba(255,255,255,0.9)", "center", 600);
-      if (!s.ready) { label(ctx, "◀", x + 30, y + 300, 40, "#fff"); label(ctx, "▶", x + w - 30, y + 300, 40, "#fff"); }
+      label(ctx, s.cpu ? `CPU ${s.cpu}` : `P${i + 1}`, x + w / 2, y + 44, 30, color, "center", 900);
+      title(ctx, def.name, x + w / 2, y + 530, 44, INK);
+      label(ctx, def.tagline, x + w / 2, y + 566, 16, "rgba(41,39,34,0.9)", "center", 600);
+      if (!s.ready) { label(ctx, "◀", x + 30, y + 300, 40, INK); label(ctx, "▶", x + w - 30, y + 300, 40, INK); }
       if (s.cpu) {
-        label(ctx, "grab: change fighter", x + w / 2, y + h - 46, 18, "#fff");
-        label(ctx, "special: level / remove", x + w / 2, y + h - 24, 18, "#fff");
-      } else label(ctx, s.ready ? "READY" : "attack: ready · shield: leave", x + w / 2, y + h - 24, 20, s.ready ? "#fff" : "rgba(255,255,255,0.85)");
+        label(ctx, "grab: change fighter", x + w / 2, y + h - 46, 18, INK);
+        label(ctx, "special: level / remove", x + w / 2, y + h - 24, 18, INK);
+      } else label(ctx, s.ready ? "READY" : "attack: ready · shield: leave", x + w / 2, y + h - 24, 20, INK);
     });
     const filled = this.slots.filter((s) => s.device || s.cpu);
     const allReady = filled.length >= (this.training ? 1 : 2) && filled.every((s) => s.ready);

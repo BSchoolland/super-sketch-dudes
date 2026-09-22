@@ -41,22 +41,22 @@ export class StageScreen implements Screen {
       // thumbnail: the platforms drawn to scale
       ctx.save();
       ctx.beginPath(); ctx.roundRect(x + 12, y + 12, w - 24, h - 70, 10); ctx.clip();
-      ctx.fillStyle = "#2a1550"; ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = "#f4efe4"; ctx.fillRect(x, y, w, h);
       const sc = (w - 60) / (st.camera.right - st.camera.left);
       ctx.translate(x + w / 2, y + h / 2 + 30);
       ctx.scale(sc, sc);
       const fake = { platOffsets: st.platforms.map(() => ({ dx: 0, dy: 0 })) } as unknown as State;
       drawStage(ctx, fake, st);
       ctx.restore();
-      title(ctx, st.name, x + w / 2, y + h - 18, 30, i === this.sel ? INK : "#fff");
+      title(ctx, st.name, x + w / 2, y + h - 18, 30, INK);
     });
     if (!this.training) {
       const ry = 520;
       const rowCard = (r: number, y: number, text: string, value: string) => {
         const sel = this.row === r;
         card(ctx, VIEW_W / 2 - 300, y, 600, 80, sel ? "#ffc43a" : "rgba(18,16,26,0.6)", sel);
-        label(ctx, text, VIEW_W / 2 - 270, y + 52, 30, sel ? INK : "#fff", "left", 900);
-        label(ctx, `◀  ${value}  ▶`, VIEW_W / 2 + 270, y + 52, 30, sel ? INK : "#fff", "right", 900);
+        label(ctx, text, VIEW_W / 2 - 270, y + 52, 30, INK, "left", 900);
+        label(ctx, `◀  ${value}  ▶`, VIEW_W / 2 + 270, y + 52, 30, INK, "right", 900);
       };
       rowCard(1, ry, "STOCKS", `${settings.stocks}`);
       rowCard(2, ry + 100, "TIME", settings.time ? `${settings.time}:00` : "none");

@@ -223,9 +223,9 @@ export class OnlineScreen implements Screen {
     items.forEach(([name, description], index) => {
       const y = 230 + index * 180;
       const selected = index === this.sel;
-      card(ctx, VIEW_W / 2 - 360, y, 720, 130, selected ? "#ffc43a" : "rgba(18,16,26,0.7)", selected);
-      title(ctx, name, VIEW_W / 2, y + 60, 38, selected ? INK : "#fff");
-      label(ctx, description, VIEW_W / 2, y + 101, 19, selected ? INK : "rgba(255,255,255,0.8)");
+      card(ctx, VIEW_W / 2 - 360, y, 720, 130, selected ? INK : "rgba(18,16,26,0.7)", selected);
+      title(ctx, name, VIEW_W / 2, y + 60, 38, INK);
+      label(ctx, description, VIEW_W / 2, y + 101, 19, selected ? INK : "rgba(41,39,34,0.8)");
     });
     hint(ctx, "attack: choose · shield: back");
   }
@@ -234,14 +234,14 @@ export class OnlineScreen implements Screen {
     label(ctx, "ENTER ROOM CODE", VIEW_W / 2, 260, 30);
     this.code.forEach((char, index) => {
       const x = VIEW_W / 2 - 250 + index * 140;
-      card(ctx, x, 330, 110, 140, index === this.codePos ? "#ffc43a" : "rgba(18,16,26,0.75)", index === this.codePos);
-      title(ctx, char, x + 55, 425, 70, index === this.codePos ? INK : "#fff");
+      card(ctx, x, 330, 110, 140, index === this.codePos ? INK : "rgba(18,16,26,0.75)", index === this.codePos);
+      title(ctx, char, x + 55, 425, 70, INK);
     });
     hint(ctx, "type the code · left/right change · up/down move · Enter: join");
   }
 
   private drawWaiting(ctx: CanvasRenderingContext2D): void {
-    title(ctx, "SEARCHING…", VIEW_W / 2, VIEW_H / 2, 70, "#ffc43a");
+    title(ctx, "SEARCHING…", VIEW_W / 2, VIEW_H / 2, 70, INK);
     label(ctx, "Waiting for the relay", VIEW_W / 2, VIEW_H / 2 + 60, 24);
     hint(ctx, "shield: cancel");
   }
@@ -249,7 +249,7 @@ export class OnlineScreen implements Screen {
   private drawLobby(ctx: CanvasRenderingContext2D): void {
     const room = this.context.room;
     if (!room) throw new Error("lobby phase without room state");
-    label(ctx, `ROOM ${room.code}`, VIEW_W / 2, 135, 26, "#ffc43a");
+    label(ctx, `ROOM ${room.code}`, VIEW_W / 2, 135, 26, INK);
     const w = 380, h = 650, gap = 36;
     const x0 = (VIEW_W - (w * 4 + gap * 3)) / 2;
     for (let slot = 0; slot < 4; slot++) {
@@ -257,7 +257,7 @@ export class OnlineScreen implements Screen {
       const x = x0 + slot * (w + gap), y = 175;
       card(ctx, x, y, w, h, member ? SLOT_COLORS[slot] : "rgba(18,16,26,0.5)", !!member?.ready, member ? 1 : 0.65);
       if (!member) {
-        label(ctx, "WAITING", x + w / 2, y + h / 2, 28, "rgba(255,255,255,0.65)");
+        label(ctx, "WAITING", x + w / 2, y + h / 2, 28, "rgba(41,39,34,0.65)");
         continue;
       }
       const fighter = roster[member.fighter as FighterId];
@@ -266,11 +266,11 @@ export class OnlineScreen implements Screen {
       drawFighterPortrait(ctx, fighter, slot, this.t, member.ready, { x: x + 16, y: y + 68, w: w - 32, h: 390 }, 2.2);
       title(ctx, fighter.name, x + w / 2, y + 525, 40);
       label(ctx, member.ready ? "READY" : member.id === this.context.id ? "◀  PICK  ▶" : "CHOOSING", x + w / 2, y + 585, 22);
-      if (member.id === this.context.id) label(ctx, "attack: ready", x + w / 2, y + 622, 18, "rgba(255,255,255,0.85)");
+      if (member.id === this.context.id) label(ctx, "attack: ready", x + w / 2, y + 622, 18, "rgba(41,39,34,0.85)");
     }
     const canStart = room.members.length >= 2 && room.members.every((member) => member.ready);
     if (room.host === this.context.id) {
-      label(ctx, `input delay ${this.inputDelay}f · up/down adjust`, VIEW_W / 2, 870, 21, "rgba(255,255,255,0.8)");
+      label(ctx, `input delay ${this.inputDelay}f · up/down adjust`, VIEW_W / 2, 870, 21, "rgba(41,39,34,0.8)");
       hint(ctx, canStart ? "everyone's ready · press START" : "pick a fighter and ready up · shield: leave");
     } else {
       hint(ctx, canStart ? "waiting for the host to start" : "pick a fighter and ready up · shield: leave");
@@ -389,11 +389,11 @@ class OnlineVersusScreen extends VersusScreen {
     super.draw(ctx, dt);
     const rollback = this.session.rollbackFramesPerSecond();
     const quality = this.session.connectionQuality();
-    const color = quality > 0.72 ? "#4dff88" : quality > 0.38 ? "#ffc43a" : "#ff6b5c";
+    const color = quality > 0.72 ? "#4dff88" : quality > 0.38 ? INK : "#ff6b5c";
     const status = this.session.waiting ? "WAITING" : `${Math.round(this.context.transport.rtt())} ms · ${rollback} rb/s`;
     label(ctx, status, VIEW_W - 24, 34, 17, color, "right", 700);
     if (this.failure) drawBanner(ctx, this.failure.title, this.failure.detail, "#ff4d2e", this.failureTime);
-    else if (this.session.waiting) drawBanner(ctx, "WAITING", "Connection is catching up", "#ffc43a", 1);
+    else if (this.session.waiting) drawBanner(ctx, "WAITING", "Connection is catching up", INK, 1);
   }
 
   netDebug(frame = this.session.state.frame): { frame: number; hash: number | null } {

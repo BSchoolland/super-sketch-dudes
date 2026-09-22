@@ -93,7 +93,7 @@ function frame(now: number): void {
   if (next) { screen = next; screen.enter?.(); }
   endInputFrame();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = "#000";
+  ctx.fillStyle = "#f4efe4";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.setTransform(scale, 0, 0, scale, offX, offY);
   ctx.save();

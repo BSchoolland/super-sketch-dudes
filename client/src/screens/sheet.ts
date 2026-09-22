@@ -1,3 +1,4 @@
+import { drawPaper, INK } from "../render/paper";
 import { VIEW_H, VIEW_W } from "../render/camera";
 import type { MenuInput } from "../input/devices";
 import { roster } from "../../../shared/fighters/index";
@@ -22,8 +23,7 @@ export class SheetScreen implements Screen {
   draw(ctx: CanvasRenderingContext2D, dt: number): void {
     this.t += dt;
     const def = roster[this.fighterId] ?? roster.sable;
-    ctx.fillStyle = "#2a1550";
-    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    drawPaper(ctx, VIEW_W, VIEW_H);
     const entries: { name: string; keys: ReturnType<typeof poseAt> extends infer _ ? any : never; frame: number; loop?: number; move?: string }[] = [];
     for (const [name, keys] of Object.entries(def.rig.anims)) entries.push({ name, keys, frame: Math.floor(this.t * 60), loop: def.rig.loops[name] });
     for (const mv of Object.values(def.moves)) {
@@ -34,14 +34,14 @@ export class SheetScreen implements Screen {
     const cols = 8, rows = 4, per = cols * rows;
     const pageEntries = entries.slice(this.page * per, this.page * per + per);
     const cw = VIEW_W / cols, ch = VIEW_H / rows;
-    label(ctx, `${def.name} poses · page ${this.page + 1}/${Math.ceil(entries.length / per)} (left/right)`, 16, 24, 18, "#fff", "left");
+    label(ctx, `${def.name} poses · page ${this.page + 1}/${Math.ceil(entries.length / per)} (left/right)`, 16, 24, 18, INK, "left");
     pageEntries.forEach((e, i) => {
       const cx = (i % cols) * cw + cw / 2, cy = Math.floor(i / cols) * ch + ch - 40;
       ctx.save();
-      ctx.strokeStyle = "rgba(255,255,255,0.15)";
+      ctx.strokeStyle = "rgba(41,39,34,0.15)";
       ctx.strokeRect((i % cols) * cw, Math.floor(i / cols) * ch, cw, ch);
       ctx.translate(cx, cy);
-      ctx.fillStyle = "rgba(255,255,255,0.2)";
+      ctx.fillStyle = "rgba(41,39,34,0.2)";
       ctx.fillRect(-cw / 2 + 10, 0, cw - 20, 2);
       const scale = 1.1;
       ctx.scale(scale, scale);
@@ -64,7 +64,7 @@ export class SheetScreen implements Screen {
         }
       }
       ctx.restore();
-      label(ctx, `${e.name}${e.move ? ` f${e.frame}` : ""}`, cx, Math.floor(i / cols) * ch + 20, 14, "#fff");
+      label(ctx, `${e.name}${e.move ? ` f${e.frame}` : ""}`, cx, Math.floor(i / cols) * ch + 20, 14, INK);
     });
   }
 }

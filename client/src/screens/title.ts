@@ -1,3 +1,4 @@
+import { inkLine } from "../render/paper";
 import { VIEW_H, VIEW_W } from "../render/camera";
 import type { MenuInput } from "../input/devices";
 import { sfx } from "../audio/audio";
@@ -30,22 +31,20 @@ export class TitleScreen implements Screen {
     ctx.save();
     ctx.translate(VIEW_W / 2, 250);
     ctx.rotate(-0.04);
-    ctx.fillStyle = INK;
-    ctx.beginPath(); ctx.roundRect(-470, -100, 940, 190, 30); ctx.fill();
-    ctx.fillStyle = "#ff4d2e";
-    ctx.beginPath(); ctx.roundRect(-458, -88, 916, 166, 22); ctx.fill();
-    title(ctx, "RINGOUT", 0, 40, 150, "#fff1a8");
+    title(ctx, "RINGOUT", 0, 40, 150, INK);
+    inkLine(ctx, -410, 70, 410, 59, INK, 5);
+    inkLine(ctx, -375, 82, 365, 75, INK, 2);
     ctx.restore();
-    label(ctx, "you don't win by emptying a bar. you win by throwing them out.", VIEW_W / 2, 400, 26, "rgba(255,255,255,0.85)", "center", 600);
+    label(ctx, "you don't win by emptying a bar. you win by throwing them out.", VIEW_W / 2, 400, 26, "rgba(41,39,34,0.85)", "center", 600);
     // menu
     const x = VIEW_W / 2 - 220, y0 = 470;
     this.items.forEach((it, i) => {
       const y = y0 + i * 110;
       const sel = i === this.sel;
       card(ctx, x, y, 440, 86, sel ? "#ffc43a" : "rgba(18,16,26,0.7)", sel);
-      title(ctx, it.name, x + 220, y + 58, 40, sel ? INK : "#fff");
+      title(ctx, it.name, x + 220, y + 58, 40, INK);
     });
-    label(ctx, this.items[this.sel].desc, VIEW_W / 2, y0 + this.items.length * 110 + 20, 24, "#fff");
+    label(ctx, this.items[this.sel].desc, VIEW_W / 2, y0 + this.items.length * 110 + 20, 24, INK);
     // roster parade on the right
     rosterList.forEach((def, i) => {
       const rp = resolvePose(def, poseAt(def.rig.anims.idle, Math.floor(this.t * 60) + i * 17, def.rig.loops.idle));
@@ -56,6 +55,6 @@ export class TitleScreen implements Screen {
       ctx.restore();
     });
     hint(ctx, "keyboard: WASD/arrows move · J/Numpad1 confirm · gamepad: A confirm");
-    label(ctx, `build ${__BUILD__}`, VIEW_W - 20, VIEW_H - 16, 14, "rgba(255,255,255,0.5)", "right", 400);
+    label(ctx, `build ${__BUILD__}`, VIEW_W - 20, VIEW_H - 16, 14, "rgba(41,39,34,0.5)", "right", 400);
   }
 }
