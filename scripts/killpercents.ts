@@ -21,6 +21,7 @@ function dies(attackerId: string, moveId: string, percent: number, x: number, ti
   a.action = "attack"; a.move = moveId; a.frame = hb.frames[0]; a.moveInstance = 1;
   a.chargeMul = 1;
   hitOf(s, a, v, hb, v.x, v.y - 60, !!mv.throwFrame);
+  a.action = "idle"; a.move = null; // one hit only: the rest of the active window must not connect again
   // only side/top blast-zone deaths count: falling to the bottom is the dummy not recovering, not knockback
   for (let i = 0; i < 600; i++) {
     step(s, [EMPTY_INPUT, EMPTY_INPUT]);

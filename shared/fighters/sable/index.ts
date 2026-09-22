@@ -14,8 +14,8 @@ const stats: Stats = {
 // Every blade move has a tipper at the last 20% of the blade: priority 0 with more damage and knockback.
 const T = { fx: "tip" as const, priority: 0, electric: false };
 const S = { fx: "slash" as const, priority: 1 };
-const tip = (d: number) => Math.round(d * 1.4 * 10) / 10;
-const tipKb = (g: number) => Math.round(g * 1.3);
+const tip = (d: number) => Math.round(d * 1.3 * 10) / 10;
+const tipKb = (g: number) => Math.round(g * 1.15);
 
 const stanceA = { torso: 8, legF: 25, legF2: -20, legB: -25, legB2: 25, armF: 100, armF2: -20, weapon: 10, armB: -40, armB2: -40 };
 const lungePose = { torso: 30, legF: 70, legF2: -30, legB: -40, legB2: 10, armF: 60, armF2: 0, weapon: 0, armB: -40, armB2: -30 };
@@ -50,8 +50,8 @@ const moves: Record<string, Move> = {
     cap([9, 13], 30, -80, 100, -70, 12, 8, 55, 45, 60, S),
   ], [key(0, { a: { ...stanceA, torso: 30 } }), key(8, { a: { ...lungePose, torso: 45, armF: 60 }, dx: 16 }), key(14, { a: { ...lungePose, torso: 45 }, dx: 16 }), key(36, { a: stanceA, dx: 0 })], { motion: [[1, 9, 0], [9, 4, 0], [14, 1, 0]] }),
   fsmash: mv("fsmash", 50, [
-    hb([14, 16], 172, -84, 16, tip(16), 40, 45, tipKb(100), T),
-    cap([14, 16], 55, -88, 158, -84, 13, 16, 40, 45, 100, S),
+    hb([14, 16], 172, -84, 16, tip(16), 40, 55, tipKb(100), T),
+    cap([14, 16], 55, -88, 158, -84, 13, 16, 40, 55, 100, S),
   ], [key(0, { a: { ...stanceA, torso: -12, armF: 0, armF2: -40, weapon: 0 }, dx: -10 }), key(13, { a: { ...lungePose, torso: 34, armF: 62 }, dx: 26 }), key(18, { a: { ...lungePose, torso: 34, armF: 62 }, dx: 26 }), key(50, { a: stanceA, dx: 0 })], { smash: true, motion: [[13, 5, 0], [16, 0, 0]] }),
   usmash: mv("usmash", 44, [
     hb([10, 15], 24, -235, 16, tip(14), 90, 40, tipKb(100), T),
@@ -86,8 +86,8 @@ const moves: Record<string, Move> = {
   dashGrab: mv("dashGrab", 38, [hb([8, 9], 66, -80, 24, 0, 0, 0, 0, { grab: true })], [key(0, { a: stanceA }), key(7, { a: { ...stanceA, torso: 24, armB: 100, armB2: 0 }, dx: 10 }), key(12, { a: { ...stanceA, torso: 24, armB: 100 }, dx: 10 }), key(38, { a: stanceA, dx: 0 })], { isGrab: true, motion: [[1, 5, 0], [8, 0, 0]] }),
   pummel: mv("pummel", 14, [], [key(0, { a: { ...stanceA, armB: 98, armF: 60 } }), key(5, { a: { ...stanceA, armB: 98, armF: 110, armF2: -20 } }), key(14, { a: { ...stanceA, armB: 98, armF: 60 } })]),
   fthrow: throwMove("fthrow", 30, 12, 8, 45, 55, 65, [key(0, { a: { ...stanceA, armB: 98 } }), key(12, { a: { ...stanceA, torso: 20, armB: 130, armF: 100 }, dx: 8 }), key(30, { a: stanceA, dx: 0 })]),
-  bthrow: throwMove("bthrow", 34, 14, 9, 40, 60, 75, [key(0, { a: { ...stanceA, armB: 98 } }), key(14, { a: { ...stanceA, torso: -30, armB: -82, armF: -60 } }), key(34, { a: stanceA })]),
-  uthrow: throwMove("uthrow", 32, 14, 7, 90, 55, 60, [key(0, { a: { ...stanceA, armB: 98 } }), key(14, { a: { ...stanceA, torso: -10, armB: -172, armF: 172 } }), key(32, { a: stanceA })]),
+  bthrow: throwMove("bthrow", 34, 14, 9, 40, 65, 90, [key(0, { a: { ...stanceA, armB: 98 } }), key(14, { a: { ...stanceA, torso: -30, armB: -82, armF: -60 } }), key(34, { a: stanceA })]),
+  uthrow: throwMove("uthrow", 32, 14, 7, 90, 60, 85, [key(0, { a: { ...stanceA, armB: 98 } }), key(14, { a: { ...stanceA, torso: -10, armB: -172, armF: 172 } }), key(32, { a: stanceA })]),
   dthrow: throwMove("dthrow", 36, 16, 6, 60, 45, 50, [key(0, { a: { ...stanceA, armB: 98 } }), key(16, { a: { ...stanceA, torso: 40, armB: 53, armF: 30, legF: 50, legF2: -70, legB: -40, legB2: 70 }, dy: 20 }), key(36, { a: stanceA, dy: 0 })]),
   // Lunge: chargeable stab; full charge is a screen-length flash-step
   nspecial: mv("nspecial", 46, [

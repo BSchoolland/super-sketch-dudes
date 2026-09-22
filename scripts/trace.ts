@@ -9,7 +9,8 @@ a.x = -60; v.x = 0; v.facing = -1; a.facing = 1; a.moveFacing = 1; v.percent = p
 const m = roster[att].moves[mv];
 const hb = m.hitboxes.find((h) => h.priority === 0) ?? m.hitboxes[0];
 a.action = "attack"; a.move = mv; a.frame = hb.frames[0]; a.moveInstance = 1; a.chargeMul = 1;
-hitOf(s, a, v, hb, 0, -60, false);
+hitOf(s, a, v, hb, 0, -60, !!m.throwFrame);
+a.action = "idle"; a.move = null;
 console.log("pending", v.pending, "hitlag", v.hitlag);
 for (let i = 1; i <= 200; i++) {
   step(s, [EMPTY_INPUT, EMPTY_INPUT]);

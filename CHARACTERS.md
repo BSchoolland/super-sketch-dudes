@@ -4,7 +4,11 @@ Every fighter is a folder in `shared/fighters/<id>/` (stats, moves, rig, palette
 else has to know it exists: the roster is the list in `shared/fighters/index.ts`. Adding a fighter
 means adding a folder and a line. See ARCHITECTURE.md for the file shape and the tuning tools.
 
-Frame data below is the opening bid. The rule for tuning: every fighter must be able to win a
+Frame data below is the opening bid; the fighter data files are the truth once tuning starts, and
+`npx tsx scripts/killpercents.ts` (kill percent per move from centre and ledge, no DI) plus
+`npm run ladder` are the reference readouts. Calibration target: a tipper/strong smash kills a
+mid-weight from centre stage around 55-70%, from the ledge around 35-45%; tilts around 120-150%;
+kill throws around 160-190%. The rule for tuning: every fighter must be able to win a
 best-of-five against every other fighter at CPU level 9, and no matchup may fall outside 40/60 in
 the automated ladder (`npm run ladder`). Numbers are frames unless stated. Angles are degrees
 from the victim's facing (0 = straight away from the attacker, 90 = straight up). Knockback is
