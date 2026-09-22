@@ -8,7 +8,7 @@ const serverTarget = process.env.RINGOUT_SERVER ?? "http://localhost:3008";
 
 export default defineConfig({
   root: path.resolve(__dirname),
-  base: "/ringout/",
+  base: process.env.RINGOUT_BASE ?? "/ringout/",
   define: { __BUILD__: JSON.stringify(build) },
   build: { outDir: path.resolve(__dirname, "../dist/client"), emptyOutDir: true, target: "es2022" },
   server: {
