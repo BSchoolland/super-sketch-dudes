@@ -134,19 +134,27 @@ export function playEvents(events: GameEvent[]): void {
 }
 
 /** Generative music: a slow chord pad and a pulse whose rate follows match intensity (0..1). */
+interface Theme { base: number; chord: number[]; bass: number[]; bpm: number; pad: OscillatorType; pulse: OscillatorType }
+const THEMES: Record<string, Theme> = {
+  proving: { base: 110, chord: [0, 7, 12, 19], bass: [0, 0, 7, 5, 0, 0, 10, 7], bpm: 96, pad: "triangle", pulse: "square" },
+  rooftops: { base: 98, chord: [0, 3, 7, 14], bass: [0, 0, 3, 5, 0, 0, 10, 8], bpm: 108, pad: "sawtooth", pulse: "square" },
+  kessler: { base: 82.4, chord: [0, 7, 14, 21], bass: [0, 12, 7, 0, 5, 12, 7, 3], bpm: 84, pad: "sine", pulse: "triangle" },
+};
+
 export class Music {
   private nodes: { osc: OscillatorNode; gain: GainNode }[] = [];
   private pulseTimer = 0;
   private intensity = 0;
   private started = false;
   private root = 0;
-  start(): void {
+  private theme: Theme = THEMES.proving;
+  start(themeId = "proving"): void {
     const c = audioContext(); if (!c || !master || this.started) return;
     this.started = true;
-    const chord = [0, 7, 12, 19];
-    for (const semi of chord) {
-      const osc = c.createOscillator(); osc.type = "triangle";
-      osc.frequency.value = 110 * Math.pow(2, semi / 12);
+    this.theme = THEMES[themeId] ?? THEMES.proving;
+    for (const semi of this.theme.chord) {
+      const osc = c.createOscillator(); osc.type = this.theme.pad;
+      osc.frequency.value = this.theme.base * Math.pow(2, semi / 12);
       const g = c.createGain(); g.gain.value = 0;
       const f = c.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 700;
       osc.connect(f); f.connect(g); g.connect(master);
@@ -162,11 +170,11 @@ export class Music {
     this.nodes.forEach((n, i) => { n.gain.gain.value = vol * (i === 0 ? 1.2 : 0.6); });
     this.pulseTimer -= dt;
     if (this.pulseTimer <= 0) {
-      const bpm = 96 + this.intensity * 60;
+      const bpm = this.theme.bpm + this.intensity * 60;
       this.pulseTimer = 60 / bpm;
       this.root = (this.root + 1) % 8;
-      const notes = [0, 0, 7, 5, 0, 0, 10, 7];
-      tone({ freq: 55 * Math.pow(2, notes[this.root] / 12), dur: 0.18, gain: audioSettings.music * (0.12 + this.intensity * 0.12), type: "square", attack: 0.002 });
+      const notes = this.theme.bass;
+      tone({ freq: (this.theme.base / 2) * Math.pow(2, notes[this.root] / 12), dur: 0.18, gain: audioSettings.music * (0.12 + this.intensity * 0.12), type: this.theme.pulse, attack: 0.002 });
       if (this.root % 2 === 0) burst({ freq: 3000, q: 0.5, dur: 0.04, gain: audioSettings.music * 0.06, type: "highpass" });
     }
   }

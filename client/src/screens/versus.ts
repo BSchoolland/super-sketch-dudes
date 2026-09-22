@@ -6,7 +6,7 @@ import { Renderer } from "../render/render";
 import { drawBanner, SLOT_COLORS } from "../render/hud";
 import { Music, playEvents, sfx } from "../audio/audio";
 import { card, label, title, type Screen, INK, settings } from "./ui";
-import type { MatchConfig } from "../../../shared/sim";
+import { stageOf, type MatchConfig } from "../../../shared/sim";
 import { B } from "../../../shared/input";
 import { roster } from "../../../shared/fighters/index";
 import { currentMove } from "../../../shared/fighter";
@@ -34,7 +34,7 @@ export class VersusScreen implements Screen {
     this.renderer.showHitboxes = training;
     if (training) { this.match.state.fighters.forEach((f) => (f.stocks = 99)); if (this.match.sources[1]) { this.match.sources[1].cpu = 0; this.match.state.fighters[1].cpu = 0; this.renderer.names[1] = "DUMMY"; } }
   }
-  enter(): void { this.music.start(); }
+  enter(): void { this.music.start(stageOf(this.match.state).theme); }
   update(dt: number, m: MenuInput): Screen | null {
     const st = this.match.state;
     if (this.countdown > 0) {
