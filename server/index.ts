@@ -9,6 +9,7 @@ import { attachLobby } from "./lobby";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
 const PORT = Number(process.env.PORT ?? 3008);
+const BASE = (process.env.RINGOUT_BASE ?? "/ringout/").replace(/\/$/, "");
 const DATA_DIR = process.env.RINGOUT_DATA ?? path.join(root, "server-data");
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -17,7 +18,7 @@ app.use(express.json({ limit: "8kb" }));
 const api = express.Router();
 // Apache proxies /ringout/* to / here; when hit directly the prefix is still present, so mount both.
 app.use("/api", api);
-app.use("/ringout/api", api);
+app.use(`${BASE}/api`, api);
 
 api.get("/health", (_req, res) => res.json({ ok: true, build: process.env.BUILD ?? "dev" }));
 
@@ -34,15 +35,15 @@ api.post("/log", (req, res) => {
 
 const clientDir = fs.existsSync(path.join(root, "dist", "client")) ? path.join(root, "dist", "client") : path.join(root, "client");
 const staticOpts = { maxAge: "1h", setHeaders: (res: express.Response, p: string) => { if (p.endsWith(".html")) res.setHeader("Cache-Control", "no-cache"); } };
-app.use("/ringout", express.static(clientDir, staticOpts));
+app.use(BASE, express.static(clientDir, staticOpts));
 app.use("/", express.static(clientDir, staticOpts));
-app.get(["/", "/ringout", "/ringout/"], (_req, res) => res.sendFile(path.join(clientDir, "index.html")));
+app.get(["/", BASE, `${BASE}/`], (_req, res) => res.sendFile(path.join(clientDir, "index.html")));
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ noServer: true });
 server.on("upgrade", (req, socket, head) => {
   const url = req.url ?? "";
-  if (url === "/ws" || url === "/ringout/ws" || url.startsWith("/ws?") || url.startsWith("/ringout/ws?")) {
+  if (url === "/ws" || url === `${BASE}/ws` || url.startsWith("/ws?") || url.startsWith(`${BASE}/ws?`)) {
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
   } else socket.destroy();
 });
