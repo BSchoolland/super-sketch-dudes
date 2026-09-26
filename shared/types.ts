@@ -267,6 +267,8 @@ export interface Platform {
   bottom?: number;
   /** Moving platforms report their own offset per frame; static ones omit it. */
   motion?: { kind: "orbit"; cx: number; cy: number; rx: number; ry: number; period: number; phase: number };
+  /** Drawn by the screen that owns the stage (the title screen's menu cards), not the stage renderer. */
+  hidden?: boolean;
 }
 export interface Ledge {
   x: number;

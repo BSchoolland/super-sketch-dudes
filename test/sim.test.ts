@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { createMatch, step, cloneState, hashState } from "../shared/sim";
+import { createFighter, createMatch, step, cloneState, hashState } from "../shared/sim";
+import { stages } from "../shared/stages/index";
 import { cpuInput } from "../shared/cpu";
 import { B, EMPTY_INPUT, type InputFrame } from "../shared/input";
 import { knockback } from "../shared/hits";
@@ -121,5 +122,27 @@ describe("a full CPU match ends", () => {
     let frames = 0;
     while (!s.ended && frames < 60 * 240) { step(s, [cpuInput(s, 0, 9), cpuInput(s, 1, 9)]); s.events.length = 0; frames++; }
     expect(s.ended).toBe(true);
+  });
+});
+
+describe("menu brawl stage", () => {
+  it("runs six CPUs for a minute on the title screen's stage, fighters dropping in mid-match, and never ends", async () => {
+    await loadAllHouse();
+    const ids = ["woodstove", "slugbert", "rocket", "wizard", "lampjack", "woodstove"];
+    const s = createMatch({ stage: "menu", players: ids.slice(0, 2).map((fighter) => ({ fighter, cpu: 9 })), rules: { stocks: 99, time: 0 }, seed: 11 });
+    const stage = stages.menu;
+    for (let frame = 0; frame < 3600; frame++) {
+      if (frame % 600 === 599 && s.fighters.length < 6) {
+        const slot = s.fighters.length;
+        s.fighters.push(createFighter(slot, ids[slot], stage, s.rules, slot, 9));
+        s.inputs.push({ ...EMPTY_INPUT });
+        s.fighters[slot].x = stage.respawn.x; s.fighters[slot].y = stage.respawn.y; s.fighters[slot].grounded = false;
+      }
+      step(s, s.fighters.map((_, i) => cpuInput(s, i, 9)));
+      s.ended = false;
+      s.events.length = 0;
+    }
+    expect(s.fighters.length).toBe(6);
+    expect(s.fighters.every((f) => Number.isFinite(f.x) && Number.isFinite(f.y))).toBe(true);
   });
 });

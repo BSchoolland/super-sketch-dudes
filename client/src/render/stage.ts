@@ -50,6 +50,7 @@ export function drawBackdrop(ctx: CanvasRenderingContext2D, stage: Stage, cam: C
 
 export function drawStage(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void {
   stage.platforms.forEach((p, i) => {
+    if (p.hidden) return;
     const o = platformOffset(state, i);
     const x = p.x1 + o.dx, y = p.y + o.dy, w = p.x2 - p.x1;
     const h = p.solid ? p.bottom! - p.y : p.motion ? 42 : 16;

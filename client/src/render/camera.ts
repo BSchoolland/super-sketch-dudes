@@ -8,9 +8,12 @@ export class Camera {
   tx = 0; ty = 0; tz = 0.8;
   trauma = 0;
   shakeX = 0; shakeY = 0;
+  /** World units are view pixels and nothing moves the camera (the title screen's brawl). */
+  fixed = false;
   private seed = 1;
 
   solve(state: State, stage: Stage, interp: { x: number; y: number }[]): void {
+    if (this.fixed) { this.x = this.tx = VIEW_W / 2; this.y = this.ty = VIEW_H / 2; this.zoom = this.tz = 1; return; }
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, n = 0;
     state.fighters.forEach((f, i) => {
       if (f.action === "dead" || f.stocks <= 0) return;
@@ -47,7 +50,7 @@ export class Camera {
     this.x += (this.tx - this.x) * k * 0.9;
     this.y += (this.ty - this.y) * k * 0.9;
     this.zoom += (this.tz - this.zoom) * k * 0.6;
-    this.trauma = Math.max(0, this.trauma - dt * 1.6);
+    this.trauma = this.fixed ? 0 : Math.max(0, this.trauma - dt * 1.6);
     const s = this.trauma * this.trauma;
     this.seed = (this.seed * 16807) % 2147483647;
     const r1 = (this.seed / 2147483647) * 2 - 1;

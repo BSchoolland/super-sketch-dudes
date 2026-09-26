@@ -77,6 +77,12 @@ export function stepPhysics(state: State, f: Fighter, input: InputFrame, stage: 
     // flew into the wall or came down beside it; only flying into it counts as a wall hit
     if (feetInside && f.x < t.x1 && f.x + halfW > t.x1) { const flew = px + halfW <= t.x1 + 0.5; f.x = t.x1 - halfW; if (flew) hitWall(state, f, def, 1, input); }
     else if (feetInside && f.x > t.x2 && f.x - halfW < t.x2) { const flew = px - halfW >= t.x2 - 0.5; f.x = t.x2 + halfW; if (flew) hitWall(state, f, def, -1, input); }
+    // a big launch can carry the centre through a wall in one frame: back out the way it came
+    else if (feetInside && f.x >= t.x1 && f.x <= t.x2 && py > t.y + 0.01 && (px < t.x1 || px > t.x2)) {
+      const side: 1 | -1 = px < t.x1 ? 1 : -1;
+      f.x = side === 1 ? t.x1 - halfW : t.x2 + halfW;
+      hitWall(state, f, def, side, input);
+    }
     // ceiling
     if (f.vy < 0 && f.x > t.x1 && f.x < t.x2 && py - s.height >= bottom && f.y - s.height < bottom) { f.y = bottom + s.height; f.vy = 0; }
   }

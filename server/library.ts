@@ -62,6 +62,12 @@ export function findCharacter(id: string): LibraryEntry | null {
   return null;
 }
 
+/** Every ready character in every library, for the title screen's brawl. */
+export function everyCharacter(): LibraryEntry[] {
+  for (const f of fs.readdirSync(dir)) load(path.basename(f, ".json"));
+  return [...cache.values()].flatMap((lib) => lib.characters.filter((c) => c.status === "ready" && c.bundleUrl));
+}
+
 /** Adds or replaces the entry (by id) in its owner's library. */
 export function upsertCharacter(entry: LibraryEntry, player?: Player): LibraryEntry {
   const lib = load(entry.owner);

@@ -2,10 +2,9 @@ import type { Stage, StageId } from "../types";
 import { provingGround } from "./proving-ground";
 import { rooftops } from "./rooftops";
 import { kesslerField } from "./kessler-field";
+import { menuStage } from "./menu";
 
-export const stages: Record<StageId, Stage> = {
-  [rooftops.id]: rooftops,
-  [provingGround.id]: provingGround,
-  [kesslerField.id]: kesslerField,
-};
-export const stageList: Stage[] = Object.values(stages);
+/** The stages a match can be played on. */
+export const stageList: Stage[] = [rooftops, provingGround, kesslerField];
+/** Every stage the sim knows, including the title screen's brawl stage. */
+export const stages: Record<StageId, Stage> = Object.fromEntries([...stageList, menuStage].map((s) => [s.id, s]));

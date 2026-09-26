@@ -6,8 +6,10 @@ import { account } from "../account";
 import { refreshLibrary } from "../fighters";
 import { bg, card, hint, label, title, hover, clicked, goTo, type Screen, INK } from "./ui";
 import { image } from "./draw/images";
+import { MenuBrawl } from "./brawl";
+import { MENU_CARD } from "../../../shared/stages/menu";
 
-const MENU_Y = 350, MENU_STEP = 96;
+const MENU_Y = MENU_CARD.y0, MENU_STEP = MENU_CARD.step;
 
 export type Mode = "draw" | "create" | "library" | "quick" | "couch" | "settings";
 
@@ -53,9 +55,11 @@ export class TitleScreen implements Screen {
     { id: "couch", name: "COUCH CO-OP", desc: "Play with friends on the same device or against bots" },
     { id: "settings", name: "SETTINGS", desc: "Change settings" },
   ];
+  brawl: MenuBrawl | null = null;
   constructor(private onPick: (m: Mode) => Screen) {}
   enter(): void {
     void refreshLibrary();
+    this.brawl = new MenuBrawl();
   }
   update(_dt: number, m: MenuInput): Screen | null {
     if (m.up) { this.sel = (this.sel + this.items.length - 1) % this.items.length; sfx.menuMove(); }
@@ -67,16 +71,18 @@ export class TitleScreen implements Screen {
     this.t += dt;
     bg(ctx, this.t);
     drawLogo(ctx, 170);
-    drawPlayerBadge(ctx);
-    const x = VIEW_W / 2 - 260;
+    const x = MENU_CARD.x, w = MENU_CARD.w, h = MENU_CARD.h;
     this.items.forEach((it, i) => {
       const y = MENU_Y + i * MENU_STEP;
       const sel = i === this.sel;
-      if (hover(x, y, 520, 88)) { this.sel = i; document.body.style.cursor = "pointer"; }
-      if (clicked(x, y, 520, 88)) { sfx.menuConfirm(); goTo(this.onPick(it.id)); }
-      card(ctx, x, y, 520, 88, "", sel);
-      title(ctx, it.name, x + 260, y + 60, 42, INK);
+      if (hover(x, y, w, h)) { this.sel = i; document.body.style.cursor = "pointer"; }
+      if (clicked(x, y, w, h)) { sfx.menuConfirm(); goTo(this.onPick(it.id)); }
+      card(ctx, x, y, w, h, "", sel);
+      title(ctx, it.name, x + w / 2, y + 60, 42, INK);
     });
+    // the brawl plays over the menu: fighters stand on the cards and the logo
+    if (this.brawl) { this.brawl.update(dt); this.brawl.draw(ctx, dt); }
+    drawPlayerBadge(ctx);
     label(ctx, this.items[this.sel].desc, VIEW_W / 2, MENU_Y + this.items.length * MENU_STEP + 30, 26, INK, "center");
     hint(ctx, "click, or arrows + Enter · gamepad: stick + A");
     label(ctx, `build ${__BUILD__}`, VIEW_W - 20, VIEW_H - 16, 14, "rgba(41,39,34,0.5)", "right", 400);

@@ -26,6 +26,8 @@ export class Renderer {
   projGhosts: ProjGhost[] = [];
   time = 0;
   showHitboxes = false;
+  /** Backdrop, HUD and the slot markers over heads; the title screen's brawl draws fighters only. */
+  chrome = true;
   names: string[];
   private prevPos: { x: number; y: number }[] = [];
   private curPos: { x: number; y: number }[] = [];
@@ -92,7 +94,7 @@ export class Renderer {
     this.ghosts = this.ghosts.filter((g) => g.age < 0.22);
 
     ctx.save();
-    drawBackdrop(ctx, stage, this.cam, this.time);
+    if (this.chrome) drawBackdrop(ctx, stage, this.cam, this.time);
     ctx.save();
     this.cam.apply(ctx);
     drawStage(ctx, state, stage);
@@ -124,7 +126,7 @@ export class Renderer {
     if (this.showHitboxes) this.drawBoxes(ctx, state);
     ctx.restore();
     this.fx.drawScreen(ctx, VIEW_W, VIEW_H, this.cam);
-    drawHud(ctx, state, this.hud, dt, this.names);
+    if (this.chrome) drawHud(ctx, state, this.hud, dt, this.names);
     ctx.restore();
   }
 
@@ -200,6 +202,7 @@ export class Renderer {
       ctx.fillStyle = "#fff"; ctx.fillRect(pos.x - 30, pos.y - def.stats.height - 28, 60 * Math.min(1, f.special.charge / 60), 4);
       ctx.restore();
     }
+    if (!this.chrome) return;
     // slot marker above the head
     ctx.save();
     ctx.fillStyle = SLOT_COLORS[f.slot] ?? "#fff";

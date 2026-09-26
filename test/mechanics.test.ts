@@ -125,6 +125,17 @@ describe("defensive mechanics", () => {
 });
 
 describe("edges", () => {
+  it("a launch fast enough to put the centre inside the stage's side in one frame is pushed back out", () => {
+    const s = two();
+    const f = s.fighters[0];
+    const halfW = roster.lampjack.stats.width / 2;
+    f.grounded = false; f.platform = -1; f.action = "tumble"; f.hitstun = 40; f.frame = 2;
+    f.x = 560 + halfW + 10; f.y = 80; f.vx = -90; f.vy = 0;
+    s.fighters[1].x = -300;
+    step(s, [EMPTY_INPUT, EMPTY_INPUT]);
+    expect(f.x - halfW).toBeGreaterThanOrEqual(560 - 0.01);
+  });
+
   it("a fighter coming down beside the edge is pushed clear of the wall instead of sinking into the stage's side", () => {
     for (const action of ["attack", "hitstun", "air"] as const) {
       const s = two();

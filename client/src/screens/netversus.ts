@@ -1,6 +1,6 @@
 import type { FighterId, StageId } from "../../../shared/types";
 import { roster } from "../../../shared/fighters/index";
-import { stages } from "../../../shared/stages/index";
+import { stageList } from "../../../shared/stages/index";
 import type { MatchConfig } from "../../../shared/sim";
 import { VIEW_W } from "../render/camera";
 import { drawBanner } from "../render/hud";
@@ -24,7 +24,7 @@ export function startConfig(value: unknown, seed: number): { match: MatchConfig;
   if (!value || typeof value !== "object") throw new Error("online start missing config");
   const raw = value as Record<string, unknown>;
   const stage = String(raw.stage ?? "") as StageId;
-  if (!stages[stage]) throw new Error(`online start has unknown stage ${stage}`);
+  if (!stageList.some((s) => s.id === stage)) throw new Error(`online start has unknown stage ${stage}`);
   if (!Array.isArray(raw.players) || raw.players.length < 2 || raw.players.length > 4) throw new Error("online start has invalid players");
   const bundles: string[] = [];
   const players = raw.players.map((player) => {

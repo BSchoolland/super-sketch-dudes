@@ -5,7 +5,7 @@ import { DRAW_PNG_MAX_BYTES } from "../shared/draw";
 import { playerOf } from "./auth";
 import { drawingUrlOf, enqueueJob, entryOf, jobOf, newFighterId, storeCharacter } from "./forge";
 import { upsertCharacter } from "./library";
-import { libraryOf, removeCharacter, setStarters, starterEntries, starterIds } from "./library";
+import { everyCharacter, libraryOf, removeCharacter, setStarters, starterEntries, starterIds } from "./library";
 
 /** The character creator and the library, over HTTP, for signed-in players. */
 export function attachCharacters(api: express.Router, forgeToken = "", dataDir = ""): void {
@@ -60,6 +60,11 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
       const entry = upsertCharacter({ id, owner, status: "ready", stage: "", error: null, ...result, drawingUrl: drawingUrlOf(id), createdAt: Date.now(), origin: "creator" });
       res.json({ character: entry });
     } catch (e) { res.status(400).json({ error: (e as Error).message }); }
+  });
+
+  // everyone's finished characters, for the title screen's brawl: just enough to load and name them
+  api.get("/characters/everyone", (_req, res) => {
+    res.json({ characters: everyCharacter().map((c) => ({ id: c.id, name: c.name, bundleUrl: c.bundleUrl })) });
   });
 
   api.get("/characters/:id", (req, res) => {
