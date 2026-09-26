@@ -5,7 +5,31 @@ import type { Action, Fighter, FighterDef, Move, Stage, State } from "./types";
 import { roster } from "./fighters/index";
 import { hitOf } from "./hits";
 
-export const defOf = (f: Fighter): FighterDef => roster[f.id];
+const formDefs = new WeakMap<FighterDef, Map<string, FighterDef>>();
+/** The def as seen in the given form: the base def with the form's overlay merged in, built once per (def, form). */
+export function formDef(base: FighterDef, form: string): FighterDef {
+  let byForm = formDefs.get(base);
+  if (!byForm) { byForm = new Map(); formDefs.set(base, byForm); }
+  let def = byForm.get(form);
+  if (!def) {
+    const o = base.forms?.[form];
+    if (!o) throw new Error(`${base.id} has no form ${form}`);
+    def = {
+      ...base,
+      stats: { ...base.stats, ...o.stats },
+      moves: { ...base.moves, ...o.moves },
+      rig: { ...base.rig, anims: { ...base.rig.anims, ...o.poses }, loops: { ...base.rig.loops, ...o.loops } },
+      sprite: base.sprite && { ...base.sprite, anims: { ...base.sprite.anims, ...o.anims } },
+    };
+    byForm.set(form, def);
+  }
+  return def;
+}
+export const defOf = (f: Fighter): FighterDef => {
+  const base = roster[f.id];
+  const form = base.form?.(f);
+  return form ? formDef(base, form) : base;
+};
 
 export interface Edges {
   pressed: number;

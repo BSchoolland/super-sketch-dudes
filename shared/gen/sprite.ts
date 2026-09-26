@@ -30,7 +30,11 @@ export function cellForAnim(def: FighterDef, anim: string): SpriteCell {
 export function cellFor(f: Fighter, def: FighterDef, anim: string): { cell: SpriteCell; flip: boolean } {
   if (f.action === "attack" || f.action === "smashCharge") {
     const mv = f.move ? def.moves[f.move] : null;
-    if (mv) return { cell: (mv.cell as SpriteCell) ?? defaultCellForMove(mv.id), flip: !!mv.cellFlip };
+    if (mv) {
+      let cell = (mv.cell as SpriteCell) ?? defaultCellForMove(mv.id);
+      for (const [from, c] of mv.cells ?? []) if (f.frame >= from) cell = c as SpriteCell;
+      return { cell, flip: !!mv.cellFlip };
+    }
   }
   return { cell: cellForAnim(def, anim), flip: false };
 }

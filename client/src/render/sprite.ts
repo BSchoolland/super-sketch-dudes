@@ -1,5 +1,6 @@
 import type { FighterDef, Pose } from "../../../shared/types";
 import { PAPER, PENCIL } from "./paper";
+import { roster } from "../../../shared/fighters/index";
 
 /**
  * Drawn fighters: one image per sheet cell, tinted variants built once. Cells are square PNGs
@@ -52,7 +53,7 @@ export function drawSprite(ctx: CanvasRenderingContext2D, def: FighterDef, cell:
   if (!sp) throw new Error(`${def.id} has no sprite`);
   const url = sp.cells[cell] ?? sp.cells.idle;
   const e = load(url);
-  const u = def.stats.height / sp.heightPx;
+  const u = (roster[def.id] ?? def).stats.height / sp.heightPx;
   ctx.save();
   if (opts.alpha !== undefined) ctx.globalAlpha *= opts.alpha;
   ctx.translate(pose.dx ?? 0, pose.dy ?? 0);

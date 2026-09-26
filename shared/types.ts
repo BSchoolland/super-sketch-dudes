@@ -122,6 +122,8 @@ export interface Move {
   helpless?: boolean;
   /** Fighter-specific hook name, run each frame of the move. */
   hook?: string;
+  /** Sprite fighters: cell changes over the move as [fromFrame, cell] pairs, e.g. a transformation strip. */
+  cells?: [number, string][];
   /** Renderer effect tag for the move (trail, flame, etc). */
   fx?: string;
   /** Voice/sound tag. */
@@ -196,6 +198,21 @@ export interface SpriteRig {
   heightPx: number;
 }
 
+/**
+ * A form is an overlay on the fighter's def: stats, moves, sprite anims and pose tracks that replace
+ * the base ones while `FighterDef.form(f)` names it (a car mode, a powered-up stance). Everything
+ * else (hooks, hitbox helpers, cells) is shared.
+ */
+export interface FighterForm {
+  stats?: Partial<Stats>;
+  moves?: Record<string, Move>;
+  /** Animation name -> sprite cell, over the base sprite.anims. */
+  anims?: Record<string, string>;
+  /** Pose tracks over rig.anims, and their loop lengths. */
+  poses?: Record<string, PoseKey[]>;
+  loops?: Record<string, number>;
+}
+
 export interface FighterDef {
   id: FighterId;
   name: string;
@@ -210,6 +227,9 @@ export interface FighterDef {
   generated?: { player: string; description: string };
   /** Initial value of fighter.special (must be a plain object). */
   special: () => Record<string, number>;
+  /** Alternate forms, and which one the fighter is in (null/undefined = base). Read every frame; keep it a pure function of the fighter. */
+  forms?: Record<string, FighterForm>;
+  form?: (f: Fighter) => string | null | undefined;
   /** Named hooks referenced from moves. Run each frame of the move; may mutate the fighter and state. */
   hooks: Record<string, (ctx: HookCtx) => void>;
   /** Called when this fighter lands a hit. */

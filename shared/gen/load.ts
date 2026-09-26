@@ -1,4 +1,5 @@
-import type { FighterDef, SpriteRig } from "../types";
+import { formDef } from "../fighter";
+import type { Move, FighterDef, SpriteRig } from "../types";
 import { generatedApi } from "./api";
 import { SPRITE_CELLS, defaultCellForMove, STATE_CELLS } from "./sprite";
 
@@ -67,6 +68,38 @@ const STAT_RANGES: Record<string, [number, number]> = {
   crouchHeight: [30, 300], landLag: [0, 30], ledgeReach: [0, 120],
 };
 
+function checkMoves(moves: Record<string, Move>, def: FighterDef, cells: Set<string>, p: string[], at: string): void {
+  for (const [id, mv] of Object.entries(moves)) {
+    if (mv.id !== id) p.push(`${at}moves.${id}.id is ${mv.id}`);
+    if (!Number.isInteger(mv.total) || mv.total < 1 || mv.total > 600) p.push(`${at}${id}.total must be 1..600`);
+    if (!Array.isArray(mv.poses) || !mv.poses.length) p.push(`${at}${id} has no poses`);
+    if (!Array.isArray(mv.hitboxes)) p.push(`${at}${id}.hitboxes missing`);
+    else for (const [i, h] of mv.hitboxes.entries()) {
+      for (const k of ["x", "y", "r", "damage", "angle", "base", "growth"] as const) if (typeof h[k] !== "number" || !isFinite(h[k])) p.push(`${at}${id}.hitboxes[${i}].${k} not a finite number`);
+      if (!Array.isArray(h.frames) || h.frames.length !== 2) p.push(`${at}${id}.hitboxes[${i}].frames malformed`);
+      else if (!mv.throwFrame && h.frames[1] > mv.total) p.push(`${at}${id}.hitboxes[${i}] active past total`);
+      if (h.r < 0 || h.r > 400) p.push(`${at}${id}.hitboxes[${i}].r outside 0..400`);
+      if (h.damage < 0 || h.damage > 999) p.push(`${at}${id}.hitboxes[${i}].damage outside 0..999`);
+    }
+    const cell = mv.cell ?? defaultCellForMove(id);
+    if (!cells.has(cell)) p.push(`${at}${id} shows cell "${cell}" which the sheet doesn't have`);
+    for (const [from, c] of mv.cells ?? []) {
+      if (!Number.isInteger(from) || from < 0) p.push(`${at}${id}.cells has a bad frame ${from}`);
+      if (!cells.has(c)) p.push(`${at}${id}.cells names cell "${c}" which the sheet doesn't have`);
+    }
+    if (mv.hook && typeof def.hooks?.[mv.hook] !== "function") p.push(`${at}${id} names hook "${mv.hook}" which isn't a function`);
+    if (mv.next && !def.moves[mv.next]) p.push(`${at}${id}.next names unknown move ${mv.next}`);
+    if (mv.counter && !def.moves[mv.counter.move]) p.push(`${at}${id}.counter.move names unknown move ${mv.counter.move}`);
+  }
+}
+
+function checkAnims(anims: Record<string, string>, cells: Set<string>, p: string[], at: string): void {
+  for (const [anim, cell] of Object.entries(anims)) {
+    if (!(anim in STATE_CELLS)) p.push(`${at}.${anim} is not a state animation`);
+    if (!cells.has(cell)) p.push(`${at}.${anim} -> "${cell}" which the sheet doesn't have`);
+  }
+}
+
 export function validateGenerated(def: FighterDef): string[] {
   const p: string[] = [];
   if (typeof def.name !== "string" || !def.name.trim()) p.push("name missing");
@@ -81,27 +114,22 @@ export function validateGenerated(def: FighterDef): string[] {
   for (const m of CORE_MOVES) if (!def.moves[m]) p.push(`missing core move ${m}`);
   const cells = new Set(Object.keys(def.sprite?.cells ?? {}));
   for (const c of SPRITE_CELLS) if (!cells.has(c)) p.push(`sprite is missing cell ${c}`);
-  for (const [id, mv] of Object.entries(def.moves)) {
-    if (mv.id !== id) p.push(`moves.${id}.id is ${mv.id}`);
-    if (!Number.isInteger(mv.total) || mv.total < 1 || mv.total > 600) p.push(`${id}.total must be 1..600`);
-    if (!Array.isArray(mv.poses) || !mv.poses.length) p.push(`${id} has no poses`);
-    if (!Array.isArray(mv.hitboxes)) p.push(`${id}.hitboxes missing`);
-    else for (const [i, h] of mv.hitboxes.entries()) {
-      for (const k of ["x", "y", "r", "damage", "angle", "base", "growth"] as const) if (typeof h[k] !== "number" || !isFinite(h[k])) p.push(`${id}.hitboxes[${i}].${k} not a finite number`);
-      if (!Array.isArray(h.frames) || h.frames.length !== 2) p.push(`${id}.hitboxes[${i}].frames malformed`);
-      else if (!mv.throwFrame && h.frames[1] > mv.total) p.push(`${id}.hitboxes[${i}] active past total`);
-      if (h.r < 0 || h.r > 400) p.push(`${id}.hitboxes[${i}].r outside 0..400`);
-      if (h.damage < 0 || h.damage > 999) p.push(`${id}.hitboxes[${i}].damage outside 0..999`);
+  checkMoves(def.moves, def, cells, p, "");
+  checkAnims(def.sprite?.anims ?? {}, cells, p, "sprite.anims");
+  if (def.forms !== undefined || def.form !== undefined) {
+    if (!def.forms || typeof def.forms !== "object") p.push("forms must be an object of form overlays");
+    else if (typeof def.form !== "function") p.push("form must be a function when forms are defined");
+    else for (const [name, o] of Object.entries(def.forms)) {
+      if (!o || typeof o !== "object") { p.push(`forms.${name} must be an object`); continue; }
+      const merged = formDef(def, name);
+      for (const [k, [lo, hi]] of Object.entries(STAT_RANGES)) {
+        const v = (merged.stats as unknown as Record<string, number>)[k];
+        if (typeof v !== "number" || !isFinite(v)) p.push(`forms.${name}.stats.${k} must be a finite number`);
+        else if (v < lo || v > hi) p.push(`forms.${name}.stats.${k}=${v} outside ${lo}..${hi}`);
+      }
+      if (o.moves) checkMoves(o.moves, merged, cells, p, `forms.${name}.`);
+      checkAnims(o.anims ?? {}, cells, p, `forms.${name}.anims`);
     }
-    const cell = mv.cell ?? defaultCellForMove(id);
-    if (!cells.has(cell)) p.push(`${id} shows cell "${cell}" which the sheet doesn't have`);
-    if (mv.hook && typeof def.hooks?.[mv.hook] !== "function") p.push(`${id} names hook "${mv.hook}" which isn't a function`);
-    if (mv.next && !def.moves[mv.next]) p.push(`${id}.next names unknown move ${mv.next}`);
-    if (mv.counter && !def.moves[mv.counter.move]) p.push(`${id}.counter.move names unknown move ${mv.counter.move}`);
-  }
-  for (const [anim, cell] of Object.entries(def.sprite?.anims ?? {})) {
-    if (!(anim in STATE_CELLS)) p.push(`sprite.anims.${anim} is not a state animation`);
-    if (!cells.has(cell)) p.push(`sprite.anims.${anim} -> "${cell}" which the sheet doesn't have`);
   }
   if (typeof def.special !== "function") p.push("special must be a function returning a plain object of numbers");
   else {
