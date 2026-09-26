@@ -18,7 +18,7 @@ for (const arg of process.argv.slice(2)) {
   } else {
     source = fs.readFileSync(path.join(dir, "fighter.js"), "utf8");
     const extra = fs.existsSync(path.join(dir, "meta.json")) ? JSON.parse(fs.readFileSync(path.join(dir, "meta.json"), "utf8")) : {};
-    Object.assign({ name, tagline, description, card }, extra); name = extra.name ?? name; tagline = extra.tagline ?? ""; description = extra.description ?? ""; card = extra.card ?? null;
+    name = extra.name ?? name; tagline = extra.tagline ?? ""; description = extra.description ?? ""; card = extra.card ?? null; anims = extra.anims ?? {};
   }
   const dest = path.join(out, id);
   fs.rmSync(dest, { recursive: true, force: true }); fs.mkdirSync(dest, { recursive: true });

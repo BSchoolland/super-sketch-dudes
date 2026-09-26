@@ -1,0 +1,16 @@
+{
+ "px": 512,
+ "feetPx": 448,
+ "heightPx": 300,
+ "cells": {
+  "idle": {},
+  "walk": {},
+  "jump": {},
+  "atk-fwd": {},
+  "atk-up": {},
+  "atk-down": {},
+  "hit": {},
+  "launched": {},
+  "block": {}
+ }
+}

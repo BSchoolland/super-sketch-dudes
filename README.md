@@ -28,9 +28,9 @@ dodge; shield just before a hit lands parries.
 
 ## Fighters
 
-The house roster (`client/public/house/`, ids in `shared/house.ts`) is three forged characters that
+The house roster (`client/public/house/`, ids in `shared/house.ts`) is four forged characters that
 ship with the game and stand in as CPU opponents and the forge's balance ladder: **WOODSTOVE**,
-**SLUGBERT** and **ROCKET**. Everything else a player fights is drawn and forged.
+**SLUGBERT**, **ROCKET** and **WIZARD**. Everything else a player fights is drawn and forged.
 
 ## Development
 

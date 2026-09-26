@@ -26,7 +26,7 @@ export interface CheckReport {
 }
 
 /** The balance ladder, from the house roster: an all-rounder, a heavy, a swordsman and a floaty zoner. */
-export const LADDER: readonly HouseId[] = ["woodstove", "slugbert", "rocket"];
+export const LADDER: readonly HouseId[] = ["woodstove", "slugbert", "rocket", "wizard"];
 /** The punching bag for the move, recovery and KO checks. */
 const DUMMY: HouseId = "woodstove";
 const LADDER_MATCHES = 2, LEVEL = 9, CAP_FRAMES = 60 * 180, SOFT_SECONDS = 25;

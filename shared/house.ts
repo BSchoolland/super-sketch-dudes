@@ -7,6 +7,7 @@ export const HOUSE_ROSTER = [
   { id: "woodstove", name: "WOODSTOVE" },
   { id: "slugbert", name: "SLUGBERT" },
   { id: "rocket", name: "ROCKET" },
+  { id: "wizard", name: "WIZARD" },
 ] as const;
 export type HouseId = (typeof HOUSE_ROSTER)[number]["id"];
 /** Bundle URL relative to the site base (cell URLs inside the bundle are relative to it too). */
