@@ -9,6 +9,7 @@ import { SignInScreen } from "./signin";
 import { SettingsScreen } from "./settings";
 import { DrawScreen } from "./draw/screen";
 import { CreateScreen } from "./create";
+import { DescribeScreen } from "./describe";
 import { ForgeScreen } from "./forging";
 import { LibraryScreen } from "./library";
 import { PickFighterScreen } from "./battle/fighter";
@@ -46,6 +47,7 @@ export function menus(): Nav {
       return new SettingsScreen(() => nav.title(), () => { signOut(); forgetLibrary(); return signInScreen(); });
     }),
     create: (pad) => new CreateScreen(nav, pad),
+    describe: (pad) => new DescribeScreen(nav, pad),
     forge: (entry, pad) => new ForgeScreen(nav, entry, pad),
     library: () => new LibraryScreen(nav),
     battle: (fighter) => fighter ? modes(fighter, null) : new PickFighterScreen((f, from) => modes(f, from), () => nav.title()),

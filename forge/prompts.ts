@@ -15,8 +15,12 @@ function fill(template: string, vars: Record<string, string>): string {
   return out;
 }
 
-export function conceptPrompt(o: { drawing: string; out: string; player: string; round: number; siblings: string[] }): string {
+export function conceptPrompt(o: { drawing: string; out: string; player: string; round: number; siblings: string[]; hint: { name: string; description: string } | null }): string {
+  const notes = o.hint
+    ? [o.hint.name ? `The player named it "${o.hint.name}": use that name (trim it to the rules if you must).` : "", o.hint.description ? `The player says: "${o.hint.description}". That is what the drawing is and does; design from it, and only overrule it where the page plainly shows something else.` : ""].filter(Boolean).join(" ")
+    : "The player left no name or description: read it from the page.";
   return fill(CONCEPT, {
+    NOTES: notes,
     DRAWING: o.drawing,
     PLAYER: o.player,
     ROUND: `#${o.round}`,

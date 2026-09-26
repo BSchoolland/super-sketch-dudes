@@ -82,22 +82,22 @@ await shot(a, "09-lobby-settings");
 await tap(a, 960, 915);
 await until(a, "draw phase", (r) => r.phase === "draw");
 
-// Ann draws a lamp with pencil and markers; Bob scribbles, undoes, and lets the clock submit for him
+// Ann draws a lamp in black and colours; Bob scribbles, undoes, and lets the clock submit for him
 await stroke(a, circle(960, 380, 120));
 await stroke(a, [[960, 500], [960, 760]]);
 await stroke(a, [[960, 600], [820, 520], [760, 560]]);
 await stroke(a, [[960, 600], [1100, 660], [1160, 620]]);
 await stroke(a, [[960, 760], [860, 930]]); await stroke(a, [[960, 760], [1060, 930]]);
-await tap(a, 90 + 32, 214 + 32);
+await tap(a, 90 + 56 + 28, 100 + 32);
 await stroke(a, [[900, 340], [940, 360], [980, 330], [1020, 380], [940, 420], [890, 400]]);
-await tap(a, 90 + 4 * 69 + 32, 214 + 32); await tap(a, 90 + 2 * 116 + 52, 467);
+await tap(a, 90 + 5 * 56 + 28, 100 + 32); await tap(a, 90 + 2 * 116 + 52, 467);
 await stroke(a, [[600, 960], [1320, 960]]);
-await tap(b, 90 + 3 * 69 + 32, 214 + 32);
+await tap(b, 90 + 4 * 56 + 28, 100 + 32);
 await stroke(b, circle(900, 500, 200));
 await stroke(b, [[700, 300], [1200, 800]]);
 await shot(b, "10-draw-bob-before-undo");
 await tap(b, 90 + 170, 590 + 42);
-await tap(b, 90 + 170, 100 + 42);
+await tap(b, 90 + 28, 100 + 32);
 await stroke(b, [[820, 460], [860, 470]]); await stroke(b, [[940, 460], [980, 470]]); await stroke(b, [[820, 580], [900, 620], [980, 580]]);
 await shot(a, "11-draw-ann");
 await shot(b, "12-draw-bob");

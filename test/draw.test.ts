@@ -161,7 +161,7 @@ describe("draw battle", () => {
   it("the creator: a signed-in player's drawing becomes a queued library entry, the forge completes it, the library shows it ready", async () => {
     const dev = await (await api("/auth/dev", { method: "POST", body: JSON.stringify({ name: "Dee" }) })).json();
     const H = { "x-session": dev.session };
-    const created = await (await api("/characters", { method: "POST", headers: H, body: JSON.stringify({ png: `data:image/png;base64,${png1x1}` }) })).json();
+    const created = await (await api("/characters", { method: "POST", headers: H, body: JSON.stringify({ png: `data:image/png;base64,${png1x1}`, name: "big bob!", description: "  a stick guy with a red hat.\nhe kicks.  " }) })).json();
     expect(created.character.status).toBe("queued");
     expect(created.character.owner).toBe(dev.player.id);
     expect(created.character.origin).toBe("creator");
@@ -169,6 +169,7 @@ describe("draw battle", () => {
     expect(lib.characters.map((c: { id: string }) => c.id)).toContain(created.character.id);
     const job = await (await api("/forge/jobs/next")).json();
     expect(job.fighterId).toBe(created.character.id);
+    expect(job.hint).toEqual({ name: "BIG BOB!", description: "a stick guy with a red hat. he kicks." });
     expect((await api(`/forge/jobs/${job.id}/progress`, { method: "POST", body: JSON.stringify({ stage: "drawing the sheet" }) })).status).toBe(204);
     expect((await (await api(`/characters/${job.fighterId}`, { headers: H })).json()).character.stage).toBe("drawing the sheet");
     const cells = Object.fromEntries(SPRITE_CELLS.map((c) => [c, png1x1]));

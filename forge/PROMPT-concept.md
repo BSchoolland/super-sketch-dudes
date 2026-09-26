@@ -6,7 +6,7 @@ with a giant sword has a giant sword. If the page is blank or unreadable, that I
 (a blank page, a scribble) and you design that.
 
 Player: {{PLAYER}}. This is their character {{ROUND}}. Their other characters so far: {{SIBLINGS}}
-(don't repeat a name or gimmick).
+(don't repeat a name or gimmick). {{NOTES}}
 
 Write ONE JSON file to {{OUT}} with the Write tool and nothing else. Shape:
 

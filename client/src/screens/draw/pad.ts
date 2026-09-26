@@ -2,22 +2,21 @@ import { onPointer, type PointerStroke } from "../../input/pointer";
 import { PAPER, INK } from "../../render/paper";
 
 export const PAD_PX = 768;
-export const MARKERS = ["#e4483f", "#e98a2d", "#ddb51d", "#329854", "#287ad4"];
+/** Pen colours, black first. Lines are solid: the sheet model reads clean ink best. */
+export const COLORS = [INK, "#e4483f", "#e98a2d", "#ddb51d", "#329854", "#287ad4"];
 export const SIZES = [0.5, 1, 2];
 
-export type ToolKind = "pencil" | "marker" | "eraser";
+export type ToolKind = "pen" | "eraser";
 export interface Tool { kind: ToolKind; color: string }
 
 interface Stroke { kind: ToolKind; color: string; width: number; points: number[] }
 type Mark = Stroke | "clear";
 
-const BASE_WIDTH: Record<ToolKind, number> = { pencil: 5, marker: 18, eraser: 34 };
+const BASE_WIDTH: Record<ToolKind, number> = { pen: 6, eraser: 34 };
 
 function paint(g: CanvasRenderingContext2D, s: Stroke): void {
   const p = s.points;
   g.save();
-  g.globalCompositeOperation = s.kind === "marker" ? "multiply" : "source-over";
-  g.globalAlpha = s.kind === "marker" ? 0.8 : 1;
   g.strokeStyle = g.fillStyle = s.kind === "eraser" ? PAPER : s.color;
   g.lineWidth = s.width; g.lineCap = "round"; g.lineJoin = "round";
   if (p.length === 2) {
@@ -42,7 +41,7 @@ function canvas(): [HTMLCanvasElement, CanvasRenderingContext2D] {
 
 /** The 768x768 drawing: a stack of marks (strokes and clears) replayed onto paper, so undo is exact. */
 export class DrawPad {
-  tool: Tool = { kind: "pencil", color: INK };
+  tool: Tool = { kind: "pen", color: INK };
   size = 1;
   locked = false;
   private marks: Mark[] = [];

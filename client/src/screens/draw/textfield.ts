@@ -8,6 +8,10 @@ export interface TextFieldOptions {
   upper?: boolean;
   onSubmit: (value: string) => void;
   onCancel: () => void;
+  /** A textarea: Enter makes a new line, Ctrl/Cmd+Enter submits. */
+  multiline?: boolean;
+  /** Not focused on creation (a second field on the page). */
+  quiet?: boolean;
 }
 
 /**
@@ -15,14 +19,15 @@ export interface TextFieldOptions {
  * passwords. The canvas draws the card behind it; `place` keeps it glued to view coordinates.
  */
 export class TextField {
-  readonly el = document.createElement("input");
+  readonly el: HTMLInputElement | HTMLTextAreaElement;
   private placed = "";
 
   constructor(opts: TextFieldOptions) {
     const overlay = document.getElementById("overlay");
     if (!overlay) throw new Error("#overlay missing from index.html");
-    const el = this.el;
-    el.type = opts.type ?? "text";
+    const el = this.el = opts.multiline ? document.createElement("textarea") : document.createElement("input");
+    if (el instanceof HTMLInputElement) el.type = opts.type ?? "text";
+    else { el.rows = 4; el.style.resize = "none"; el.style.lineHeight = "1.25"; }
     el.maxLength = opts.maxLength;
     el.value = opts.value ?? "";
     el.autocomplete = opts.type === "password" ? "current-password" : "off";
@@ -30,15 +35,16 @@ export class TextField {
     el.autocapitalize = opts.upper ? "characters" : "off";
     Object.assign(el.style, {
       position: "absolute", border: "none", outline: "none", background: "transparent", color: INK,
-      fontFamily: FONT, fontWeight: "700", textAlign: "center", padding: "0", margin: "0", pointerEvents: "auto",
+      fontFamily: FONT, padding: "0", margin: "0", pointerEvents: "auto",
       textTransform: opts.upper ? "uppercase" : "none", letterSpacing: opts.upper ? "0.3em" : "normal",
+      textAlign: opts.multiline ? "left" : "center", fontWeight: opts.multiline ? "500" : "700",
     });
-    el.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { e.preventDefault(); opts.onSubmit(this.value); }
+    (el as HTMLElement).addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.key === "Enter" && (!opts.multiline || e.ctrlKey || e.metaKey)) { e.preventDefault(); opts.onSubmit(this.value); }
       if (e.key === "Escape") { e.preventDefault(); opts.onCancel(); }
     });
     overlay.appendChild(el);
-    el.focus();
+    if (!opts.quiet) el.focus();
   }
 
   get value(): string {

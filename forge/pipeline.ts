@@ -18,7 +18,7 @@ const MODULE_RETRIES = 2;
 const MODULE_EFFORT = (process.env.FORGE_EFFORT ?? "low") as "low" | "medium" | "high";
 const CHECKS_TIMEOUT_MS = 120_000;
 
-export interface JobSpec { id: string; fighterId: string; playerName: string; round: number; siblings: string[] }
+export interface JobSpec { id: string; fighterId: string; playerName: string; round: number; siblings: string[]; hint?: { name: string; description: string } | null }
 
 export interface CompletePayload {
   name: string;
@@ -90,7 +90,7 @@ export async function runPipeline(job: JobSpec, drawingSrc: string, dir: string,
   const conceptFile = path.join(dir, "concept.json");
   let conceptSession = "";
   const concept = await step("concept", async () => {
-    let r = await agent("concept", conceptPrompt({ drawing, out: conceptFile, player: job.playerName, round: job.round, siblings: job.siblings }));
+    let r = await agent("concept", conceptPrompt({ drawing, out: conceptFile, player: job.playerName, round: job.round, siblings: job.siblings, hint: job.hint ?? null }));
     let c = readConcept(conceptFile);
     if (!c.concept) {
       io.log(`concept rejected: ${c.problems.join("; ")}`);

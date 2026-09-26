@@ -19,7 +19,7 @@ export function attachCharacters(api: express.Router): void {
     res.status(204).end();
   });
 
-  // { png: <data URL> } -> the new library entry, queued for the forge
+  // { png: <data URL>, name?, description? } -> the new library entry, queued for the forge
   api.post("/characters", (req, res) => {
     const player = playerOf(req);
     if (!player) return res.status(401).json({ error: "not signed in" });
@@ -27,7 +27,10 @@ export function attachCharacters(api: express.Router): void {
     if (!png) return res.status(400).json({ error: "drawing must be a PNG data URL" });
     if (png.length > DRAW_PNG_MAX_BYTES) return res.status(400).json({ error: "drawing too large" });
     const siblings = libraryOf(player.id).map((c) => c.name).filter((n): n is string => !!n);
-    const job = enqueueJob({ fighterId: newFighterId(player.id.replace(/\W+/g, "").slice(-4) || "p"), player, siblings, png, origin: "creator" });
+    const name = String(req.body?.name ?? "").replace(/[^\w .'!?-]/g, "").trim().slice(0, 14).toUpperCase();
+    const description = String(req.body?.description ?? "").replace(/\s+/g, " ").trim().slice(0, 240);
+    const hint = name || description ? { name, description } : null;
+    const job = enqueueJob({ fighterId: newFighterId(player.id.replace(/\W+/g, "").slice(-4) || "p"), player, siblings, png, origin: "creator", hint });
     res.json({ character: entryOf(job) });
   });
 
