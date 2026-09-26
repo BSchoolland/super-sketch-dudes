@@ -50,7 +50,7 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 const errors: string[] = [];
 page.on("pageerror", (e) => errors.push(String(e)));
 page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
-await page.goto(`${url}?quick=1&preview=1&p1=cpu&cpu=0&gen=${BASE}gen/preview/bundle.json&f=${ID},tank&stage=proving&seed=1`);
+await page.goto(`${url}?quick=1&preview=1&p1=cpu&cpu=0&gen=${BASE}gen/preview/bundle.json&f=${ID},woodstove&stage=proving&seed=1`);
 await page.waitForFunction(() => (window as any).sketchbattle?.preview, null, { timeout: 30000 });
 await page.waitForTimeout(400);
 

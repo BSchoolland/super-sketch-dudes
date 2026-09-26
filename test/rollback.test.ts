@@ -117,7 +117,7 @@ function makeConfig(withCpus = false): MatchConfig {
     seed: 0x51a7e,
     rules: { stocks: 99, time: 0 },
     players: withCpus
-      ? [{ fighter: "lampjack" }, { fighter: "slugbert" }, { fighter: "tank", cpu: 6 }, { fighter: "liftoff", cpu: 8 }]
+      ? [{ fighter: "lampjack" }, { fighter: "slugbert" }, { fighter: "woodstove", cpu: 6 }, { fighter: "rocket", cpu: 8 }]
       : [{ fighter: "lampjack" }, { fighter: "slugbert" }],
   };
 }

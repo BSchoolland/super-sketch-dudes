@@ -11,7 +11,7 @@ describe("house roster", () => {
   beforeAll(loadAllHouse);
 
   stageList.forEach((stage, n) => {
-    // four of the eight per stage, rotating so every house fighter plays somewhere
+    // four slots from the roster per stage, rotating so every house fighter plays somewhere
     const four = [0, 1, 2, 3].map((i) => HOUSE_ROSTER[(n * 4 + i) % HOUSE_ROSTER.length].id);
     it(`4-player CPU match on ${stage.id} (${four.join(", ")}) resimulates from a mid-match snapshot to the same hash`, () => {
       const cfg = { stage: stage.id, players: four.map((id) => ({ fighter: id, cpu: 9 })), seed: 42 };
@@ -38,7 +38,7 @@ describe("house roster", () => {
   });
 
   it("every house fighter validates and has the core moves with poses", () => {
-    expect(rosterList.map((d) => d.id)).toEqual(HOUSE_ROSTER.map((h) => h.id));
+    expect(rosterList.map((d) => d.id)).toEqual([...HOUSE_ROSTER.map((h) => h.id), "lampjack"]);
     for (const def of rosterList) {
       expect(validateGenerated(def), def.id).toEqual([]);
       for (const m of CORE_MOVES) expect(def.moves[m].poses.length, `${def.id}.${m} poses`).toBeGreaterThan(0);

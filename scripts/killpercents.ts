@@ -1,6 +1,6 @@
 // Kill-percent calibration: for each fighter's key moves, the lowest percent at which the victim
 // (a house fighter, no DI) dies from centre stage and from near the ledge on Proving Ground.
-// Usage: tsx scripts/killpercents.ts [victim=lampjack]
+// Usage: tsx scripts/killpercents.ts [victim=woodstove]
 import { createMatch, step } from "../shared/sim";
 import { EMPTY_INPUT } from "../shared/input";
 import { rosterList, roster } from "../shared/fighters/index";
@@ -8,7 +8,7 @@ import { hitOf } from "../shared/hits";
 import { houseId, loadAllHouse } from "../test/house";
 
 await loadAllHouse();
-const victimId = houseId(process.argv[2] ?? "lampjack");
+const victimId = houseId(process.argv[2] ?? "woodstove");
 const MOVES = ["ftilt", "fsmash", "usmash", "bair", "fair", "uair", "dsmash", "nspecial", "bthrow", "uthrow"];
 
 function dies(attackerId: string, moveId: string, percent: number, x: number, tipper: boolean): boolean {

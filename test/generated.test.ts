@@ -13,7 +13,7 @@ const source = readFileSync(new URL("../forge/exemplar/lampjack.fighter.js", imp
 const sprite = { px: 512, feetPx: 448, heightPx: 360, anims: {}, cells: Object.fromEntries(SPRITE_CELLS.map((c) => [c, `/gen/lampjack/${c}.png`])) };
 
 describe("generated fighters", () => {
-  beforeAll(async () => { await loadHouse("tank"); await loadHouse("dizzy"); });
+  beforeAll(async () => { await loadHouse("woodstove"); await loadHouse("slugbert"); });
 
   it("the exemplar lints, builds, validates and registers", async () => {
     expect(lintGeneratedSource(source)).toEqual([]);
@@ -27,7 +27,7 @@ describe("generated fighters", () => {
   it("a 4-player CPU match with a generated fighter resimulates from a snapshot to the same hash", async () => {
     const def = await buildGenerated({ id: "gen-lamp", source, sprite, player: "test", description: "a lamp" });
     registerFighter(def);
-    const cfg = { stage: "proving", players: [{ fighter: "gen-lamp", cpu: 9 }, { fighter: "tank", cpu: 9 }, { fighter: "dizzy", cpu: 9 }, { fighter: "gen-lamp", cpu: 9 }], seed: 7 };
+    const cfg = { stage: "proving", players: [{ fighter: "gen-lamp", cpu: 9 }, { fighter: "woodstove", cpu: 9 }, { fighter: "slugbert", cpu: 9 }, { fighter: "gen-lamp", cpu: 9 }], seed: 7 };
     const a = createMatch(cfg);
     let snap: ReturnType<typeof cloneState> | null = null;
     const inputsAt: ReturnType<typeof cpuInput>[][] = [];
@@ -52,7 +52,7 @@ describe("generated fighters", () => {
     expect(bad).not.toBe(source);
     const def = await buildGenerated({ id: "gen-bad", source: bad, sprite, player: "test", description: "" });
     registerFighter(def);
-    const s = createMatch({ stage: "proving", players: [{ fighter: "gen-bad" }, { fighter: "tank" }], seed: 1 });
+    const s = createMatch({ stage: "proving", players: [{ fighter: "gen-bad" }, { fighter: "woodstove" }], seed: 1 });
     const f = s.fighters[0];
     startMove(s, f, "sspecial");
     const errors: string[] = [];

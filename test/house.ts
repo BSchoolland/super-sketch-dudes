@@ -17,8 +17,17 @@ export async function loadHouse(id: HouseId): Promise<FighterDef> {
   return def;
 }
 
+/** The forge exemplar (LAMPJACK), registered under its own id: the fixture the mechanics tests are written against. */
+export async function loadExemplar(): Promise<FighterDef> {
+  const bundle = JSON.parse(readFileSync(new URL("../forge/exemplar/lampjack/bundle.json", import.meta.url), "utf8")) as GeneratedBundle;
+  const def = await buildGenerated(bundle);
+  registerFighter(def);
+  return def;
+}
+
+/** Every house fighter plus the exemplar. */
 export function loadAllHouse(): Promise<FighterDef[]> {
-  return Promise.all(HOUSE_ROSTER.map((h) => loadHouse(h.id)));
+  return Promise.all([...HOUSE_ROSTER.map((h) => loadHouse(h.id)), loadExemplar()]);
 }
 
 /** Script arguments name house fighters; anything else is a typo. */

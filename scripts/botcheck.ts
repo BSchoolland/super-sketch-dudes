@@ -6,7 +6,7 @@ import { createMatch, step } from "../shared/sim";
 import { loadAllHouse } from "../test/house";
 
 await loadAllHouse();
-const DUMMY = "lampjack";
+const DUMMY = "woodstove";
 
 let failed = false;
 

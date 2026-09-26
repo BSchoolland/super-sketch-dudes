@@ -21,11 +21,11 @@ export async function loadFighters(ids: string[]): Promise<void> {
 }
 
 /**
- * ?quick=1&p2=cpu&cpu=9&f=lampjack,tank&stage=rooftops&seed=3&boxes=1 skips the menus into a
+ * ?quick=1&p2=cpu&cpu=9&f=slugbert,woodstove&stage=rooftops&seed=3&boxes=1 skips the menus into a
  * match; &training=1 makes it training. No sign-in needed.
  */
 export async function quickMatch(params: URLSearchParams, exit: () => Screen): Promise<VersusScreen> {
-  const ids = (params.get("f") ?? "lampjack,tank").split(",").filter(Boolean);
+  const ids = (params.get("f") ?? "slugbert,woodstove").split(",").filter(Boolean);
   await loadFighters(ids);
   const p2 = params.get("p2") ?? "cpu";
   const cpu = Number(params.get("cpu") ?? 6);

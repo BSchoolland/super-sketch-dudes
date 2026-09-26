@@ -28,13 +28,9 @@ dodge; shield just before a hit lands parries.
 
 ## Fighters
 
-- **BRICK**, the wall: a golem of stacked slabs. Super armour on smashes, a command grab that walks
-  you off the ledge, a piston jump with no horizontal recovery.
-- **WICK**, the runaway flame: fastest jab in the game, a heat meter that grows it and leaves embers,
-  a blink-dash, a snuff-out reset that costs heat.
-- **PILOT**, the Kessler homage: crescent up close, six homing slugs that reload on the ground, the
-  wave, a fuel-tank rocket burn and a debris chunk anyone can hit.
-- **SABLE**, the fencer: tipper sweetspot on the rapier, a counter, a cancelable dash-slash.
+The house roster (`client/public/house/`, ids in `shared/house.ts`) is three forged characters that
+ship with the game and stand in as CPU opponents and the forge's balance ladder: **WOODSTOVE**,
+**SLUGBERT** and **ROCKET**. Everything else a player fights is drawn and forged.
 
 ## Development
 

@@ -4,7 +4,7 @@ const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
 const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
-await page.goto("http://localhost:5175/sketch-battle/?quick=1&training=1&f=liftoff,tank&stage=proving");
+await page.goto("http://localhost:5175/sketch-battle/?quick=1&training=1&f=rocket,woodstove&stage=proving");
 await page.waitForFunction(() => window.sketchbattle?.screen, null, { timeout: 20000 });
 await page.waitForTimeout(600);
 await page.keyboard.down("KeyD"); await page.waitForTimeout(500); await page.keyboard.up("KeyD");
