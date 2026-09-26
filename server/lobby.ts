@@ -7,32 +7,43 @@ import type { FighterId } from "../shared/types";
  * picks the seed and slot order, and forwards every input frame to the other members.
  * Message shapes are documented in ARCHITECTURE.md.
  */
-interface Client {
+export interface Client {
   ws: WebSocket;
   id: number;
   name: string;
   room: Room | null;
+  /** Relay slot. -1 = spectator: inputs from this client are dropped. */
   slot: number;
   lastPing: number;
   fighter: FighterId;
   ready: boolean;
+  /** Passed the DRAW BATTLE password on this connection. */
+  drawAuthed: boolean;
 }
-interface Room { code: string; members: Client[]; started: boolean; host: Client; seed: number; config: unknown }
+export interface Room { code: string; members: Client[]; started: boolean; host: Client; seed: number; config: unknown; /** Set on DRAW BATTLE rooms; owned by server/draw.ts. */ draw?: unknown }
+
+/** Draw mode plugs in here: it owns every `draw*` message and hears about members leaving. */
+export interface RoomExtension {
+  handle(c: Client, msg: { t: string } & Record<string, unknown>): boolean;
+  onLeave(c: Client, room: Room, duringMatch: boolean): void;
+}
+let extension: RoomExtension | null = null;
+export function setRoomExtension(ext: RoomExtension): void { extension = ext; }
 
 let nextId = 1;
-const rooms = new Map<string, Room>();
+export const rooms = new Map<string, Room>();
 const queue: Client[] = [];
 
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-function makeCode(): string {
+export function makeCode(): string {
   let c = "";
   do { c = ""; for (let i = 0; i < 4; i++) c += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]; } while (rooms.has(c));
   return c;
 }
-function send(c: Client, msg: unknown): void {
+export function send(c: Client, msg: unknown): void {
   if (c.ws.readyState === c.ws.OPEN) c.ws.send(JSON.stringify(msg));
 }
-function broadcast(room: Room, msg: unknown, except?: Client): void {
+export function broadcast(room: Room, msg: unknown, except?: Client): void {
   for (const m of room.members) if (m !== except) send(m, msg);
 }
 function roomInfo(room: Room): unknown {
@@ -44,7 +55,7 @@ function roomInfo(room: Room): unknown {
     members: room.members.map((m) => ({ id: m.id, name: m.name, slot: m.slot, fighter: m.fighter, ready: m.ready })),
   };
 }
-function leaveRoom(c: Client): void {
+export function leaveRoom(c: Client): void {
   const room = c.room;
   if (!room) return;
   const slot = c.slot;
@@ -52,8 +63,9 @@ function leaveRoom(c: Client): void {
   c.room = null;
   c.ready = false;
   room.members = room.members.filter((m) => m !== c);
-  if (!room.members.length) { rooms.delete(room.code); return; }
+  if (!room.members.length) { rooms.delete(room.code); if (room.draw) extension?.onLeave(c, room, duringMatch); return; }
   if (room.host === c) room.host = room.members[0];
+  if (room.draw) { extension?.onLeave(c, room, duringMatch); return; }
   if (duringMatch) {
     room.started = false;
     room.members.forEach((m) => (m.ready = false));
@@ -62,7 +74,7 @@ function leaveRoom(c: Client): void {
   broadcast(room, { t: "left", id: c.id, slot, duringMatch });
   broadcast(room, roomInfo(room));
 }
-function joinRoom(c: Client, room: Room): void {
+export function joinRoom(c: Client, room: Room): void {
   leaveRoom(c);
   c.room = room;
   c.slot = room.members.length;
@@ -74,12 +86,14 @@ function joinRoom(c: Client, room: Room): void {
 export function attachLobby(wss: WebSocketServer): void {
   wss.on("connection", (ws) => {
     const id = nextId++;
-    const c: Client = { ws, id, name: `guest${id}`, room: null, slot: 0, lastPing: Date.now(), fighter: "sable", ready: false };
+    const c: Client = { ws, id, name: `guest${id}`, room: null, slot: 0, lastPing: Date.now(), fighter: "sable", ready: false, drawAuthed: false };
     send(c, { t: "hello", id: c.id });
     ws.on("message", (raw) => {
       let msg: any;
       try { msg = JSON.parse(String(raw)); } catch { return; }
       if (!msg || typeof msg.t !== "string") return;
+      if (msg.t.startsWith("draw")) { if (!extension?.handle(c, msg)) send(c, { t: "error", error: `unknown message ${msg.t}` }); return; }
+      if (c.room?.draw && (msg.t === "join" || msg.t === "pick" || msg.t === "start" || msg.t === "end" || msg.t === "queue")) { send(c, { t: "error", error: "not in a draw room" }); return; }
       switch (msg.t) {
         case "name": c.name = String(msg.name ?? "").replace(/[^\w \-.!?]/g, "").slice(0, 14) || c.name; if (c.room) broadcast(c.room, roomInfo(c.room)); break;
         case "ping": send(c, { t: "pong", at: msg.at }); break;
@@ -127,8 +141,8 @@ export function attachLobby(wss: WebSocketServer): void {
           broadcast(room, { t: "start", seed: room.seed, config: room.config, members: room.members.map((m) => ({ id: m.id, name: m.name, slot: m.slot })) });
           break;
         }
-        case "inputs": if (c.room?.started) broadcast(c.room, { t: "inputs", slot: c.slot, frame: msg.frame | 0, inputs: msg.inputs }, c); break;
-        case "hash": if (c.room?.started) broadcast(c.room, { t: "hash", slot: c.slot, frame: msg.frame | 0, hash: msg.hash >>> 0 }, c); break;
+        case "inputs": if (c.room?.started && c.slot >= 0) broadcast(c.room, { t: "inputs", slot: c.slot, frame: msg.frame | 0, inputs: msg.inputs }, c); break;
+        case "hash": if (c.room?.started && c.slot >= 0) broadcast(c.room, { t: "hash", slot: c.slot, frame: msg.frame | 0, hash: msg.hash >>> 0 }, c); break;
         case "end": if (c.room && c.room.host === c) { c.room.started = false; c.room.members.forEach((m) => (m.ready = false)); broadcast(c.room, roomInfo(c.room)); } break;
       }
     });

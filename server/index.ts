@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import http from "node:http";
 import { WebSocketServer } from "ws";
 import { attachLobby } from "./lobby";
+import { attachDraw } from "./draw";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
@@ -14,13 +15,23 @@ const DATA_DIR = process.env.SKETCHBATTLE_DATA ?? path.join(root, "server-data")
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const app = express();
-app.use(express.json({ limit: "8kb" }));
+// forge completions carry nine PNG cells + a sheet as base64
+app.use((req, res, next) => express.json({ limit: req.path.includes("/forge/") ? "12mb" : "8kb" })(req, res, next));
 const api = express.Router();
 // Apache proxies /sketch-battle/* to / here; when hit directly the prefix is still present, so mount both.
 app.use("/api", api);
 app.use(`${BASE}/api`, api);
 
 api.get("/health", (_req, res) => res.json({ ok: true, build: process.env.BUILD ?? "dev" }));
+
+// DRAW BATTLE: password-gated rooms, forge job queue, generated fighters served as static files
+const DRAW_PASSWORD = process.env.DRAW_PASSWORD ?? "";
+const FORGE_TOKEN = process.env.FORGE_TOKEN ?? "";
+if (!DRAW_PASSWORD || !FORGE_TOKEN) console.warn("DRAW_PASSWORD / FORGE_TOKEN unset: draw battle is disabled");
+attachDraw(api, { password: DRAW_PASSWORD, forgeToken: FORGE_TOKEN, dataDir: DATA_DIR, genBase: `${BASE}/gen` });
+const genDir = path.join(DATA_DIR, "gen");
+app.use(`${BASE}/gen`, express.static(genDir, { maxAge: "1y", immutable: true }));
+app.use("/gen", express.static(genDir, { maxAge: "1y", immutable: true }));
 
 const LOG = path.join(DATA_DIR, "client-log.jsonl");
 const LOG_MAX = 8 * 1024 * 1024;
