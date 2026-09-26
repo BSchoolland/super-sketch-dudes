@@ -4,7 +4,8 @@ import fs from "node:fs";
 import { createMatch, step, cloneState, hashState } from "../shared/sim";
 import { cpuInput } from "../shared/cpu";
 import { hitOf } from "../shared/hits";
-import { EMPTY_INPUT } from "../shared/input";
+import { B, EMPTY_INPUT } from "../shared/input";
+import { startMove } from "../shared/fighter";
 import { registerFighter, STOCK_IDS, roster } from "../shared/fighters/index";
 import { buildGenerated, lintGeneratedSource, type GeneratedBundle } from "../shared/gen/load";
 import type { FighterDef, State } from "../shared/types";
@@ -118,6 +119,27 @@ export async function runChecks(input: CheckInput): Promise<CheckReport> {
     const secs = all.reduce((a, x) => a + x.avgSeconds, 0) / all.length;
     if (w === total && secs < SOFT_SECONDS) r.soft.push(`wins every ladder match in ${secs.toFixed(0)}s on average: probably overtuned`);
     if (w === 0 && secs < SOFT_SECONDS) r.soft.push(`loses every ladder match in ${secs.toFixed(0)}s on average: probably too weak or too light`);
+  });
+
+  // the CPU leaves some moves (often the specials) unused; run every move directly so their hooks run too
+  await timed("moves", async () => {
+    const d = await fresh();
+    const held = { ...EMPTY_INPUT, x: 100, b: B.SPECIAL | B.ATTACK };
+    for (const [m, mv] of Object.entries(d.moves)) {
+      if (mv.throwFrame || m === "pummel") continue;
+      for (const input of [EMPTY_INPUT, held]) guard(`move ${m} started on its own`, () => {
+        const s = createMatch({ stage: "proving", players: [{ fighter: id }, { fighter: "sable" }], seed: 3 });
+        const f = s.fighters[0], v = s.fighters[1];
+        f.x = -40; v.x = 40; f.facing = 1; v.facing = -1;
+        if (mv.aerial) for (const x of [f, v]) { x.y = -220; x.grounded = false; x.platform = -1; }
+        startMove(s, f, m);
+        for (let i = 0; i < mv.total + 30; i++) {
+          step(s, [i < 20 ? input : EMPTY_INPUT, EMPTY_INPUT]);
+          hooks.collect(s, (slot) => slot === 0);
+          s.events.length = 0;
+        }
+      });
+    }
   });
 
   await timed("recovery", async () => {

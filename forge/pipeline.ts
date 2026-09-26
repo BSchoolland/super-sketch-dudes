@@ -118,7 +118,7 @@ export async function runPipeline(job: JobSpec, drawingSrc: string, dir: string,
   if (faces === "left") meta = await step("cells", () => normalize(true), () => "mirrored");
 
   // pass 2 + checks, retried with the failure list
-  const height = provisionalHeight(concept);
+  const height = provisionalHeight(concept, meta.cells.idle.box);
   const moduleFile = path.join(dir, "module.json");
   const attempts: ForgeReport["attempts"] = [];
   let session = "";

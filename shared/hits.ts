@@ -17,8 +17,10 @@ export function hurtbox(f: Fighter): Capsule {
   const s = defOf(f).stats;
   const crouched = f.action === "crouch" || f.action === "knockdown" || f.action === "spotDodge";
   const h = crouched ? s.crouchHeight : s.height;
-  const r = s.width / 2;
-  return { x1: f.x, y1: f.y - r, x2: f.x, y2: f.y - h + r, r };
+  // wider than tall (drawn tanks, worms): lie the capsule down instead of inverting it through the floor
+  const r = Math.min(s.width, h) / 2;
+  const half = s.width / 2 - r;
+  return { x1: f.x - half, y1: f.y - r, x2: f.x + half, y2: f.y - h + r, r };
 }
 
 export function shieldCircle(f: Fighter): { x: number; y: number; r: number } {

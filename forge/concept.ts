@@ -33,13 +33,16 @@ export function readConcept(file: string): { concept: Concept | null; problems: 
 
 /**
  * stats.height pass 2 must use: the cell boxes are converted to fighter units with it before the
- * module exists, so it's fixed from the concept.
+ * module exists, so it's fixed from the concept and the idle cell's shape. Wide silhouettes (a tank,
+ * a worm) get shorter so their width on stage stays in a fighter's range.
  */
-export function provisionalHeight(c: Concept): number {
+export function provisionalHeight(c: Concept, idleBox: [number, number, number, number]): number {
   const base: Record<Concept["archetype"], number> = { walker: 120, hopper: 104, floater: 112, roller: 112, blob: 100, swimmer: 104, crawler: 92 };
   const note = c.stats_note.toLowerCase();
   let h = base[c.archetype];
   if (/\b(heavy|huge|big|giant|massive|tall|hulking)\b/.test(note)) h += 24;
   if (/\b(light|tiny|small|little|short|featherweight)\b/.test(note)) h -= 16;
-  return Math.max(76, Math.min(160, h));
+  const aspect = (idleBox[2] - idleBox[0]) / (idleBox[3] - idleBox[1]);
+  h /= Math.sqrt(Math.max(1, aspect / 0.8));
+  return Math.round(Math.max(64, Math.min(160, h)));
 }

@@ -49,6 +49,8 @@ Determinism is non-negotiable (every client re-runs your code and must get ident
 - Some move must be able to KO a weight-100 opponent from centre stage under 150%.
 - Hitbox `angle`: 0 launches away from you, 90 up, 270 down (spike), 180 pulls toward you.
   `base` 20-70, `growth` 40-110 are the normal range; smashes and specials at the top.
+- `stats.width` and `stats.height` are the hurtbox: a capsule that wide and that tall standing on
+  the feet (lying flat when wider than tall). Size width from the idle box above.
 - Respect the design's stats_note and archetype. A roller has no jumpSquat bounce; a floater
   has low gravity and 3+ jumps; a blob squashes more than it leans.
 
