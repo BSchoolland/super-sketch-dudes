@@ -19,7 +19,9 @@ export interface RoomMember {
   id: number;
   name: string;
   slot: number;
+  /** "" until the member first picks. */
   fighter: string;
+  bundleUrl: string;
   ready: boolean;
 }
 

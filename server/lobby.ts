@@ -1,7 +1,5 @@
 import type { WebSocketServer, WebSocket } from "ws";
-import { roster } from "../shared/fighters/index";
-import type { FighterId } from "../shared/types";
-import type { Player } from "../shared/account";
+import { isBundlePath, type Player } from "../shared/account";
 
 /**
  * Lobby and input relay. The server never simulates: it pairs clients into rooms,
@@ -16,7 +14,9 @@ export interface Client {
   /** Relay slot. -1 = spectator: inputs from this client are dropped. */
   slot: number;
   lastPing: number;
-  fighter: FighterId;
+  /** Fighter id and the bundle every client loads it from; "" until the first pick. */
+  fighter: string;
+  bundleUrl: string;
   ready: boolean;
   /** Passed the DRAW BATTLE password on this connection. */
   drawAuthed: boolean;
@@ -56,7 +56,7 @@ function roomInfo(room: Room): unknown {
     host: room.host.id,
     started: room.started,
     game: room.game,
-    members: room.members.map((m) => ({ id: m.id, name: m.name, slot: m.slot, fighter: m.fighter, ready: m.ready })),
+    members: room.members.map((m) => ({ id: m.id, name: m.name, slot: m.slot, fighter: m.fighter, bundleUrl: m.bundleUrl, ready: m.ready })),
   };
 }
 export function leaveRoom(c: Client): void {
@@ -90,7 +90,7 @@ export function joinRoom(c: Client, room: Room): void {
 export function attachLobby(wss: WebSocketServer): void {
   wss.on("connection", (ws) => {
     const id = nextId++;
-    const c: Client = { ws, id, name: `guest${id}`, room: null, slot: 0, lastPing: Date.now(), fighter: "sable", ready: false, drawAuthed: false, player: null };
+    const c: Client = { ws, id, name: `guest${id}`, room: null, slot: 0, lastPing: Date.now(), fighter: "", bundleUrl: "", ready: false, drawAuthed: false, player: null };
     send(c, { t: "hello", id: c.id });
     ws.on("message", (raw) => {
       let msg: any;
@@ -126,9 +126,11 @@ export function attachLobby(wss: WebSocketServer): void {
         case "leave": leaveRoom(c); break;
         case "pick": {
           if (!c.room || c.room.started) break;
-          const fighter = String(msg.fighter ?? "") as FighterId;
-          if (!roster[fighter]) { send(c, { t: "error", error: "unknown fighter" }); break; }
+          const fighter = String(msg.fighter ?? "");
+          const bundleUrl = typeof msg.bundleUrl === "string" ? msg.bundleUrl : "";
+          if (!isBundlePath(bundleUrl, fighter)) { send(c, { t: "error", error: "unknown fighter" }); break; }
           c.fighter = fighter;
+          c.bundleUrl = bundleUrl;
           c.ready = !!msg.ready;
           broadcast(c.room, roomInfo(c.room));
           break;
@@ -141,7 +143,7 @@ export function attachLobby(wss: WebSocketServer): void {
           const requested = msg.config;
           room.started = true;
           room.seed = (Math.random() * 0xffffffff) >>> 0;
-          room.config = { ...requested, players: room.members.map((m) => ({ fighter: m.fighter })) };
+          room.config = { ...requested, players: room.members.map((m) => ({ fighter: m.fighter, bundleUrl: m.bundleUrl })) };
           broadcast(room, { t: "start", seed: room.seed, config: room.config, members: room.members.map((m) => ({ id: m.id, name: m.name, slot: m.slot })) });
           break;
         }

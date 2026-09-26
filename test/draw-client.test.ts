@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { isBundlePath } from "../shared/account";
 import { abandonedResult, battleReporter, DRAW_GRACE_MS, ladderHistory, phaseMs, secondsLeft, standings } from "../client/src/screens/draw/logic";
 import type { DrawCharacter, DrawPlayer, DrawRoomState } from "../shared/draw";
 
@@ -47,5 +48,18 @@ describe("draw client logic", () => {
     const fighters = [{ stocks: 3, percent: 10 }, { stocks: 1, percent: 80 }, { stocks: 2, percent: 0 }];
     expect(abandonedResult(fighters, [0])).toEqual({ winner: 2, standings: [2, 1, 0] });
     expect(abandonedResult(fighters, [])).toEqual({ winner: 0, standings: [0, 2, 1] });
+  });
+});
+
+describe("room fighter bundles", () => {
+  it("accepts only same-site gen/ and house/ bundles named after the fighter", () => {
+    expect(isBundlePath("/sketch-battle/gen/gen--ann-6435c8/bundle.json", "gen--ann-6435c8")).toBe(true);
+    expect(isBundlePath("/sketch-battle/house/tank/bundle.json", "tank")).toBe(true);
+    expect(isBundlePath("/gen/tank/bundle.json", "tank")).toBe(true);
+    expect(isBundlePath("/sketch-battle/house/tank/bundle.json", "lampjack")).toBe(false);
+    expect(isBundlePath("https://evil.example/gen/tank/bundle.json", "tank")).toBe(false);
+    expect(isBundlePath("//evil.example/gen/tank/bundle.json", "tank")).toBe(false);
+    expect(isBundlePath("/sketch-battle/gen/../api/tank/bundle.json", "tank")).toBe(false);
+    expect(isBundlePath("house/tank/bundle.json", "tank")).toBe(false);
   });
 });
