@@ -187,3 +187,38 @@ describe("draw battle", () => {
     expect(lib.characters).toHaveLength(0);
   });
 });
+
+describe("the forge queue survives a restart", () => {
+  it("requeues a running job from forge-jobs.json", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sb-forge-"));
+    const { attachForge: attach2 } = await import("../server/forge");
+    const { initLibrary: init2, libraryOf } = await import("../server/library");
+    const express2 = (await import("express")).default;
+    const app2 = express2(); app2.use(express2.json({ limit: "12mb" }));
+    const r2 = express2.Router(); app2.use("/api", r2);
+    init2(dir); attach2(r2, { token: "t2", dataDir: dir, genBase: "/gen" });
+    const srv = http.createServer(app2); await new Promise<void>((r) => srv.listen(0, "127.0.0.1", () => r()));
+    const p2 = (srv.address() as { port: number }).port;
+    const call = (p: string, init?: RequestInit) => fetch(`http://127.0.0.1:${p2}/api${p}`, { ...init, headers: { "x-forge-token": "t2", "content-type": "application/json", ...(init?.headers ?? {}) } });
+    const { enqueueJob } = await import("../server/forge");
+    enqueueJob({ fighterId: "gen-restart-1", player: { id: "dev-r", name: "R", avatar: null }, siblings: [], png: Buffer.from(png1x1, "base64"), origin: "creator" });
+    const job = await (await call("/forge/jobs/next")).json();
+    expect(job.fighterId).toBe("gen-restart-1");
+    expect((await call("/forge/jobs/next")).status).toBe(204);
+    const saved = JSON.parse(fs.readFileSync(path.join(dir, "forge-jobs.json"), "utf8")) as { fighterId: string; status: string }[];
+    expect(saved.find((j) => j.fighterId === "gen-restart-1")?.status).toBe("running");
+    // "restart": a data dir whose jobs file says the job was running; attaching again requeues it
+    const dir3 = fs.mkdtempSync(path.join(os.tmpdir(), "sb-forge3-"));
+    fs.writeFileSync(path.join(dir3, "forge-jobs.json"), JSON.stringify(saved.filter((j) => j.fighterId === "gen-restart-1")));
+    init2(dir3);
+    const r3 = express2.Router(); app2.use("/api3", r3);
+    attach2(r3, { token: "t2", dataDir: dir3, genBase: "/gen" });
+    const again = await (await fetch(`http://127.0.0.1:${p2}/api3/forge/jobs/next`, { headers: { "x-forge-token": "t2" } })).json();
+    expect(again.fighterId).toBe("gen-restart-1");
+    expect(again.attempts).toBe(2);
+    fs.rmSync(dir3, { recursive: true, force: true });
+    srv.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+    void libraryOf;
+  });
+});

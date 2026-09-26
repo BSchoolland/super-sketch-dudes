@@ -37,7 +37,26 @@ export interface ForgeJob {
 const jobs = new Map<string, ForgeJob>();
 const queue: string[] = [];
 const listeners = new Set<(job: ForgeJob) => void>();
-let genDir = "", genBase = "";
+let genDir = "", genBase = "", jobsFile = "";
+
+/** Every job change is written out, so a restart mid-character requeues it instead of stranding it. */
+function persist(): void {
+  if (jobsFile) fs.writeFileSync(jobsFile, JSON.stringify([...jobs.values()]));
+}
+function restore(): void {
+  if (!fs.existsSync(jobsFile)) return;
+  const saved = JSON.parse(fs.readFileSync(jobsFile, "utf8")) as ForgeJob[];
+  for (const job of saved) {
+    jobs.set(job.id, job);
+    if (job.status === "queued" || job.status === "running") {
+      job.status = "queued"; job.stage = "back in line after a restart"; job.claimedAt = 0;
+      queue.push(job.id);
+    }
+  }
+  const requeued = queue.length;
+  if (requeued) console.log(`forge: requeued ${requeued} job(s) from before the restart`);
+  for (const id of queue) { const job = jobs.get(id)!; upsertCharacter(entryOf(job)); }
+}
 
 /** Runs whenever a job changes (status, stage, completion). Draw rooms mirror it into their state. */
 export function onJob(cb: (job: ForgeJob) => void): () => void {
@@ -62,6 +81,7 @@ export function entryOf(job: ForgeJob): LibraryEntry {
 
 function changed(job: ForgeJob, player?: Player): void {
   upsertCharacter(entryOf(job), player);
+  persist();
   for (const cb of listeners) cb(job);
 }
 
@@ -90,6 +110,8 @@ export function attachForge(api: express.Router, opts: ForgeOptions): void {
   genDir = path.join(opts.dataDir, "gen");
   genBase = opts.genBase;
   fs.mkdirSync(genDir, { recursive: true });
+  jobsFile = path.join(opts.dataDir, "forge-jobs.json");
+  restore();
 
   const setStatus = (job: ForgeJob, status: ForgeJob["status"], stage: string, error: string | null = null): void => {
     job.status = status; job.stage = stage; job.error = error;
