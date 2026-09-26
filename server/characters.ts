@@ -27,7 +27,7 @@ export function attachCharacters(api: express.Router): void {
     if (!png) return res.status(400).json({ error: "drawing must be a PNG data URL" });
     if (png.length > DRAW_PNG_MAX_BYTES) return res.status(400).json({ error: "drawing too large" });
     const siblings = libraryOf(player.id).map((c) => c.name).filter((n): n is string => !!n);
-    const job = enqueueJob({ fighterId: newFighterId(player.id.slice(-4)), player, siblings, png, origin: "creator" });
+    const job = enqueueJob({ fighterId: newFighterId(player.id.replace(/\W+/g, "").slice(-4) || "p"), player, siblings, png, origin: "creator" });
     res.json({ character: entryOf(job) });
   });
 
