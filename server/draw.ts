@@ -217,7 +217,7 @@ export function attachDraw(api: express.Router, opts: DrawOptions): void {
   // a job the forge claimed but never finished goes back on the queue once
   setInterval(() => {
     for (const job of jobs.values()) {
-      if (job.status === "running" && Date.now() - job.claimedAt > 6 * 60_000) {
+      if (job.status === "running" && Date.now() - job.claimedAt > 10 * 60_000) {
         if (job.attempts >= 2) { job.status = "failed"; setStatus(job, "failed", "", "the forge gave up on this one"); }
         else { job.status = "queued"; queue.push(job.id); setStatus(job, "queued", "waiting for the forge again"); }
       }

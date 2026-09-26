@@ -1,5 +1,5 @@
 # systemd --user unit for the forge worker.
-# Install: ln -s ~/Projects/sketch-battle/forge/forge.service ~/.config/systemd/user/sketch-forge.service
+# Install: ln -s ~/Projects/sketch-battle-draw/forge/forge.service ~/.config/systemd/user/sketch-forge.service
 #          systemctl --user daemon-reload && systemctl --user enable --now sketch-forge
 # Logs:    journalctl --user -u sketch-forge -f
 [Unit]
@@ -7,7 +7,7 @@ Description=SKETCH BATTLE forge worker
 After=network-online.target
 
 [Service]
-WorkingDirectory=%h/Projects/sketch-battle
+WorkingDirectory=%h/Projects/sketch-battle-draw
 EnvironmentFile=%h/.config/sketch-forge/env
 Environment=PATH=%h/.local/share/mise/installs/node/26/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=%h/.local/share/mise/installs/node/26/bin/npx tsx forge/worker.ts

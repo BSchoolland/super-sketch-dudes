@@ -112,7 +112,7 @@ await shot(a, "14-reveal-queued");
 await until(a, "forging", (r) => r.players.some((p) => p.characters[0].status === "generating"));
 await a.waitForTimeout(1500);
 await shot(a, "15-reveal-forging");
-await until(a, "both forged", (r) => r.players.every((p) => p.characters[0].status === "ready"), 30000);
+await until(a, "both forged", (r) => r.players.every((p) => p.characters[0].status === "ready"), Number(process.env.FORGE_MS ?? 30000));
 await a.waitForTimeout(800);
 await shot(a, "16-reveal-ready");
 await tap(a, 960, 1080 - 72);
