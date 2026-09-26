@@ -7,6 +7,8 @@ import { hitboxWorld, hurtbox } from "../../../shared/hits";
 import { label, type Screen } from "./ui";
 import { drawStrikes } from "../render/strikes";
 import type { Fighter } from "../../../shared/types";
+import { drawSprite } from "../render/sprite";
+import { cellForAnim, defaultCellForMove } from "../../../shared/gen/sprite";
 
 /**
  * Debug contact sheet: every move of one fighter drawn at its first active frame (or mid-move),
@@ -45,8 +47,11 @@ export class SheetScreen implements Screen {
       ctx.fillRect(-cw / 2 + 10, 0, cw - 20, 2);
       const scale = 1.1;
       ctx.scale(scale, scale);
-      const rp = resolvePose(def, poseAt(e.keys, e.frame, e.loop));
-      drawRig(ctx, rp, def.palette.colors, def.palette.outline);
+      const pose = poseAt(e.keys, e.frame, e.loop);
+      if (def.sprite) {
+        const mvCell = e.move ? def.moves[e.move].cell ?? defaultCellForMove(e.move) : cellForAnim(def, e.name);
+        drawSprite(ctx, def, mvCell, pose, { flip: e.move ? !!def.moves[e.move].cellFlip : false });
+      } else drawRig(ctx, resolvePose(def, pose), def.palette.colors, def.palette.outline);
       if (e.move) {
         const mv = def.moves[e.move];
         const fake = { x: 0, y: 0, moveFacing: 1, facing: 1, frame: e.frame, action: "attack", id: def.id, move: e.move, hitlag: 0, slot: 0 } as unknown as Fighter;

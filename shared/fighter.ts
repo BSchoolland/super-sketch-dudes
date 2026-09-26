@@ -791,6 +791,25 @@ function climbTo(f: Fighter, stage: Stage, L: { x: number; y: number; side: 1 | 
   f.vx = 0; f.vy = 0;
 }
 
+/**
+ * Generated fighters bring their own hook code. A hook that throws is disabled for the rest of the
+ * session and the fighter drops to idle, with an event so the screen can say so. Every client runs
+ * the same hook against the same state, so all of them disable it on the same frame.
+ */
+function runHook(state: State, f: Fighter, def: FighterDef, mv: Move, input: InputFrame, prev: InputFrame): void {
+  const hook = def.hooks[mv.hook!];
+  if (!hook) throw new Error(`${def.id}.${mv.id} names missing hook ${mv.hook}`);
+  try {
+    hook({ state, f, input, prev });
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    mv.hook = undefined;
+    state.events.push({ t: "hookError", frame: state.frame, slot: f.slot, move: mv.id, error });
+    if (f.grabbing >= 0) { const v = state.fighters[f.grabbing]; if (v) releaseGrab(state, f, v, false); }
+    setAction(f, f.grounded ? "idle" : "air");
+  }
+}
+
 export function releaseGrab(state: State, g: Fighter, v: Fighter, escaped: boolean): void {
   g.grabbing = -1;
   v.grabbedBy = -1;
@@ -849,7 +868,7 @@ function applyPending(f: Fighter, input: InputFrame): void {
 function stepMove(state: State, f: Fighter, def: FighterDef, input: InputFrame, prev: InputFrame, e: Edges, stage: Stage): void {
   const mv = currentMove(f)!;
   const s = def.stats;
-  if (mv.hook) def.hooks[mv.hook]({ state, f, input, prev });
+  if (mv.hook) runHook(state, f, def, mv, input, prev);
   if (f.action !== "attack") return; // the hook changed state
   if (mv.motion) for (const [fr, mx, my] of mv.motion) if (fr === f.frame) { f.vx = mx * f.moveFacing; f.vy = my; if (my < 0) { f.grounded = false; f.platform = -1; } }
   const hovering = mv.hover && f.frame >= mv.hover[0] && f.frame <= mv.hover[1];

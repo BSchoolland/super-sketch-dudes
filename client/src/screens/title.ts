@@ -5,6 +5,8 @@ import { sfx } from "../audio/audio";
 import { bg, card, hint, label, title, type Screen, INK } from "./ui";
 import { rosterList } from "../../../shared/fighters/index";
 import { drawRig, poseAt, resolvePose } from "../render/rig";
+import { drawSprite } from "../render/sprite";
+import { cellForAnim } from "../../../shared/gen/sprite";
 
 export type Mode = "versus" | "online" | "training" | "settings";
 
@@ -46,12 +48,13 @@ export class TitleScreen implements Screen {
     });
     label(ctx, this.items[this.sel].desc, VIEW_W / 2, y0 + this.items.length * 110 + 20, 24, INK);
     // roster parade on the right
-    rosterList.forEach((def, i) => {
-      const rp = resolvePose(def, poseAt(def.rig.anims.idle, Math.floor(this.t * 60) + i * 17, def.rig.loops.idle));
+    rosterList.slice(0, 4).forEach((def, i) => {
+      const pose = poseAt(def.rig.anims.idle, Math.floor(this.t * 60) + i * 17, def.rig.loops.idle);
       ctx.save();
       ctx.translate(VIEW_W - 260 - (i % 2) * 220, 700 + Math.floor(i / 2) * 260);
       ctx.scale(1.4, 1.4);
-      drawRig(ctx, rp, def.palette.colors, def.palette.outline);
+      if (def.sprite) drawSprite(ctx, def, cellForAnim(def, "idle"), pose);
+      else drawRig(ctx, resolvePose(def, pose), def.palette.colors, def.palette.outline);
       ctx.restore();
     });
     hint(ctx, "keyboard: WASD/arrows move · J/Numpad1 confirm · gamepad: A confirm");

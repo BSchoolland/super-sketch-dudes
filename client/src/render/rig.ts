@@ -32,17 +32,18 @@ export function poseAt(keys: PoseKey[], frame: number, loop?: number): Pose {
 }
 
 /** Which named animation (and frame) a fighter is showing, from its sim state. */
-export function animFor(f: Fighter, def: FighterDef): { keys: PoseKey[]; frame: number; loop?: number } {
+export interface AnimPick { keys: PoseKey[]; frame: number; loop?: number; /** animation (or move) name */ name: string }
+export function animFor(f: Fighter, def: FighterDef): AnimPick {
   const anims = def.rig.anims;
-  const pick = (name: string, frame = f.frame): { keys: PoseKey[]; frame: number; loop?: number } => ({ keys: anims[name] ?? anims.idle ?? [], frame, loop: def.rig.loops[name] });
+  const pick = (name: string, frame = f.frame): AnimPick => ({ keys: anims[name] ?? anims.idle ?? [], frame, loop: def.rig.loops[name], name });
   switch (f.action) {
     case "attack": {
       const mv = currentMove(f);
-      return mv ? { keys: mv.poses, frame: f.frame } : pick("idle");
+      return mv ? { keys: mv.poses, frame: f.frame, name: mv.id } : pick("idle");
     }
     case "smashCharge": {
       const mv = f.move ? def.moves[f.move] : null;
-      return mv ? { keys: mv.poses.slice(0, 1), frame: 0 } : pick("idle");
+      return mv ? { keys: mv.poses.slice(0, 1), frame: 0, name: mv.id } : pick("idle");
     }
     case "idle": return pick("idle");
     case "walk": return pick("walk");

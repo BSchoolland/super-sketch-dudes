@@ -7,11 +7,14 @@ import { stageOf } from "../../../shared/sim";
 import { Camera, VIEW_H, VIEW_W } from "./camera";
 import { Fx } from "./fx";
 import { animFor, drawRig, poseAt, resolvePose, tintColors, type ResolvedPose } from "./rig";
+import { drawSprite } from "./sprite";
+import { cellFor } from "../../../shared/gen/sprite";
+import type { FighterDef, Pose } from "../../../shared/types";
 import { drawBackdrop, drawShadow, drawStage } from "./stage";
 import { SLOT_COLORS, createHud, drawHud, type HudState } from "./hud";
 import { drawStrikes, inWindup } from "./strikes";
 
-interface Ghost { x: number; y: number; facing: number; rp: ResolvedPose; age: number; colors: Record<string, string> }
+interface Ghost { x: number; y: number; facing: number; rp: ResolvedPose; age: number; colors: Record<string, string>; sprite?: { def: FighterDef; cell: string; flip: boolean; pose: Pose } }
 
 export class Renderer {
   cam = new Camera();
@@ -48,8 +51,10 @@ export class Renderer {
       if (fast && state.frame % 2 === 0) {
         const def = defOf(f);
         const a = animFor(f, def);
-        const rp = resolvePose(def, poseAt(a.keys, a.frame, a.loop));
-        this.ghosts.push({ x: f.x, y: f.y, facing: f.facing, rp, age: 0, colors: tintColors(def, i, SLOT_COLORS) });
+        const pose = poseAt(a.keys, a.frame, a.loop);
+        const rp = resolvePose(def, pose);
+        const sprite = def.sprite ? { def, ...cellFor(f, def, a.name), pose } : undefined;
+        this.ghosts.push({ x: f.x, y: f.y, facing: f.facing, rp, age: 0, colors: tintColors(def, i, SLOT_COLORS), sprite });
       }
     });
   }
@@ -81,7 +86,8 @@ export class Renderer {
       ctx.save();
       ctx.translate(g.x, g.y);
       ctx.scale(g.facing, 1);
-      drawRig(ctx, g.rp, g.colors, "rgba(255,255,255,0)", { alpha: 0.35 * (1 - g.age / 0.22), flash: PENCIL, outlineWidth: 0 });
+      if (g.sprite) drawSprite(ctx, g.sprite.def, g.sprite.cell, g.sprite.pose, { alpha: 0.35 * (1 - g.age / 0.22), ghost: true, flip: g.sprite.flip });
+      else drawRig(ctx, g.rp, g.colors, "rgba(255,255,255,0)", { alpha: 0.35 * (1 - g.age / 0.22), flash: PENCIL, outlineWidth: 0 });
       ctx.restore();
     }
     // projectiles
@@ -149,7 +155,8 @@ export class Renderer {
     const blink = f.invuln > 0 && !dodging && f.action !== "respawn" && (state.frame >> 2) % 2 === 0;
     const alpha = f.action === "respawn" ? 0.8 : dodging && f.invuln > 0 ? 0.45 : blink ? 0.7 : 1;
     const flash = f.hitlag > 0 && f.pending ? "#ffffff" : undefined;
-    drawRig(ctx, rp, colors, def.palette.outline, { alpha, flash, outlineWidth: 3 });
+    if (def.sprite) { const c = cellFor(f, def, a.name); drawSprite(ctx, def, c.cell, pose, { alpha, flash: !!flash, flip: c.flip }); }
+    else drawRig(ctx, rp, colors, def.palette.outline, { alpha, flash, outlineWidth: 3 });
     ctx.restore();
     // shield bubble
     if (f.shieldHeld || f.action === "shieldStun") {

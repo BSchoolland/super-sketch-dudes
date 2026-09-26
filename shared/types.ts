@@ -82,6 +82,8 @@ export interface Pose {
   /** Squash and stretch scale. */
   sx?: number;
   sy?: number;
+  /** Lean in degrees, positive tips the top toward the facing direction. Sprite fighters only. */
+  rot?: number;
 }
 export interface PoseKey {
   frame: number;
@@ -136,6 +138,10 @@ export interface Move {
   /** Pressing attack from `nextFrom` on chains into this move (jab combos). */
   next?: string;
   nextFrom?: number;
+  /** Sprite fighters: which sheet cell this move shows (default by move id, see gen/sprite.ts). */
+  cell?: string;
+  /** Sprite fighters: mirror the cell (a back-air drawn from the forward-attack cell). */
+  cellFlip?: boolean;
 }
 
 export type BoneShape = "capsule" | "circle" | "poly" | "blade" | "slab" | "flame";
@@ -174,6 +180,22 @@ export interface Palette {
   outline: string;
 }
 
+/**
+ * A fighter drawn from a sheet of hand-drawn cells instead of a bone rig. Every cell is a
+ * square PNG of `px` pixels with the character facing right, horizontally centred, feet on
+ * the row `feetPx` from the top, and drawn so the idle cell's content is `heightPx` tall.
+ * The renderer maps `heightPx` onto `stats.height`, so all cells share one world scale.
+ */
+export interface SpriteRig {
+  /** Cell name -> image URL (or data URL). Names are the SPRITE_CELLS in gen/sprite.ts. */
+  cells: Record<string, string>;
+  /** Animation name -> cell name; anything missing falls back to the defaults in gen/sprite.ts. */
+  anims: Record<string, string>;
+  px: number;
+  feetPx: number;
+  heightPx: number;
+}
+
 export interface FighterDef {
   id: FighterId;
   name: string;
@@ -182,6 +204,10 @@ export interface FighterDef {
   moves: Record<string, Move>;
   rig: Rig;
   palette: Palette;
+  /** Present on drawn (player-generated) fighters; the renderer uses it instead of the rig's bones. */
+  sprite?: SpriteRig;
+  /** Player-generated fighters carry who drew them and the description the agent worked from. */
+  generated?: { player: string; description: string };
   /** Initial value of fighter.special (must be a plain object). */
   special: () => Record<string, number>;
   /** Named hooks referenced from moves. Run each frame of the move; may mutate the fighter and state. */
@@ -371,6 +397,7 @@ export type GameEvent =
   | { t: "respawn"; frame: number; slot: number; x: number; y: number }
   | { t: "projectile"; frame: number; slot: number; kind: string; x: number; y: number }
   | { t: "sfx"; frame: number; slot: number; name: string; x: number; y: number }
+  | { t: "hookError"; frame: number; slot: number; move: string; error: string }
   | { t: "end"; frame: number; winner: number }
   | { t: "suddenDeath"; frame: number };
 

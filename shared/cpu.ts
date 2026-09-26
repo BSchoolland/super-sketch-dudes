@@ -3,7 +3,7 @@ import { cosDeg, sign, sinDeg } from "./fixed";
 import { currentMove, defOf, isActionable } from "./fighter";
 import { knockback } from "./hits";
 import { B, type InputFrame } from "./input";
-import { roster } from "./fighters/index";
+import { roster, onRosterChange } from "./fighters/index";
 import { stageOf } from "./sim";
 import type { Fighter, FighterDef, Hitbox, Move, Stage, State } from "./types";
 
@@ -27,13 +27,19 @@ const EMPTY_MOVE: MoveInfo = {
   first: 999, last: 0, damage: 0, angle: 0, base: 0, growth: 0,
 };
 
-const REACH: ReachTable = buildReachTables();
+// Reach tables are built per fighter on first use so fighters registered at runtime get one too.
+const REACH: ReachTable = {};
+onRosterChange((id) => { delete REACH[id]; });
+function reachOf(id: string): Record<string, MoveInfo> {
+  return REACH[id] ?? (REACH[id] = buildReachTable(id));
+}
 const REACTION = [30, 30, 26, 21, 15, 11, 8, 6, 4, 3];
 const THINK = [12, 12, 10, 8, 7, 6, 5, 4, 3, 2];
 
-function buildReachTables(): ReachTable {
-  const tables: ReachTable = {};
-  for (const id in roster) {
+function buildReachTable(id: string): Record<string, MoveInfo> {
+  const def = roster[id];
+  if (!def) throw new Error(`cpu: unknown fighter ${id}`);
+  {
     const moves: Record<string, MoveInfo> = {};
     for (const moveId in roster[id].moves) {
       const move = roster[id].moves[moveId];
@@ -56,9 +62,8 @@ function buildReachTables(): ReachTable {
       }
       moves[moveId] = first === 999 ? { ...EMPTY_MOVE } : { minX, maxX, minY, maxY, first, last, damage, angle, base, growth };
     }
-    tables[id] = moves;
+    return moves;
   }
-  return tables;
 }
 
 function blank(): InputFrame {
@@ -101,7 +106,7 @@ function offStage(state: State, f: Fighter, stage: Stage): boolean {
 }
 
 function moveCanReach(attacker: Fighter, victim: Fighter, moveId: string, facing: 1 | -1): boolean {
-  const info = REACH[attacker.id]?.[moveId];
+  const info = reachOf(attacker.id)[moveId];
   if (!info || info.first === 999) return false;
   const vdef = defOf(victim);
   const localX = (victim.x - attacker.x) * facing;
@@ -114,7 +119,7 @@ function moveCanReach(attacker: Fighter, victim: Fighter, moveId: string, facing
 }
 
 function moveNearReach(attacker: Fighter, victim: Fighter, moveId: string, facing: 1 | -1, extra: number): boolean {
-  const info = REACH[attacker.id]?.[moveId];
+  const info = reachOf(attacker.id)[moveId];
   if (!info || info.first === 999) return false;
   const vdef = defOf(victim);
   const localX = (victim.x - attacker.x) * facing;

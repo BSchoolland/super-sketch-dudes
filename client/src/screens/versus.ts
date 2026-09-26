@@ -26,6 +26,8 @@ export class VersusScreen implements Screen {
   training: boolean;
   suddenT = 0;
   dummyToggled = false;
+  /** A generated fighter's hook threw: shown for a few seconds. */
+  hookErr: { text: string; detail: string; t: number } | null = null;
   constructor(cfg: MatchConfig, sources: SlotSource[], private onExit: () => Screen, private onRematch: () => Screen, training = false, driver?: MatchDriver) {
     this.match = driver ?? new LocalMatch(cfg, sources);
     this.training = training;
@@ -87,6 +89,11 @@ export class VersusScreen implements Screen {
     }
     const events = this.match.takeEvents();
     if (events.some((e) => e.t === "suddenDeath")) this.suddenT = 2.5;
+    for (const e of events) if (e.t === "hookError") {
+      console.error(`hook error in ${roster[st.fighters[e.slot].id].name}.${e.move}: ${e.error}`);
+      this.hookErr = { text: `${roster[st.fighters[e.slot].id].name}'S ${e.move.toUpperCase()} EXPLODED`, detail: e.error.slice(0, 90), t: 0 };
+    }
+    if (this.hookErr) { this.hookErr.t += dt; if (this.hookErr.t > 4) this.hookErr = null; }
     this.suddenT = Math.max(0, this.suddenT - dt);
     this.renderer.fx.consume(st, events, this.renderer.cam);
     playEvents(events);
@@ -139,6 +146,7 @@ export class VersusScreen implements Screen {
       this.drawTrainingOverlay(ctx);
     }
     if (this.suddenT > 0 && !st.ended) drawBanner(ctx, "SUDDEN DEATH", "300% · one stock · first hit wins", "#ff3b3b", Math.min(1, (2.5 - this.suddenT) * 2 + 0.2));
+    if (this.hookErr && !st.ended) drawBanner(ctx, this.hookErr.text, this.hookErr.detail, "#ff4d2e", Math.min(1, this.hookErr.t * 2 + 0.2));
     if (st.ended) {
       this.bannerT += dt;
       const w = st.winner;

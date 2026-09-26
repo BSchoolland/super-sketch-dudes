@@ -1,6 +1,8 @@
 import type { FighterDef } from "../../../shared/types";
 import { drawRig, poseAt, resolvePose, tintColors } from "../render/rig";
 import { SLOT_COLORS } from "../render/hud";
+import { drawSprite } from "../render/sprite";
+import { cellForAnim } from "../../../shared/gen/sprite";
 
 export interface PortraitBounds {
   x: number;
@@ -18,9 +20,11 @@ export function drawFighterPortrait(
   bounds: PortraitBounds,
   scale = 2.4,
 ): void {
-  const anim = ready ? (def.rig.anims.taunt ?? def.rig.anims.idle) : def.rig.anims.idle;
+  const animName = ready && def.rig.anims.taunt ? "taunt" : "idle";
+  const anim = def.rig.anims[animName] ?? [];
   const loop = ready ? 60 : def.rig.loops.idle;
-  const pose = resolvePose(def, poseAt(anim, Math.floor(t * 60), loop));
+  const raw = poseAt(anim, Math.floor(t * 60), loop);
+  const pose = resolvePose(def, raw);
   ctx.save();
   ctx.beginPath();
   ctx.roundRect(bounds.x, bounds.y, bounds.w, bounds.h, 12);
@@ -29,6 +33,7 @@ export function drawFighterPortrait(
   ctx.fillRect(bounds.x, bounds.y, bounds.w, bounds.h);
   ctx.translate(bounds.x + bounds.w / 2, bounds.y + bounds.h - 30);
   ctx.scale(scale, scale);
-  drawRig(ctx, pose, tintColors(def, slot, SLOT_COLORS), def.palette.outline);
+  if (def.sprite) drawSprite(ctx, def, cellForAnim(def, animName), raw);
+  else drawRig(ctx, pose, tintColors(def, slot, SLOT_COLORS), def.palette.outline);
   ctx.restore();
 }
