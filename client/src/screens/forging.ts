@@ -31,16 +31,17 @@ export class ForgeScreen implements Screen {
   }
 
   private buttons(): Button[] {
-    const y = VIEW_H - 150, w = 440;
+    const y = VIEW_H - 150, w = 520;
+    const library: Button = { id: "back", x: VIEW_W / 2 + 20, y, w, h: 110, text: "GO TO MY CHARACTERS", size: 36 };
     if (this.entry.status === "ready") return [
       { id: "battle", x: VIEW_W / 2 - w - 20, y, w, h: 110, text: "BATTLE WITH IT", size: 44 },
-      { id: "back", x: VIEW_W / 2 + 20, y, w, h: 110, text: "BACK", size: 44 },
+      library,
     ];
     if (this.entry.status === "failed" && this.pad) return [
       { id: "retry", x: VIEW_W / 2 - w - 20, y, w, h: 110, text: "TRY AGAIN", size: 44 },
-      { id: "back", x: VIEW_W / 2 + 20, y, w, h: 110, text: "BACK", size: 44 },
+      library,
     ];
-    return [{ id: "back", x: VIEW_W / 2 - w / 2, y, w, h: 110, text: "BACK", size: 44 }];
+    return [{ ...library, x: VIEW_W / 2 - w / 2 }];
   }
 
   update(dt: number, m: MenuInput): Screen | null {
