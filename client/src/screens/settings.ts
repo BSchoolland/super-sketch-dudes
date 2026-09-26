@@ -43,10 +43,10 @@ export class SettingsScreen implements Screen {
         label(ctx, r.get(), VIEW_W / 2 + 370, y + 50, 28, INK, "right", 700);
         return;
       }
-      const d = arrows(ctx, VIEW_W / 2 + 250, y + 50, 90, 26);
+      const d = arrows(ctx, VIEW_W / 2 + 280, y + 50, 90, 26);
       if (d) { r.adj(d); saveSettings(); sfx.menuMove(); }
       label(ctx, r.name, VIEW_W / 2 - 370, y + 50, 28, INK, "left", 900);
-      label(ctx, `◀  ${r.get()}  ▶`, VIEW_W / 2 + 370, y + 50, 28, INK, "right", 900);
+      label(ctx, r.get(), VIEW_W / 2 + 280, y + 50, 28, INK, "center", 900);
     });
     const y = 160 + this.rows.length * 96 + 30;
     label(ctx, "KEYBOARD 1: WASD move · W/Space jump · J attack · K special · L/Shift shield · I grab · U smash modifier · T taunt", VIEW_W / 2, y, 18, INK, "center", 600);

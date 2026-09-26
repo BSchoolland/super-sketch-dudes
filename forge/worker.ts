@@ -44,7 +44,7 @@ async function handle(job: JobSpec & { attempts: number }): Promise<void> {
     await post(`/jobs/${job.id}/complete`, payload);
     log(tag, `DONE ${payload.name} in ${((Date.now() - t0) / 1000).toFixed(0)}s, $${payload.report.costUsd.toFixed(2)} (agent $${payload.report.agent.costUsd.toFixed(2)}, sheet ~$${(payload.report.sheet.costUsd ?? NaN).toFixed(2)})`);
   } catch (e) {
-    const msg = e instanceof ForgeError ? e.message : `forge error: ${e instanceof Error ? e.message : String(e)}`;
+    const msg = e instanceof ForgeError ? e.message : `something broke: ${e instanceof Error ? e.message : String(e)}`;
     fs.writeFileSync(path.join(dir, "error.txt"), e instanceof Error ? e.stack ?? e.message : String(e));
     log(tag, `FAILED after ${((Date.now() - t0) / 1000).toFixed(0)}s: ${msg}`);
     await post(`/jobs/${job.id}/fail`, { error: msg }).catch((err) => log(tag, `could not report the failure: ${err.message}`));

@@ -11,28 +11,28 @@ import { drawFighterPortrait } from "../portrait";
 export type BattleMode = "cpu" | "local" | "online";
 
 const X = 1060, W = 640;
-const BUTTONS: Button[] = [
-  { id: "cpu", x: X, y: 220, w: W, h: 140, text: "VS CPU", size: 60 },
-  { id: "local", x: X, y: 400, w: W, h: 140, text: "LOCAL 2P", size: 60 },
-  { id: "online", x: X, y: 580, w: W, h: 140, text: "ONLINE", size: 60 },
-  { id: "back", x: 40, y: VIEW_H - 130, w: 240, h: 90, text: "BACK", size: 40 },
-];
+const NAMES: Record<BattleMode, string> = { cpu: "VS CPU", local: "LOCAL 2P", online: "ONLINE" };
 
-/** BATTLE, step 2: your fighter on the left, how you want to fight on the right. */
+/** Step 2 of a battle: your fighter on the left, how you want to fight on the right. */
 export class ModeScreen implements Screen {
   t = 0;
   private menu = new ButtonMenu();
+  private buttons: Button[];
   /** The device that last drove the menus: player 1's in a local match. */
   private device: DeviceId;
 
-  constructor(private fighter: FighterChoice, device: DeviceId | null, private onMode: (mode: BattleMode, device: DeviceId) => Screen, private onBack: () => Screen) {
+  constructor(private fighter: FighterChoice, device: DeviceId | null, modes: BattleMode[], private onMode: (mode: BattleMode, device: DeviceId) => Screen, private onBack: () => Screen) {
     this.device = device ?? "kb1";
+    this.buttons = [
+      ...modes.map((mode, i) => ({ id: mode, x: X, y: 220 + i * 180, w: W, h: 140, text: NAMES[mode], size: 60 })),
+      { id: "back", x: 40, y: VIEW_H - 130, w: 240, h: 90, text: "BACK", size: 40 },
+    ];
   }
 
   update(dt: number, m: MenuInput): Screen | null {
     this.t += dt;
     if (m.from) this.device = m.from;
-    const id = this.menu.update(BUTTONS, m, consumeTaps());
+    const id = this.menu.update(this.buttons, m, consumeTaps());
     if (id === "cpu" || id === "local" || id === "online") return this.onMode(id, this.device);
     if (id === "back" || m.back) { sfx.menuBack(); return this.onBack(); }
     return null;
@@ -44,6 +44,6 @@ export class ModeScreen implements Screen {
     if (def) drawFighterPortrait(ctx, def, this.t, true, { x: 160, y: 140, w: 640, h: 640 });
     title(ctx, this.fighter.name, 480, 860, 80);
     if (def) label(ctx, def.tagline, 480, 910, 26, PENCIL, "center", 700);
-    this.menu.draw(ctx, BUTTONS);
+    this.menu.draw(ctx, this.buttons);
   }
 }

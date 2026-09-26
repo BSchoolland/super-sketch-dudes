@@ -84,7 +84,7 @@ export function attachDraw(api: express.Router, opts: DrawOptions): void {
     // rounds run back to back; the only wait is at the end, for the forge
     if (d.round < d.rounds) { startDrawRound(room, d.round + 1); return; }
     d.phase = "reveal";
-    d.note = "the forge is finishing up";
+    d.note = "the last characters are still being made";
     for (const p of d.players.values()) p.ready = false;
     setTimer(room, 0, () => {});
     push(room);
@@ -97,7 +97,7 @@ export function attachDraw(api: express.Router, opts: DrawOptions): void {
     const players = [...d.players.values()].filter((p) => p.connected);
     const everyoneReady = players.length > 0 && players.every((p) => p.ready);
     const settled = players.every((p) => p.characters.every((ch) => ch.status === "ready" || ch.status === "failed"));
-    if (!settled) { d.note = "the forge is finishing up"; return; }
+    if (!settled) { d.note = "the last characters are still being made"; return; }
     d.note = everyoneReady ? "" : "everyone's characters are in: ready up to fight";
     if (everyoneReady) beginLadder(room);
     else push(room);
@@ -108,7 +108,7 @@ export function attachDraw(api: express.Router, opts: DrawOptions): void {
       p.current = p.characters.findIndex((ch) => ch.status === "ready" && !ch.spent);
       p.alive = p.current >= 0 && p.connected;
     }
-    if (alive(d).length < 2) { finish(room, "not enough fighters made it out of the forge"); return; }
+    if (alive(d).length < 2) { finish(room, "not enough characters made it"); return; }
     nextBattle(room);
   }
   function nextBattle(room: Room): void {
@@ -242,7 +242,7 @@ export function attachDraw(api: express.Router, opts: DrawOptions): void {
           const siblings = p.characters.filter((q) => q.round !== round && q.name).map((q) => q.name!);
           jobChars.set(fighterId, { code: room.code, playerId: p.id, round });
           enqueueJob({ fighterId, player: c.player, siblings, png, origin: { room: room.code, round } });
-          ch.status = "queued"; ch.stage = "waiting for the forge"; ch.fighterId = fighterId; ch.drawingUrl = drawingUrlOf(fighterId);
+          ch.status = "queued"; ch.stage = "waiting in line"; ch.fighterId = fighterId; ch.drawingUrl = drawingUrlOf(fighterId);
           push(room);
           if ([...d.players.values()].every((q) => !q.connected || q.characters[round - 1].status !== "waiting")) endDrawRound(room);
           return true;

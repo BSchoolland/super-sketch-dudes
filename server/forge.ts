@@ -72,7 +72,7 @@ export function enqueueJob(spec: { fighterId: string; player: Player; siblings: 
   fs.writeFileSync(drawingPath, spec.png);
   const job: ForgeJob = {
     id: crypto.randomBytes(6).toString("hex"), fighterId: spec.fighterId, owner: spec.player.id, playerName: spec.player.name, siblings: spec.siblings,
-    drawingPath, status: "queued", stage: "waiting for the forge", error: null, claimedAt: 0, attempts: 0, origin: spec.origin, hint: spec.hint ?? null, createdAt: Date.now(), result: null,
+    drawingPath, status: "queued", stage: "waiting in line", error: null, claimedAt: 0, attempts: 0, origin: spec.origin, hint: spec.hint ?? null, createdAt: Date.now(), result: null,
   };
   jobs.set(job.id, job);
   queue.push(job.id);
@@ -100,8 +100,8 @@ export function attachForge(api: express.Router, opts: ForgeOptions): void {
   setInterval(() => {
     for (const job of jobs.values()) {
       if (job.status === "running" && Date.now() - job.claimedAt > 15 * 60_000) {
-        if (job.attempts >= 2) setStatus(job, "failed", "", "the forge gave up on this one");
-        else { queue.push(job.id); setStatus(job, "queued", "waiting for the forge again"); }
+        if (job.attempts >= 2) setStatus(job, "failed", "", "gave up on this one after two tries");
+        else { queue.push(job.id); setStatus(job, "queued", "back in line"); }
       }
     }
   }, 15_000).unref();
@@ -140,7 +140,7 @@ export function attachForge(api: express.Router, opts: ForgeOptions): void {
     if (!forgeAuth(req, res)) return;
     const job = jobs.get(req.params.id);
     if (!job || job.status !== "running") return res.status(409).json({ error: "job not running" });
-    setStatus(job, "failed", "", String(req.body?.error ?? "the forge failed").slice(0, 300));
+    setStatus(job, "failed", "", String(req.body?.error ?? "couldn't be made").slice(0, 300));
     res.status(204).end();
   });
   api.post("/forge/jobs/:id/complete", async (req, res) => {

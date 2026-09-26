@@ -94,7 +94,7 @@ export class ResultsView implements DrawView {
     p.characters.forEach((ch, i) => {
       const tx = x + 230 + i * (thumb + 20);
       drawCharacterArt(ctx, ch, tx, y, thumb, 0);
-      if (ch.status === "failed") label(ctx, "didn't forge", tx + thumb / 2, y + thumb + 24, 18, RED);
+      if (ch.status === "failed") label(ctx, "didn't make it", tx + thumb / 2, y + thumb + 24, 18, RED);
       else label(ctx, ch.name ?? "?", tx + thumb / 2, y + thumb + 24, 20, ch.spent ? PENCIL : INK, "center", i === p.current && !ch.spent ? 900 : 700);
     });
   }

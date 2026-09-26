@@ -45,8 +45,8 @@ export function drawCharacterArt(ctx: CanvasRenderingContext2D, ch: ArtSource | 
 export function characterStatus(ch: Pick<DrawCharacter, "status" | "stage" | "error">, t: number): { text: string; color: string } | null {
   const dots = ".".repeat(1 + (Math.floor(t * 2) % 3));
   if (ch.status === "ready") return null;
-  if (ch.status === "failed") return { text: ch.error ?? "the forge failed", color: RED };
+  if (ch.status === "failed") return { text: ch.error ?? "couldn't be made", color: RED };
   if (ch.status === "waiting") return { text: "still drawing", color: PENCIL };
-  if (ch.status === "queued") return { text: `${ch.stage || "waiting for the forge"}${dots}`, color: PENCIL };
+  if (ch.status === "queued") return { text: `${ch.stage || "waiting in line"}${dots}`, color: PENCIL };
   return { text: `${ch.stage || "forging"}${dots}`, color: INK };
 }

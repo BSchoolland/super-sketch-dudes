@@ -85,7 +85,7 @@ export class LibraryScreen implements Screen {
 
   private updateDetail(e: LibraryEntry, m: MenuInput, taps: ReturnType<typeof consumeTaps>): Screen | null {
     const pressed = this.detailMenu.update(this.detailButtons(e), m, taps);
-    if (pressed === "fight") return this.nav.battle(libraryChoices([e])[0]);
+    if (pressed === "fight") return this.nav.battle("any", libraryChoices([e])[0]);
     if (pressed === "delete") {
       if (this.deleteArmed >= 0 && this.t - this.deleteArmed < 3) this.remove(e);
       else this.deleteArmed = this.t;
@@ -150,7 +150,7 @@ export class LibraryScreen implements Screen {
     else {
       drawCharacterArt(ctx, e, 160, 110, 640, this.t);
       title(ctx, "FAILED", 870, 200, 96, RED, "left");
-      wrapped(ctx, e.error ?? "the forge failed", 870, 280, 860, 32, RED, 8, "left");
+      wrapped(ctx, e.error ?? "couldn't be made", 870, 280, 860, 32, RED, 8, "left");
     }
     this.detailMenu.draw(ctx, this.detailButtons(e));
   }

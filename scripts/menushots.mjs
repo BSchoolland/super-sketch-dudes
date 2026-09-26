@@ -15,7 +15,7 @@ const press = async (key, n = 1) => { for (let i = 0; i < n; i++) { await page.k
 const shot = async (name, ms = 400) => { await page.waitForTimeout(ms); await page.screenshot({ path: `${out}/${name}.png` }); };
 await signIn(page, base, "Menus");
 await shot("m0-title", 1200);
-await press("ArrowDown", 3); await press("Enter");
+await press("ArrowDown", 4); await press("Enter");
 await page.waitForFunction(() => !!window.sketchbattle.screen.grid);
 await shot("m1-pick", 1200);
 await press("ArrowRight"); await press("Enter");
@@ -36,7 +36,7 @@ await shot("m6-fight", 300);
 await page.keyboard.press("Escape");
 await shot("m7-pause", 300);
 await signIn(page, base, "Menus");
-await press("ArrowDown", 4); await press("Enter");
+await press("ArrowDown", 5); await press("Enter");
 await shot("m8-settings");
 if (errors.length) { console.error("page errors:\n" + errors.join("\n")); process.exitCode = 1; }
 await browser.close();

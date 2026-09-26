@@ -41,7 +41,7 @@ async function stroke(page, points) {
 const circle = (cx, cy, r, n = 28) => Array.from({ length: n + 1 }, (_, i) => [cx + Math.cos((i / n) * Math.PI * 2) * r, cy + Math.sin((i / n) * Math.PI * 2) * r]);
 
 // title menu rows (x 180..700, from y 430 every 104)
-const menu = (i) => [440, 430 + i * 104 + 44];
+const menu = (i) => [960, 350 + i * 96 + 44];
 
 /** NEW CHARACTER from the title: a stick figure with a red hat, DONE, and wait for the fake forge. */
 async function createCharacter(page, prefix) {
@@ -116,12 +116,12 @@ await shot(a, "09-vs-cpu");
 const fighters = await a.evaluate(() => window.sketchbattle.screen.match.state.fighters.map((f) => f.id));
 console.log(`vs cpu fighters: ${fighters.join(" vs ")}`);
 
-// LOCAL 2P from the title: BATTLE, your first fighter, LOCAL 2P, player 2 joins on the arrows keyboard
+// LOCAL 2P from the title: COUCH CO-OP, your first fighter, LOCAL 2P, player 2 joins on the arrows keyboard
 await a.goto(base);
 await onScreen(a, "TitleScreen");
 await a.waitForTimeout(800);
 await shot(a, "10-title-own-parade");
-await tap(a, ...menu(3));
+await tap(a, ...menu(4));
 await onScreen(a, "PickFighterScreen");
 await a.waitForTimeout(1500);
 await shot(a, "11-pick-fighter");
@@ -159,8 +159,6 @@ for (const page of [a, b]) {
   await onScreen(page, "PickFighterScreen");
   await page.waitForTimeout(500);
   await tap(page, 250 + 100, 190 + 100);
-  await onScreen(page, "ModeScreen");
-  await tap(page, 1060 + 320, 650);
   await onScreen(page, "OnlineScreen");
 }
 await tap(a, 960, 230 + 180 + 65);

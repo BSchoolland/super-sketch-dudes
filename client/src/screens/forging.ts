@@ -51,7 +51,7 @@ export class ForgeScreen implements Screen {
     if (pressed === "battle") {
       const choice = libraryChoices([this.entry])[0];
       if (!choice) throw new Error(`ready character ${this.entry.id} has no bundle`);
-      return this.nav.battle(choice);
+      return this.nav.battle("any", choice);
     }
     if (pressed === "retry" && this.pad) return this.nav.create(this.pad);
     if (pressed === "back" || m.back) { sfx.menuBack(); return this.nav.library(); }

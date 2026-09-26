@@ -10,7 +10,7 @@ import { RED } from "./draw/character";
 import type { DrawPad } from "./draw/pad";
 import { padPng } from "./draw/tools";
 import { TextField } from "./draw/textfield";
-import type { Nav } from "./nav";
+import type { CharacterHint, Nav } from "./nav";
 
 const ART = { x: 120, y: 150, w: 720, h: 720 };
 const FORM_X = 960, FORM_W = 840;
@@ -19,7 +19,7 @@ const DESC = { x: FORM_X, y: 440, w: FORM_W, h: 220 };
 export const NAME_MAX = 14, DESCRIPTION_MAX = 240;
 
 /**
- * Between the pad and the forge: an optional name and a line or two about the character, so the
+ * Between the pad and creation: an optional name and a line or two about the character, so the
  * player can steer the design ("it's a tank, the barrel shoots", "the tail is a whip").
  */
 export class DescribeScreen implements Screen {
@@ -31,10 +31,10 @@ export class DescribeScreen implements Screen {
   private problem = "";
   private next: Screen | null = null;
 
-  constructor(private nav: Nav, private pad: DrawPad) {
+  constructor(private nav: Nav, private pad: DrawPad, hint?: CharacterHint) {
     pad.locked = true;
-    this.name = new TextField({ maxLength: NAME_MAX, upper: true, onSubmit: () => this.description.el.focus(), onCancel: () => this.back() });
-    this.description = new TextField({ maxLength: DESCRIPTION_MAX, multiline: true, quiet: true, onSubmit: () => this.send(), onCancel: () => this.back() });
+    this.name = new TextField({ maxLength: NAME_MAX, upper: true, value: hint?.name, onSubmit: () => this.description.el.focus(), onCancel: () => this.back() });
+    this.description = new TextField({ maxLength: DESCRIPTION_MAX, multiline: true, quiet: true, value: hint?.description, onSubmit: () => this.send(), onCancel: () => this.back() });
     this.menu.focus = 0;
   }
 
@@ -44,8 +44,8 @@ export class DescribeScreen implements Screen {
 
   private buttons(): Button[] {
     return [
-      { id: "send", x: FORM_X, y: 760, w: 400, h: 110, text: this.sending ? "…" : "SEND TO THE FORGE", size: 34, disabled: this.sending },
-      { id: "back", x: FORM_X + 440, y: 760, w: 400, h: 110, text: "BACK TO THE PAD", size: 34, disabled: this.sending },
+      { id: "send", x: FORM_X, y: 760, w: 400, h: 110, text: this.sending ? "…" : "CREATE CHARACTER", size: 34, disabled: this.sending },
+      { id: "back", x: FORM_X + 440, y: 760, w: 400, h: 110, text: "KEEP DRAWING", size: 34, disabled: this.sending },
     ];
   }
 
@@ -66,10 +66,10 @@ export class DescribeScreen implements Screen {
     label(ctx, "NAME (optional)", NAME.x, NAME.y - 22, 26, PENCIL, "left", 800);
     card(ctx, NAME.x, NAME.y, NAME.w, NAME.h, INK, document.activeElement === this.name.el);
     this.name.place(NAME.x + 20, NAME.y + 14, NAME.w - 40, NAME.h - 28, 44);
-    label(ctx, "WHAT IS IT? WHAT DOES IT DO? (optional, the forge reads this)", DESC.x, DESC.y - 22, 26, PENCIL, "left", 800);
+    label(ctx, "WHAT IS IT? WHAT DOES IT DO? (optional)", DESC.x, DESC.y - 22, 26, PENCIL, "left", 800);
     card(ctx, DESC.x, DESC.y, DESC.w, DESC.h, INK, document.activeElement === this.description.el);
     this.description.place(DESC.x + 20, DESC.y + 16, DESC.w - 40, DESC.h - 32, 28);
-    if (!this.name.value && !this.description.value) label(ctx, "leave both empty and the forge decides from the drawing alone", FORM_X, DESC.y + DESC.h + 44, 24, PENCIL, "left");
+    if (!this.name.value && !this.description.value) label(ctx, "leave both empty and it's all read from the drawing", FORM_X, DESC.y + DESC.h + 44, 24, PENCIL, "left");
     const buttons = this.buttons();
     this.menu.draw(ctx, buttons);
     if (this.problem) label(ctx, this.problem, VIEW_W / 2, VIEW_H - 40, 28, RED);
@@ -77,9 +77,10 @@ export class DescribeScreen implements Screen {
 
   private back(): Screen {
     sfx.menuBack();
+    const hint = { name: this.name.value.trim(), description: this.description.value.trim() };
     this.dispose();
     this.pad.locked = false;
-    return this.nav.create(this.pad);
+    return this.nav.create(this.pad, hint);
   }
 
   private dispose(): void {

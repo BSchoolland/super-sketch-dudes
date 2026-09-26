@@ -7,7 +7,7 @@ import { ButtonMenu, type Button } from "./draw/buttons";
 import { RED } from "./draw/character";
 import { DrawPad } from "./draw/pad";
 import { PadTools } from "./draw/tools";
-import type { Nav } from "./nav";
+import type { CharacterHint, Nav } from "./nav";
 
 const PAD = { x: 510, y: 90, w: 900, h: 900 };
 const RIGHT = 1490, COL_W = 340;
@@ -20,7 +20,7 @@ export class CreateScreen implements Screen {
   private problem = "";
   private next: Screen | null = null;
 
-  constructor(private nav: Nav, pad?: DrawPad) {
+  constructor(private nav: Nav, pad?: DrawPad, private hint?: CharacterHint) {
     this.tools = new PadTools(pad ?? new DrawPad(PAD));
     this.tools.pad.locked = false;
   }
@@ -45,7 +45,7 @@ export class CreateScreen implements Screen {
     this.t += dt;
     if (this.next) return this.leave(this.next);
     const pressed = this.menu.update(this.buttons(), m, consumeTaps());
-    if (pressed === "done") { sfx.menuConfirm(); return this.leave(this.nav.describe(this.tools.pad)); }
+    if (pressed === "done") { sfx.menuConfirm(); return this.leave(this.nav.describe(this.tools.pad, this.hint)); }
     else if (pressed === "back" || m.back) { sfx.menuBack(); return this.leave(this.nav.title()); }
     else if (pressed) this.tools.press(pressed);
     return null;
