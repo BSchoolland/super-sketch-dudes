@@ -15,9 +15,27 @@ const BANNED: [RegExp, string][] = [
   [/\basync\b|\bawait\b|\.then\(/, "must be synchronous"],
 ];
 
+/** Comments and string literals blanked out (newlines kept), so a word in a comment can't trip the lint. */
+export function codeOnly(src: string): string {
+  let out = "", i = 0;
+  const n = src.length;
+  while (i < n) {
+    const c = src[i], d = src[i + 1];
+    if (c === "/" && d === "/") { while (i < n && src[i] !== "\n") { out += " "; i++; } continue; }
+    if (c === "/" && d === "*") { i += 2; out += "  "; while (i < n && !(src[i] === "*" && src[i + 1] === "/")) { out += src[i] === "\n" ? "\n" : " "; i++; } i += 2; out += "  "; continue; }
+    if (c === '"' || c === "'" || c === "`") {
+      out += c; i++;
+      while (i < n && src[i] !== c) { if (src[i] === "\\") { out += " "; i++; } out += src[i] === "\n" ? "\n" : " "; i++; }
+      out += c; i++; continue;
+    }
+    out += c; i++;
+  }
+  return out;
+}
+
 export function lintGeneratedSource(src: string): string[] {
   const problems: string[] = [];
-  src.split("\n").forEach((line, i) => {
+  codeOnly(src).split("\n").forEach((line, i) => {
     if (line.includes("// determinism-ok")) return;
     for (const [re, why] of BANNED) if (re.test(line)) problems.push(`line ${i + 1}: ${why}: ${line.trim().slice(0, 120)}`);
   });

@@ -75,3 +75,12 @@ describe("generated fighters", () => {
     await expect(buildGenerated({ id: "gen-broken", source: broken, sprite, player: "t", description: "" })).rejects.toThrow(/fullHop=999[\s\S]*dtilt\.id/);
   });
 });
+
+describe("the source lint", () => {
+  it("ignores words inside comments and strings", async () => {
+    const { codeOnly, lintGeneratedSource } = await import("../shared/gen/load");
+    expect(lintGeneratedSource(source.replace("// LAMPJACK", "// LAMPJACK fights with the fire in its window, says document.title"))).toEqual([]);
+    expect(codeOnly('const a = "window"; // Date\nlet b = 1;')).toBe('const a = "      ";        \nlet b = 1;');
+    expect(lintGeneratedSource(source.replace("const stats = {", "const w = window;\n  const stats = {"))).toEqual([expect.stringMatching(/reaches outside the sim/)]);
+  });
+});

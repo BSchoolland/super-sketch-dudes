@@ -14,6 +14,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
 const TSX = path.join(root, "node_modules/.bin/tsx");
 const MODULE_RETRIES = 2;
+/** Pass-2 effort. Low writes a module in ~95s; medium thinks longer (the builder measured 5-6 min at the default) and passes the gate about as often. */
+const MODULE_EFFORT = (process.env.FORGE_EFFORT ?? "medium") as "low" | "medium" | "high";
 const CHECKS_TIMEOUT_MS = 120_000;
 
 export interface JobSpec { id: string; fighterId: string; playerName: string; round: number; siblings: string[] }
@@ -67,7 +69,7 @@ export async function runPipeline(job: JobSpec, drawingSrc: string, dir: string,
     io.log(`${name} ${((Date.now() - s) / 1000).toFixed(1)}s${detail ? ` ${detail(r)}` : ""}`);
     return r;
   };
-  const agent = async (pass: string, prompt: string, resume?: string, effort?: "low"): Promise<AgentResult> => {
+  const agent = async (pass: string, prompt: string, resume?: string, effort?: "low" | "medium" | "high"): Promise<AgentResult> => {
     fs.appendFileSync(path.join(dir, "prompts.log"), `\n===== ${pass} ${resume ? `(resume ${resume})` : ""}\n${prompt}\n`);
     const r = await runAgent(prompt, dir, { resume, effort });
     calls.push({ pass, ms: r.ms, costUsd: r.costUsd, tokens: r.tokens });
@@ -131,7 +133,7 @@ export async function runPipeline(job: JobSpec, drawingSrc: string, dir: string,
     else await io.progress(`fixing: ${failures[0]}`.slice(0, 80));
     const prompt = attempt === 0 ? modulePrompt({ concept, cellsDir, meta, height, out: moduleFile }) : feedbackPrompt(failures, moduleFile);
     if (attempt === 0) fs.rmSync(moduleFile, { force: true });
-    const r = await step("module", () => agent(attempt === 0 ? "module" : `module-fix-${attempt}`, prompt, session || undefined, "low"));
+    const r = await step("module", () => agent(attempt === 0 ? "module" : `module-fix-${attempt}`, prompt, session || undefined, MODULE_EFFORT));
     session = r.sessionId;
     const mod = readModule(moduleFile);
     if (!mod.module) { failures = mod.problems; attempts.push({ attempt, failures }); io.log(`module rejected: ${failures.join("; ")}`); continue; }

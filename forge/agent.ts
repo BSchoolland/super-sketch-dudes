@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 
 export const AGENT_MODEL = "claude-opus-5-5";
-const TIMEOUT_MS = 4 * 60_000;
+const TIMEOUT_MS = 8 * 60_000;
 
 export interface Tokens { input: number; output: number; cacheRead: number; cacheWrite: number }
 export interface AgentResult { sessionId: string; result: string; tokens: Tokens; costUsd: number; ms: number }
