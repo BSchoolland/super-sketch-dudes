@@ -1,17 +1,12 @@
-import type { FighterId, StageId } from "../../../shared/types";
+import type { FighterId } from "../../../shared/types";
 import { roster, rosterList } from "../../../shared/fighters/index";
-import { stages } from "../../../shared/stages/index";
-import { type MatchConfig } from "../../../shared/sim";
 import { VIEW_H, VIEW_W } from "../render/camera";
-import { drawBanner, SLOT_COLORS } from "../render/hud";
+import { SLOT_COLORS } from "../render/hud";
 import { consumeTypedChars, type DeviceId, type MenuInput } from "../input/devices";
 import { sfx } from "../audio/audio";
-import { logClient } from "../telemetry";
-import { RollbackMatch } from "../net/match";
-import { RollbackSession } from "../net/rollback";
-import { WebSocketTransport, type RelayMessage, type RoomMember, type Unsubscribe } from "../net/transport";
+import { WebSocketTransport, type RelayMessage, type Unsubscribe } from "../net/transport";
 import { drawFighterPortrait } from "./portrait";
-import { VersusScreen } from "./versus";
+import { NetVersusScreen, startConfig } from "./netversus";
 import { bg, card, hint, label, settings, title, type Screen, INK } from "./ui";
 
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -21,23 +16,6 @@ interface OnlineContext {
   transport: WebSocketTransport;
   id: number;
   room: RoomState | null;
-}
-
-function startConfig(value: unknown, seed: number): { match: MatchConfig; inputDelay: number } {
-  if (!value || typeof value !== "object") throw new Error("online start missing config");
-  const raw = value as Record<string, unknown>;
-  const stage = String(raw.stage ?? "") as StageId;
-  if (!stages[stage]) throw new Error(`online start has unknown stage ${stage}`);
-  if (!Array.isArray(raw.players) || raw.players.length < 2 || raw.players.length > 4) throw new Error("online start has invalid players");
-  const players = raw.players.map((player) => {
-    const fighter = String((player as Record<string, unknown>).fighter ?? "") as FighterId;
-    if (!roster[fighter]) throw new Error(`online start has unknown fighter ${fighter}`);
-    return { fighter };
-  });
-  if (!raw.rules || typeof raw.rules !== "object") throw new Error("online start has invalid rules");
-  const rules = raw.rules as MatchConfig["rules"];
-  const inputDelay = Math.max(1, Math.min(6, Number(raw.inputDelay ?? 2) | 0));
-  return { match: { stage, players, rules, seed }, inputDelay };
 }
 
 export class OnlineScreen implements Screen {
@@ -210,7 +188,21 @@ export class OnlineScreen implements Screen {
       const local = message.members.find((member) => member.id === this.context.id);
       if (!local) throw new Error("start message omitted local member");
       const config = startConfig(message.config, message.seed);
-      this.nextScreen = new OnlineVersusScreen(this.onExit, this.context, config.match, message.members, local.slot, this.device, config.inputDelay);
+      const context = this.context, onExit = this.onExit;
+      this.nextScreen = new NetVersusScreen({
+        transport: context.transport,
+        config: config.match,
+        members: message.members,
+        localSlot: local.slot,
+        device: this.device,
+        inputDelay: config.inputDelay,
+        onLobby: (lobby) => { if (lobby.t === "room") context.room = lobby; },
+        exit: (reason) => {
+          if (reason === "closed") return onExit();
+          if (context.room?.host === context.id) context.transport.sendLobby({ t: "end" });
+          return new OnlineScreen(onExit, context);
+        },
+      });
     }
   }
 
@@ -291,112 +283,5 @@ export class OnlineScreen implements Screen {
   private dispose(): void {
     for (const unsubscribe of this.unsubscribers) unsubscribe();
     this.unsubscribers.length = 0;
-  }
-}
-
-class OnlineVersusScreen extends VersusScreen {
-  readonly session: RollbackSession;
-  private failure: { title: string; detail: string; automatic: boolean } | null = null;
-  private failureTime = 0;
-  private pingTime = 0;
-  private unsubscribers: Unsubscribe[] = [];
-  private cleanupMatch: () => void;
-
-  constructor(
-    private onlineExit: () => Screen,
-    private context: OnlineContext,
-    config: MatchConfig,
-    members: Pick<RoomMember, "id" | "name" | "slot">[],
-    localSlot: number,
-    device: DeviceId,
-    inputDelay: number,
-  ) {
-    let cleanup: (() => void) | null = null;
-    const toLobby = () => {
-      if (!cleanup) throw new Error("online match cleanup is not initialized");
-      cleanup();
-      if (context.room?.host === context.id) context.transport.sendLobby({ t: "end" });
-      return new OnlineScreen(onlineExit, context);
-    };
-    const session = new RollbackSession({
-      config,
-      localSlot,
-      transport: context.transport,
-      inputDelay,
-      onDesync: (info) => logClient("desync", { frame: info.frame, localHash: info.localHash, remoteHash: info.remoteHash, remoteSlot: info.remoteSlot }),
-    });
-    const driver = new RollbackMatch(session, device);
-    const names = config.players.map((_, slot) => {
-      const member = members.find((candidate) => candidate.slot === slot);
-      if (!member) throw new Error(`start message omitted slot ${slot}`);
-      return member.name;
-    });
-    super(config, driver.sources, toLobby, toLobby, false, driver);
-    this.session = session;
-    this.renderer.names = names;
-    this.unsubscribers.push(
-      context.transport.onLobby((message) => {
-        if (message.t === "room") context.room = message;
-        if (message.t === "left" && message.duringMatch) {
-          this.failure = { title: "PLAYER DISCONNECTED", detail: "Returning to the room", automatic: true };
-          this.session.waiting = true;
-        }
-      }),
-      context.transport.onClose(() => {
-        this.failure = { title: "CONNECTION LOST", detail: "The relay closed", automatic: false };
-        this.session.waiting = true;
-      }),
-    );
-    this.cleanupMatch = () => {
-      this.session.close();
-      for (const unsubscribe of this.unsubscribers) unsubscribe();
-      this.unsubscribers.length = 0;
-      this.music.stop();
-    };
-    cleanup = this.cleanupMatch;
-  }
-
-  override update(dt: number, menu: MenuInput): Screen | null {
-    this.pingTime += dt;
-    if (this.pingTime >= 1) {
-      this.pingTime -= 1;
-      this.context.transport.ping();
-    }
-    if (this.session.desync && !this.failure) {
-      const desync = this.session.desync;
-      this.failure = { title: "DESYNC", detail: `frame ${desync.frame} · ${desync.localHash} ≠ ${desync.remoteHash}`, automatic: false };
-    }
-    if (this.failure) {
-      this.failureTime += dt;
-      this.renderer.fx.update(dt);
-      if (this.failure.automatic && this.failureTime >= 2) {
-        this.cleanupMatch();
-        if (this.context.room?.host === this.context.id) this.context.transport.sendLobby({ t: "end" });
-        return new OnlineScreen(this.onlineExit, this.context);
-      }
-      if (menu.back || menu.confirm) {
-        this.cleanupMatch();
-        if (this.failure.title === "CONNECTION LOST") return this.onlineExit();
-        if (this.context.room?.host === this.context.id) this.context.transport.sendLobby({ t: "end" });
-        return new OnlineScreen(this.onlineExit, this.context);
-      }
-      return null;
-    }
-    return super.update(dt, menu);
-  }
-
-  override draw(ctx: CanvasRenderingContext2D, dt: number): void {
-    super.draw(ctx, dt);
-    const rollback = this.session.rollbackFramesPerSecond();
-    const quality = this.session.connectionQuality();
-    const color = quality > 0.72 ? "#4dff88" : quality > 0.38 ? INK : "#ff6b5c";
-    const status = this.session.waiting ? "WAITING" : `${Math.round(this.context.transport.rtt())} ms · ${rollback} rb/s`;
-    label(ctx, status, VIEW_W - 24, 34, 17, color, "right", 700);
-    if (this.failure) drawBanner(ctx, this.failure.title, this.failure.detail, "#ff4d2e", this.failureTime);
-    else if (this.session.waiting) drawBanner(ctx, "WAITING", "Connection is catching up", INK, 1);
-  }
-
-  netDebug(frame = this.session.state.frame): { frame: number; hash: number | null } {
-    return { frame, hash: this.session.stateHashAt(frame) };
   }
 }
