@@ -38,6 +38,6 @@ export const SESSION_HEADER = "x-session";
  * whose folder is the fighter id. Bundles carry code every client runs, so nothing else is allowed.
  */
 export function isBundlePath(url: string, fighter: string): boolean {
-  const m = /^\/(?:[\w-]+\/)*(?:gen|house)\/([\w-]+)\/bundle\.json$/.exec(url);
+  const m = /^\/(?:[\w-]+\/)*(?:gen|house)\/([\w-]+)\/(?:[0-9a-f]{8}\/)?bundle\.json(?:\?v=[\w.-]+)?$/.exec(url);
   return !!m && m[1] === fighter;
 }

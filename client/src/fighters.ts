@@ -16,7 +16,7 @@ export interface FighterChoice {
   entry: LibraryEntry | null;
 }
 
-export const houseChoice = (id: HouseId, name: string): FighterChoice => ({ id, name, bundleUrl: site.base + houseBundlePath(id), house: true, entry: null });
+export const houseChoice = (id: HouseId, name: string): FighterChoice => ({ id, name, bundleUrl: `${site.base}${houseBundlePath(id)}?v=${site.build}`, house: true, entry: null });
 export const houseChoices = (): FighterChoice[] => HOUSE_ROSTER.map((h) => houseChoice(h.id, h.name));
 export const isHouseId = (id: string): id is HouseId => HOUSE_ROSTER.some((h) => h.id === id);
 

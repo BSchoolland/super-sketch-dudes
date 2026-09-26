@@ -105,7 +105,8 @@ describe("draw battle", () => {
     await a.expect("draw", (m) => m.room.players[0].characters[0].status === "failed");
     expect((await complete(j2.id, "BOBBO")).status).toBe(204);
     await a.expect("draw", (m) => m.room.players[1].characters[0].status === "ready" && m.room.players[1].characters[0].bundleUrl?.endsWith("/bundle.json"));
-    expect(fs.existsSync(path.join(dataDir, "gen", j2.fighterId, "bundle.json"))).toBe(true);
+    const j2Dir = path.join(dataDir, "gen", j2.fighterId);
+    expect(fs.readdirSync(j2Dir).some((v) => /^[0-9a-f]{8}$/.test(v) && fs.existsSync(path.join(j2Dir, v, "bundle.json")))).toBe(true);
     // everyone ready -> ladder. Ann has no fighter, so the game is over before it starts.
     a.send({ t: "drawReady", ready: true }); b.send({ t: "drawReady", ready: true });
     const over = await a.phase("over");
@@ -179,7 +180,7 @@ describe("draw battle", () => {
     expect(entry.status).toBe("ready");
     expect(entry.name).toBe("DEE");
     expect(entry.card).toHaveLength(4);
-    expect(entry.bundleUrl).toBe(`/gen/${entry.id}/bundle.json`);
+    expect(entry.bundleUrl).toMatch(new RegExp(`^/gen/${entry.id}/[0-9a-f]{8}/bundle\\.json$`));
     // not signed in: no library
     expect((await api("/library")).status).toBe(401);
     expect((await api(`/library/${entry.id}`, { method: "DELETE", headers: H })).status).toBe(204);

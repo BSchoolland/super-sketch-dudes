@@ -109,12 +109,15 @@ export async function storeCharacter(fighterId: string, playerName: string, b: a
   if (!b.sprite || typeof b.sprite !== "object") throw new Error("sprite missing");
   if (!b.cells || typeof b.cells !== "object") throw new Error("cells missing");
   for (const c of SPRITE_CELLS) if (typeof b.cells[c] !== "string") throw new Error(`cell ${c} missing`);
-  const dir = path.join(genDir, fighterId);
+  // gen files are served immutable, so every version of a character gets its own URLs (re-imports, retries)
+  const ver = crypto.createHash("sha1").update(b.source).update(Object.keys(b.cells).sort().map((c) => b.cells[c]).join("")).digest("hex").slice(0, 8);
+  const dir = path.join(genDir, fighterId, ver);
+  const base = `${genBase}/${fighterId}/${ver}`;
   fs.mkdirSync(dir, { recursive: true });
   const cells: Record<string, string> = {};
   for (const c of Object.keys(b.cells)) {
     if (!/^[\w-]+$/.test(c)) continue;
-    fs.writeFileSync(path.join(dir, `${c}.png`), Buffer.from(b.cells[c], "base64")); cells[c] = `${genBase}/${fighterId}/${c}.png`;
+    fs.writeFileSync(path.join(dir, `${c}.png`), Buffer.from(b.cells[c], "base64")); cells[c] = `${base}/${c}.png`;
   }
   if (typeof b.sheet === "string") fs.writeFileSync(path.join(dir, "sheet.png"), Buffer.from(b.sheet, "base64"));
   const sprite = { px: Number(b.sprite.px), feetPx: Number(b.sprite.feetPx), heightPx: Number(b.sprite.heightPx), anims: b.sprite.anims && typeof b.sprite.anims === "object" ? b.sprite.anims : {}, cells };
@@ -125,7 +128,7 @@ export async function storeCharacter(fighterId: string, playerName: string, b: a
   return {
     name: b.name.slice(0, 24), tagline: b.tagline.slice(0, 120), description: b.description.slice(0, 600),
     card: Array.isArray(b.card) ? b.card.slice(0, 4).map((c: unknown) => String(c).slice(0, 60)) : null,
-    bundleUrl: `${genBase}/${fighterId}/bundle.json`, sheetUrl: typeof b.sheet === "string" ? `${genBase}/${fighterId}/sheet.png` : null,
+    bundleUrl: `${base}/bundle.json`, sheetUrl: typeof b.sheet === "string" ? `${base}/sheet.png` : null,
   };
 }
 

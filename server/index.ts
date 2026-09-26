@@ -60,7 +60,8 @@ api.post("/log", (req, res) => {
 });
 
 const clientDir = fs.existsSync(path.join(root, "dist", "client")) ? path.join(root, "dist", "client") : path.join(root, "client");
-const staticOpts = { maxAge: "1h", setHeaders: (res: express.Response, p: string) => { if (p.endsWith(".html")) res.setHeader("Cache-Control", "no-cache"); } };
+// house fighters keep their URLs across builds, so they revalidate (ETag) instead of sitting in the browser cache
+const staticOpts = { maxAge: "1h", setHeaders: (res: express.Response, p: string) => { if (p.endsWith(".html") || p.includes(`${path.sep}house${path.sep}`)) res.setHeader("Cache-Control", "no-cache"); } };
 app.use(BASE, express.static(clientDir, staticOpts));
 app.use("/", express.static(clientDir, staticOpts));
 // Discord sends the signed-in browser back to /auth with the token in the URL fragment; the game page handles it
