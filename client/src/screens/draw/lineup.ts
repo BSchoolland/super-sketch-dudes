@@ -6,7 +6,7 @@ import type { ViewPoint } from "../../input/pointer";
 import type { DrawCharacter, DrawPlayer } from "../../../../shared/draw";
 import { label, title, INK } from "../ui";
 import { drawCharacterArt, RED } from "./character";
-import { fighterLoad } from "./images";
+import { fighterLoad } from "../../gen";
 import type { DrawHost, DrawView } from "./view";
 
 interface Entry { player: DrawPlayer; ch: DrawCharacter }

@@ -1,4 +1,3 @@
-import { loadGeneratedFighter } from "../../gen";
 import { PAPER, PENCIL } from "../../render/paper";
 import { label } from "../ui";
 
@@ -35,24 +34,4 @@ export function drawImageIn(ctx: CanvasRenderingContext2D, url: string | null, x
     label(ctx, empty, x + size / 2, y + size / 2, Math.max(16, size / 14), PENCIL);
   }
   ctx.restore();
-}
-
-export interface FighterLoad { state: "loading" | "ready" | "failed"; error: string; promise: Promise<void> }
-const fighters = new Map<string, FighterLoad>();
-
-/** Loads a generated fighter bundle once; the returned record says how it went. */
-export function fighterLoad(bundleUrl: string): FighterLoad {
-  let f = fighters.get(bundleUrl);
-  if (f) return f;
-  const record: FighterLoad = { state: "loading", error: "", promise: Promise.resolve() };
-  record.promise = loadGeneratedFighter(bundleUrl).then(
-    () => { record.state = "ready"; },
-    (error: unknown) => {
-      console.error(`fighter bundle failed: ${bundleUrl}`, error);
-      record.state = "failed";
-      record.error = error instanceof Error ? error.message : String(error);
-    },
-  );
-  fighters.set(bundleUrl, record);
-  return record;
 }

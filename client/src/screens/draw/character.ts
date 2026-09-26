@@ -5,8 +5,11 @@ import { drawImageIn } from "./images";
 
 export const RED = "#c0392b";
 
+/** What drawing a character needs: a draw-battle character or a library entry. */
+export type ArtSource = Pick<DrawCharacter, "status" | "sheetUrl" | "drawingUrl"> & { spent?: boolean };
+
 /** The drawing, or once the forge is done the sheet it drew (big enough, with the original drawing pinned to its corner). */
-export function drawCharacterArt(ctx: CanvasRenderingContext2D, ch: DrawCharacter | null, x: number, y: number, size: number, t: number): void {
+export function drawCharacterArt(ctx: CanvasRenderingContext2D, ch: ArtSource | null, x: number, y: number, size: number, t: number): void {
   if (!ch) { drawImageIn(ctx, null, x, y, size, "—"); inkRect(ctx, x, y, size, size, PENCIL, 1.2); return; }
   const sheet = ch.status === "ready" && ch.sheetUrl;
   if (sheet) drawImageIn(ctx, sheet, x, y, size);
@@ -39,7 +42,7 @@ export function drawCharacterArt(ctx: CanvasRenderingContext2D, ch: DrawCharacte
 }
 
 /** What the forge is doing with it, in words; null once it's a fighter. */
-export function characterStatus(ch: DrawCharacter, t: number): { text: string; color: string } | null {
+export function characterStatus(ch: Pick<DrawCharacter, "status" | "stage" | "error">, t: number): { text: string; color: string } | null {
   const dots = ".".repeat(1 + (Math.floor(t * 2) % 3));
   if (ch.status === "ready") return null;
   if (ch.status === "failed") return { text: ch.error ?? "the forge failed", color: RED };
