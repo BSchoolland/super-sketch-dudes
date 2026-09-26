@@ -1,4 +1,5 @@
 import { VIEW_H, VIEW_W } from "../render/camera";
+import type { PreviewApi } from "../preview";
 import type { MenuInput } from "../input/devices";
 import { rumble } from "../input/devices";
 import { LocalMatch, type MatchDriver, type SlotSource } from "../match";
@@ -28,6 +29,9 @@ export class VersusScreen implements Screen {
   dummyToggled = false;
   /** A generated fighter's hook threw: shown for a few seconds. */
   hookErr: { text: string; detail: string; t: number } | null = null;
+  /** Preview tooling: the clock doesn't tick; frames advance only through debugStep. */
+  frozen = false;
+  preview: PreviewApi | null = null;
   /** REMATCH / MENU on the result screen; a mode that moves on by itself turns them off. */
   endButtons = true;
   constructor(cfg: MatchConfig, sources: SlotSource[], private onExit: () => Screen, private onRematch: () => Screen, training = false, driver?: MatchDriver) {
@@ -63,7 +67,7 @@ export class VersusScreen implements Screen {
     const slow = st.slowmo > 0 ? 0.25 : 1;
     this.acc += dt * 1000 * slow;
     let n = 0;
-    while (this.acc >= STEP && n < 4) {
+    while (!this.frozen && this.acc >= STEP && n < 4) {
       if (this.match.tick()) {
         this.renderer.snapshot(this.match.state);
         this.acc -= STEP;
@@ -129,6 +133,16 @@ export class VersusScreen implements Screen {
     lines.forEach((t, i) => label(ctx, t, 36, 46 + i * 26, 18, INK, "left", 600));
     ctx.restore();
   }
+  /** Advance n sim frames right now, feeding the events to the renderer, regardless of the frame clock. */
+  debugStep(n: number): void {
+    for (let i = 0; i < n; i++) if (this.match.tick()) this.renderer.snapshot(this.match.state);
+    this.acc = STEP;
+    const st = this.match.state;
+    const events = this.match.takeEvents();
+    for (const e of events) if (e.t === "hookError") this.hookErr = { text: `${roster[st.fighters[e.slot].id].name}'S ${e.move.toUpperCase()} EXPLODED`, detail: e.error.slice(0, 90), t: 0 };
+    this.renderer.fx.consume(st, events, this.renderer.cam);
+  }
+
   draw(ctx: CanvasRenderingContext2D, dt: number): void {
     const st = this.match.state;
     const alpha = this.match.paused || this.countdown > 0 ? 1 : Math.min(1, this.acc / STEP);

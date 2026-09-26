@@ -1,73 +1,125 @@
-import type { Fighter, Hitbox, Move } from "../../../shared/types";
+import type { Fighter, FighterDef, Hitbox, Move } from "../../../shared/types";
 import { hitboxWorld } from "../../../shared/hits";
 import { defOf, currentMove } from "../../../shared/fighter";
-import { hatch, inkArc, inkLine, inkPath, inkRect, INK } from "./paper";
+import { inkArc, inkLine, inkPath, INK, PAPER, PENCIL } from "./paper";
 import { drawLook, lookOf } from "./looks";
 
-const SLASH = "#00bddd";
+const LINGER = 6;
 
+/** The character's own marker colour, for speed lines and accents. */
+function markerOf(def: FighterDef): string {
+  const p = def.palette as { colors: Record<string, string>; accent?: string; outline: string };
+  return (p.accent && p.colors[p.accent]) || Object.values(p.colors)[0] || p.outline || INK;
+}
+
+/**
+ * Strikes are drawn the way a cartoonist draws a swing: one tapered swoosh tracing the attacking
+ * part's path from the fighter's pivot, a few speed lines behind it, in the character's own ink.
+ * The drawing itself shows the sword or the fist; this only says "it moved, fast".
+ */
 export function drawStrikes(ctx: CanvasRenderingContext2D, f: Fighter, pos: { x: number; y: number }, slotColor: string, time: number): void {
   if (f.action !== "attack") return;
   const mv = currentMove(f);
   if (!mv || mv.throwFrame) return;
   const def = defOf(f);
+  const marker = markerOf(def);
   for (const hb of mv.hitboxes) {
-    if (f.frame < hb.frames[0] || f.frame > hb.frames[1] + 6) continue;
+    if (f.frame < hb.frames[0] || f.frame > hb.frames[1] + LINGER) continue;
     const c = hitboxWorld({ ...f, x: pos.x, y: pos.y }, hb);
-    const t = (f.frame - hb.frames[0] + 1) / (hb.frames[1] - hb.frames[0] + 7);
-    ctx.save(); ctx.globalAlpha = 0.95 - t * 0.5;
+    const active = hb.frames[1] - hb.frames[0] + 1;
+    const since = f.frame - hb.frames[0];
+    const t = Math.min(1, (since + 1) / active);          // swing progress over the active frames
+    const fade = since < active ? 1 : 1 - (since - active + 1) / (LINGER + 1);
+    ctx.save();
+    ctx.globalAlpha = 0.9 * fade;
     const look = lookOf(def, hb.fx);
     if (hb.grab) {
       ctx.setLineDash([5, 5]); inkArc(ctx, c.x1, c.y1, c.r, 0, Math.PI * 2, slotColor, 2.5);
     } else if (look) {
       const len = Math.hypot(c.x2 - c.x1, c.y2 - c.y1);
       const angle = len > 0 ? Math.atan2(c.y2 - c.y1, c.x2 - c.x1) : f.moveFacing === 1 ? 0 : Math.PI;
-      // shapes go a little translucent so an area attack doesn't hide the fighter inside it
-      drawLook(ctx, def, look, { x: len > 0 && !look.cell ? c.x1 : (c.x1 + c.x2) / 2, y: len > 0 && !look.cell ? c.y1 : (c.y1 + c.y2) / 2, angle, r: c.r, len: look.cell ? 0 : len, facing: f.moveFacing, frame: f.frame - hb.frames[0], alpha: look.cell ? 1 : 0.75 });
+      drawLook(ctx, def, look, { x: len > 0 && !look.cell ? c.x1 : (c.x1 + c.x2) / 2, y: len > 0 && !look.cell ? c.y1 : (c.y1 + c.y2) / 2, angle, r: c.r, len: look.cell ? 0 : len, facing: f.moveFacing, frame: since, alpha: look.cell ? 1 : 0.75 });
     } else {
-      const family = hb.fx ?? mv.hitboxes[0]?.fx ?? "hit";
-      if (family === "slash" || family === "tip") {
-        const cx = pos.x, cy = pos.y - def.stats.height * 0.55;
-        const mx = (c.x1 + c.x2) / 2, my = (c.y1 + c.y2) / 2;
-        const far = Math.max(Math.hypot(c.x1 - cx, c.y1 - cy), Math.hypot(c.x2 - cx, c.y2 - cy)) + c.r;
-        const dir = Math.atan2(my - cy, mx - cx);
-        const spread = Math.min(1.3, 0.28 + c.r * 2.4 / Math.max(40, far - c.r));
-        inkArc(ctx, cx, cy, far - c.r, dir - spread / 2, dir + spread / 2, SLASH, c.r * 1.6, 9);
-        inkArc(ctx, cx, cy, far - c.r, dir - spread / 2, dir + spread / 2, "#fff", Math.max(2, c.r * 0.22), 9);
-        inkLine(ctx, c.x1, c.y1, c.x2, c.y2, SLASH, c.r * 1.7, 10, true);
-        inkLine(ctx, c.x1, c.y1, c.x2, c.y2, "#fff", Math.max(1.5, c.r * 0.2), 10, true);
-        if (family === "tip") {
-          inkLine(ctx, c.x2 - 9, c.y2 - 9, c.x2 + 9, c.y2 + 9, INK, 2);
-          inkLine(ctx, c.x2 + 9, c.y2 - 9, c.x2 - 9, c.y2 + 9, SLASH, 3);
-        }
-      } else if (family === "fire") {
-        const n = Math.max(1, Math.ceil(Math.hypot(c.x2 - c.x1, c.y2 - c.y1) / Math.max(10, c.r)));
-        for (let i = 0; i <= n; i++) {
-          const x = c.x1 + (c.x2 - c.x1) * i / n, y = c.y1 + (c.y2 - c.y1) * i / n;
-          const points: [number, number][] = [];
-          for (let j = 0; j <= 26; j++) {
-            const a = j / 26 * Math.PI * 2;
-            const r = c.r * (j % 2 ? 0.72 : 1) + Math.sin(j * 7 + Math.floor(time * 6)) * 2;
-            points.push([x + Math.cos(a) * r, y + Math.sin(a) * r]);
-          }
-          inkPath(ctx, points, true); ctx.fillStyle = "#ffd22b"; ctx.fill();
-          ctx.strokeStyle = "#ef4823"; ctx.lineWidth = 3.5; ctx.stroke();
-          for (let j = -2; j <= 2; j++) inkLine(ctx, x - c.r * 0.5, y + j * c.r * 0.22, x + c.r * 0.5, y + (j - 1) * c.r * 0.22, "#f16a22", 2, j, true);
-        }
-      } else {
-        ctx.translate(c.x1, c.y1); ctx.rotate(Math.atan2(c.y2 - c.y1, c.x2 - c.x1));
-        const len = Math.hypot(c.x2 - c.x1, c.y2 - c.y1);
-        const color = family === "heavy" ? "#ee721b" : family === "energy" ? "#00c5e4" : slotColor;
-        inkPath(ctx, [[-c.r, -c.r * 0.75], [len + c.r, -c.r], [len + c.r, c.r * 0.8], [-c.r, c.r]], true, 5, true);
-        ctx.fillStyle = color; ctx.fill();
-        ctx.strokeStyle = family === "heavy" ? INK : color; ctx.lineWidth = 2; ctx.stroke();
-        ctx.save(); ctx.clip(); ctx.globalAlpha *= 0.6; hatch(ctx, -c.r, -c.r, len + c.r * 2, c.r * 2, family === "heavy" ? "#944717" : "#fff"); ctx.restore();
-        if (family === "energy") inkLine(ctx, -c.r * 0.6, 0, len + c.r * 0.6, -1, "#fff", Math.max(2, c.r * 0.28));
-        for (let j = -1; j <= 1; j++) inkLine(ctx, -c.r - 7, j * c.r * 0.7, -c.r - 24 - Math.abs(j) * 7, j * c.r, family === "heavy" ? INK : color, 2);
-        if (family === "heavy") inkRect(ctx, -c.r + 3, -c.r * 0.75 + 3, len + c.r * 2 - 6, c.r * 1.5 - 6, color, 2);
-      }
+      const family = hb.fx ?? "hit";
+      if (family === "fire") drawFlame(ctx, c, time);
+      else drawSwing(ctx, f, def, pos, c, family, t, since < active, marker);
     }
     ctx.restore();
+  }
+}
+
+type Capsule = { x1: number; y1: number; x2: number; y2: number; r: number };
+
+function drawSwing(ctx: CanvasRenderingContext2D, f: Fighter, def: FighterDef, pos: { x: number; y: number }, c: Capsule, family: string, t: number, active: boolean, marker: string): void {
+  const px = pos.x, py = pos.y - def.stats.height * 0.55;
+  // the swoosh follows the far end of the hitbox around the fighter's pivot
+  const d1 = Math.hypot(c.x1 - px, c.y1 - py), d2 = Math.hypot(c.x2 - px, c.y2 - py);
+  const ex = d2 >= d1 ? c.x2 : c.x1, ey = d2 >= d1 ? c.y2 : c.y1;
+  const R = Math.max(d1, d2) + c.r * 0.6;
+  const heavy = family === "heavy", blade = family === "slash" || family === "tip", energy = family === "energy";
+  if (R < 40) { drawBurst(ctx, ex, ey, c.r, heavy, marker); return; }
+  const dir = Math.atan2(ey - py, ex - px);
+  const sweep = Math.min(1.25, 0.45 + c.r * 1.6 / R) * (0.55 + 0.45 * t);
+  const sign = f.moveFacing;                                    // the swing comes from behind and above the fighter
+  const a0 = dir - sweep * sign, a1 = dir;
+  const width = c.r * (heavy ? 0.9 : blade ? 0.75 : 0.55);
+  // tapered crescent: thin at the tail, full at the leading edge
+  const n = 18, outer: [number, number][] = [], inner: [number, number][] = [];
+  for (let i = 0; i <= n; i++) {
+    const k = i / n, a = a0 + (a1 - a0) * k, w = width * Math.pow(k, 0.7);
+    outer.push([px + Math.cos(a) * (R + w * 0.5), py + Math.sin(a) * (R + w * 0.5)]);
+    inner.push([px + Math.cos(a) * (R - w * 0.5), py + Math.sin(a) * (R - w * 0.5)]);
+  }
+  const ink = def.palette.outline || INK;
+  const body = energy ? marker : ink;
+  inkPath(ctx, [...outer, ...inner.reverse()], true, 3);
+  ctx.fillStyle = body; ctx.globalAlpha *= blade ? 0.8 : 0.9; ctx.fill();
+  ctx.globalAlpha /= blade ? 0.8 : 0.9;
+  // the gleam: a paper-coloured line down the middle of a blade, a pencil line otherwise
+  const midR = R, ga = a0 + (a1 - a0) * 0.35;
+  inkArc(ctx, px, py, midR, ga, a1, blade ? PAPER : PENCIL, Math.max(1.2, width * (blade ? 0.22 : 0.12)), 7);
+  if (heavy) inkArc(ctx, px, py, R + width * 0.5 + 7, a0 + (a1 - a0) * 0.3, a1, marker, 3, 11);
+  if (energy) { ctx.setLineDash([6, 8]); inkArc(ctx, px, py, R - width * 0.5 - 6, a0 + (a1 - a0) * 0.2, a1, marker, 2, 13); ctx.setLineDash([]); }
+  // speed lines trailing the swing
+  for (let j = 0; j < 3; j++) {
+    const rr = R * (0.5 + j * 0.2), b0 = a0 - 0.12 * sign * (j + 1), b1 = a0 + (a1 - a0) * (0.18 + j * 0.06);
+    inkArc(ctx, px, py, rr, Math.min(b0, b1), Math.max(b0, b1), marker, 1.6 + (heavy ? 1 : 0), 17 + j);
+  }
+  if (family === "tip" && active) drawStar(ctx, ex + Math.cos(dir) * c.r * 0.4, ey + Math.sin(dir) * c.r * 0.4, 8 + c.r * 0.25, ink);
+  if (heavy && active) {
+    for (let j = 0; j < 3; j++) {
+      const a = dir + (j - 1) * 0.6, rr = c.r * (0.9 + j * 0.3);
+      inkArc(ctx, ex + Math.cos(a) * rr, ey + Math.sin(a) * rr, 4 + j * 2, Math.PI * 1.1, Math.PI * 1.9, PENCIL, 1.5, 23 + j);
+    }
+  }
+}
+
+/** Attacks that burst out of the fighter's own body (spins, shockwaves) get an expanding ink ring. */
+function drawBurst(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, heavy: boolean, marker: string): void {
+  inkArc(ctx, x, y, r, 0, Math.PI * 2, INK, heavy ? 4 : 2.5, 5);
+  inkArc(ctx, x + 3, y - 2, r * 0.8, 0.3, 2.9, marker, 1.5, 6);
+  for (let j = 0; j < 6; j++) { const a = j * Math.PI / 3 + 0.3; inkLine(ctx, x + Math.cos(a) * (r + 6), y + Math.sin(a) * (r + 6), x + Math.cos(a) * (r + 16), y + Math.sin(a) * (r + 16), INK, 2, j); }
+}
+
+function drawStar(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string): void {
+  const pts: [number, number][] = [];
+  for (let j = 0; j < 8; j++) { const a = j * Math.PI / 4, rr = j % 2 ? r * 0.35 : r; pts.push([x + Math.cos(a) * rr, y + Math.sin(a) * rr]); }
+  inkPath(ctx, pts, true, 29); ctx.fillStyle = PAPER; ctx.fill(); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+}
+
+function drawFlame(ctx: CanvasRenderingContext2D, c: Capsule, time: number): void {
+  const n = Math.max(1, Math.ceil(Math.hypot(c.x2 - c.x1, c.y2 - c.y1) / Math.max(10, c.r)));
+  for (let i = 0; i <= n; i++) {
+    const x = c.x1 + (c.x2 - c.x1) * i / n, y = c.y1 + (c.y2 - c.y1) * i / n;
+    const points: [number, number][] = [];
+    for (let j = 0; j <= 26; j++) {
+      const a = j / 26 * Math.PI * 2;
+      const r = c.r * (j % 2 ? 0.72 : 1) + Math.sin(j * 7 + Math.floor(time * 6)) * 2;
+      points.push([x + Math.cos(a) * r, y + Math.sin(a) * r]);
+    }
+    inkPath(ctx, points, true); ctx.fillStyle = "#ffd22b"; ctx.fill();
+    ctx.strokeStyle = "#ef4823"; ctx.lineWidth = 3.5; ctx.stroke();
+    for (let j = -2; j <= 2; j++) inkLine(ctx, x - c.r * 0.5, y + j * c.r * 0.22, x + c.r * 0.5, y + (j - 1) * c.r * 0.22, "#f16a22", 2, j, true);
   }
 }
 

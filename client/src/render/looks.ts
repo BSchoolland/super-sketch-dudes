@@ -80,14 +80,10 @@ function drawShapeLook(ctx: CanvasRenderingContext2D, look: Look, at: LookAt): v
     if (shape === "bolt") for (let j = -1; j <= 1; j++) inkLine(ctx, -6, j * r * 0.6, -22 - Math.abs(j) * 6, j * r * 0.9, ink, 2, j);
     return;
   }
-  // point shapes stamp along the capsule
-  const n = at.len > 0 ? Math.max(1, Math.ceil(at.len / (r * 1.2))) : 0;
-  for (let i = 0; i <= n; i++) {
-    ctx.save();
-    ctx.translate(n ? at.len * i / n : 0, 0);
-    paint(ctx, shape, 0, r, color, ink, texture, -r * 1.3, -r * 1.3, r * 2.6, r * 2.6, seed + i * 31, shape === "ring");
-    ctx.restore();
-  }
+  // point shapes on a capsule: one shape over the middle, big enough to cover it
+  const rr = look.size !== undefined ? r : Math.max(r, at.len / 2 + r * 0.5);
+  ctx.translate(at.len / 2, 0);
+  paint(ctx, shape, 0, rr, color, ink, texture, -rr * 1.3, -rr * 1.3, rr * 2.6, rr * 2.6, seed, shape === "ring");
 }
 
 function tracePath(ctx: CanvasRenderingContext2D, shape: Look["shape"], len: number, r: number, seed: number): void {
@@ -100,8 +96,8 @@ function tracePath(ctx: CanvasRenderingContext2D, shape: Look["shape"], len: num
       pts.push([0, -r * 0.5], [len * 0.35, -r * 0.9], [len * 0.7, -r * 0.5], [len, 0], [len * 0.7, r * 0.5], [len * 0.35, r * 0.9], [0, r * 0.5], [len * 0.15, 0]);
       break;
     case "slash": {
-      for (let j = 0; j <= 12; j++) { const t = j / 12; pts.push([len * t, -Math.sin(t * Math.PI) * r * 1.4 - r * 0.2]); }
-      for (let j = 12; j >= 0; j--) { const t = j / 12; pts.push([len * t, -Math.sin(t * Math.PI) * r * 0.5 + r * 0.2]); }
+      for (let j = 0; j <= 12; j++) { const t = j / 12; pts.push([len * t, -Math.sin(t * Math.PI) * r * 0.9 - r * 0.1]); }
+      for (let j = 12; j >= 0; j--) { const t = j / 12; pts.push([len * t, -Math.sin(t * Math.PI) * r * 0.45 + r * 0.1]); }
       break;
     }
     case "star":

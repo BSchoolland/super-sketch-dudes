@@ -140,6 +140,6 @@ export async function mount(opts: MountOptions): Promise<AppController> {
       detachPointer();
     },
   };
-  (window as any).sketchbattle = { get screen() { return screen; }, build: site.build, hash: swap.hash };
+  (window as any).sketchbattle = { get screen() { return screen; }, get preview() { return (screen as VersusScreen).preview ?? null; }, build: site.build, hash: swap.hash };
   return controller;
 }

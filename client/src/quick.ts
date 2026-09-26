@@ -1,4 +1,5 @@
 import type { DeviceId } from "./input/devices";
+import { previewApi } from "./preview";
 import type { SlotSource } from "./match";
 import { fighterLoad } from "./gen";
 import { houseChoice, isHouseId } from "./fighters";
@@ -42,5 +43,6 @@ export async function quickMatch(params: URLSearchParams, exit: () => Screen): P
   v.countdown = 0;
   if (params.get("seed")) v.match.state.seed = Number(params.get("seed"));
   if (params.get("boxes") === "1") v.renderer.showHitboxes = true;
+  if (params.get("preview") === "1") { v.frozen = true; v.countdown = 0; v.preview = previewApi(v); }
   return v;
 }
