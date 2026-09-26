@@ -53,6 +53,8 @@ export class RollbackSession {
   private remoteHashes = new Map<number, Map<number, number>>();
   private nextHashFrame = 30;
   private remoteNewest = new Map<number, number>();
+  /** Remote players who left mid-match: their slot plays empty inputs after this frame. */
+  private gone = new Map<number, number>();
   private slowTick = 0;
   /** Snapshots from this frame on are kept whatever the rollback window, so a bundle swap can hand one over. */
   keepFrom: number | null = null;
@@ -201,6 +203,21 @@ export class RollbackSession {
     return lead;
   }
 
+  /**
+   * A remote player left for good. The relay delivers their inputs to everyone in the same order
+   * before it announces the leave, so every client fills empty inputs from the same frame on.
+   */
+  drop(slot: number): void {
+    if (slot === this.localSlot || !this.humanSlots.includes(slot) || this.gone.has(slot)) return;
+    const last = this.remoteNewest.get(slot) ?? this.inputDelay;
+    this.gone.set(slot, last);
+    this.remoteNewest.delete(slot);
+    for (const [frame, used] of this.usedInputs) {
+      if (frame > last && !inputEquals(used[slot], EMPTY_INPUT)) this.pendingRollback = Math.min(this.pendingRollback ?? frame, frame);
+    }
+    this.advanceConfirmation();
+  }
+
   private receiveInputs(slot: number, newestFrame: number, inputs: InputFrame[]): void {
     if (!this.humanSlots.includes(slot) || slot === this.localSlot) return;
     this.remoteNewest.set(slot, Math.max(this.remoteNewest.get(slot) ?? 0, newestFrame));
@@ -253,6 +270,7 @@ export class RollbackSession {
   private inputsForFrame(frame: number): InputFrame[] {
     return this.cpuLevels.map((level, slot) => {
       if (level > 0) return cpuInput(this.state, slot, level);
+      if (frame > (this.gone.get(slot) ?? Infinity)) return cloneInput(EMPTY_INPUT);
       const real = this.realInputs[slot].get(frame);
       if (real) return cloneInput(real);
       return this.predictedInput(slot, frame);
@@ -271,7 +289,7 @@ export class RollbackSession {
     // resend everything a remote might still be missing: from just before the slowest remote's sim frame, capped at 120 frames
     let firstFrame = newestFrame - 7;
     for (const slot of this.humanSlots) {
-      if (slot === this.localSlot) continue;
+      if (slot === this.localSlot || this.gone.has(slot)) continue;
       const newest = this.remoteNewest.get(slot);
       firstFrame = Math.min(firstFrame, newest === undefined ? 1 : newest - this.inputDelay - 4);
     }
@@ -286,7 +304,8 @@ export class RollbackSession {
   }
 
   private advanceConfirmation(): void {
-    while (this.humanSlots.every((slot) => this.realInputs[slot].has(this.confirmedThrough + 1))) this.confirmedThrough++;
+    const has = (slot: number, frame: number) => frame > (this.gone.get(slot) ?? Infinity) || this.realInputs[slot].has(frame);
+    while (this.humanSlots.every((slot) => has(slot, this.confirmedThrough + 1))) this.confirmedThrough++;
   }
 
   private sendConfirmedHashes(): void {

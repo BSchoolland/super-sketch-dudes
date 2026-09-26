@@ -110,8 +110,13 @@ export class NetVersusScreen extends VersusScreen {
       opts.transport.onLobby((message) => {
         opts.onLobby?.(message);
         if (message.t === "left" && message.duringMatch) {
-          this.failure = { title: "PLAYER DISCONNECTED", detail: "Returning to the room", automatic: true };
-          this.session.waiting = true;
+          // someone already out of stocks (or a finished match) can go without ending it for everyone else
+          const out = (this.session.state.fighters[message.slot]?.stocks ?? 0) <= 0;
+          if (out || this.session.state.ended) this.session.drop(message.slot);
+          else {
+            this.failure = { title: "PLAYER DISCONNECTED", detail: "Returning to the room", automatic: true };
+            this.session.waiting = true;
+          }
         }
         // a bundle switch: the host names a frame far enough ahead that everyone can confirm it
         if (message.t === "game" && opts.isHost()) opts.transport.sendLobby({ t: "gameAt", hash: message.hash, frame: this.session.state.frame + 90 });

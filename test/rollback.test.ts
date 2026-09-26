@@ -160,6 +160,35 @@ describe("rollback session", () => {
     expect(hashState(a.state)).toBe(hashState(b.state));
   });
 
+  it("two players carry on in step after a third leaves mid-match", () => {
+    const config: MatchConfig = { ...makeConfig(), players: [{ fighter: "lampjack" }, { fighter: "slugbert" }, { fighter: "woodstove" }] };
+    const network = new SeededNetwork(0x7e57, 2, 6);
+    const peers = [0, 1, 2].map((slot) => new RollbackSession({ config, localSlot: slot, transport: network.endpoint(slot) }));
+    const run = (active: RollbackSession[], until: number) => {
+      let ticks = 0;
+      while (active.some((p) => p.state.frame < until) && ticks < until * 4) {
+        network.tick();
+        for (const p of active) if (p.state.frame < until) p.advance(scriptedInput(p.localSlot, p.state.frame + p.inputDelay + 1));
+        ticks++;
+      }
+      expect(ticks).toBeLessThan(until * 4);
+    };
+    run(peers, 300);
+    // slot 2 goes quiet; the relay delivers what it already sent, then announces the leave
+    const [a, b] = peers;
+    for (let i = 0; i < 12; i++) network.tick();
+    a.drop(2);
+    b.drop(2);
+    run([a, b], 900);
+    for (let i = 0; i < 12; i++) network.tick();
+    a.synchronize();
+    b.synchronize();
+    expect(a.state.frame).toBe(900);
+    expect(b.state.frame).toBe(900);
+    expect(a.desync ?? b.desync).toBeNull();
+    expect(hashState(a.state)).toBe(hashState(b.state));
+  });
+
   it("stalls at the rollback cap and resumes without diverging", () => {
     const config = makeConfig();
     const network = new SeededNetwork(0xdeadbeef, 2, 6);

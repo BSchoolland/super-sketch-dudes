@@ -70,11 +70,8 @@ export function leaveRoom(c: Client): void {
   if (!room.members.length) { rooms.delete(room.code); if (room.draw) extension?.onLeave(c, room, duringMatch); return; }
   if (room.host === c) room.host = room.members[0];
   if (room.draw) { extension?.onLeave(c, room, duringMatch); return; }
-  if (duringMatch) {
-    room.started = false;
-    room.members.forEach((m) => (m.ready = false));
-  }
-  room.members.forEach((m, i) => (m.slot = i));
+  // mid-match the relay keeps everyone's slot: the clients carry on without an eliminated player, and the host's "end" reopens the room
+  if (!duringMatch) room.members.forEach((m, i) => (m.slot = i));
   broadcast(room, { t: "left", id: c.id, slot, duringMatch });
   broadcast(room, roomInfo(room));
 }
@@ -151,7 +148,7 @@ export function attachLobby(wss: WebSocketServer): void {
         case "hash": if (c.room?.started && c.slot >= 0) broadcast(c.room, { t: "hash", slot: c.slot, frame: msg.frame | 0, hash: msg.hash >>> 0 }, c); break;
         // the host picks the frame everyone swaps bundles at; relayed to the whole room, host included
         case "gameAt": if (c.room && c.room.host === c && typeof msg.hash === "string") broadcast(c.room, { t: "gameAt", hash: msg.hash, frame: msg.frame | 0 }); break;
-        case "end": if (c.room && c.room.host === c) { c.room.started = false; c.room.members.forEach((m) => (m.ready = false)); broadcast(c.room, roomInfo(c.room)); } break;
+        case "end": if (c.room && c.room.host === c) { c.room.started = false; c.room.members.forEach((m, i) => { m.ready = false; m.slot = i; }); broadcast(c.room, roomInfo(c.room)); } break;
       }
     });
     ws.on("close", () => { const i = queue.indexOf(c); if (i >= 0) queue.splice(i, 1); leaveRoom(c); });
