@@ -61,7 +61,7 @@ whole cell: key(frame, { sx, sy, rot, dx, dy }). Lean into every strike.
   `motion`), and it must be `helpless: true, ledgeOk: true`. The check knocks the fighter out to
   about 200 units past the ledge at ledge height; uspecial (plus its jumps) must bring it back
   that far sideways, not just up, so let f.vx follow input.x strongly during the rise.
-- Some move must be able to KO a weight-100 opponent from centre stage under 150%.
+- Some move must be able to KO a middleweight (LAMPJACK, weight 78) from centre stage under 150%.
 - Hitbox `angle`: 0 launches away from you, 90 up, 270 down (spike), 180 pulls toward you.
   `base` 20-70, `growth` 40-110 are the normal range; smashes and specials at the top.
 - `stats.width` and `stats.height` are the hurtbox: a capsule that wide and that tall standing on
