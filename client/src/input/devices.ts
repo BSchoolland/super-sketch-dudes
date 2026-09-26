@@ -8,11 +8,11 @@ export interface KeyBindings {
 }
 export const KB1: KeyBindings = {
   left: ["KeyA"], right: ["KeyD"], up: ["KeyW"], down: ["KeyS"],
-  jump: ["KeyW", "Space"], attack: ["Mouse0"], special: ["Mouse2"], shield: ["ShiftLeft"], smash: ["KeyU"], taunt: ["KeyT"], pause: ["Escape"],
+  jump: ["Space"], attack: ["Mouse0"], special: ["Mouse2"], shield: ["ShiftLeft"], smash: ["KeyE"], taunt: ["KeyT"], pause: ["Escape"],
 };
 export const KB2: KeyBindings = {
   left: ["ArrowLeft"], right: ["ArrowRight"], up: ["ArrowUp"], down: ["ArrowDown"],
-  jump: ["ArrowUp", "Numpad0"], attack: ["Numpad1"], special: ["Numpad2"], shield: ["Numpad3", "ShiftRight"], smash: ["Numpad6"], taunt: ["Numpad5"], pause: ["Escape"],
+  jump: ["Numpad0"], attack: ["Numpad1"], special: ["Numpad2"], shield: ["Numpad3", "ShiftRight"], smash: ["Numpad6"], taunt: ["Numpad5"], pause: ["Escape"],
 };
 
 const keys = new Set<string>();
@@ -65,17 +65,16 @@ export function readDevice(dev: DeviceId, opts: { tapJump: boolean; mouse?: bool
     // a tap that started and ended between two frames still counts for one frame
     const down = (list: string[]) => list.some((k) => (opts.mouse !== false || !isMouse(k)) && (keys.has(k) || pressedThisFrame.has(k)));
     const x = (down(b.right) ? 100 : 0) - (down(b.left) ? 100 : 0);
-    const y = (down(b.down) ? 100 : 0) - (down(b.up) && !down(b.jump.filter((k) => !b.up.includes(k))) ? 0 : 0) - (down(b.up) ? 100 : 0);
-    let bits = 0;
+    const y = (down(b.down) ? 100 : 0) - (down(b.up) ? 100 : 0);
+    let bits = B.DIGITAL;
     if (down(b.jump)) bits |= B.JUMP;
     if (down(b.attack)) bits |= B.ATTACK;
     if (down(b.special)) bits |= B.SPECIAL;
     if (down(b.shield)) bits |= B.SHIELD;
-    if (down(b.smash)) bits |= B.SMASH;
+    if (down(b.smash)) bits |= B.SMASH | B.ATTACK;
     if (down(b.taunt)) bits |= B.TAUNT;
     if (down(b.pause)) bits |= B.PAUSE;
-    // W is both up and jump on keyboard 1; up-as-jump means y should not read as "up" for tilts when jumping.
-    return { x, y: y < -100 ? -100 : y, cx: 0, cy: 0, b: bits };
+    return { x, y, cx: 0, cy: 0, b: bits };
   }
   const idx = Number(dev.slice(3));
   const s = padState(idx);

@@ -49,8 +49,8 @@ export class SettingsScreen implements Screen {
       label(ctx, r.get(), VIEW_W / 2 + 280, y + 50, 28, INK, "center", 900);
     });
     const y = 160 + this.rows.length * 96 + 30;
-    label(ctx, "KEYBOARD 1: WASD move · W/Space jump · left click attack · right click special · Shift shield · U smash modifier · T taunt", VIEW_W / 2, y, 18, INK, "center", 600);
-    label(ctx, "KEYBOARD 2: arrows move · Up/Numpad0 jump · Numpad1 attack · 2 special · 3/RShift shield · 6 smash modifier · 5 taunt", VIEW_W / 2, y + 30, 18, INK, "center", 600);
+    label(ctx, "KEYBOARD 1: WASD move · Space jump · left click attack · E smash · right click special · Shift shield · T taunt", VIEW_W / 2, y, 18, INK, "center", 600);
+    label(ctx, "KEYBOARD 2: arrows move · Numpad0 jump · Numpad1 attack · 6 smash · 2 special · 3/RShift shield · 5 taunt", VIEW_W / 2, y + 30, 18, INK, "center", 600);
     label(ctx, "GAMEPAD: left stick move · X/Y jump · A attack · B special · LB/RB/LT shield · right stick smash · Start pause", VIEW_W / 2, y + 60, 18, INK, "center", 600);
     label(ctx, "tilts: hold a direction then attack · smashes: flick a direction with attack, or the modifier, or the right stick", VIEW_W / 2, y + 100, 18, INK, "center", 600);
     if (backButton(ctx)) { sfx.menuBack(); goTo(this.onBack()); }

@@ -119,12 +119,13 @@ function smashFromAttack(f: Fighter, input: InputFrame, e: Edges): string | null
   }
   if (!buffered(f, e, B.ATTACK)) return null;
   const mod = (e.held & B.SMASH) !== 0;
+  const flick = f.flickT > 0 && !(input.b & B.DIGITAL);
   const d = stickDir(f, input);
-  if (f.flickT > 0 || mod) {
-    if ((f.flickY < 0 && f.flickT > 0) || (mod && d === "u")) return "usmash";
-    if ((f.flickY > 0 && f.flickT > 0) || (mod && d === "d")) return "dsmash";
-    if ((f.flickX !== 0 && f.flickT > 0) || (mod && (d === "f" || d === "b"))) {
-      const dir = f.flickT > 0 && f.flickX !== 0 ? f.flickX : sign(input.x);
+  if (flick || mod) {
+    if ((flick && f.flickY < 0) || (mod && d === "u")) return "usmash";
+    if ((flick && f.flickY > 0) || (mod && d === "d")) return "dsmash";
+    if ((flick && f.flickX !== 0) || mod) {
+      const dir = flick && f.flickX !== 0 ? f.flickX : sign(input.x);
       if (dir !== 0) f.facing = dir as 1 | -1;
       return "fsmash";
     }
@@ -214,7 +215,8 @@ function tryGroundActions(state: State, f: Fighter, def: FighterDef, input: Inpu
     const running = f.action === "run" || f.action === "dash";
     if (running) {
       const c = cstickDir(f, input);
-      if (c === "u" || ((f.flickT > 0 && f.flickY < 0) && buffered(f, e, B.ATTACK))) {
+      const upSmash = (e.held & B.SMASH) !== 0 ? stickDir(f, input) === "u" : f.flickT > 0 && f.flickY < 0 && !(input.b & B.DIGITAL);
+      if (c === "u" || (upSmash && buffered(f, e, B.ATTACK))) {
         consume(f, B.ATTACK);
         startMove(state, f, "usmash", { keepVel: true });
         return true;
