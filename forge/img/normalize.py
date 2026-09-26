@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """Turn a generated 3x3 sheet into nine normalised cells.
 
-Usage: normalize.py <sheet.png> <outdir> [--px 512 --feet 448 --height 360] [--prefix car-] [--names a,b,c,...]
+Usage: normalize.py <sheet.png> <outdir> [--px 512 --feet 448 --height 360 --mirror 1] [--prefix car-] [--names a,b,c,...]
 
-`--prefix` names the cells <prefix><cell> (a second form's sheet into the same folder); `--names`
-replaces the nine cell names outright (a transformation strip). The scale comes from the first
-cell either way.
+`--prefix` names the cells <prefix><cell> (a second form's sheet into the same folder, merged into
+its cells.json); `--names` replaces the nine cell names outright (a transformation strip). The
+scale comes from the first cell either way.
 
 Each cell: paper keyed to alpha, the drawing scaled by ONE factor (chosen so the first (idle) cell's
-content is `height` px tall) so all cells share a world scale, horizontally centred on its
-alpha centroid, and rested with the bottom of its content on row `feet`. Writes
+content is `height` px tall, or less if some cell wouldn't fit; cells.json heightPx is the idle
+height actually used) so all cells share a world scale, horizontally centred on its alpha centroid, and rested with the bottom of its content on row `feet`. Writes
 <outdir>/<cell>.png and <outdir>/cells.json with the content box of every cell in cell pixels
-(the hitbox placer reads those).
+(the hitbox placer reads those). --mirror 1 flips every cell left-right first.
 """
 import json, sys, os
 from PIL import Image, ImageFilter
@@ -47,7 +47,7 @@ def centroid_x(im, thresh=40):
 def main():
     args = sys.argv[1:]
     sheet, out = args[0], args[1]
-    opts = {"px": 512, "feet": 448, "height": 300, "prefix": "", "names": ""}
+    opts = {"px": 512, "feet": 448, "height": 300, "mirror": 0, "prefix": "", "names": ""}
     for i, a in enumerate(args):
         if a.startswith("--"): opts[a[2:]] = args[i + 1] if a in ("--prefix", "--names") else int(args[i + 1])
     px, feet, height = opts["px"], opts["feet"], opts["height"]
@@ -62,14 +62,18 @@ def main():
     for i, name in enumerate(names):
         r, c = divmod(i, 3)
         crop = im.crop((c * cw + pad, r * ch + pad, (c + 1) * cw - pad, (r + 1) * ch - pad))
+        if opts["mirror"]: crop = crop.transpose(Image.FLIP_LEFT_RIGHT)
         cells[name] = key_paper(crop)
-    idle_box = content_box(cells[names[0]])
-    if not idle_box: sys.exit("first cell is empty after keying")
-    scale = height / (idle_box[3] - idle_box[1])
-    meta = {"px": px, "feetPx": feet, "heightPx": height, "cells": {}}
-    for name, cim in cells.items():
-        box = content_box(cim)
+    boxes = {name: content_box(cim) for name, cim in cells.items()}
+    for name, box in boxes.items():
         if not box: sys.exit(f"cell {name} is empty after keying")
+    idle_box = boxes[names[0]]
+    # idle content `height` px tall, unless some cell would then not fit the canvas (wide or tall drawings)
+    fit = min((px - 16) / max(b[2] - b[0], b[3] - b[1]) for b in boxes.values())
+    scale = min(height / (idle_box[3] - idle_box[1]), fit)
+    meta = {"px": px, "feetPx": feet, "heightPx": round((idle_box[3] - idle_box[1]) * scale), "cells": {}}
+    for name, cim in cells.items():
+        box = boxes[name]
         cx = centroid_x(cim)
         sw, sh = max(1, round(cim.width * scale)), max(1, round(cim.height * scale))
         scaled = cim.resize((sw, sh), Image.LANCZOS)

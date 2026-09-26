@@ -33,6 +33,7 @@
   },
   "dependencies": {
     "express": "^4.22.3",
+    "openai": "^7.23.0",
     "ws": "^8.21.3"
   }
 }

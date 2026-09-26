@@ -7,3 +7,6 @@ agents/
 research/fightsheet/sheet-*.png
 research/fightsheet/cells-*
 research/fightsheet/frames
+forge/.env
+forge/runs/
+client/public/gen-test
