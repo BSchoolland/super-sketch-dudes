@@ -7,7 +7,7 @@ import { hitboxWorld, hurtbox } from "../../../shared/hits";
 import { label, type Screen } from "./ui";
 import { drawStrikes } from "../render/strikes";
 import type { Fighter } from "../../../shared/types";
-import { drawSprite } from "../render/sprite";
+import { drawSprite, FLOOR_ANIMS, restOnFloor } from "../render/sprite";
 import { cellForAnim, defaultCellForMove } from "../../../shared/gen/sprite";
 
 /**
@@ -50,7 +50,7 @@ export class SheetScreen implements Screen {
       ctx.scale(scale, scale);
       const pose = poseAt(e.keys, e.frame, e.loop);
       const mvCell = e.move ? def.moves[e.move].cell ?? defaultCellForMove(e.move) : cellForAnim(def, e.name);
-      drawSprite(ctx, def, mvCell, pose, { flip: e.move ? !!def.moves[e.move].cellFlip : false });
+      drawSprite(ctx, def, mvCell, !e.move && FLOOR_ANIMS.has(e.name) ? restOnFloor(def, mvCell, pose) : pose, { flip: e.move ? !!def.moves[e.move].cellFlip : false });
       if (e.move) {
         const mv = def.moves[e.move];
         const fake = { x: 0, y: 0, moveFacing: 1, facing: 1, frame: e.frame, action: "attack", id: def.id, move: e.move, hitlag: 0, slot: 0 } as unknown as Fighter;

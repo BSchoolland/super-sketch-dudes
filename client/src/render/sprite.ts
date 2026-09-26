@@ -7,7 +7,11 @@ import { roster } from "../../../shared/fighters/index";
  * with the character facing right, feet on row `feetPx`; `heightPx` of image maps onto
  * `stats.height` world units so every cell shares one scale (see SpriteRig).
  */
-export interface CellImages { base: HTMLImageElement | null; flash: HTMLCanvasElement | null; ghost: HTMLCanvasElement | null; failed: boolean }
+export interface CellImages {
+  base: HTMLImageElement | null; flash: HTMLCanvasElement | null; ghost: HTMLCanvasElement | null; failed: boolean;
+  /** Where the ink is, in cell pixels: [x0, y0, x1, y1]. */
+  bounds: [number, number, number, number] | null;
+}
 const cache = new Map<string, CellImages>();
 
 function tinted(img: HTMLImageElement, color: string): HTMLCanvasElement {
@@ -20,13 +24,27 @@ function tinted(img: HTMLImageElement, color: string): HTMLCanvasElement {
   return c;
 }
 
+function inkBounds(img: HTMLImageElement): [number, number, number, number] {
+  const c = document.createElement("canvas");
+  c.width = img.naturalWidth; c.height = img.naturalHeight;
+  const g = c.getContext("2d", { willReadFrequently: true })!;
+  g.drawImage(img, 0, 0);
+  const d = g.getImageData(0, 0, c.width, c.height).data;
+  let x0 = c.width, y0 = c.height, x1 = -1, y1 = -1;
+  for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) {
+    if (d[(y * c.width + x) * 4 + 3] < 24) continue;
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  return x1 < 0 ? [0, 0, c.width, c.height] : [x0, y0, x1 + 1, y1 + 1];
+}
+
 export function cellImages(url: string): CellImages {
   let e = cache.get(url);
   if (e) return e;
-  e = { base: null, flash: null, ghost: null, failed: false };
+  e = { base: null, flash: null, ghost: null, failed: false, bounds: null };
   cache.set(url, e);
   const img = new Image();
-  img.onload = () => { e!.base = img; e!.flash = tinted(img, "#ffffff"); e!.ghost = tinted(img, PENCIL); };
+  img.onload = () => { e!.base = img; e!.flash = tinted(img, "#ffffff"); e!.ghost = tinted(img, PENCIL); e!.bounds = inkBounds(img); };
   img.onerror = () => { e!.failed = true; console.error(`sprite cell failed to load: ${url}`); };
   img.src = url;
   return e;
@@ -39,6 +57,29 @@ export function preloadSprite(def: FighterDef): Promise<void> {
     const check = () => { if (urls.every((u) => { const e = cellImages(u); return e.base || e.failed; })) resolve(); else setTimeout(check, 30); };
     check();
   });
+}
+
+/** Animations drawn lying on the floor rather than standing on it. */
+export const FLOOR_ANIMS = new Set(["knockdown", "roll"]);
+
+/**
+ * The pose with its offset replaced so the rotated, scaled drawing rests on the floor, centred
+ * on the fighter: a downed body lies across its position instead of pivoting into the ground.
+ */
+export function restOnFloor(def: FighterDef, cell: string, pose: Pose): Pose {
+  const sp = def.sprite;
+  const b = cellImages(sp.cells[cell] ?? sp.cells.idle).bounds;
+  if (!b) return pose;
+  const u = (roster[def.id] ?? def).stats.height / sp.heightPx;
+  const sx = pose.sx ?? 1, sy = pose.sy ?? 1, a = -((pose.rot ?? 0) * Math.PI) / 180;
+  const cos = Math.cos(a), sin = Math.sin(a);
+  let minX = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const [px, py] of [[b[0], b[1]], [b[2], b[1]], [b[0], b[3]], [b[2], b[3]]]) {
+    const x = (px - sp.px / 2) * u * sx, y = (py - sp.feetPx) * u * sy;
+    const rx = x * cos - y * sin, ry = x * sin + y * cos;
+    minX = Math.min(minX, rx); maxX = Math.max(maxX, rx); maxY = Math.max(maxY, ry);
+  }
+  return { ...pose, dx: -(minX + maxX) / 2, dy: -maxY };
 }
 
 export interface SpriteDrawOpts { alpha?: number; flash?: boolean; ghost?: boolean; flip?: boolean }

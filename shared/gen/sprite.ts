@@ -9,7 +9,7 @@ export type SpriteCell = (typeof SPRITE_CELLS)[number];
 export const STATE_CELLS: Record<string, SpriteCell> = {
   idle: "idle", walk: "walk", run: "walk", dash: "walk", skid: "idle", crouch: "block", jumpSquat: "idle",
   jump: "jump", fall: "jump", land: "idle", helpless: "launched", shield: "block", hitstun: "hit", tumble: "launched",
-  knockdown: "launched", ledgeHang: "jump", grabHold: "atk-fwd", grabbed: "hit", dead: "idle", taunt: "idle",
+  knockdown: "hit", ledgeHang: "jump", grabHold: "atk-fwd", grabbed: "hit", dead: "idle", taunt: "idle",
   respawn: "idle", spotDodge: "block", roll: "launched", airDodge: "jump",
 };
 
@@ -62,7 +62,7 @@ export function spriteAnims(): Record<string, PoseKey[]> {
     shield: [key(0, P({ sy: 0.94, sx: 1.04 }))],
     hitstun: [key(0, P({ rot: -18, sx: 1.08, sy: 0.94 }))],
     tumble: [key(0, P({ rot: -30 })), key(12, P({ rot: -150 })), key(24, P({ rot: -270 })), key(36, P({ rot: -390 }))],
-    knockdown: [key(0, P({ rot: -80, dy: 20 }))],
+    knockdown: [key(0, P({ rot: 90 }))],
     ledgeHang: [key(0, P({ rot: -10, dy: 20 }))],
     grabHold: [key(0, P({ rot: 6 }))],
     grabbed: [key(0, P({ rot: -12, sx: 0.94 }))],
