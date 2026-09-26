@@ -455,12 +455,14 @@ function routeTo(state: State, f: Fighter, target: Fighter, stage: Stage): { me:
   return { me, next: path[1], goal };
 }
 
-/** Where on `me` to leave from for `next`, and where on `next` to aim: the nearest edges, or straight up/down over the overlap. */
-function launchPoint(me: Surface, next: Surface, towardX: number): { lx: number; over: boolean } {
-  if (next.x1 > me.x2 - 10) return { lx: me.x2 - 14, over: false };
-  if (next.x2 < me.x1 + 10) return { lx: me.x1 + 14, over: false };
+/** Where on `me` to leave from for `next`, and which way to go from there: 0 is straight up, or straight down through a soft platform. */
+function launchPoint(me: Surface, next: Surface, towardX: number, soft: boolean): { lx: number; dir: -1 | 0 | 1 } {
+  if (next.x1 > me.x2 - 10) return { lx: me.x2 - 14, dir: 1 };
+  if (next.x2 < me.x1 + 10) return { lx: me.x1 + 14, dir: -1 };
+  // down off a solid block: the edge nearer the target
+  if (next.y > me.y + 8 && !soft) return towardX < (me.x1 + me.x2) / 2 ? { lx: me.x1 + 14, dir: -1 } : { lx: me.x2 - 14, dir: 1 };
   const lo = Math.max(me.x1, next.x1) + 14, hi = Math.min(me.x2, next.x2) - 14;
-  return { lx: Math.max(lo, Math.min(hi, towardX)), over: true };
+  return { lx: Math.max(lo, Math.min(hi, towardX)), dir: 0 };
 }
 
 /** Grounded and the target is on another surface: walk to the launch point and hop, drop off the edge, or wait for a moving platform. */
@@ -468,19 +470,21 @@ function navInput(state: State, f: Fighter, target: Fighter, stage: Stage): Inpu
   const r = routeTo(state, f, target, stage);
   if (!r) return null;
   const { me, next } = r;
-  const { lx, over } = launchPoint(me, next, target.x);
+  const soft = !stage.platforms[me.i].solid;
+  const { lx, dir } = launchPoint(me, next, target.x, soft);
   const out = blank();
   const dx = lx - f.x;
   if (Math.abs(dx) > 16) { out.x = sign(dx) * (Math.abs(dx) > 120 ? 100 : 55); return out; }
   if (!canCross(me, next, legs(f), true)) return out;
-  const toward = over ? 0 : next.x1 > me.x2 - 10 ? 1 : -1;
   if (next.y < me.y - 8) {
     // up: a full hop, held toward the far side
     out.b = B.JUMP;
-    out.x = toward * 100;
-  } else {
-    // down or level: walk off the edge
-    out.x = (toward || sign((next.x1 + next.x2) / 2 - f.x) || 1) * 100;
+    out.x = dir * 100;
+  } else if (dir) {
+    out.x = dir * 100;
+  } else if (f.action !== "crouch" || f.frame <= C.FLICK_WINDOW) {
+    // dropping through takes a fresh flick down, so a crouch held too long lets go for a frame
+    out.y = 100;
   }
   return out;
 }
