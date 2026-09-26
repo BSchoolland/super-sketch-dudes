@@ -21,6 +21,8 @@ const typedThisFrame: string[] = [];
 let anyPress = false;
 window.addEventListener("keydown", (e) => {
   if (e.repeat) return;
+  // text fields (DRAW BATTLE's password/name/code) own their keystrokes
+  if (e.target instanceof HTMLInputElement) return;
   keys.add(e.code);
   pressedThisFrame.add(e.code);
   if (/^[a-z0-9]$/i.test(e.key)) typedThisFrame.push(e.key.toUpperCase());

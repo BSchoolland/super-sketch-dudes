@@ -376,10 +376,14 @@ export function attachDraw(api: express.Router, opts: DrawOptions): void {
         case "drawLoaded": {
           if (Array.isArray(msg.fighterIds)) p.loaded = msg.fighterIds.map(String).slice(0, 32);
           maybeStartBattle(room);
+          // everyone's loading screen shows who's in
+          if (d.phase === "loading") push(room);
           return true;
         }
         case "drawBattleEnd": {
-          if (room.host !== c) return true;
+          // an eliminated host isn't simulating the match, so relay slot 0 reports instead
+          const reporter = d.battle && !d.battle.participants.includes(room.host.id) ? d.battle.participants[0] : room.host.id;
+          if (c.id !== reporter) return true;
           endBattle(room, Number(msg.winner));
           return true;
         }
@@ -398,6 +402,8 @@ export function attachDraw(api: express.Router, opts: DrawOptions): void {
         broadcast(room, { t: "left", id: c.id, slot: d.battle.participants.indexOf(c.id), duringMatch: true });
         if (left.length === 1) endBattle(room, d.battle.participants.indexOf(left[0]));
         else if (left.length === 0) finish(room, "everyone left");
+        // two or more remain but the match can't continue without the missing inputs: the reporter ends it from where it stopped
+        else push(room);
         return;
       }
       if (d.phase === "reveal") maybeAdvanceReveal(room);

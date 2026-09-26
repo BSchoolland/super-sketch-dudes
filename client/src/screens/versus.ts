@@ -28,6 +28,7 @@ export class VersusScreen implements Screen {
   dummyToggled = false;
   /** A generated fighter's hook threw: shown for a few seconds. */
   hookErr: { text: string; detail: string; t: number } | null = null;
+  endHint = "attack: rematch · shield: back to menu";
   constructor(cfg: MatchConfig, sources: SlotSource[], private onExit: () => Screen, private onRematch: () => Screen, training = false, driver?: MatchDriver) {
     this.match = driver ?? new LocalMatch(cfg, sources);
     this.training = training;
@@ -162,7 +163,7 @@ export class VersusScreen implements Screen {
           label(ctx, `KOs ${f.kos}   falls ${f.falls}`, x + 100, y + 86, 18, INK);
           label(ctx, `dealt ${Math.round(f.dealt)}%`, x + 100, y + 112, 18, INK);
         });
-        label(ctx, "attack: rematch · shield: back to menu", VIEW_W / 2, y + 180, 24, INK);
+        if (this.endHint) label(ctx, this.endHint, VIEW_W / 2, y + 180, 24, INK);
       }
     } else if (this.match.paused) {
       drawBanner(ctx, "PAUSED", "", INK, 1);
