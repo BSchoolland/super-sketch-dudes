@@ -126,7 +126,6 @@ export class NetVersusScreen extends VersusScreen {
       this.session.close();
       for (const unsubscribe of this.unsubscribers) unsubscribe();
       this.unsubscribers.length = 0;
-      this.music.stop();
     };
     cleanup = this.cleanupMatch;
   }

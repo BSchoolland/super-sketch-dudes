@@ -54,7 +54,7 @@ export function unlockAudio(): void {
 }
 for (const ev of ["keydown", "pointerdown", "touchstart"]) window.addEventListener(ev, unlockAudio, { passive: true });
 
-export function running(): Mix | null { return ctx?.state === "running" ? mix : null; }
+export function running(): (Mix & { c: AudioContext }) | null { return ctx?.state === "running" ? mix : null; }
 
 export function setVolume(v: number): void { volumes.sfx = v; if (mix) mix.sfx.gain.value = v; }
 export function setMusicVolume(v: number): void { volumes.music = v; if (mix) mix.music.gain.value = v * MUSIC_TRIM; }

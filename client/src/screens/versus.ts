@@ -5,7 +5,7 @@ import { rumble } from "../input/devices";
 import { LocalMatch, type MatchDriver, type SlotSource } from "../match";
 import { Renderer } from "../render/render";
 import { drawBanner, SLOT_COLORS } from "../render/hud";
-import { Music, StateSounds, playEvents, sfx } from "../audio/audio";
+import { music, StateSounds, playEvents, sfx } from "../audio/audio";
 import { card, label, title, button, goTo, type Screen, INK, settings } from "./ui";
 import type { MatchConfig } from "../../../shared/sim";
 import { B } from "../../../shared/input";
@@ -18,7 +18,6 @@ const STEP = 1000 / 60;
 export class VersusScreen implements Screen {
   match: MatchDriver;
   renderer: Renderer;
-  music = new Music();
   stateSounds = new StateSounds();
   acc = 0;
   countdown = 3.2;
@@ -43,7 +42,6 @@ export class VersusScreen implements Screen {
     this.renderer.showHitboxes = training;
     if (training) { this.match.state.fighters.forEach((f) => (f.stocks = 99)); if (this.match.sources[1]) { this.match.sources[1].cpu = 0; this.match.state.fighters[1].cpu = 0; this.renderer.names[1] = "DUMMY"; } }
   }
-  enter(): void { this.music.start(); }
   update(dt: number, m: MenuInput): Screen | null {
     let st = this.match.state;
     if (this.countdown > 0) {
@@ -57,12 +55,12 @@ export class VersusScreen implements Screen {
     }
     if (st.ended) {
       this.endedFor += dt;
-      if (this.endedFor > 1.2 && (m.confirm || m.start)) { this.music.stop(); return this.onRematch(); }
-      if (this.endedFor > 1.2 && m.back) { this.music.stop(); return this.onExit(); }
+      if (this.endedFor > 1.2 && (m.confirm || m.start)) { return this.onRematch(); }
+      if (this.endedFor > 1.2 && m.back) { return this.onExit(); }
     }
     if (this.match.paused) {
       if (m.up || m.down) { this.pauseSel = 1 - this.pauseSel; sfx.menuMove(); }
-      if (m.confirm) { if (this.pauseSel === 0) { this.match.paused = false; } else { this.music.stop(); return this.onExit(); } }
+      if (m.confirm) { if (this.pauseSel === 0) { this.match.paused = false; } else { return this.onExit(); } }
       if (m.back) this.match.paused = false;
     }
     const slow = st.slowmo > 0 ? 0.25 : 1;
@@ -103,13 +101,13 @@ export class VersusScreen implements Screen {
     if (this.hookErr) { this.hookErr.t += dt; if (this.hookErr.t > 4) this.hookErr = null; }
     this.suddenT = Math.max(0, this.suddenT - dt);
     this.renderer.fx.consume(st, events, this.renderer.cam);
-    playEvents(st, events, this.music);
+    playEvents(st, events);
     if (!this.match.paused) this.stateSounds.update(dt, st);
     if (settings.rumble) for (const e of events) {
       if (e.t === "hit") { const s = this.match.sources[e.victim]; if (s.device) rumble(s.device, Math.min(1, e.damage / 20), 0.5, 80 + e.damage * 8); const a = this.match.sources[e.attacker]; if (a.device) rumble(a.device, 0.2, 0.6, 60); }
       if (e.t === "ko") for (const s of this.match.sources) if (s.device) rumble(s.device, 1, 1, 400);
     }
-    this.music.muffle(this.match.paused || st.ended);
+    music.muffle(this.match.paused || st.ended);
     return null;
   }
   resetTraining(): void {
@@ -179,14 +177,14 @@ export class VersusScreen implements Screen {
           label(ctx, `KOs ${f.kos}   falls ${f.falls}`, x + 100, y + 86, 18, INK);
           label(ctx, `dealt ${Math.round(f.dealt)}%`, x + 100, y + 112, 18, INK);
         });
-        if (this.endButtons && button(ctx, VIEW_W / 2 - 330, y + 160, 300, 70, "REMATCH", { key: "Enter", size: 28 })) { this.music.stop(); goTo(this.onRematch()); }
-        if (this.endButtons && button(ctx, VIEW_W / 2 + 30, y + 160, 300, 70, "MENU", { key: "Esc", size: 28 })) { this.music.stop(); goTo(this.onExit()); }
+        if (this.endButtons && button(ctx, VIEW_W / 2 - 330, y + 160, 300, 70, "REMATCH", { key: "Enter", size: 28 })) { goTo(this.onRematch()); }
+        if (this.endButtons && button(ctx, VIEW_W / 2 + 30, y + 160, 300, 70, "MENU", { key: "Esc", size: 28 })) { goTo(this.onExit()); }
       }
     } else if (this.match.paused) {
       drawBanner(ctx, "PAUSED", "", INK, 1);
       const y = VIEW_H / 2 + 80;
       ["RESUME", "QUIT TO MENU"].forEach((t, i) => {
-        if (button(ctx, VIEW_W / 2 - 200, y + i * 80, 400, 64, t, { focused: this.pauseSel === i, size: 26, key: i === 0 ? "Esc" : undefined })) { if (i === 0) this.match.paused = false; else { this.music.stop(); goTo(this.onExit()); } }
+        if (button(ctx, VIEW_W / 2 - 200, y + i * 80, 400, 64, t, { focused: this.pauseSel === i, size: 26, key: i === 0 ? "Esc" : undefined })) { if (i === 0) this.match.paused = false; else { goTo(this.onExit()); } }
       });
     }
   }

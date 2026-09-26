@@ -1,82 +1,76 @@
-import { live } from "./engine";
+import { running, type Mix } from "./engine";
 
-/** Battle music: every file in ./music, one picked at random per battle, looped. */
+/**
+ * One song at a time from ./music, picked at random and looped. Battles play it open; every other
+ * screen plays a different one muffled, as if through a wall.
+ */
 const TRACKS = Object.values(import.meta.glob<string>("./music/*.{mp3,m4a,ogg,opus}", { eager: true, query: "?url", import: "default" }));
 if (!TRACKS.length) throw new Error("no battle music in client/src/audio/music");
 
-let el: HTMLAudioElement | null = null;
-let chain: { duck: GainNode; tone: BiquadFilterNode } | null = null;
+const MUFFLED = 650, OPEN = 20000;
+
+interface Player { c: AudioContext; el: HTMLAudioElement; duck: GainNode; tone: BiquadFilterNode }
+let player: Player | null = null;
+/** The battle screen the song belongs to; null for the menus, undefined before anything plays. */
+let owner: object | null | undefined;
+let muffled = false;
 let last = -1;
 
-function player(): { el: HTMLAudioElement; duck: GainNode; tone: BiquadFilterNode } {
-  if (!el || !chain) {
-    const m = live();
-    el = new Audio();
-    el.loop = true;
-    el.preload = "auto";
-    const src = m.c.createMediaElementSource(el);
-    const tone = m.c.createBiquadFilter(); tone.type = "lowpass"; tone.frequency.value = 20000; tone.Q.value = 0.5;
-    const duck = m.c.createGain(); duck.gain.value = 0;
-    src.connect(tone); tone.connect(duck); duck.connect(m.music);
-    chain = { duck, tone };
-  }
-  return { el, ...chain };
+function build(m: Mix & { c: AudioContext }): Player {
+  const el = new Audio();
+  el.loop = true;
+  el.preload = "auto";
+  const src = m.c.createMediaElementSource(el);
+  const tone = m.c.createBiquadFilter(); tone.type = "lowpass"; tone.frequency.value = OPEN; tone.Q.value = 0.5;
+  const duck = m.c.createGain(); duck.gain.value = 0;
+  src.connect(tone); tone.connect(duck); duck.connect(m.music);
+  return { c: m.c, el, duck, tone };
 }
 
-export class Music {
-  private on = false;
-  private muffled = false;
+function ramp(c: AudioContext, p: AudioParam, to: number, secs: number, exp = false): void {
+  const t = c.currentTime;
+  p.cancelScheduledValues(t);
+  p.setValueAtTime(p.value, t);
+  if (exp) p.exponentialRampToValueAtTime(to, t + secs); else p.linearRampToValueAtTime(to, t + secs);
+}
 
-  start(): void {
-    if (this.on) return;
-    this.on = true;
-    const p = player();
-    let pick = Math.floor(Math.random() * TRACKS.length);
-    if (TRACKS.length > 1 && pick === last) pick = (pick + 1) % TRACKS.length;
-    last = pick;
-    p.el.src = TRACKS[pick];
-    p.el.currentTime = 0;
-    p.el.play().catch((err) => console.error("battle music failed to start", err));
-    const t = p.duck.context.currentTime;
-    p.duck.gain.cancelScheduledValues(t);
-    p.duck.gain.setValueAtTime(0, t);
-    p.duck.gain.linearRampToValueAtTime(1, t + 0.8);
-    p.tone.frequency.setValueAtTime(20000, t);
-    this.muffled = false;
-  }
+/** A new random track (never the one just played), faded in. False until audio is unlocked. */
+function playNew(filter: number): boolean {
+  const m = running();
+  if (!m) return false;
+  player ??= build(m);
+  let pick = Math.floor(Math.random() * TRACKS.length);
+  if (TRACKS.length > 1 && pick === last) pick = (pick + 1) % TRACKS.length;
+  last = pick;
+  player.el.src = TRACKS[pick];
+  player.el.play().catch((err) => console.error("music failed to start", err));
+  const t = player.c.currentTime;
+  player.duck.gain.cancelScheduledValues(t);
+  player.duck.gain.setValueAtTime(0, t);
+  player.duck.gain.linearRampToValueAtTime(1, t + 0.8);
+  player.tone.frequency.cancelScheduledValues(t);
+  player.tone.frequency.setValueAtTime(filter, t);
+  muffled = filter === MUFFLED;
+  return true;
+}
 
-  stop(): void {
-    if (!this.on) return;
-    this.on = false;
-    const p = player();
-    const t = p.duck.context.currentTime;
-    p.duck.gain.cancelScheduledValues(t);
-    p.duck.gain.setValueAtTime(p.duck.gain.value, t);
-    p.duck.gain.linearRampToValueAtTime(0, t + 0.25);
-    const which = p.el.src;
-    setTimeout(() => { if (!this.on && p.el.src === which) p.el.pause(); }, 300);
-  }
-
-  /** Paused or on the results screen, the song drops behind a wall. */
+export const music = {
+  /** Every frame, from the shell: the battle screen, or null anywhere else. Entering a battle, a rematch, or leaving for the menus changes the song. */
+  follow(battle: object | null): void {
+    if (battle !== owner && playNew(battle ? OPEN : MUFFLED)) owner = battle;
+  },
+  /** Paused or on the results screen, the battle song drops behind the wall too. */
   muffle(on: boolean): void {
-    if (!this.on || on === this.muffled) return;
-    this.muffled = on;
-    const p = player();
-    const t = p.tone.context.currentTime;
-    p.tone.frequency.cancelScheduledValues(t);
-    p.tone.frequency.setValueAtTime(p.tone.frequency.value, t);
-    p.tone.frequency.exponentialRampToValueAtTime(on ? 650 : 20000, t + 0.35);
-  }
-
+    if (!owner || !player || on === muffled) return;
+    muffled = on;
+    ramp(player.c, player.tone.frequency, on ? MUFFLED : OPEN, 0.35, true);
+  },
   /** A KO: the song ducks under the boom and comes back. */
   duck(): void {
-    if (!this.on) return;
-    const p = player();
-    const t = p.duck.context.currentTime;
-    p.duck.gain.cancelScheduledValues(t);
-    p.duck.gain.setValueAtTime(p.duck.gain.value, t);
-    p.duck.gain.linearRampToValueAtTime(0.3, t + 0.04);
-    p.duck.gain.setValueAtTime(0.3, t + 0.5);
-    p.duck.gain.linearRampToValueAtTime(1, t + 1.8);
-  }
-}
+    if (!owner || !player) return;
+    const g = player.duck.gain, t = player.c.currentTime;
+    ramp(player.c, g, 0.3, 0.04);
+    g.setValueAtTime(0.3, t + 0.5);
+    g.linearRampToValueAtTime(1, t + 1.8);
+  },
+};

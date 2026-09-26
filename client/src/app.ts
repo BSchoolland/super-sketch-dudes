@@ -9,7 +9,7 @@ import { SheetScreen } from "./screens/sheet";
 import { SignInScreen } from "./screens/signin";
 import { menus, signInScreen } from "./screens/flow";
 import { loadSettings, settings, takeHandoff, type Screen } from "./screens/ui";
-import { setMusicVolume, setVolume } from "./audio/audio";
+import { music, setMusicVolume, setVolume } from "./audio/audio";
 import { logClient } from "./telemetry";
 import { loadGeneratedFighter } from "./gen";
 import { devSignIn, finishSignIn, loadAccount, signedIn } from "./account";
@@ -117,6 +117,7 @@ export async function mount(opts: MountOptions): Promise<AppController> {
       next = signInScreen();
     }
     if (next) { screen = next; screen.enter?.(); }
+    music.follow(screen instanceof VersusScreen ? screen : null);
     endInputFrame();
     if (!running) return; // the screen asked the shell for another bundle
     ctx.setTransform(1, 0, 0, 1, 0, 0);

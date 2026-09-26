@@ -3,9 +3,9 @@ import { defOf } from "../../../shared/fighter";
 import { C } from "../../../shared/config";
 import { panOf, play } from "./engine";
 import * as S from "./sounds";
-import type { Music } from "./music";
+import { music } from "./music";
 
-export { Music } from "./music";
+export { music } from "./music";
 export { setMusicVolume, setVolume, unlockAudio } from "./engine";
 
 const hitVary = 0.06;
@@ -29,7 +29,7 @@ function swingWeight(id: string, mv: Move): 0 | 1 | 2 | null {
 }
 
 /** Sounds for one batch of sim events. The whoosh lands on the move's first active frame, not its start. */
-export function playEvents(state: State, events: GameEvent[], music: Music): void {
+export function playEvents(state: State, events: GameEvent[]): void {
   let hits = 0;
   for (const e of events) {
     switch (e.t) {
