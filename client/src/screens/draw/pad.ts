@@ -12,7 +12,7 @@ export interface Tool { kind: ToolKind; color: string }
 interface Stroke { kind: ToolKind; color: string; width: number; points: number[] }
 type Mark = Stroke | "clear";
 
-const BASE_WIDTH: Record<ToolKind, number> = { pen: 9, eraser: 34 };
+const BASE_WIDTH: Record<ToolKind, number> = { pen: 18, eraser: 40 };
 
 function paint(g: CanvasRenderingContext2D, s: Stroke): void {
   const p = s.points;
