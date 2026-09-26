@@ -1,7 +1,7 @@
 {
  "px": 512,
  "feetPx": 448,
- "heightPx": 300,
+ "heightPx": 240,
  "cells": {
   "idle": {
    "box": [

@@ -11,10 +11,10 @@ export default function make(api) {
     fallSpeed: 7, fastFall: 11, gravity: 0.46, shortHop: 8, fullHop: 14, doubleJump: 13,
     jumps: 2, wallJump: false, traction: 0.55, height: 130, width: 64, crouchHeight: 90, landLag: 5, ledgeReach: 40,
   };
-  // the car is 2/3 the height, twice the width, and slides: low traction is the whole handling model
+  // the car is 2/3 the height, twice the width, and slides: the low traction is the whole handling model
   const carStats = {
     walk: 5.5, run: 9.5, dashInit: 9, airSpeed: 6, airAccel: 0.12, fallSpeed: 8, fastFall: 12, gravity: 0.5,
-    shortHop: 6, fullHop: 10, doubleJump: 8, traction: 0.12, height: 86, width: 130, crouchHeight: 70, landLag: 3, ledgeReach: 20,
+    shortHop: 6, fullHop: 10, doubleJump: 8, traction: 0.26, height: 86, width: 130, crouchHeight: 70, landLag: 3, ledgeReach: 20,
   };
 
   const P = (extra) => ({ a: {}, ...extra });
@@ -169,7 +169,7 @@ export default function make(api) {
         if (f.frame !== 14) return;
         const boosted = f.special.nitro >= 40;
         if (boosted) f.special.nitro -= 40;
-        spawnProjectile(state, f, boosted ? "shock" : "chunk", f.x + f.moveFacing * 70, f.y - 92, f.moveFacing * (boosted ? 16 : 11), 0, boosted ? 34 : 26,
+        spawnProjectile(state, f, boosted ? "fistBoosted" : "fist", f.x + f.moveFacing * 70, f.y - 92, f.moveFacing * (boosted ? 16 : 11), 0, boosted ? 34 : 26,
           { frames: [0, 999], x: 0, y: 0, r: boosted ? 26 : 20, damage: boosted ? 13 : 8, angle: 40, base: boosted ? 55 : 35, growth: boosted ? 90 : 60, fx: "heavy" });
       },
       jumpJet: ({ f, input }) => {
@@ -181,7 +181,7 @@ export default function make(api) {
         if (f.frame === 8) {
           const fuel = Math.min(60, f.special.nitro);
           f.special.nitro -= fuel;
-          f.vx = f.moveFacing * (6 + fuel * 0.16);
+          f.vx = f.moveFacing * (6 + fuel * 0.1);
         }
         if (f.frame > 8 && f.frame <= 26 && f.grounded) f.vx = f.moveFacing * Math.max(4, Math.abs(f.vx) * 0.985);
       },
