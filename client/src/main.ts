@@ -72,7 +72,8 @@ if (params.get("sheet")) {
   const fighters = (params.get("f") ?? "sable,sable").split(",").map((f) => (roster[f] ? f : "sable"));
   const cpu = Number(params.get("cpu") ?? 6);
   const p1 = (params.get("p1") ?? "kb1") as DeviceId;
-  const picks: SlotPick[] = fighters.map((f, i) => ({ device: i === 0 ? p1 : i === 1 && p2 !== "cpu" ? "kb2" : null, cpu: i === 0 || (i === 1 && p2 !== "cpu") ? 0 : cpu, fighter: rosterList.findIndex((d) => d.id === f), ready: true }));
+  const p1cpu = params.get("p1") === "cpu";
+  const picks: SlotPick[] = fighters.map((f, i) => ({ device: i === 0 ? (p1cpu ? null : p1) : i === 1 && p2 !== "cpu" ? "kb2" : null, cpu: (i === 0 && !p1cpu) || (i === 1 && p2 !== "cpu") ? 0 : cpu, fighter: rosterList.findIndex((d) => d.id === f), ready: true }));
   while (picks.length < 4) picks.push({ device: null, cpu: 0, fighter: 0, ready: false });
   screen = startMatch(picks, { stage: params.get("stage") ?? "proving", stocks: Number(params.get("stocks") ?? 3), time: 0 }, params.get("training") === "1");
   const v = screen as VersusScreen;
