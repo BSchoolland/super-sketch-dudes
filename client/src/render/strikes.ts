@@ -3,12 +3,13 @@ import { hitboxWorld } from "../../../shared/hits";
 import { defOf, currentMove } from "../../../shared/fighter";
 import { hatch, inkArc, inkLine, inkPath, inkRect, INK } from "./paper";
 
+const SLASH = "#00bddd";
+
 export function drawStrikes(ctx: CanvasRenderingContext2D, f: Fighter, pos: { x: number; y: number }, slotColor: string, time: number): void {
   if (f.action !== "attack") return;
   const mv = currentMove(f);
   if (!mv || mv.throwFrame) return;
   const def = defOf(f);
-  const accent = f.id === "sable" ? "#8a3ffc" : f.id === "brick" ? "#ee721b" : f.id === "wick" ? "#ffb920" : "#00bddd";
   for (const hb of mv.hitboxes) {
     if (f.frame < hb.frames[0] || f.frame > hb.frames[1] + 6) continue;
     const c = hitboxWorld({ ...f, x: pos.x, y: pos.y }, hb);
@@ -24,13 +25,13 @@ export function drawStrikes(ctx: CanvasRenderingContext2D, f: Fighter, pos: { x:
         const far = Math.max(Math.hypot(c.x1 - cx, c.y1 - cy), Math.hypot(c.x2 - cx, c.y2 - cy)) + c.r;
         const dir = Math.atan2(my - cy, mx - cx);
         const spread = Math.min(1.3, 0.28 + c.r * 2.4 / Math.max(40, far - c.r));
-        inkArc(ctx, cx, cy, far - c.r, dir - spread / 2, dir + spread / 2, accent, c.r * 1.6, 9);
+        inkArc(ctx, cx, cy, far - c.r, dir - spread / 2, dir + spread / 2, SLASH, c.r * 1.6, 9);
         inkArc(ctx, cx, cy, far - c.r, dir - spread / 2, dir + spread / 2, "#fff", Math.max(2, c.r * 0.22), 9);
-        inkLine(ctx, c.x1, c.y1, c.x2, c.y2, accent, c.r * 1.7, 10, true);
+        inkLine(ctx, c.x1, c.y1, c.x2, c.y2, SLASH, c.r * 1.7, 10, true);
         inkLine(ctx, c.x1, c.y1, c.x2, c.y2, "#fff", Math.max(1.5, c.r * 0.2), 10, true);
         if (family === "tip") {
           inkLine(ctx, c.x2 - 9, c.y2 - 9, c.x2 + 9, c.y2 + 9, INK, 2);
-          inkLine(ctx, c.x2 + 9, c.y2 - 9, c.x2 - 9, c.y2 + 9, accent, 3);
+          inkLine(ctx, c.x2 + 9, c.y2 - 9, c.x2 - 9, c.y2 + 9, SLASH, 3);
         }
       } else if (family === "fire") {
         const n = Math.max(1, Math.ceil(Math.hypot(c.x2 - c.x1, c.y2 - c.y1) / Math.max(10, c.r)));

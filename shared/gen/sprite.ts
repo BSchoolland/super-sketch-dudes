@@ -1,4 +1,4 @@
-import type { Fighter, FighterDef, PoseKey } from "../types";
+import type { Fighter, FighterDef, Pose, PoseKey } from "../types";
 import { key } from "./helpers";
 
 /** The nine cells every drawn fighter's sheet has, in sheet order (3 columns x 3 rows). */
@@ -22,7 +22,7 @@ export function defaultCellForMove(id: string): SpriteCell {
 }
 
 export function cellForAnim(def: FighterDef, anim: string): SpriteCell {
-  const named = def.sprite?.anims[anim] as SpriteCell | undefined;
+  const named = def.sprite.anims[anim] as SpriteCell | undefined;
   return named ?? STATE_CELLS[anim] ?? "idle";
 }
 
@@ -39,7 +39,7 @@ export function cellFor(f: Fighter, def: FighterDef, anim: string): { cell: Spri
   return { cell: cellForAnim(def, anim), flip: false };
 }
 
-const P = (extra: { dx?: number; dy?: number; sx?: number; sy?: number; rot?: number }) => ({ a: {}, ...extra });
+const P = (pose: Pose): Pose => pose;
 
 /**
  * Default pose tracks for a sprite fighter's non-move states: the sheet gives one drawing per

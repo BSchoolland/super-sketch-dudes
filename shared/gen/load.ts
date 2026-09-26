@@ -74,7 +74,7 @@ export async function buildGenerated(b: GeneratedBundle): Promise<FighterDef> {
   let def: FighterDef;
   try { def = make(generatedApi); } catch (e) { throw new Error(`generated fighter factory threw: ${e instanceof Error ? e.message : String(e)}`); }
   def = { ...def, id: b.id, sprite: b.sprite, generated: { player: b.player, description: b.description } };
-  if (!def.rig) def.rig = { bones: [], anims: {}, loops: {} };
+  if (!def.rig) def.rig = { anims: {}, loops: {} };
   const problems = validateGenerated(def);
   if (problems.length) throw new Error(`generated fighter ${b.id} invalid:\n${problems.join("\n")}`);
   return def;

@@ -34,7 +34,6 @@ function load(url: string): CellImages {
 
 /** Start loading every cell so the first frame of a match doesn't draw blanks. Resolves when all have loaded or failed. */
 export function preloadSprite(def: FighterDef): Promise<void> {
-  if (!def.sprite) return Promise.resolve();
   const urls = Object.values(def.sprite.cells);
   return new Promise((resolve) => {
     const check = () => { if (urls.every((u) => { const e = load(u); return e.base || e.failed; })) resolve(); else setTimeout(check, 30); };
@@ -50,7 +49,6 @@ export interface SpriteDrawOpts { alpha?: number; flash?: boolean; ghost?: boole
  */
 export function drawSprite(ctx: CanvasRenderingContext2D, def: FighterDef, cell: string, pose: Pose, opts: SpriteDrawOpts = {}): void {
   const sp = def.sprite;
-  if (!sp) throw new Error(`${def.id} has no sprite`);
   const url = sp.cells[cell] ?? sp.cells.idle;
   const e = load(url);
   const u = (roster[def.id] ?? def).stats.height / sp.heightPx;

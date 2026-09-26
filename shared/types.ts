@@ -74,15 +74,13 @@ export interface Hitbox {
 }
 
 export interface Pose {
-  /** Joint angles in degrees keyed by bone name. */
-  a?: Record<string, number>;
-  /** Root offset in fighter space. */
+  /** Offset in fighter space. */
   dx?: number;
   dy?: number;
   /** Squash and stretch scale. */
   sx?: number;
   sy?: number;
-  /** Lean in degrees, positive tips the top toward the facing direction. Sprite fighters only. */
+  /** Lean in degrees, positive tips the top toward the facing direction. */
   rot?: number;
 }
 export interface PoseKey {
@@ -146,44 +144,21 @@ export interface Move {
   cellFlip?: boolean;
 }
 
-export type BoneShape = "capsule" | "circle" | "poly" | "blade" | "slab" | "flame";
-export interface Bone {
-  name: string;
-  parent: string | null;
-  /** Length along the bone from its joint. */
-  len: number;
-  /** Thickness (radius) for capsules; width for slabs. */
-  thick: number;
-  /** Rest angle in degrees (0 = pointing down, positive = toward facing). */
-  rest: number;
-  /** Where the bone attaches on its parent: 0 = joint, 1 = tip. */
-  at?: number;
-  /** Colour key into the palette. */
-  color: string;
-  shape?: BoneShape;
-  /** Draw order; higher draws later (in front). */
-  z?: number;
-  outline?: boolean;
-  /** For circles: radius; for slabs: [w, h]. */
-  size?: number | [number, number];
-}
+/** Pose tracks (squash, stretch, lean, offset of the whole cell) for the sprite's non-move states. */
 export interface Rig {
-  bones: Bone[];
   /** Named animations for non-move states: idle, walk, run, jumpsquat, jump, fall, land, crouch, shield, hitstun, tumble, ledge, helpless, dead. */
   anims: Record<string, PoseKey[]>;
   /** Animation loop lengths in frames for cyclic anims (walk, run, idle). */
   loops: Record<string, number>;
 }
+/** The character's marker colours. Nothing draws with them any more; the screens' bone branch still reads them. */
 export interface Palette {
-  /** Named colours the rig references. */
   colors: Record<string, string>;
-  /** Which colour key is retinted per player slot. */
-  accent: string;
   outline: string;
 }
 
 /**
- * A fighter drawn from a sheet of hand-drawn cells instead of a bone rig. Every cell is a
+ * A fighter drawn from a sheet of hand-drawn cells. Every cell is a
  * square PNG of `px` pixels with the character facing right, horizontally centred, feet on
  * the row `feetPx` from the top, and drawn so the idle cell's content is `heightPx` tall.
  * The renderer maps `heightPx` onto `stats.height`, so all cells share one world scale.
@@ -221,8 +196,7 @@ export interface FighterDef {
   moves: Record<string, Move>;
   rig: Rig;
   palette: Palette;
-  /** Present on drawn (player-generated) fighters; the renderer uses it instead of the rig's bones. */
-  sprite?: SpriteRig;
+  sprite: SpriteRig;
   /** Player-generated fighters carry who drew them and the description the agent worked from. */
   generated?: { player: string; description: string };
   /** Initial value of fighter.special (must be a plain object). */

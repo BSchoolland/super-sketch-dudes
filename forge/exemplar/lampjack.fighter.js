@@ -22,7 +22,7 @@ export default function make(api) {
   };
 
   // Poses for a drawn fighter are squash/stretch/lean/offset on the whole cell (the cell itself is the drawing).
-  const P = (extra) => ({ a: {}, ...extra });
+  const P = (extra) => ({ ...extra });
   const rest = P({});
   const strikePoses = (total, hit, lean, extra = {}) => [
     key(0, P({ rot: -lean * 0.5, sx: 0.96, sy: 1.04, ...extra })),
@@ -102,8 +102,8 @@ export default function make(api) {
     tagline: "A desk lamp with a grudge and a very long cord.",
     stats,
     moves,
-    rig: { bones: [], anims: spriteAnims(), loops: spriteLoops },
-    palette: { colors: { marker: "#c94a3c" }, accent: "marker", outline: "#292722" },
+    rig: { anims: spriteAnims(), loops: spriteLoops },
+    palette: { colors: { marker: "#c94a3c" }, outline: "#292722" },
     // every key must exist from the start: the state hash walks these
     special: () => ({ charge: 0, heat: 0 }),
     hooks: {

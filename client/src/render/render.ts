@@ -1,12 +1,11 @@
-import { FONT, INK, PENCIL, inkArc, inkLine, inkRect, hatch } from "./paper";
+import { FONT, INK, PENCIL, inkArc, inkLine } from "./paper";
 import type { Fighter, State } from "../../../shared/types";
-import { roster } from "../../../shared/fighters/index";
 import { defOf, currentMove } from "../../../shared/fighter";
 import { hitboxWorld, hurtbox, shieldCircle } from "../../../shared/hits";
 import { stageOf } from "../../../shared/sim";
 import { Camera, VIEW_H, VIEW_W } from "./camera";
 import { Fx } from "./fx";
-import { animFor, drawRig, poseAt, resolvePose, tintColors, type ResolvedPose } from "./rig";
+import { animFor, poseAt } from "./rig";
 import { drawSprite } from "./sprite";
 import { cellFor } from "../../../shared/gen/sprite";
 import type { FighterDef, Pose } from "../../../shared/types";
@@ -14,7 +13,7 @@ import { drawBackdrop, drawShadow, drawStage } from "./stage";
 import { SLOT_COLORS, createHud, drawHud, type HudState } from "./hud";
 import { drawStrikes, inWindup } from "./strikes";
 
-interface Ghost { x: number; y: number; facing: number; rp: ResolvedPose; age: number; colors: Record<string, string>; sprite?: { def: FighterDef; cell: string; flip: boolean; pose: Pose } }
+interface Ghost { x: number; y: number; facing: number; age: number; def: FighterDef; cell: string; flip: boolean; pose: Pose }
 
 export class Renderer {
   cam = new Camera();
@@ -44,17 +43,14 @@ export class Renderer {
     this.prevProj = this.curProj;
     this.curProj = new Map(state.projectiles.map((p) => [p.id, { x: p.x, y: p.y }]));
     // afterimages for fast moves
-    state.fighters.forEach((f, i) => {
+    state.fighters.forEach((f) => {
       const mv = f.action === "attack" ? currentMove(f) : null;
       const striking = !!mv && !mv.throwFrame && mv.hitboxes.some((h) => !h.grab && f.frame >= h.frames[0] && f.frame <= h.frames[1]);
       const fast = (mv?.fx === "trail") || striking || f.action === "dash" || f.action === "roll" || (f.action === "air" && Math.abs(f.vx) > 9) || f.action === "airDodge";
       if (fast && state.frame % 2 === 0) {
         const def = defOf(f);
         const a = animFor(f, def);
-        const pose = poseAt(a.keys, a.frame, a.loop);
-        const rp = resolvePose(def, pose);
-        const sprite = def.sprite ? { def, ...cellFor(f, def, a.name), pose } : undefined;
-        this.ghosts.push({ x: f.x, y: f.y, facing: f.facing, rp, age: 0, colors: tintColors(def, i, SLOT_COLORS), sprite });
+        this.ghosts.push({ x: f.x, y: f.y, facing: f.facing, age: 0, def, ...cellFor(f, def, a.name), pose: poseAt(a.keys, a.frame, a.loop) });
       }
     });
   }
@@ -86,15 +82,14 @@ export class Renderer {
       ctx.save();
       ctx.translate(g.x, g.y);
       ctx.scale(g.facing, 1);
-      if (g.sprite) drawSprite(ctx, g.sprite.def, g.sprite.cell, g.sprite.pose, { alpha: 0.35 * (1 - g.age / 0.22), ghost: true, flip: g.sprite.flip });
-      else drawRig(ctx, g.rp, g.colors, "rgba(255,255,255,0)", { alpha: 0.35 * (1 - g.age / 0.22), flash: PENCIL, outlineWidth: 0 });
+      drawSprite(ctx, g.def, g.cell, g.pose, { alpha: 0.35 * (1 - g.age / 0.22), ghost: true, flip: g.flip });
       ctx.restore();
     }
     // projectiles
     for (const p of state.projectiles) {
       const a = this.prevProj.get(p.id) ?? p, b = this.curProj.get(p.id) ?? p;
       const x = a.x + (b.x - a.x) * alpha, y = a.y + (b.y - a.y) * alpha;
-      drawProjectile(ctx, p.kind, x, y, p.vx, p.vy, p.hb.r, SLOT_COLORS[p.owner] ?? "#fff", this.time);
+      drawProjectile(ctx, x, y, p.vx, p.vy, p.hb.r, SLOT_COLORS[p.owner] ?? "#fff");
     }
     // fighters, back to front by slot (the one who was hit last draws on top)
     const order = state.fighters.map((f) => f).sort((a, b) => a.lastHitFrame - b.lastHitFrame);
@@ -110,11 +105,9 @@ export class Renderer {
 
   private drawFighter(ctx: CanvasRenderingContext2D, state: State, f: Fighter, pos: { x: number; y: number }): void {
     if (f.action === "dead") return;
-    const def = roster[f.id];
+    const def = defOf(f);
     const a = animFor(f, def);
     const pose = poseAt(a.keys, a.frame, a.loop);
-    const rp = resolvePose(def, pose);
-    const colors = tintColors(def, f.slot, SLOT_COLORS);
     ctx.save();
     let jx = 0, jy = 0;
     if (f.hitlag > 0 && f.pending) { jx = (Math.random() - 0.5) * 8; jy = (Math.random() - 0.5) * 6; }
@@ -154,9 +147,8 @@ export class Renderer {
     const dodging = f.action === "airDodge" || f.action === "spotDodge" || f.action === "roll" || f.action === "getupRoll" || f.action === "techRoll" || f.action === "ledgeRoll";
     const blink = f.invuln > 0 && !dodging && f.action !== "respawn" && (state.frame >> 2) % 2 === 0;
     const alpha = f.action === "respawn" ? 0.8 : dodging && f.invuln > 0 ? 0.45 : blink ? 0.7 : 1;
-    const flash = f.hitlag > 0 && f.pending ? "#ffffff" : undefined;
-    if (def.sprite) { const c = cellFor(f, def, a.name); drawSprite(ctx, def, c.cell, pose, { alpha, flash: !!flash, flip: c.flip }); }
-    else drawRig(ctx, rp, colors, def.palette.outline, { alpha, flash, outlineWidth: 3 });
+    const c = cellFor(f, def, a.name);
+    drawSprite(ctx, def, c.cell, pose, { alpha, flash: f.hitlag > 0 && !!f.pending, flip: c.flip });
     ctx.restore();
     // shield bubble
     if (f.shieldHeld || f.action === "shieldStun") {
@@ -221,16 +213,11 @@ function capsulePath(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: 
   ctx.closePath();
 }
 
-export function drawProjectile(ctx: CanvasRenderingContext2D, kind: string, x: number, y: number, vx: number, vy: number, r: number, color: string, time: number): void {
+export function drawProjectile(ctx: CanvasRenderingContext2D, x: number, y: number, vx: number, vy: number, r: number, color: string): void {
   ctx.save(); ctx.translate(x, y); ctx.rotate(Math.atan2(vy, vx));
-  const marker = kind === "ember" || kind === "emberTrail" ? "#ee5825" : kind === "chunk" || kind === "shock" ? "#ed7e20" : "#00bfdc";
-  if (kind === "chunk") {
-    ctx.rotate(time * 4); ctx.fillStyle = "#f4efe4"; ctx.fillRect(-r, -r, r * 2, r * 2);
-    hatch(ctx, -r, -r, r * 2, r * 2, marker); inkRect(ctx, -r, -r, r * 2, r * 2);
-  } else {
-    inkArc(ctx, 0, 0, r * 0.75, 0, Math.PI * 2, marker, Math.max(3, r * 0.5));
-    inkLine(ctx, -r, 0, r, 0, color, 3, 0, true);
-    for (let i = -1; i <= 1; i++) inkLine(ctx, -r * 1.4, i * r * 0.5, -r * 2.7, i * r * 0.7, marker, 1.5, i, true);
-  }
+  const marker = "#00bfdc";
+  inkArc(ctx, 0, 0, r * 0.75, 0, Math.PI * 2, marker, Math.max(3, r * 0.5));
+  inkLine(ctx, -r, 0, r, 0, color, 3, 0, true);
+  for (let i = -1; i <= 1; i++) inkLine(ctx, -r * 1.4, i * r * 0.5, -r * 2.7, i * r * 0.7, marker, 1.5, i, true);
   ctx.restore();
 }

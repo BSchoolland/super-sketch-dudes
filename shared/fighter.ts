@@ -19,7 +19,7 @@ export function formDef(base: FighterDef, form: string): FighterDef {
       stats: { ...base.stats, ...o.stats },
       moves: { ...base.moves, ...o.moves },
       rig: { ...base.rig, anims: { ...base.rig.anims, ...o.poses }, loops: { ...base.rig.loops, ...o.loops } },
-      sprite: base.sprite && { ...base.sprite, anims: { ...base.sprite.anims, ...o.anims } },
+      sprite: { ...base.sprite, anims: { ...base.sprite.anims, ...o.anims } },
     };
     byForm.set(form, def);
   }

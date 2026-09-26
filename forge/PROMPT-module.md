@@ -54,7 +54,7 @@ those four, exactly like the exemplar's `aim()`:
 - plus ledgeAttack, getupAttack, taunt (aimings of the strike, or trivial).
 Every move's `cell` is one of the nine (defaults: up-moves atk-up, down-moves atk-down, the rest
 atk-fwd; bair `cell: "atk-fwd", cellFlip: true`). Poses are squash/stretch/lean/offset keys on the
-whole cell: key(frame, { a: {}, sx, sy, rot, dx, dy }). Lean into every strike.
+whole cell: key(frame, { sx, sy, rot, dx, dy }). Lean into every strike.
 
 ## Required
 - uspecial must actually recover: it must gain height (set f.vy negative in a hook or use
