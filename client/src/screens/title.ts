@@ -15,7 +15,8 @@ export function drawLogo(ctx: CanvasRenderingContext2D, y: number): void {
   ctx.save();
   ctx.translate(VIEW_W / 2, y);
   ctx.rotate(-0.04);
-  title(ctx, "SKETCH BATTLE", 0, 40, 150, INK);
+  title(ctx, "SUPER", 0, -78, 64, INK);
+  title(ctx, "SKETCH DUDES", 0, 40, 150, INK);
   inkLine(ctx, -410, 70, 410, 59, INK, 5);
   inkLine(ctx, -375, 82, 365, 75, INK, 2);
   ctx.restore();

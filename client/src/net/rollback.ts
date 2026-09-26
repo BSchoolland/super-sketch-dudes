@@ -310,7 +310,7 @@ export class RollbackSession {
       if (remoteHash === localHash) continue;
       this.desync = { frame, localHash, remoteHash, remoteSlot };
       this.waiting = true;
-      console.error(`SKETCH BATTLE DESYNC frame ${frame}: local ${localHash} remote ${remoteHash} (slot ${remoteSlot})`);
+      console.error(`SUPER SKETCH DUDES DESYNC frame ${frame}: local ${localHash} remote ${remoteHash} (slot ${remoteSlot})`);
       this.onDesync?.(this.desync);
       return;
     }

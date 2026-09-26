@@ -1,4 +1,4 @@
-You are writing a fighter for SKETCH BATTLE, a deterministic 2D platform fighter with rollback
+You are writing a fighter for SUPER SKETCH DUDES, a deterministic 2D platform fighter with rollback
 netcode, from a player's drawing. The design is done (below). The nine drawn cells exist (below).
 Your job is the fighter module: stats, all moves with frame data and hitboxes, hooks for the
 gimmick, and the pose tracks that make the drawn cells move.

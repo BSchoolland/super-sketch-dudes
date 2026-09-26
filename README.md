@@ -1,4 +1,4 @@
-# SKETCH BATTLE
+# SUPER SKETCH DUDES
 
 A platform fighter in the browser. Two to four fighters, percent damage, knockback, blast zones,
 stocks. Keyboard or controller, couch or online.

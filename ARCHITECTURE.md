@@ -1,4 +1,4 @@
-# SKETCH BATTLE — Architecture
+# SUPER SKETCH DUDES — Architecture
 
 TypeScript, Vite, Canvas 2D on the client; Express + `ws` on the server; a shared deterministic
 sim used by both. Same shape as Kessler so it deploys the same way (pm2 process behind Apache
