@@ -45,7 +45,9 @@ Determinism is non-negotiable (every client re-runs your code and must get ident
   atk-fwd; bair usually `cell: "atk-fwd", cellFlip: true`). Poses are squash/stretch/lean/offset
   keys on the whole cell: key(frame, { a: {}, sx, sy, rot, dx, dy }). Lean into every strike.
 - uspecial must actually recover: it must gain height (set f.vy negative in a hook or use
-  `motion`), and it must be `helpless: true, ledgeOk: true`.
+  `motion`), and it must be `helpless: true, ledgeOk: true`. The check knocks the fighter out to
+  about 200 units past the ledge at ledge height; uspecial (plus its jumps) must bring it back
+  that far sideways, not just up, so let f.vx follow input.x strongly during the rise.
 - Some move must be able to KO a weight-100 opponent from centre stage under 150%.
 - Hitbox `angle`: 0 launches away from you, 90 up, 270 down (spike), 180 pulls toward you.
   `base` 20-70, `growth` 40-110 are the normal range; smashes and specials at the top.
