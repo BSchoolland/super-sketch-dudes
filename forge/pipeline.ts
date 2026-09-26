@@ -15,7 +15,7 @@ const root = path.resolve(here, "..");
 const TSX = path.join(root, "node_modules/.bin/tsx");
 const MODULE_RETRIES = 2;
 /** Pass-2 effort. Low writes a module in ~95s; medium thinks longer (the builder measured 5-6 min at the default) and passes the gate about as often. */
-const MODULE_EFFORT = (process.env.FORGE_EFFORT ?? "medium") as "low" | "medium" | "high";
+const MODULE_EFFORT = (process.env.FORGE_EFFORT ?? "low") as "low" | "medium" | "high";
 const CHECKS_TIMEOUT_MS = 120_000;
 
 export interface JobSpec { id: string; fighterId: string; playerName: string; round: number; siblings: string[] }
