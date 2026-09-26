@@ -1,16 +1,21 @@
-import type { Fighter, Hitbox, Move } from "../../../shared/types";
+import type { Fighter, FighterDef, Hitbox, Move } from "../../../shared/types";
 import { hitboxWorld } from "../../../shared/hits";
 import { defOf, currentMove } from "../../../shared/fighter";
-import { hatch, inkArc, inkLine, inkPath, inkRect, INK } from "./paper";
+import { hatch, inkArc, inkLine, inkPath, inkRect, INK, PAPER } from "./paper";
 import { drawLook, lookOf } from "./looks";
 
-const SLASH = "#00bddd";
+/** Strikes are drawn in the character's own marker colour, outlined in its ink. */
+export function markerOf(def: FighterDef): string {
+  const p = def.palette as { colors: Record<string, string>; accent?: string; outline: string };
+  return (p.accent && p.colors[p.accent]) || Object.values(p.colors)[0] || p.outline || INK;
+}
 
 export function drawStrikes(ctx: CanvasRenderingContext2D, f: Fighter, pos: { x: number; y: number }, slotColor: string, time: number): void {
   if (f.action !== "attack") return;
   const mv = currentMove(f);
   if (!mv || mv.throwFrame) return;
   const def = defOf(f);
+  const marker = markerOf(def), ink = def.palette.outline || INK;
   for (const hb of mv.hitboxes) {
     if (f.frame < hb.frames[0] || f.frame > hb.frames[1] + 6) continue;
     const c = hitboxWorld({ ...f, x: pos.x, y: pos.y }, hb);
@@ -32,13 +37,15 @@ export function drawStrikes(ctx: CanvasRenderingContext2D, f: Fighter, pos: { x:
         const far = Math.max(Math.hypot(c.x1 - cx, c.y1 - cy), Math.hypot(c.x2 - cx, c.y2 - cy)) + c.r;
         const dir = Math.atan2(my - cy, mx - cx);
         const spread = Math.min(1.3, 0.28 + c.r * 2.4 / Math.max(40, far - c.r));
-        inkArc(ctx, cx, cy, far - c.r, dir - spread / 2, dir + spread / 2, SLASH, c.r * 1.6, 9);
-        inkArc(ctx, cx, cy, far - c.r, dir - spread / 2, dir + spread / 2, "#fff", Math.max(2, c.r * 0.22), 9);
-        inkLine(ctx, c.x1, c.y1, c.x2, c.y2, SLASH, c.r * 1.7, 10, true);
-        inkLine(ctx, c.x1, c.y1, c.x2, c.y2, "#fff", Math.max(1.5, c.r * 0.2), 10, true);
+        inkArc(ctx, cx, cy, far - c.r, dir - spread / 2, dir + spread / 2, ink, c.r * 1.6 + 4, 9);
+        inkArc(ctx, cx, cy, far - c.r, dir - spread / 2, dir + spread / 2, marker, c.r * 1.6, 9);
+        inkArc(ctx, cx, cy, far - c.r, dir - spread / 2, dir + spread / 2, PAPER, Math.max(2, c.r * 0.22), 9);
+        inkLine(ctx, c.x1, c.y1, c.x2, c.y2, ink, c.r * 1.7 + 4, 10, true);
+        inkLine(ctx, c.x1, c.y1, c.x2, c.y2, marker, c.r * 1.7, 10, true);
+        inkLine(ctx, c.x1, c.y1, c.x2, c.y2, PAPER, Math.max(1.5, c.r * 0.2), 10, true);
         if (family === "tip") {
-          inkLine(ctx, c.x2 - 9, c.y2 - 9, c.x2 + 9, c.y2 + 9, INK, 2);
-          inkLine(ctx, c.x2 + 9, c.y2 - 9, c.x2 - 9, c.y2 + 9, SLASH, 3);
+          inkLine(ctx, c.x2 - 9, c.y2 - 9, c.x2 + 9, c.y2 + 9, ink, 3);
+          inkLine(ctx, c.x2 + 9, c.y2 - 9, c.x2 - 9, c.y2 + 9, ink, 3);
         }
       } else if (family === "fire") {
         const n = Math.max(1, Math.ceil(Math.hypot(c.x2 - c.x1, c.y2 - c.y1) / Math.max(10, c.r)));
@@ -57,14 +64,14 @@ export function drawStrikes(ctx: CanvasRenderingContext2D, f: Fighter, pos: { x:
       } else {
         ctx.translate(c.x1, c.y1); ctx.rotate(Math.atan2(c.y2 - c.y1, c.x2 - c.x1));
         const len = Math.hypot(c.x2 - c.x1, c.y2 - c.y1);
-        const color = family === "heavy" ? "#ee721b" : family === "energy" ? "#00c5e4" : slotColor;
+        const color = marker;
         inkPath(ctx, [[-c.r, -c.r * 0.75], [len + c.r, -c.r], [len + c.r, c.r * 0.8], [-c.r, c.r]], true, 5, true);
         ctx.fillStyle = color; ctx.fill();
-        ctx.strokeStyle = family === "heavy" ? INK : color; ctx.lineWidth = 2; ctx.stroke();
-        ctx.save(); ctx.clip(); ctx.globalAlpha *= 0.6; hatch(ctx, -c.r, -c.r, len + c.r * 2, c.r * 2, family === "heavy" ? "#944717" : "#fff"); ctx.restore();
-        if (family === "energy") inkLine(ctx, -c.r * 0.6, 0, len + c.r * 0.6, -1, "#fff", Math.max(2, c.r * 0.28));
-        for (let j = -1; j <= 1; j++) inkLine(ctx, -c.r - 7, j * c.r * 0.7, -c.r - 24 - Math.abs(j) * 7, j * c.r, family === "heavy" ? INK : color, 2);
-        if (family === "heavy") inkRect(ctx, -c.r + 3, -c.r * 0.75 + 3, len + c.r * 2 - 6, c.r * 1.5 - 6, color, 2);
+        ctx.strokeStyle = ink; ctx.lineWidth = family === "heavy" ? 3.5 : 2.5; ctx.lineJoin = "round"; ctx.stroke();
+        ctx.save(); ctx.clip(); ctx.globalAlpha *= family === "heavy" ? 0.7 : 0.45; hatch(ctx, -c.r, -c.r, len + c.r * 2, c.r * 2, ink); ctx.restore();
+        if (family === "energy") inkLine(ctx, -c.r * 0.6, 0, len + c.r * 0.6, -1, PAPER, Math.max(2, c.r * 0.28));
+        for (let j = -1; j <= 1; j++) inkLine(ctx, -c.r - 7, j * c.r * 0.7, -c.r - 24 - Math.abs(j) * 7, j * c.r, ink, 2.5);
+        if (family === "heavy") inkRect(ctx, -c.r + 3, -c.r * 0.75 + 3, len + c.r * 2 - 6, c.r * 1.5 - 6, PAPER, 2);
       }
     }
     ctx.restore();

@@ -3,6 +3,7 @@ import type { GameEvent, State } from "../../../shared/types";
 import type { Camera } from "./camera";
 import { defOf } from "../../../shared/fighter";
 import { lookColor, lookOf } from "./looks";
+import { markerOf } from "./strikes";
 
 interface Particle { x: number; y: number; vx: number; vy: number; life: number; age: number; size: number; color: string; kind: "spark" | "dust" | "ring" | "line" | "star" | "ember"; grav: number; ang?: number; len?: number; drag: number }
 interface Flash { life: number; age: number; color: string; alpha: number }
@@ -51,8 +52,9 @@ export class Fx {
     for (const e of events) {
       switch (e.t) {
         case "hit": {
-          const look = e.attacker >= 0 ? lookOf(defOf(state.fighters[e.attacker]), e.fx) : null;
-          const family = e.fx === "fire" ? "#ffc43a" : e.fx === "energy" ? "#35e0ff" : e.fx === "slash" || e.fx === "tip" ? "#f4f0ff" : null;
+          const def = e.attacker >= 0 ? defOf(state.fighters[e.attacker]) : null;
+          const look = def ? lookOf(def, e.fx) : null;
+          const family = e.fx === "fire" ? "#ffc43a" : e.fx === "energy" && def ? markerOf(def) : e.fx === "slash" || e.fx === "tip" ? "#f4f0ff" : null;
           const c = look ? lookColor(look, this.colors[e.attacker] ?? "#fff") : family ?? this.colors[e.attacker] ?? "#fff";
           const big = e.damage >= 12;
           const flame = e.fx === "fire" || look?.texture === "flame";
