@@ -56,10 +56,10 @@ describe("generated fighters", () => {
     for (let i = 0; i < 10; i++) { step(s, [EMPTY_INPUT, EMPTY_INPUT]); for (const e of s.events) if (e.t === "hookError") errors.push(`${e.move}:${e.error}`); s.events.length = 0; }
     expect(errors).toEqual(["sspecial:kaboom"]);
     expect(f.action).toBe("idle");
-    expect(def.moves.sspecial.hook).toBeUndefined();
-    // the move still works afterwards, minus its hook
+    // nothing outside the state changed: using the move again throws again, on the same frame
     startMove(s, f, "sspecial");
-    for (let i = 0; i < 50; i++) { step(s, [EMPTY_INPUT, EMPTY_INPUT]); s.events.length = 0; }
+    for (let i = 0; i < 50; i++) { step(s, [EMPTY_INPUT, EMPTY_INPUT]); for (const e of s.events) if (e.t === "hookError") errors.push(`${e.move}:${e.error}`); s.events.length = 0; }
+    expect(errors).toEqual(["sspecial:kaboom", "sspecial:kaboom"]);
     expect(s.projectiles.length).toBe(0);
     unregisterFighter("gen-bad");
   });

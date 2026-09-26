@@ -792,9 +792,9 @@ function climbTo(f: Fighter, stage: Stage, L: { x: number; y: number; side: 1 | 
 }
 
 /**
- * Generated fighters bring their own hook code. A hook that throws is disabled for the rest of the
- * session and the fighter drops to idle, with an event so the screen can say so. Every client runs
- * the same hook against the same state, so all of them disable it on the same frame.
+ * Generated fighters bring their own hook code. A hook that throws cuts the move short (the fighter
+ * drops to idle) with an event so the screen can say so. Nothing outside the state is changed, so
+ * a rolled-back throw leaves no trace and every client agrees.
  */
 function runHook(state: State, f: Fighter, def: FighterDef, mv: Move, input: InputFrame, prev: InputFrame): void {
   const hook = def.hooks[mv.hook!];
@@ -803,7 +803,6 @@ function runHook(state: State, f: Fighter, def: FighterDef, mv: Move, input: Inp
     hook({ state, f, input, prev });
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
-    mv.hook = undefined;
     state.events.push({ t: "hookError", frame: state.frame, slot: f.slot, move: mv.id, error });
     if (f.grabbing >= 0) { const v = state.fighters[f.grabbing]; if (v) releaseGrab(state, f, v, false); }
     setAction(f, f.grounded ? "idle" : "air");

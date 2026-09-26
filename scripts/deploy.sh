@@ -11,5 +11,5 @@ BUILD=$(git rev-parse --short HEAD)
 ssh personal-server "mkdir -p ~/$NAME/dist"
 rsync -az --delete dist/ personal-server:~/$NAME/dist/
 rsync -az package.json package-lock.json personal-server:~/$NAME/
-ssh personal-server "cd ~/$NAME && npm install --omit=dev --no-audit --no-fund >/dev/null && export PORT=$PORT BUILD=$BUILD SKETCHBATTLE_BASE=$BASE && (pm2 describe $NAME >/dev/null 2>&1 && pm2 restart $NAME --update-env || pm2 start dist/server.mjs --name $NAME) && pm2 save >/dev/null"
+ssh personal-server "cd ~/$NAME && npm install --omit=dev --no-audit --no-fund >/dev/null && set -a && [ -f .env ] && . ./.env; set +a; export PORT=$PORT BUILD=$BUILD SKETCHBATTLE_BASE=$BASE && (pm2 describe $NAME >/dev/null 2>&1 && pm2 restart $NAME --update-env || pm2 start dist/server.mjs --name $NAME) && pm2 save >/dev/null"
 echo "deployed: https://bschoolland.dev$BASE"
