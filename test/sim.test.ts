@@ -146,3 +146,24 @@ describe("menu brawl stage", () => {
     expect(s.fighters.every((f) => Number.isFinite(f.x) && Number.isFinite(f.y))).toBe(true);
   });
 });
+
+describe("CPU pathing", () => {
+  it("climbs from the menu floor to a target standing on top of the menu cards, by way of the circling platform and a shelf", async () => {
+    await loadAllHouse();
+    const s = createMatch({ stage: "menu", players: [{ fighter: "lampjack", cpu: 9 }, { fighter: "woodstove", cpu: 0 }], rules: { stocks: 99, time: 0 }, seed: 3 });
+    const [cpu, dummy] = s.fighters;
+    cpu.x = 300; cpu.y = 1000; cpu.platform = 0;
+    dummy.x = 960; dummy.y = 350; dummy.platform = 1; dummy.grounded = true;
+    let closest = Infinity, reachedAt = -1;
+    for (let frame = 0; frame < 3600; frame++) {
+      step(s, [cpuInput(s, 0, 9), EMPTY_INPUT]);
+      s.ended = false; s.events.length = 0;
+      dummy.x = 960; dummy.y = 350; dummy.platform = 1; dummy.grounded = true; dummy.percent = 0; dummy.action = "idle"; dummy.stocks = 99;
+      const d = Math.hypot(cpu.x - dummy.x, cpu.y - dummy.y);
+      if (d < closest) closest = d;
+      if (d < 160 && reachedAt < 0) { reachedAt = frame; break; }
+    }
+    expect(reachedAt, `closest ${Math.round(closest)}`).toBeGreaterThanOrEqual(0);
+    expect(reachedAt).toBeGreaterThan(120);
+  });
+});

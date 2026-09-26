@@ -5,6 +5,7 @@ import { knockback } from "./hits";
 import { B, type InputFrame } from "./input";
 import { EMPTY_MOVE, SPECIALS, profileOf, type MoveInfo, type Profile, type SpecialId } from "./cpu-profile";
 import { stageOf } from "./sim";
+import { canCross, legs, route, surfaces, surfaceUnder, type Surface } from "./nav";
 import type { Fighter, Hitbox, Move, Stage, State } from "./types";
 
 const REACTION = [30, 30, 26, 21, 15, 11, 8, 6, 4, 3];
@@ -443,10 +444,61 @@ function edgeguardInput(state: State, f: Fighter, target: Fighter, level: number
   return blank();
 }
 
-function aerialNeutral(state: State, f: Fighter, target: Fighter, level: number): InputFrame {
+/** The route from where a fighter stands (or would land) to where the target stands; null when they share a surface or none exists. */
+function routeTo(state: State, f: Fighter, target: Fighter, stage: Stage): { me: Surface; next: Surface; goal: Surface } | null {
+  const surfs = surfaces(state, stage);
+  const me = f.grounded && f.platform >= 0 ? surfs[f.platform] : surfaceUnder(surfs, f.x, f.y);
+  const goal = target.grounded && target.platform >= 0 ? surfs[target.platform] : surfaceUnder(surfs, target.x, target.y);
+  if (!me || !goal || me.i === goal.i) return null;
+  const path = route(surfs, me, goal, legs(f));
+  if (!path || path.length < 2) return null;
+  return { me, next: path[1], goal };
+}
+
+/** Where on `me` to leave from for `next`, and where on `next` to aim: the nearest edges, or straight up/down over the overlap. */
+function launchPoint(me: Surface, next: Surface, towardX: number): { lx: number; over: boolean } {
+  if (next.x1 > me.x2 - 10) return { lx: me.x2 - 14, over: false };
+  if (next.x2 < me.x1 + 10) return { lx: me.x1 + 14, over: false };
+  const lo = Math.max(me.x1, next.x1) + 14, hi = Math.min(me.x2, next.x2) - 14;
+  return { lx: Math.max(lo, Math.min(hi, towardX)), over: true };
+}
+
+/** Grounded and the target is on another surface: walk to the launch point and hop, drop off the edge, or wait for a moving platform. */
+function navInput(state: State, f: Fighter, target: Fighter, stage: Stage): InputFrame | null {
+  const r = routeTo(state, f, target, stage);
+  if (!r) return null;
+  const { me, next } = r;
+  const { lx, over } = launchPoint(me, next, target.x);
+  const out = blank();
+  const dx = lx - f.x;
+  if (Math.abs(dx) > 16) { out.x = sign(dx) * (Math.abs(dx) > 120 ? 100 : 55); return out; }
+  if (!canCross(me, next, legs(f), true)) return out;
+  const toward = over ? 0 : next.x1 > me.x2 - 10 ? 1 : -1;
+  if (next.y < me.y - 8) {
+    // up: a full hop, held toward the far side
+    out.b = B.JUMP;
+    out.x = toward * 100;
+  } else {
+    // down or level: walk off the edge
+    out.x = (toward || sign((next.x1 + next.x2) / 2 - f.x) || 1) * 100;
+  }
+  return out;
+}
+
+function aerialNeutral(state: State, f: Fighter, target: Fighter, level: number, stage: Stage): InputFrame {
   const out = blank();
   const dx = target.x - f.x, dy = target.y - f.y;
   out.x = sign(dx) * (Math.abs(dx) > 45 ? 80 : 35);
+  // on a route: steer for the next surface, double jump when it is still above
+  const r = routeTo(state, f, target, stage);
+  if (r) {
+    const aim = Math.max(r.next.x1 + 14, Math.min(r.next.x2 - 14, f.x));
+    const ax = aim - f.x;
+    out.x = Math.abs(ax) > 8 ? sign(ax) * 100 : 0;
+    if (f.vy > 0 && r.next.y < f.y - 10 && f.jumpsLeft > 0 && f.action === "air") out.b = pulse(state, f.slot, B.JUMP);
+    if (f.vy > 0 && r.next.y > f.y + 60 && Math.abs(ax) <= 8) out.y = 100;
+    return out;
+  }
   const facingToTarget = sign(dx) === f.facing;
   if (target.action === "tumble" || target.action === "hitstun") {
     if (dy < -35 && moveCanReach(f, target, "uair", f.facing)) return startAerial(state, f, "uair");
@@ -501,6 +553,9 @@ function groundNeutral(state: State, f: Fighter, target: Fighter, level: number,
   const special = specialChoice(state, f, target, level, facing, distance, stage);
   if (special) return special;
 
+  const nav = navInput(state, f, target, stage);
+  if (nav) return nav;
+
   if (dy < -65) {
     if (moveCanReach(f, target, "utilt", facing)) return startTilt(state, f, "utilt", facing);
     if (distance < 180 + level * 8) { out.x = facing * 65; out.b = pulse(state, f.slot, B.JUMP); return out; }
@@ -550,7 +605,7 @@ export function cpuInput(state: State, slot: number, rawLevel: number): InputFra
   const committed = handleCommitted(state, f, target, level, stage);
   if (committed) return committed;
   if (!target) return blank();
-  if (!f.grounded) return aerialNeutral(state, f, target, level);
+  if (!f.grounded) return aerialNeutral(state, f, target, level, stage);
 
   if (level <= 3 && state.frame % THINK[level] !== 0 && hash(state, f, 0x5107, THINK[level]) % 100 < 45) {
     const out = blank();
