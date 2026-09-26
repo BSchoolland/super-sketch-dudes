@@ -376,6 +376,8 @@ export function attachDraw(api: express.Router, opts: DrawOptions): void {
         case "drawLoaded": {
           if (Array.isArray(msg.fighterIds)) p.loaded = msg.fighterIds.map(String).slice(0, 32);
           maybeStartBattle(room);
+          // everyone's loading screen shows who's in
+          if (d.phase === "loading") push(room);
           return true;
         }
         case "drawBattleEnd": {

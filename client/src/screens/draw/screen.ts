@@ -47,13 +47,7 @@ export class DrawScreen implements Screen, DrawHost {
       const local = start.members.find((member) => member.id === s.id);
       if (local) return this.battle(start, local.slot);
     }
-    const key = this.keyFor();
-    if (key !== this.viewKey) {
-      this.view?.dispose?.();
-      this.view = key === "closed" ? null : this.makeView(key);
-      this.viewKey = key;
-      this.leaveArmed = -1;
-    }
+    this.syncView();
     if (this.view) {
       const inRoom = !!s.room && s.room.phase !== "lobby" && s.room.phase !== "over";
       if (inRoom && this.leaveRequested(m, taps)) return null;
@@ -68,6 +62,8 @@ export class DrawScreen implements Screen, DrawHost {
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
+    // a finished match hands control back and gets drawn before the next update
+    this.syncView();
     bg(ctx, this.t);
     const s = this.session;
     if (!this.view) {
@@ -77,7 +73,7 @@ export class DrawScreen implements Screen, DrawHost {
     }
     this.view.draw(ctx);
     const room = s.room;
-    if (room && room.phase !== "lobby") {
+    if (room && room.phase !== "lobby" && room.phase !== "over") {
       const armed = this.leaveArmed >= 0 && this.t - this.leaveArmed < 2.5;
       label(ctx, armed ? "again to leave" : `✕  ${room.code}`, LEAVE.x + 10, LEAVE.y + 44, 26, armed ? RED : PENCIL, "left");
     }
@@ -96,6 +92,15 @@ export class DrawScreen implements Screen, DrawHost {
 
   private closedButtons(): Button[] {
     return [{ id: "back", x: VIEW_W / 2 - 200, y: VIEW_H / 2 + 60, w: 400, h: 96, text: "BACK", size: 44 }];
+  }
+
+  private syncView(): void {
+    const key = this.keyFor();
+    if (key === this.viewKey) return;
+    this.view?.dispose?.();
+    this.view = key === "closed" ? null : this.makeView(key);
+    this.viewKey = key;
+    this.leaveArmed = -1;
   }
 
   private keyFor(): string {

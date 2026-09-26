@@ -56,7 +56,7 @@ export class RevealView implements DrawView {
     ctx.fillRect(cx - 40, 92, 80, 5);
     label(ctx, `${p.name}${p.ready ? " ✓" : ""}${p.connected ? "" : " (left)"}`, cx, 76, 34, p.connected ? INK : PENCIL, "center", 800);
     const ch = p.characters[this.round - 1] ?? null;
-    const top = 118, ax = cx - size / 2;
+    const top = 134, ax = cx - size / 2;
     drawCharacterArt(ctx, ch, ax, top, size, t + p.slot * 0.3);
     let y = top + size + 58;
     if (ch?.status === "ready") {

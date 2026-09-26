@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { battleReporter, ladderHistory, secondsLeft, standings } from "../client/src/screens/draw/logic";
+import { abandonedResult, battleReporter, DRAW_GRACE_MS, ladderHistory, phaseMs, secondsLeft, standings } from "../client/src/screens/draw/logic";
 import type { DrawCharacter, DrawPlayer, DrawRoomState } from "../shared/draw";
 
 const ch = (round: number, name: string, status: DrawCharacter["status"] = "ready"): DrawCharacter => ({ round, status, stage: "", drawingUrl: null, fighterId: name, bundleUrl: null, sheetUrl: null, name, tagline: null, description: null, error: null, spent: false });
@@ -34,5 +34,18 @@ describe("draw client logic", () => {
     expect(secondsLeft(10_000, 0, 4000)).toBe(6);
     expect(secondsLeft(10_000, 20_000, 4000)).toBe(0);
     expect(secondsLeft(0, 5)).toBe(0);
+  });
+
+  it("times each phase the way the server's timer does", () => {
+    expect(phaseMs({ phase: "draw", drawSeconds: 45 })).toBe(45_000 + DRAW_GRACE_MS);
+    expect(phaseMs({ phase: "reveal", drawSeconds: 45 })).toBe(30_000);
+    expect(phaseMs({ phase: "between", drawSeconds: 45 })).toBe(8_000);
+    expect(() => phaseMs({ phase: "loading", drawSeconds: 45 })).toThrow();
+  });
+
+  it("ends an abandoned battle where it stopped, the missing players last", () => {
+    const fighters = [{ stocks: 3, percent: 10 }, { stocks: 1, percent: 80 }, { stocks: 2, percent: 0 }];
+    expect(abandonedResult(fighters, [0])).toEqual({ winner: 2, standings: [2, 1, 0] });
+    expect(abandonedResult(fighters, [])).toEqual({ winner: 0, standings: [0, 2, 1] });
   });
 });

@@ -46,8 +46,8 @@ export class ResultsView implements DrawView {
     if (winner) {
       title(ctx, winner.name, cx, 150, this.over ? 120 : 96, SLOT_COLORS[winner.slot % SLOT_COLORS.length]);
       label(ctx, this.over ? `wins DRAW BATTLE${winnerChar?.name ? ` with ${winnerChar.name}` : ""}` : `wins with ${winnerChar?.name ?? "?"}`, cx, 210, 36, INK, "center", 800);
-      drawCharacterArt(ctx, winnerChar, cx - 250, 250, 500, this.host.t);
-      if (winnerChar?.tagline) wrapped(ctx, winnerChar.tagline, cx, 800, 560, 28, PENCIL, 2);
+      drawCharacterArt(ctx, winnerChar, cx - 250, 275, 500, this.host.t);
+      if (winnerChar?.tagline) wrapped(ctx, winnerChar.tagline, cx, 825, 560, 28, PENCIL, 2);
     } else {
       wrapped(ctx, room.note || "no winner", cx, 400, 700, 60, INK, 3, "center", 900);
     }
