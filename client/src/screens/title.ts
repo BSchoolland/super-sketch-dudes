@@ -2,7 +2,7 @@ import { inkLine } from "../render/paper";
 import { VIEW_H, VIEW_W } from "../render/camera";
 import type { MenuInput } from "../input/devices";
 import { sfx } from "../audio/audio";
-import { bg, card, hint, label, title, type Screen, INK } from "./ui";
+import { bg, card, hint, label, title, hover, clicked, goTo, type Screen, INK } from "./ui";
 import { rosterList } from "../../../shared/fighters/index";
 import { drawRig, poseAt, resolvePose } from "../render/rig";
 
@@ -41,6 +41,8 @@ export class TitleScreen implements Screen {
     this.items.forEach((it, i) => {
       const y = y0 + i * 110;
       const sel = i === this.sel;
+      if (hover(x, y, 440, 86)) { this.sel = i; document.body.style.cursor = "pointer"; }
+      if (clicked(x, y, 440, 86)) { sfx.menuConfirm(); goTo(this.onPick(it.id)); }
       card(ctx, x, y, 440, 86, sel ? "#ffc43a" : "rgba(18,16,26,0.7)", sel);
       title(ctx, it.name, x + 220, y + 58, 40, INK);
     });
@@ -54,7 +56,7 @@ export class TitleScreen implements Screen {
       drawRig(ctx, rp, def.palette.colors, def.palette.outline);
       ctx.restore();
     });
-    hint(ctx, "keyboard: WASD/arrows move · J/Numpad1 confirm · gamepad: A confirm");
+    hint(ctx, "click, or arrows + Enter · gamepad: stick + A");
     label(ctx, `build ${__BUILD__}`, VIEW_W - 20, VIEW_H - 16, 14, "rgba(41,39,34,0.5)", "right", 400);
   }
 }

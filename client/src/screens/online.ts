@@ -12,7 +12,7 @@ import { RollbackSession } from "../net/rollback";
 import { WebSocketTransport, type RelayMessage, type RoomMember, type Unsubscribe } from "../net/transport";
 import { drawFighterPortrait } from "./portrait";
 import { VersusScreen } from "./versus";
-import { bg, card, hint, label, settings, title, type Screen, INK } from "./ui";
+import { bg, card, hint, label, settings, title, hover, clicked, arrows, button, backButton, goTo, type Screen, INK } from "./ui";
 
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
@@ -48,6 +48,8 @@ export class OnlineScreen implements Screen {
   codePos = 0;
   inputDelay = 2;
   error = "";
+  /** keyboard focus in the lobby: 0 fighter, 1 ready, 2 start (host, when everyone is ready), 3 leave */
+  focus = 1;
   nextScreen: Screen | null = null;
   private context: OnlineContext;
   private device: DeviceId = "kb1";
@@ -162,38 +164,67 @@ export class OnlineScreen implements Screen {
     if (!room) throw new Error("lobby phase without room state");
     const member = room.members.find((candidate) => candidate.id === this.context.id);
     if (!member) throw new Error("local member missing from room");
-    if (!member.ready && (m.left || m.right)) {
-      const index = rosterList.findIndex((fighter) => fighter.id === member.fighter);
-      const fighter = rosterList[(index + (m.right ? 1 : rosterList.length - 1) + rosterList.length) % rosterList.length].id;
-      this.context.transport.sendLobby({ t: "pick", fighter, ready: false });
+    if (!member.ready && (m.left || m.right)) this.pickFighter(m.right ? 1 : -1);
+    const canStart = this.canStart();
+    const isHost = room.host === this.context.id;
+    const items = [0, 1, ...(isHost && canStart ? [2] : []), 3];
+    if (m.up || m.down) {
+      const i = Math.max(0, items.indexOf(this.focus));
+      this.focus = items[(i + (m.down ? 1 : items.length - 1)) % items.length];
       sfx.menuMove();
     }
-    if (room.host === this.context.id && (m.up || m.down)) {
-      this.inputDelay = Math.max(1, Math.min(6, this.inputDelay + (m.up ? 1 : -1)));
-      sfx.menuMove();
-    }
+    if (isHost && canStart && this.focus === 1 && member.ready) this.focus = 2;
     if (m.confirm) {
-      this.context.transport.sendLobby({ t: "pick", fighter: member.fighter, ready: !member.ready });
-      member.ready ? sfx.menuBack() : sfx.menuConfirm();
+      if (this.focus === 3) this.leave();
+      else if (this.focus === 2 && isHost && canStart) this.startMatch();
+      else this.toggleReady();
     }
-    const canStart = room.members.length >= 2 && room.members.every((candidate) => candidate.ready);
-    if (m.start && room.host === this.context.id && canStart) {
-      this.context.transport.sendLobby({
-        t: "start",
-        config: {
-          stage: "proving",
-          rules: { stocks: settings.stocks, time: settings.time * 60 * 60 },
-          inputDelay: this.inputDelay,
-        },
-      });
-      sfx.go();
-    }
-    if (m.back) {
-      this.context.transport.sendLobby({ t: "leave" });
-      this.context.room = null;
-      this.phase = "menu";
-    }
+    if (m.back) this.leave();
     return null;
+  }
+
+  canStart(): boolean {
+    const room = this.context.room;
+    return !!room && room.members.length >= 2 && room.members.every((candidate) => candidate.ready);
+  }
+
+  toggleReady(): void {
+    const room = this.context.room;
+    const member = room?.members.find((candidate) => candidate.id === this.context.id);
+    if (!room || !member) return;
+    this.context.transport.sendLobby({ t: "pick", fighter: member.fighter, ready: !member.ready });
+    member.ready ? sfx.menuBack() : sfx.menuConfirm();
+  }
+
+  pickFighter(dir: number): void {
+    const room = this.context.room;
+    const member = room?.members.find((candidate) => candidate.id === this.context.id);
+    if (!room || !member || member.ready) return;
+    const index = rosterList.findIndex((fighter) => fighter.id === member.fighter);
+    const fighter = rosterList[(index + dir + rosterList.length) % rosterList.length].id;
+    this.context.transport.sendLobby({ t: "pick", fighter, ready: false });
+    sfx.menuMove();
+  }
+
+  startMatch(): void {
+    const room = this.context.room;
+    if (!room || room.host !== this.context.id || !this.canStart()) return;
+    this.context.transport.sendLobby({
+      t: "start",
+      config: {
+        stage: "proving",
+        rules: { stocks: settings.stocks, time: settings.time * 60 * 60 },
+        inputDelay: this.inputDelay,
+      },
+    });
+    sfx.go();
+  }
+
+  leave(): void {
+    this.context.transport.sendLobby({ t: "leave" });
+    this.context.room = null;
+    this.phase = "menu";
+    sfx.menuBack();
   }
 
   private onMessage(message: RelayMessage): void {
@@ -222,28 +253,36 @@ export class OnlineScreen implements Screen {
     ];
     items.forEach(([name, description], index) => {
       const y = 230 + index * 180;
+      if (hover(VIEW_W / 2 - 360, y, 720, 130)) { this.sel = index; document.body.style.cursor = "pointer"; }
+      if (clicked(VIEW_W / 2 - 360, y, 720, 130)) this.updateMenu({ up: false, down: false, left: false, right: false, confirm: true, back: false, start: false, any: true, from: null });
       const selected = index === this.sel;
       card(ctx, VIEW_W / 2 - 360, y, 720, 130, selected ? INK : "rgba(18,16,26,0.7)", selected);
       title(ctx, name, VIEW_W / 2, y + 60, 38, INK);
       label(ctx, description, VIEW_W / 2, y + 101, 19, selected ? INK : "rgba(41,39,34,0.8)");
     });
-    hint(ctx, "attack: choose · shield: back");
+    if (backButton(ctx)) goTo(this.exit());
+    hint(ctx, "click, or up/down + Enter · Esc: back");
   }
 
   private drawCode(ctx: CanvasRenderingContext2D): void {
     label(ctx, "ENTER ROOM CODE", VIEW_W / 2, 260, 30);
     this.code.forEach((char, index) => {
       const x = VIEW_W / 2 - 250 + index * 140;
+      if (clicked(x, 330, 110, 140)) this.codePos = index;
       card(ctx, x, 330, 110, 140, index === this.codePos ? INK : "rgba(18,16,26,0.75)", index === this.codePos);
       title(ctx, char, x + 55, 425, 70, INK);
+      const d = arrows(ctx, x + 55, 510, 30, 22);
+      if (d) { const cur = Math.max(0, CODE_CHARS.indexOf(this.code[index])); this.code[index] = CODE_CHARS[(cur + d + CODE_CHARS.length) % CODE_CHARS.length]; this.codePos = index; sfx.menuMove(); }
     });
-    hint(ctx, "type the code · left/right change · up/down move · Enter: join");
+    if (button(ctx, VIEW_W / 2 - 140, 580, 280, 76, "JOIN", { key: "Enter", size: 30 })) { this.context.transport.sendLobby({ t: "join", code: this.code.join("") }); this.phase = "waiting"; }
+    if (backButton(ctx)) this.phase = "menu";
+    hint(ctx, "type the four letters, then JOIN · Esc: back");
   }
 
   private drawWaiting(ctx: CanvasRenderingContext2D): void {
     title(ctx, "SEARCHING…", VIEW_W / 2, VIEW_H / 2, 70, INK);
     label(ctx, "Waiting for the relay", VIEW_W / 2, VIEW_H / 2 + 60, 24);
-    hint(ctx, "shield: cancel");
+    if (button(ctx, VIEW_W / 2 - 120, VIEW_H / 2 + 110, 240, 70, "CANCEL", { key: "Esc", size: 26 })) { this.context.transport.sendLobby({ t: "unqueue" }); this.phase = "menu"; }
   }
 
   private drawLobby(ctx: CanvasRenderingContext2D): void {
@@ -265,21 +304,28 @@ export class OnlineScreen implements Screen {
       label(ctx, `${member.name}${member.id === room.host ? " · HOST" : ""}`, x + w / 2, y + 42, 23, INK, "center", 900);
       drawFighterPortrait(ctx, fighter, slot, this.t, member.ready, { x: x + 16, y: y + 68, w: w - 32, h: 390 }, 2.2);
       title(ctx, fighter.name, x + w / 2, y + 525, 40);
-      label(ctx, member.ready ? "READY" : member.id === this.context.id ? "◀  PICK  ▶" : "CHOOSING", x + w / 2, y + 585, 22);
-      if (member.id === this.context.id) label(ctx, "attack: ready", x + w / 2, y + 622, 18, "rgba(41,39,34,0.85)");
+      const mine = member.id === this.context.id;
+      if (mine && !member.ready) { const d = arrows(ctx, x + w / 2, y + 300, w / 2 - 34, 40); if (d) this.pickFighter(d); }
+      if (mine) {
+        if (button(ctx, x + 40, y + 560, w - 80, 64, member.ready ? "UNREADY" : "READY", { key: "Enter", size: 26, focused: this.focus === 1 })) this.toggleReady();
+      } else label(ctx, member.ready ? "READY" : "CHOOSING", x + w / 2, y + 600, 24);
     }
-    const canStart = room.members.length >= 2 && room.members.every((member) => member.ready);
-    if (room.host === this.context.id) {
-      label(ctx, `input delay ${this.inputDelay}f · up/down adjust`, VIEW_W / 2, 870, 21, "rgba(41,39,34,0.8)");
-      hint(ctx, canStart ? "everyone's ready · press START" : "pick a fighter and ready up · shield: leave");
-    } else {
-      hint(ctx, canStart ? "waiting for the host to start" : "pick a fighter and ready up · shield: leave");
-    }
+    const canStart = this.canStart();
+    const isHost = room.host === this.context.id;
+    const by = 845;
+    if (isHost) {
+      if (button(ctx, VIEW_W / 2 - 170, by, 340, 84, "START", { key: "Enter", size: 36, focused: this.focus === 2, disabled: !canStart })) this.startMatch();
+      label(ctx, `input delay ${this.inputDelay}f`, VIEW_W / 2 + 330, by + 52, 20, "rgba(41,39,34,0.85)");
+      const d = arrows(ctx, VIEW_W / 2 + 330, by + 52, 90, 22);
+      if (d) { this.inputDelay = Math.max(1, Math.min(6, this.inputDelay + d)); sfx.menuMove(); }
+    } else label(ctx, canStart ? "waiting for the host to press START" : "everyone readies up, then the host starts", VIEW_W / 2, by + 52, 24, INK);
+    if (button(ctx, 40, VIEW_H - 100, 200, 64, "LEAVE", { key: "Esc", size: 26, focused: this.focus === 3 })) this.leave();
+    hint(ctx, isHost && !canStart ? `START unlocks when everyone is ready (${room.members.length}/2+ players)` : "left/right or the arrows pick a fighter");
   }
 
   private drawError(ctx: CanvasRenderingContext2D): void {
     title(ctx, this.error, VIEW_W / 2, VIEW_H / 2, 62, "#ff4d2e");
-    hint(ctx, "attack / shield: back");
+    if (button(ctx, VIEW_W / 2 - 120, VIEW_H / 2 + 60, 240, 70, "BACK", { key: "Esc", size: 26 })) goTo(this.exit());
   }
 
   private exit(): Screen {
@@ -299,6 +345,7 @@ class OnlineVersusScreen extends VersusScreen {
   private failure: { title: string; detail: string; automatic: boolean } | null = null;
   private failureTime = 0;
   private pingTime = 0;
+  private waitingFor = 0;
   private unsubscribers: Unsubscribe[] = [];
   private cleanupMatch: () => void;
 
@@ -362,6 +409,7 @@ class OnlineVersusScreen extends VersusScreen {
       this.pingTime -= 1;
       this.context.transport.ping();
     }
+    this.waitingFor = this.session.waiting ? this.waitingFor + dt : 0;
     if (this.session.desync && !this.failure) {
       const desync = this.session.desync;
       this.failure = { title: "DESYNC", detail: `frame ${desync.frame} · ${desync.localHash} ≠ ${desync.remoteHash}`, automatic: false };
@@ -393,7 +441,7 @@ class OnlineVersusScreen extends VersusScreen {
     const status = this.session.waiting ? "WAITING" : `${Math.round(this.context.transport.rtt())} ms · ${rollback} rb/s`;
     label(ctx, status, VIEW_W - 24, 34, 17, color, "right", 700);
     if (this.failure) drawBanner(ctx, this.failure.title, this.failure.detail, "#ff4d2e", this.failureTime);
-    else if (this.session.waiting) drawBanner(ctx, "WAITING", "Connection is catching up", INK, 1);
+    else if (this.waitingFor > 0.5) drawBanner(ctx, "WAITING", "Connection is catching up", INK, 1);
   }
 
   netDebug(frame = this.session.state.frame): { frame: number; hash: number | null } {

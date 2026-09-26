@@ -5,7 +5,7 @@ import { rosterList } from "../../../shared/fighters/index";
 import { sfx } from "../audio/audio";
 import { SLOT_COLORS } from "../render/hud";
 import { drawFighterPortrait } from "./portrait";
-import { bg, card, hint, label, title, type Screen, INK, settings } from "./ui";
+import { bg, card, hint, label, title, hover, clicked, arrows, button, backButton, goTo, type Screen, INK, settings } from "./ui";
 
 export interface SlotPick { device: DeviceId | null; cpu: number; fighter: number; ready: boolean }
 
@@ -79,16 +79,46 @@ export class SelectScreen implements Screen {
     }
     const filled = this.slots.filter((s) => s.device || s.cpu);
     const allReady = filled.length >= (this.training ? 1 : 2) && filled.every((s) => s.ready);
-    if (allReady && (m.start || filled.every((s) => s.ready) && filled.some((s) => s.device) && m.confirm && this.everyoneReadyFor > 0.4)) {
-      sfx.go();
-      if (this.training && filled.length === 1) { const c = this.slots.find((s) => !s.device && !s.cpu)!; c.cpu = 1; c.fighter = 0; c.ready = true; }
-      return this.onStart(this.slots);
-    }
+    if (allReady && (m.start || (filled.some((s) => s.device) && m.confirm && this.everyoneReadyFor > 0.4))) return this.start();
     this.everyoneReadyFor = allReady ? this.everyoneReadyFor + dt : 0;
     if (m.back && !this.cursor.size) return this.onBack();
     return null;
   }
   everyoneReadyFor = 0;
+  private joinWithMouse(slot: number): void {
+    const used = new Set(this.cursor.keys());
+    const dev: DeviceId | null = !used.has("kb1") ? "kb1" : !used.has("kb2") ? "kb2" : null;
+    if (!dev) return;
+    const s = this.slots[slot];
+    s.device = dev; s.fighter = slot % rosterList.length; s.ready = false;
+    this.cursor.set(dev, slot);
+    this.prev.set(dev, readDevice(dev, { tapJump: false }));
+    sfx.menuConfirm();
+  }
+  private addCpu(slot: number): void {
+    const c = this.slots[slot];
+    if (c.device) return;
+    const wasOff = c.cpu === 0;
+    c.cpu = c.cpu === 0 ? settings.cpuLevel : c.cpu >= 9 ? 0 : c.cpu + 1;
+    if (wasOff) {
+      const taken = new Set(this.slots.filter((x) => x !== c && (x.device || x.cpu)).map((x) => x.fighter));
+      const free = rosterList.map((_, i) => i).filter((i) => !taken.has(i));
+      const pool = free.length ? free : rosterList.map((_, i) => i);
+      c.fighter = pool[(Math.floor(this.t * 1000) + slot * 7) % pool.length];
+    }
+    c.ready = c.cpu > 0;
+    sfx.menuMove();
+  }
+  private ready(): boolean {
+    const filled = this.slots.filter((s) => s.device || s.cpu);
+    return filled.length >= (this.training ? 1 : 2) && filled.every((s) => s.ready);
+  }
+  private start(): Screen {
+    sfx.go();
+    const filled = this.slots.filter((s) => s.device || s.cpu);
+    if (this.training && filled.length === 1) { const c = this.slots.find((s) => !s.device && !s.cpu)!; c.cpu = 1; c.fighter = 0; c.ready = true; }
+    return this.onStart(this.slots);
+  }
   draw(ctx: CanvasRenderingContext2D): void {
     bg(ctx, this.t);
     title(ctx, this.training ? "TRAINING" : "CHOOSE YOUR FIGHTER", VIEW_W / 2, 90, 64);
@@ -100,9 +130,11 @@ export class SelectScreen implements Screen {
       const empty = !s.device && !s.cpu;
       card(ctx, x, y, w, h, empty ? "rgba(18,16,26,0.55)" : color, s.ready, empty ? 0.8 : 1);
       if (empty) {
-        label(ctx, "PRESS A BUTTON", x + w / 2, y + h / 2 - 10, 28, "rgba(41,39,34,0.7)");
-        label(ctx, "TO JOIN", x + w / 2, y + h / 2 + 26, 28, "rgba(41,39,34,0.7)");
-        if (this.cpuCursor === i && this.cursor.size) label(ctx, "▲ special: add CPU ▼", x + w / 2, y + h - 30, 20, INK);
+        if (hover(x, y, w, h)) this.cpuCursor = i;
+        label(ctx, "PRESS A BUTTON", x + w / 2, y + h / 2 - 60, 28, "rgba(41,39,34,0.7)");
+        label(ctx, "TO JOIN", x + w / 2, y + h / 2 - 24, 28, "rgba(41,39,34,0.7)");
+        if (button(ctx, x + 60, y + h / 2 + 10, w - 120, 58, "JOIN (MOUSE)", { size: 20 })) this.joinWithMouse(i);
+        if (button(ctx, x + 60, y + h / 2 + 84, w - 120, 58, "ADD CPU", { size: 20, key: this.cpuCursor === i && this.cursor.size ? "K" : undefined })) this.addCpu(i);
         return;
       }
       const def = rosterList[s.fighter];
@@ -110,15 +142,18 @@ export class SelectScreen implements Screen {
       label(ctx, s.cpu ? `CPU ${s.cpu}` : `P${i + 1}`, x + w / 2, y + 44, 30, color, "center", 900);
       title(ctx, def.name, x + w / 2, y + 530, 44, INK);
       label(ctx, def.tagline, x + w / 2, y + 566, 16, "rgba(41,39,34,0.9)", "center", 600);
-      if (!s.ready) { label(ctx, "◀", x + 30, y + 300, 40, INK); label(ctx, "▶", x + w - 30, y + 300, 40, INK); }
+      if (!s.ready || s.cpu) { const d = arrows(ctx, x + w / 2, y + 300, w / 2 - 34, 40); if (d) { s.fighter = (s.fighter + d + rosterList.length) % rosterList.length; sfx.menuMove(); } }
       if (s.cpu) {
-        label(ctx, "grab: change fighter", x + w / 2, y + h - 46, 18, INK);
-        label(ctx, "special: level / remove", x + w / 2, y + h - 24, 18, INK);
-      } else label(ctx, s.ready ? "READY" : "attack: ready · shield: leave", x + w / 2, y + h - 24, 20, INK);
+        if (button(ctx, x + 40, y + h - 84, (w - 90) / 2, 56, `LEVEL ${s.cpu}`, { size: 18 })) this.addCpu(i);
+        if (button(ctx, x + 50 + (w - 90) / 2, y + h - 84, (w - 90) / 2, 56, "REMOVE", { size: 18 })) { s.cpu = 0; s.ready = false; sfx.menuBack(); }
+      } else {
+        if (button(ctx, x + 40, y + h - 84, (w - 90) / 2, 56, s.ready ? "UNREADY" : "READY", { size: 18, key: s.device?.startsWith("kb") ? (s.device === "kb1" ? "J" : "Num1") : "A" })) { s.ready = !s.ready; s.ready ? sfx.menuConfirm() : sfx.menuBack(); }
+        if (button(ctx, x + 50 + (w - 90) / 2, y + h - 84, (w - 90) / 2, 56, "LEAVE", { size: 18 })) { const d = s.device!; s.device = null; s.ready = false; this.cursor.delete(d); this.prev.delete(d); sfx.menuBack(); }
+      }
     });
-    const filled = this.slots.filter((s) => s.device || s.cpu);
-    const allReady = filled.length >= (this.training ? 1 : 2) && filled.every((s) => s.ready);
-    hint(ctx, allReady ? "everyone's ready: press START (Esc / pause) or attack again to fight" : "left/right pick a fighter · special adds a CPU to the highlighted empty slot (grab cycles its fighter)");
-    void VIEW_H;
+    const allReady = this.ready();
+    if (button(ctx, VIEW_W / 2 - 170, VIEW_H - 200, 340, 84, this.training ? "TRAIN" : "FIGHT", { key: "Enter", size: 36, disabled: !allReady })) goTo(this.start());
+    if (backButton(ctx)) goTo(this.onBack());
+    hint(ctx, allReady ? "everyone's ready" : "join with any device (or the mouse), pick with the arrows, READY · CPUs: ADD CPU, then LEVEL / REMOVE");
   }
 }

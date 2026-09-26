@@ -140,11 +140,16 @@ export function readMenu(devices: DeviceId[]): MenuInput {
     if (dir(now.x, prev.x, -1)) { m.left = true; hit = true; }
     if (dir(now.x, prev.x, 1)) { m.right = true; hit = true; }
     if (edge(B.ATTACK) || edge(B.JUMP)) { m.confirm = true; hit = true; }
-    if (edge(B.SPECIAL) || edge(B.SHIELD)) { m.back = true; hit = true; }
-    if (edge(B.PAUSE)) { m.start = true; hit = true; }
+    if (d.startsWith("pad")) {
+      if (edge(B.SPECIAL)) { m.back = true; hit = true; }
+      if (edge(B.PAUSE)) { m.start = true; hit = true; }
+    }
     if (hit) { m.any = true; m.from = d; }
     menuPrev.set(d, now);
   }
+  // universal keyboard menu keys, whatever the fighter bindings say
+  if (pressedThisFrame.has("Enter") || pressedThisFrame.has("NumpadEnter")) { m.confirm = true; m.start = true; m.any = true; m.from ??= "kb1"; }
+  if (pressedThisFrame.has("Escape") || pressedThisFrame.has("Backspace")) { m.back = true; m.any = true; m.from ??= "kb1"; }
   if (anyPress) m.any = true;
   return m;
 }

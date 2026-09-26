@@ -9,7 +9,7 @@ import { StageScreen } from "./screens/stage";
 import { OnlineScreen } from "./screens/online";
 import { SettingsScreen } from "./screens/settings";
 import { VersusScreen } from "./screens/versus";
-import { loadSettings, settings, type Screen } from "./screens/ui";
+import { loadSettings, settings, pointer, endPointerFrame, takeHandoff, type Screen } from "./screens/ui";
 import { SheetScreen } from "./screens/sheet";
 import { setVolume } from "./audio/audio";
 import { logClient } from "./telemetry";
@@ -31,6 +31,13 @@ function resize(): void {
 }
 window.addEventListener("resize", resize);
 resize();
+function toView(e: MouseEvent | PointerEvent): { x: number; y: number } {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  return { x: (e.clientX * dpr - offX) / scale, y: (e.clientY * dpr - offY) / scale };
+}
+canvas.addEventListener("pointermove", (e) => { const p = toView(e); pointer.x = p.x; pointer.y = p.y; pointer.present = true; });
+canvas.addEventListener("pointerdown", (e) => { const p = toView(e); pointer.x = p.x; pointer.y = p.y; pointer.present = true; pointer.clicked = true; });
+canvas.addEventListener("pointerleave", () => { pointer.present = false; });
 
 function allDevices(): DeviceId[] {
   return ["kb1", "kb2", ...connectedPads().map((i) => `pad${i}` as DeviceId)];
@@ -89,7 +96,8 @@ function frame(now: number): void {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   const menu = readMenu(allDevices());
-  const next = screen.update(dt, menu);
+  document.body.style.cursor = "default";
+  const next = screen.update(dt, menu) ?? takeHandoff();
   if (next) { screen = next; screen.enter?.(); }
   endInputFrame();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -100,6 +108,7 @@ function frame(now: number): void {
   ctx.beginPath(); ctx.rect(0, 0, VIEW_W, VIEW_H); ctx.clip();
   screen.draw(ctx, dt);
   ctx.restore();
+  endPointerFrame();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

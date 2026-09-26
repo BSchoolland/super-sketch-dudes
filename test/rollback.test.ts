@@ -188,4 +188,49 @@ describe("rollback session", () => {
     expect(b.state.frame).toBe(240);
     expect(hashState(a.state)).toBe(hashState(b.state));
   });
+
+  it("a client that starts 40 frames late still catches up (inputs are resent past the rollback window)", () => {
+    const config = makeConfig();
+    const network = new SeededNetwork(0x1badb002, 2, 6);
+    const a = new RollbackSession({ config, localSlot: 0, transport: network.endpoint(0) });
+    const b = new RollbackSession({ config, localSlot: 1, transport: network.endpoint(1) });
+    for (let i = 0; i < 40; i++) { network.tick(); a.advance(scriptedInput(0, a.state.frame + a.inputDelay + 1)); }
+    let ticks = 0;
+    while ((a.state.frame < 600 || b.state.frame < 600) && ticks < 3000) {
+      network.tick();
+      if (a.state.frame < 600) a.advance(scriptedInput(0, a.state.frame + a.inputDelay + 1));
+      if (b.state.frame < 600) b.advance(scriptedInput(1, b.state.frame + b.inputDelay + 1));
+      ticks++;
+    }
+    expect(ticks).toBeLessThan(3000);
+    for (let i = 0; i < 12; i++) network.tick();
+    a.synchronize(); b.synchronize();
+    expect(a.state.frame).toBe(600);
+    expect(b.state.frame).toBe(600);
+    expect(hashState(a.state)).toBe(hashState(b.state));
+  });
+
+  it("a client running at half speed never deadlocks the other; the fast one slows to match", () => {
+    const config = makeConfig();
+    const network = new SeededNetwork(0x5eed5eed, 2, 6);
+    const a = new RollbackSession({ config, localSlot: 0, transport: network.endpoint(0) });
+    const b = new RollbackSession({ config, localSlot: 1, transport: network.endpoint(1) });
+    let ticks = 0, aWaits = 0;
+    while (b.state.frame < 600 && ticks < 4000) {
+      network.tick();
+      const before = a.state.frame;
+      a.advance(scriptedInput(0, a.state.frame + a.inputDelay + 1));
+      if (a.waiting && a.state.frame === before) aWaits++;
+      if (ticks % 2 === 0) b.advance(scriptedInput(1, b.state.frame + b.inputDelay + 1));
+      ticks++;
+    }
+    expect(ticks).toBeLessThan(4000);
+    // the fast client should be held back by time sync, not by hard stalls
+    expect(aWaits).toBeLessThan(ticks * 0.25);
+    expect(Math.abs(a.state.frame - b.state.frame)).toBeLessThan(a.maxRollback + a.inputDelay + 2);
+    for (let i = 0; i < 12; i++) network.tick();
+    a.synchronize(); b.synchronize();
+    const f = Math.min(a.state.frame, b.state.frame);
+    expect(a.stateHashAt(f)).toBe(b.stateHashAt(f));
+  });
 });
