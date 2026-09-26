@@ -57,3 +57,7 @@ export function feedbackPrompt(failures: string[], out: string): string {
 export function conceptFeedbackPrompt(problems: string[], out: string): string {
   return `The concept file is not usable yet. Fix these and Write the whole JSON to ${out} again:\n\n${problems.map((p) => `- ${p}`).join("\n")}\n`;
 }
+
+export function facingPrompt(cellsDir: string, out: string): string {
+  return `The image model has drawn your design as nine cells. Read ${cellsDir}/idle.png and ${cellsDir}/atk-fwd.png with the Read tool. The game needs the character facing RIGHT: its front (face, eye, mouth, barrel, whatever leads when it walks and attacks forward) toward the right edge of the image. Which way does it face in these cells? Write ONE JSON file to ${out} with the Write tool: {"faces": "right"} or {"faces": "left"}. Nothing else.\n`;
+}

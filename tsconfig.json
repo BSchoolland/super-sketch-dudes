@@ -12,5 +12,5 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["shared", "client/src", "server", "scripts", "test"]
+  "include": ["shared", "client/src", "server", "scripts", "test", "forge"]
 }

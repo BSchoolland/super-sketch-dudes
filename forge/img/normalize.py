@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Turn a generated 3x3 sheet into nine normalised cells.
 
-Usage: normalize.py <sheet.png> <outdir> [--px 512 --feet 448 --height 360]
+Usage: normalize.py <sheet.png> <outdir> [--px 512 --feet 448 --height 360 --mirror 1]
 
 Each cell: paper keyed to alpha, the drawing scaled by ONE factor (chosen so the idle cell's
 content is `height` px tall) so all cells share a world scale, horizontally centred on its
 alpha centroid, and rested with the bottom of its content on row `feet`. Writes
 <outdir>/<cell>.png and <outdir>/cells.json with the content box of every cell in cell pixels
-(the hitbox placer reads those).
+(the hitbox placer reads those). --mirror 1 flips every cell left-right first.
 """
 import json, sys, os
 from PIL import Image, ImageFilter
@@ -43,7 +43,7 @@ def centroid_x(im, thresh=40):
 def main():
     args = sys.argv[1:]
     sheet, out = args[0], args[1]
-    opts = {"px": 512, "feet": 448, "height": 300}
+    opts = {"px": 512, "feet": 448, "height": 300, "mirror": 0}
     for i, a in enumerate(args):
         if a.startswith("--"): opts[a[2:]] = int(args[i + 1])
     px, feet, height = opts["px"], opts["feet"], opts["height"]
@@ -56,6 +56,7 @@ def main():
     for i, name in enumerate(CELLS):
         r, c = divmod(i, 3)
         crop = im.crop((c * cw + pad, r * ch + pad, (c + 1) * cw - pad, (r + 1) * ch - pad))
+        if opts["mirror"]: crop = crop.transpose(Image.FLIP_LEFT_RIGHT)
         cells[name] = key_paper(crop)
     idle_box = content_box(cells["idle"])
     if not idle_box: sys.exit("idle cell is empty after keying")
