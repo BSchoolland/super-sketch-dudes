@@ -15,11 +15,11 @@ stocks. Keyboard or controller, couch or online.
 |---|---|---|---|
 | Move | WASD | Arrows | Left stick / d-pad |
 | Jump | W / Space | Up / Numpad 0 | X, Y, or flick the stick up |
-| Attack | J | Numpad 1 | A |
-| Special | K | Numpad 2 | B |
-| Shield | L / Shift | Numpad 3 / Right Shift | LB, RB, LT |
+| Attack | Left click | Numpad 1 | A |
+| Special | Right click | Numpad 2 | B |
+| Shield | Shift | Numpad 3 / Right Shift | LB, RB, LT |
 | Grab | I | Numpad 4 | RT |
-| Smash | hold U + direction + J, or flick + J | Numpad 6 + direction | Right stick |
+| Smash | hold U + direction + click, or flick + click | Numpad 6 + direction | Right stick |
 | Taunt | T | Numpad 5 | d-pad down |
 | Pause | Esc | Esc | Start |
 

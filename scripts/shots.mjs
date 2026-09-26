@@ -1,6 +1,7 @@
 // Screenshots of the game for eyes that aren't in a browser. Usage: node scripts/shots.mjs [url] [outdir]
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
+import { down as btnDown, up as btnUp, press as btnPress } from "./lib/keys.mjs";
 const url = process.argv[2] ?? "http://localhost:5175/sketch-battle/?quick=1&p2=cpu&cpu=9&seed=3";
 const out = process.argv[3] ?? "shots";
 mkdirSync(out, { recursive: true });
@@ -16,16 +17,16 @@ await page.screenshot({ path: `${out}/00-start.png` });
 // let the CPU fight P1 (idle) for a bit, then drive P1 with keys
 for (let i = 1; i <= 4; i++) {
   await page.keyboard.down("KeyD"); await page.waitForTimeout(250); await page.keyboard.up("KeyD");
-  await page.keyboard.press("KeyJ"); await page.waitForTimeout(400);
+  await btnPress(page, "Mouse0"); await page.waitForTimeout(400);
   await page.keyboard.down("KeyW"); await page.waitForTimeout(80); await page.keyboard.up("KeyW");
   await page.waitForTimeout(150);
-  await page.keyboard.press("KeyJ");
+  await btnPress(page, "Mouse0");
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${out}/0${i}-play.png` });
 }
 await page.keyboard.press("F2");
 await page.keyboard.down("KeyA"); await page.waitForTimeout(120); await page.keyboard.up("KeyA");
-await page.keyboard.down("KeyU"); await page.keyboard.down("KeyD"); await page.keyboard.press("KeyJ"); await page.waitForTimeout(220);
+await page.keyboard.down("KeyU"); await page.keyboard.down("KeyD"); await btnPress(page, "Mouse0"); await page.waitForTimeout(220);
 await page.screenshot({ path: `${out}/05-boxes.png` });
 await page.keyboard.up("KeyU"); await page.keyboard.up("KeyD");
 await page.waitForTimeout(3000);

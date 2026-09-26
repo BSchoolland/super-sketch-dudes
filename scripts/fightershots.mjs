@@ -1,6 +1,7 @@
 // One action shot per fighter on a given stage. Usage: node scripts/fightershots.mjs [base] [outdir]
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
+import { down as btnDown, up as btnUp, press as btnPress } from "./lib/keys.mjs";
 const base = process.argv[2] ?? "http://localhost:5175/sketch-battle/";
 const out = process.argv[3] ?? "shots/fighters";
 mkdirSync(out, { recursive: true });
@@ -15,12 +16,12 @@ for (const [a, b, stage] of combos) {
   await page.waitForTimeout(600);
   await page.screenshot({ path: `${out}/${a}-${b}-${stage}-0.png` });
   await page.keyboard.down("KeyD"); await page.waitForTimeout(300); await page.keyboard.up("KeyD");
-  await page.keyboard.press("KeyK"); await page.waitForTimeout(250);
+  await btnPress(page, "Mouse2"); await page.waitForTimeout(250);
   await page.screenshot({ path: `${out}/${a}-${b}-${stage}-1.png` });
   await page.keyboard.press("KeyW"); await page.waitForTimeout(120);
-  await page.keyboard.press("KeyJ"); await page.waitForTimeout(200);
+  await btnPress(page, "Mouse0"); await page.waitForTimeout(200);
   await page.screenshot({ path: `${out}/${a}-${b}-${stage}-2.png` });
-  await page.keyboard.down("KeyS"); await page.keyboard.press("KeyK"); await page.waitForTimeout(400); await page.keyboard.up("KeyS");
+  await page.keyboard.down("KeyS"); await btnPress(page, "Mouse2"); await page.waitForTimeout(400); await page.keyboard.up("KeyS");
   await page.screenshot({ path: `${out}/${a}-${b}-${stage}-3.png` });
   await page.waitForTimeout(2500);
   await page.screenshot({ path: `${out}/${a}-${b}-${stage}-4.png` });

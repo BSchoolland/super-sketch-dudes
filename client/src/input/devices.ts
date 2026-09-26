@@ -8,7 +8,7 @@ export interface KeyBindings {
 }
 export const KB1: KeyBindings = {
   left: ["KeyA"], right: ["KeyD"], up: ["KeyW"], down: ["KeyS"],
-  jump: ["KeyW", "Space"], attack: ["KeyJ"], special: ["KeyK"], shield: ["KeyL", "ShiftLeft"], grab: ["KeyI"], smash: ["KeyU"], taunt: ["KeyT"], pause: ["Escape"],
+  jump: ["KeyW", "Space"], attack: ["Mouse0"], special: ["Mouse2"], shield: ["ShiftLeft"], grab: ["KeyI"], smash: ["KeyU"], taunt: ["KeyT"], pause: ["Escape"],
 };
 export const KB2: KeyBindings = {
   left: ["ArrowLeft"], right: ["ArrowRight"], up: ["ArrowUp"], down: ["ArrowDown"],
@@ -32,6 +32,12 @@ window.addEventListener("keydown", (e) => {
   if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Tab"].includes(e.code)) e.preventDefault();
 });
 window.addEventListener("keyup", (e) => keys.delete(e.code));
+// mouse buttons are keys named Mouse<button>; menus and join prompts leave them alone (`mouse: false`)
+const isMouse = (code: string) => code.startsWith("Mouse");
+window.addEventListener("pointerdown", (e) => { if (e.pointerType !== "mouse") return; keys.add(`Mouse${e.button}`); pressedThisFrame.add(`Mouse${e.button}`); });
+window.addEventListener("pointerup", (e) => { if (e.pointerType === "mouse") keys.delete(`Mouse${e.button}`); });
+window.addEventListener("pointercancel", (e) => { if (e.pointerType === "mouse") keys.delete(`Mouse${e.button}`); });
+window.addEventListener("contextmenu", (e) => { if (!(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) e.preventDefault(); });
 window.addEventListener("blur", () => keys.clear());
 
 const padPrev = new Map<number, { buttons: boolean[]; ax: number; ay: number; cx: number; cy: number; jumpFlick: number; cFlick: number }>();
@@ -53,11 +59,11 @@ function dz(v: number, dead = 0.18): number {
 const q = (v: number): number => Math.round(v * 100);
 
 /** Reads a device into a sim input frame. Call once per sim frame. */
-export function readDevice(dev: DeviceId, opts: { tapJump: boolean } = { tapJump: true }): InputFrame {
+export function readDevice(dev: DeviceId, opts: { tapJump: boolean; mouse?: boolean } = { tapJump: true }): InputFrame {
   if (dev === "kb1" || dev === "kb2") {
     const b = dev === "kb1" ? KB1 : KB2;
     // a tap that started and ended between two frames still counts for one frame
-    const down = (list: string[]) => list.some((k) => keys.has(k) || pressedThisFrame.has(k));
+    const down = (list: string[]) => list.some((k) => (opts.mouse !== false || !isMouse(k)) && (keys.has(k) || pressedThisFrame.has(k)));
     const x = (down(b.right) ? 100 : 0) - (down(b.left) ? 100 : 0);
     const y = (down(b.down) ? 100 : 0) - (down(b.up) && !down(b.jump.filter((k) => !b.up.includes(k))) ? 0 : 0) - (down(b.up) ? 100 : 0);
     let bits = 0;
@@ -110,8 +116,8 @@ export function pollJoinPresses(): DeviceId[] {
   if (pressedThisFrame.size) {
     const kb1 = [...KB1.jump, ...KB1.attack, ...KB1.special, ...KB1.shield, ...KB1.grab];
     const kb2 = [...KB2.jump, ...KB2.attack, ...KB2.special, ...KB2.shield, ...KB2.grab];
-    if ([...pressedThisFrame].some((k) => kb1.includes(k))) out.push("kb1");
-    if ([...pressedThisFrame].some((k) => kb2.includes(k))) out.push("kb2");
+    if ([...pressedThisFrame].some((k) => !isMouse(k) && kb1.includes(k))) out.push("kb1");
+    if ([...pressedThisFrame].some((k) => !isMouse(k) && kb2.includes(k))) out.push("kb2");
   }
   const pads = navigator.getGamepads?.() ?? [];
   for (let i = 0; i < pads.length; i++) {
@@ -132,7 +138,7 @@ const menuPrev = new Map<string, InputFrame>();
 export function readMenu(devices: DeviceId[]): MenuInput {
   const m: MenuInput = { up: false, down: false, left: false, right: false, confirm: false, back: false, start: false, any: false, from: null };
   for (const d of devices) {
-    const now = readDevice(d, { tapJump: false });
+    const now = readDevice(d, { tapJump: false, mouse: false });
     const prev = menuPrev.get(d) ?? EMPTY_INPUT;
     const edge = (bit: number) => (now.b & bit) && !(prev.b & bit);
     const dir = (v: number, pv: number, sgn: number) => sgn * v >= 60 && sgn * pv < 60;

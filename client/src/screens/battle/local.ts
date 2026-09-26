@@ -10,7 +10,7 @@ import { bg, card, hint, label, title, arrows, button, backButton, goTo, type Sc
 
 export interface SlotPick { device: DeviceId | null; fighter: number; ready: boolean }
 
-const KEYS: Record<string, string> = { kb1: "J", kb2: "Num1" };
+const KEYS: Record<string, string> = { kb1: "Space", kb2: "Num0" };
 
 /**
  * LOCAL 2P: two slot cards. Player 1 arrives with a fighter and a device; player 2 claims the
@@ -70,7 +70,7 @@ export class LocalSetupScreen implements Screen {
     for (const s of this.slots) {
       const d = s.device;
       if (!d) continue;
-      const now = readDevice(d, { tapJump: false });
+      const now = readDevice(d, { tapJump: false, mouse: false });
       const prev = this.prev.get(d) ?? EMPTY_INPUT;
       this.prev.set(d, now);
       const edge = (bit: number) => (now.b & bit) && !(prev.b & bit);

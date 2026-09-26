@@ -2,6 +2,7 @@
 // flowing without long WAITING stalls. Expects the dev servers. Usage: node scripts/onlineplay.mjs [base]
 import { chromium } from "playwright";
 import { openOnline as signInOnline } from "./menu-nav.mjs";
+import { down as btnDown, up as btnUp, press as btnPress } from "./lib/keys.mjs";
 const base = process.argv[2] ?? "http://localhost:5175/sketch-battle/";
 const browser = await chromium.launch();
 const page = async () => (await browser.newContext({ viewport: { width: 1280, height: 720 } })).newPage();
@@ -20,7 +21,7 @@ try {
   await guest.keyboard.type(code, { delay: 40 }); await press(guest, "Enter");
   await Promise.all(pages.map((p) => p.waitForFunction(() => window.sketchbattle.screen.lobbyDebug?.()?.members.length === 2)));
   // ready both, then the host starts
-  for (const p of pages) { await p.waitForTimeout(200); await p.keyboard.press("KeyJ"); }
+  for (const p of pages) { await p.waitForTimeout(200); await btnPress(p, "Mouse0"); }
   await Promise.all(pages.map((p) => p.waitForFunction(() => window.sketchbattle.screen.lobbyDebug?.()?.members.every((m) => m.ready))));
   await host.waitForTimeout(300);
   await host.evaluate(() => window.sketchbattle.screen.startMatch?.());
@@ -33,7 +34,7 @@ try {
   // both players hold right, then left, with jumps and attacks
   for (let round = 0; round < 6; round++) {
     const key = round % 2 ? "KeyA" : "KeyD";
-    await Promise.all(pages.map(async (p) => { await p.keyboard.down(key); await p.waitForTimeout(700); await p.keyboard.up(key); await p.keyboard.press("KeyW"); await p.keyboard.press("KeyJ"); }));
+    await Promise.all(pages.map(async (p) => { await p.keyboard.down(key); await p.waitForTimeout(700); await p.keyboard.up(key); await p.keyboard.press("KeyW"); await btnPress(p, "Mouse0"); }));
   }
   await host.waitForTimeout(1500);
   const end = await Promise.all(pages.map((p) => p.evaluate(() => { const scr = window.sketchbattle.screen; const s = scr.session.state; return { frame: s.frame, x: s.fighters.map((f) => f.x), waiting: scr.session.waiting, lead: scr.session.frameLead() }; })));

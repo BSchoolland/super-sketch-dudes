@@ -3,6 +3,7 @@
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 import { signIn } from "./menu-nav.mjs";
+import { down as btnDown, up as btnUp, press as btnPress } from "./lib/keys.mjs";
 const base = process.argv[2] ?? "http://localhost:5175/sketch-battle/";
 const out = process.argv[3] ?? "shots";
 mkdirSync(out, { recursive: true });
@@ -31,7 +32,7 @@ await page.waitForFunction(() => !!window.sketchbattle.screen.match, null, { tim
 await shot("m5-countdown", 900);
 await page.waitForTimeout(3200);
 await page.keyboard.down("KeyD"); await page.waitForTimeout(400); await page.keyboard.up("KeyD");
-await page.keyboard.press("KeyJ");
+await btnPress(page, "Mouse0");
 await shot("m6-fight", 300);
 await page.keyboard.press("Escape");
 await shot("m7-pause", 300);

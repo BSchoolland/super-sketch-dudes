@@ -1,4 +1,5 @@
 import { chromium } from "playwright";
+import { down as btnDown, up as btnUp, press as btnPress } from "./lib/keys.mjs";
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
 const errors = [];
@@ -7,7 +8,7 @@ await page.goto("http://localhost:5175/sketch-battle/?quick=1&training=1&f=lifto
 await page.waitForFunction(() => window.sketchbattle?.screen, null, { timeout: 20000 });
 await page.waitForTimeout(600);
 await page.keyboard.down("KeyD"); await page.waitForTimeout(500); await page.keyboard.up("KeyD");
-await page.keyboard.down("KeyU"); await page.keyboard.down("KeyD"); await page.keyboard.press("KeyJ"); await page.waitForTimeout(180);
+await page.keyboard.down("KeyU"); await page.keyboard.down("KeyD"); await btnPress(page, "Mouse0"); await page.waitForTimeout(180);
 await page.screenshot({ path: "shots/training.png" });
 await page.keyboard.up("KeyU"); await page.keyboard.up("KeyD");
 if (errors.length) console.error(errors.join("\n"));

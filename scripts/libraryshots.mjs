@@ -5,6 +5,7 @@
 // Server: PORT=3012 DEV_LOGIN=1 DRAW_PASSWORD=sketch FORGE_TOKEN=devtoken npx tsx server/index.ts
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
+import { down as btnDown, up as btnUp, press as btnPress } from "./lib/keys.mjs";
 
 const base = process.argv[2] ?? "http://localhost:5178/sketch-battle/";
 const out = process.argv[3] ?? "shots/library";
@@ -70,8 +71,8 @@ async function playFor(page, ms) {
   const t0 = Date.now();
   while (Date.now() - t0 < ms) {
     await page.keyboard.down("KeyD"); await page.waitForTimeout(250); await page.keyboard.up("KeyD");
-    await page.keyboard.press("KeyJ"); await page.waitForTimeout(200);
-    await page.keyboard.press("KeyK"); await page.waitForTimeout(300);
+    await btnPress(page, "Mouse0"); await page.waitForTimeout(200);
+    await btnPress(page, "Mouse2"); await page.waitForTimeout(300);
   }
 }
 

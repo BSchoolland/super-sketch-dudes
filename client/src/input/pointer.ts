@@ -35,6 +35,8 @@ export function attachPointer(canvas: HTMLCanvasElement): () => void {
   const emit = (stroke: PointerStroke) => { for (const listener of listeners) listener(stroke); };
   const track = (p: ViewPoint) => { pointer.x = p.x; pointer.y = p.y; pointer.present = true; };
   on("pointerdown", (e) => {
+    // only the primary button taps and draws; the others are fight buttons (input/devices)
+    if (e.button !== 0) { e.preventDefault(); return; }
     canvas.setPointerCapture(e.pointerId);
     const p = toView(e.clientX, e.clientY);
     track(p);

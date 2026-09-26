@@ -5,6 +5,7 @@ import { chromium } from "playwright";
 import { execSync } from "node:child_process";
 import { mkdirSync, readdirSync, renameSync } from "node:fs";
 import { openOnline } from "./menu-nav.mjs";
+import { down as btnDown, up as btnUp, press as btnPress } from "./lib/keys.mjs";
 const base = process.argv[2] ?? "http://localhost:5177/sketch-battle/";
 const site = process.argv[3] ?? "http://localhost:3010";
 const out = process.argv[4] ?? "/tmp/tf/hotswap";
@@ -46,8 +47,8 @@ await key(b, "Enter"); await a.waitForTimeout(300); await key(a, "Enter"); await
 await until(a, "the match", (i) => i.frame > 30, 20000);
 await until(b, "bob's match", (i) => i.frame > 30);
 // play a bit
-await a.keyboard.down("KeyD"); await a.waitForTimeout(600); await a.keyboard.up("KeyD"); await a.keyboard.press("KeyJ");
-await b.keyboard.down("KeyA"); await b.waitForTimeout(400); await b.keyboard.up("KeyA"); await b.keyboard.press("KeyJ");
+await a.keyboard.down("KeyD"); await a.waitForTimeout(600); await a.keyboard.up("KeyD"); await btnPress(a, "Mouse0");
+await b.keyboard.down("KeyA"); await b.waitForTimeout(400); await b.keyboard.up("KeyA"); await btnPress(b, "Mouse0");
 await a.waitForTimeout(1500);
 const before = [await info(a), await info(b)];
 console.log("before swap", JSON.stringify(before));
@@ -63,7 +64,7 @@ await until(b, "bob on B", (i) => i.hash === hashB, 15000);
 const atSwap = [await info(a), await info(b)];
 console.log("after swap", JSON.stringify(atSwap));
 await Promise.all([hold(a, "KeyD", 1500), hold(b, "KeyA", 1500)]);
-await a.keyboard.press("KeyJ"); await b.keyboard.press("KeyJ");
+await btnPress(a, "Mouse0"); await btnPress(b, "Mouse0");
 await a.waitForTimeout(3000);
 const after = [await info(a), await info(b)];
 console.log("later", JSON.stringify(after));

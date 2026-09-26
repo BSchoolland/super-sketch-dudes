@@ -2,6 +2,7 @@
 // Usage: node scripts/record-looks.mjs [base] [outdir]
 import { chromium } from "playwright";
 import { mkdirSync, readdirSync, renameSync } from "node:fs";
+import { down as btnDown, up as btnUp, press as btnPress } from "./lib/keys.mjs";
 const base = process.argv[2] ?? "http://localhost:5178/sketch-battle/";
 const out = process.argv[3] ?? "/tmp/tf/looks";
 mkdirSync(out, { recursive: true });
@@ -15,16 +16,16 @@ await page.goto(`${base}?quick=1&p2=cpu&cpu=5&f=lampjack,slugbert&stage=proving&
 await page.waitForFunction(() => window.sketchbattle?.screen);
 const k = page.keyboard;
 const wait = (ms) => page.waitForTimeout(ms);
-const tap = async (key, ms = 60) => { await k.down(key); await wait(ms); await k.up(key); };
+const tap = async (key, ms = 60) => { await btnDown(page, key); await wait(ms); await btnUp(page, key); };
 const withHeld = async (held, key, ms = 60) => { await k.down(held); await wait(40); await tap(key, ms); await wait(40); await k.up(held); };
 const shot = (n) => page.screenshot({ path: `${out}/${n}.png` });
 await wait(3400);
-await withHeld("KeyD", "KeyK"); await wait(280); await shot("hook-1"); await wait(200); await shot("hook-2"); await wait(600);
-await withHeld("KeyD", "KeyK"); await wait(300); await shot("hook-3"); await wait(700);
-await k.down("KeyK"); await wait(700); await k.up("KeyK"); await wait(120); await shot("burst-1"); await wait(120); await shot("burst-2"); await wait(900);
+await withHeld("KeyD", "Mouse2"); await wait(280); await shot("hook-1"); await wait(200); await shot("hook-2"); await wait(600);
+await withHeld("KeyD", "Mouse2"); await wait(300); await shot("hook-3"); await wait(700);
+await btnDown(page, "Mouse2"); await wait(700); await btnUp(page, "Mouse2"); await wait(120); await shot("burst-1"); await wait(120); await shot("burst-2"); await wait(900);
 await k.down("KeyD"); await wait(500); await k.up("KeyD");
-await withHeld("KeyD", "KeyJ"); await wait(300); await shot("whip"); await wait(600);
-await tap("KeyK"); await wait(700); await shot("burst-3"); await wait(2500); await shot("slime-1"); await wait(2500); await shot("slime-2");
+await withHeld("KeyD", "Mouse0"); await wait(300); await shot("whip"); await wait(600);
+await tap("Mouse2"); await wait(700); await shot("burst-3"); await wait(2500); await shot("slime-1"); await wait(2500); await shot("slime-2");
 const hookErr = await page.evaluate(() => window.sketchbattle?.screen?.hookErr ?? null);
 await context.close();
 await browser.close();
