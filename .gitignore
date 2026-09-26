@@ -10,3 +10,5 @@ research/fightsheet/frames
 forge/.env
 forge/runs/
 client/public/gen-test
+forge/work/
+/forge-v2/

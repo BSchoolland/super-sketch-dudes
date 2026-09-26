@@ -41,7 +41,8 @@ export function attachCharacters(api: express.Router, forgeToken = ""): void {
     const name = String(req.body?.name ?? "").replace(/[^\w .'!?-]/g, "").trim().slice(0, 14).toUpperCase();
     const description = String(req.body?.description ?? "").replace(/\s+/g, " ").trim().slice(0, 240);
     const hint = name || description ? { name, description } : null;
-    const job = enqueueJob({ fighterId: newFighterId(player.id.replace(/\W+/g, "").slice(-4) || "p"), player, siblings, png, origin: "creator", hint });
+    const forge = req.body?.forge === "v2" ? "v2" : req.body?.forge === "v1" ? "v1" : undefined;
+    const job = enqueueJob({ fighterId: newFighterId(player.id.replace(/\W+/g, "").slice(-4) || "p"), player, siblings, png, origin: "creator", hint, forge });
     res.json({ character: entryOf(job) });
   });
 

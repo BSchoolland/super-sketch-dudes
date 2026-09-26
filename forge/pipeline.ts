@@ -18,7 +18,7 @@ const MODULE_RETRIES = 2;
 const MODULE_EFFORT = (process.env.FORGE_EFFORT ?? "low") as "low" | "medium" | "high";
 const CHECKS_TIMEOUT_MS = 120_000;
 
-export interface JobSpec { id: string; fighterId: string; playerName: string; round: number; siblings: string[]; hint?: { name: string; description: string } | null }
+export interface JobSpec { id: string; fighterId: string; playerName: string; round: number; siblings: string[]; hint?: { name: string; description: string } | null; forge?: "v1" | "v2" }
 
 export interface CompletePayload {
   name: string;
@@ -34,6 +34,7 @@ export interface CompletePayload {
 }
 
 export interface ForgeReport {
+  forge?: "v1" | "v2";
   fighterId: string;
   name: string;
   height: number;

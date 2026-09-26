@@ -1,0 +1,85 @@
+// Forge v2: one Opus session with full tools in its own git worktree, driven by forge/v2/PROMPT.md.
+// It draws the sheet, writes the fighter, checks it and "deploys" it with the scripts in forge/tools;
+// deploy writes payload.json, which is the only thing that leaves the worktree.
+import fs from "node:fs";
+import path from "node:path";
+import { spawn, spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { AGENT_MODEL } from "./agent";
+import type { CompletePayload, JobSpec, PipelineIO } from "./pipeline";
+import { ForgeError } from "./pipeline";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const root = path.resolve(here, "..");
+const PROMPT = fs.readFileSync(path.join(here, "v2/PROMPT.md"), "utf8");
+const TIMEOUT_MS = 15 * 60_000;
+
+export async function runV2(job: JobSpec, drawingSrc: string, dir: string, io: PipelineIO): Promise<CompletePayload> {
+  const t0 = Date.now();
+  const wt = path.join(root, "..", "forge-v2", job.id);
+  fs.mkdirSync(path.dirname(wt), { recursive: true });
+  const git = (...a: string[]) => { const r = spawnSync("git", a, { cwd: root, encoding: "utf8" }); if (r.status !== 0) throw new Error(`git ${a[0]}: ${r.stderr.trim()}`); return r.stdout; };
+  git("worktree", "add", "--detach", "--force", wt, "HEAD");
+  fs.symlinkSync(path.join(root, "node_modules"), path.join(wt, "node_modules"));
+  const work = path.join(wt, "forge", "work", job.fighterId);
+  fs.mkdirSync(work, { recursive: true });
+  const drawing = path.join(work, "drawing.png");
+  fs.copyFileSync(drawingSrc, drawing);
+  const rel = (p: string) => path.relative(wt, p);
+  const notes = job.hint
+    ? [job.hint.name ? `The player named it "${job.hint.name}".` : "", job.hint.description ? `The player says: "${job.hint.description}".` : ""].filter(Boolean).join(" ")
+    : "The player didn't name or describe it.";
+  const prompt = PROMPT.replace(/\{\{DRAWING\}\}/g, rel(drawing)).replace(/\{\{WORK\}\}/g, rel(work)).replace(/\{\{ID\}\}/g, job.fighterId).replace("{{NOTES}}", notes);
+  fs.writeFileSync(path.join(dir, "prompt.txt"), prompt);
+  await io.progress("an agent is making it (v2)");
+
+  // stream the session so the room sees what it's doing
+  const log = fs.createWriteStream(path.join(dir, "session.jsonl"));
+  const result = await new Promise<{ costUsd: number; text: string; sessionId: string }>((resolve, reject) => {
+    const child = spawn("claude", ["-p", "--model", AGENT_MODEL, "--dangerously-skip-permissions", "--output-format", "stream-json", "--verbose"], { cwd: wt, stdio: ["pipe", "pipe", "pipe"], env: { ...process.env } });
+    let buf = "", err = "", timedOut = false, costUsd = 0, text = "", sessionId = "";
+    const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, TIMEOUT_MS);
+    const onLine = (line: string) => {
+      log.write(line + "\n");
+      let e: any; try { e = JSON.parse(line); } catch { return; }
+      if (e.type === "assistant") for (const b of e.message?.content ?? []) {
+        if (b.type === "tool_use") {
+          const cmd = String(b.input?.command ?? b.input?.file_path ?? "");
+          const stage = /tools\/sheet/.test(cmd) ? "drawing the animation" : /tools\/check/.test(cmd) ? "balance testing" : /tools\/deploy/.test(cmd) ? "final checks and upload" : /\.fighter\.js/.test(cmd) && b.name === "Write" ? "writing the fighter" : null;
+          if (stage) void io.progress(stage);
+          io.log(`${b.name} ${cmd.slice(0, 120)}`);
+        } else if (b.type === "text" && b.text) text = b.text;
+      }
+      if (e.type === "result") { costUsd = Number(e.total_cost_usd ?? 0); sessionId = String(e.session_id ?? ""); if (e.result) text = String(e.result); }
+    };
+    child.stdout.on("data", (d) => { buf += d; let i; while ((i = buf.indexOf("\n")) >= 0) { onLine(buf.slice(0, i)); buf = buf.slice(i + 1); } });
+    child.stderr.on("data", (d) => (err += d));
+    child.on("error", (e) => { clearTimeout(timer); reject(e); });
+    child.on("close", (code) => {
+      clearTimeout(timer); log.end();
+      if (timedOut) return reject(new ForgeError(`the agent ran out of time (${TIMEOUT_MS / 60000} minutes)`));
+      if (code !== 0 && !fs.existsSync(path.join(work, "payload.json"))) return reject(new Error(`agent exited ${code}: ${(err || text).trim().slice(-400)}`));
+      resolve({ costUsd, text, sessionId });
+    });
+    child.stdin.end(prompt);
+  });
+  fs.writeFileSync(path.join(dir, "agent-final.txt"), result.text);
+
+  const payloadFile = path.join(work, "payload.json");
+  if (!fs.existsSync(payloadFile)) throw new ForgeError(`the agent finished without deploying: ${result.text.trim().slice(0, 300)}`);
+  const p = JSON.parse(fs.readFileSync(payloadFile, "utf8"));
+  // keep what it made
+  for (const f of fs.readdirSync(work)) if (f.endsWith(".fighter.js") || f === "payload.json") fs.copyFileSync(path.join(work, f), path.join(dir, f));
+  if (fs.existsSync(path.join(work, "cells"))) fs.cpSync(path.join(work, "cells"), path.join(dir, "cells"), { recursive: true });
+  spawnSync("git", ["worktree", "remove", "--force", wt], { cwd: root });
+
+  const wallMs = Date.now() - t0;
+  const report = {
+    forge: "v2", fighterId: job.fighterId, name: p.name, height: 0, mirrored: false, timings: { agent: wallMs }, wallMs,
+    agent: { calls: [{ pass: "v2", ms: wallMs, costUsd: result.costUsd, tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }], tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, costUsd: result.costUsd },
+    sheet: { model: "gpt-image-2.5-sunburst", ms: 0, tokens: null, costUsd: null },
+    costUsd: result.costUsd, attempts: [], checks: p.report?.checks, soft: p.report?.soft ?? [], notes: result.text.slice(0, 2000), sessionId: result.sessionId,
+  };
+  fs.writeFileSync(path.join(dir, "report.json"), JSON.stringify(report, null, 1));
+  return { name: p.name, tagline: p.tagline, description: p.description ?? "", card: p.card, source: p.source, sprite: p.sprite, cells: p.cells, sheet: p.sheet, report: report as unknown as CompletePayload["report"] };
+}
