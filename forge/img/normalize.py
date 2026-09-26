@@ -16,6 +16,7 @@ height actually used) so all cells share a world scale, horizontally centred on 
 import json, sys, os
 from PIL import Image, ImageFilter
 import numpy as np
+from scipy import ndimage
 
 CELLS = ["idle", "walk", "jump", "atk-fwd", "atk-up", "atk-down", "hit", "launched", "block"]
 
@@ -30,6 +31,25 @@ def key_paper(im):
     alpha = np.maximum(alpha, np.clip((sat - 14) / 30, 0, 1))
     out = np.dstack([np.clip(a, 0, 255).astype(np.uint8), (alpha * 255).astype(np.uint8)])
     return Image.fromarray(out, "RGBA")
+
+def strip_grid_lines(im, thresh=40):
+    """Drop the sheet's grid lines that survive the crop: any connected blob of ink no thicker than
+    4px anywhere (it vanishes under a 5x5 erosion) that spans a quarter of the cell. An L of two
+    grid lines is one blob, so this is by thickness, not by bounding box. Measured: a grid line is
+    ~3px with its antialiasing; the thinnest stroke the image model draws is ~6px."""
+    a = np.asarray(im).copy()
+    mask = a[..., 3] > thresh
+    labels, n = ndimage.label(mask)
+    if not n: return im
+    h, w = mask.shape
+    for i, sl in enumerate(ndimage.find_objects(labels), start=1):
+        ys, xs = sl
+        bh, bw = ys.stop - ys.start, xs.stop - xs.start
+        if bw < 0.25 * w and bh < 0.25 * h: continue
+        blob = labels[sl] == i
+        if ndimage.binary_erosion(blob, structure=np.ones((5, 5))).any(): continue
+        a[..., 3][labels == i] = 0
+    return Image.fromarray(a, "RGBA")
 
 def content_box(im, thresh=40):
     al = np.asarray(im)[..., 3]
@@ -63,7 +83,7 @@ def main():
         r, c = divmod(i, 3)
         crop = im.crop((c * cw + pad, r * ch + pad, (c + 1) * cw - pad, (r + 1) * ch - pad))
         if opts["mirror"]: crop = crop.transpose(Image.FLIP_LEFT_RIGHT)
-        cells[name] = key_paper(crop)
+        cells[name] = strip_grid_lines(key_paper(crop))
     boxes = {name: content_box(cim) for name, cim in cells.items()}
     for name, box in boxes.items():
         if not box: sys.exit(f"cell {name} is empty after keying")
