@@ -3,19 +3,18 @@ import { VIEW_H, VIEW_W } from "./render/camera";
 import { PAPER } from "./render/paper";
 import { connectedPads, endInputFrame, readMenu, type DeviceId } from "./input/devices";
 import { attachPointer, endPointerFrame, setPointerTransform } from "./input/pointer";
-import { roster, rosterList } from "../../shared/fighters/index";
-import { TitleScreen, type Mode } from "./screens/title";
-import { SelectScreen, type SlotPick } from "./screens/select";
-import { StageScreen } from "./screens/stage";
 import { OnlineScreen } from "./screens/online";
-import { DrawScreen } from "./screens/draw/screen";
-import { SettingsScreen } from "./screens/settings";
 import { VersusScreen } from "./screens/versus";
-import { loadSettings, settings, takeHandoff, type Screen } from "./screens/ui";
 import { SheetScreen } from "./screens/sheet";
+import { SignInScreen } from "./screens/signin";
+import { menus, signInScreen } from "./screens/flow";
+import { loadSettings, settings, takeHandoff, type Screen } from "./screens/ui";
 import { setVolume } from "./audio/audio";
 import { logClient } from "./telemetry";
 import { loadGeneratedFighter } from "./gen";
+import { devSignIn, finishSignIn, loadAccount, signedIn } from "./account";
+import { forgetLibrary } from "./fighters";
+import { loadFighters, quickMatch } from "./quick";
 import { site, setSiteBase } from "./base";
 import { swap, type Handoff } from "./handoff";
 
@@ -68,53 +67,30 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     return ["kb1", "kb2", ...connectedPads().map((i) => `pad${i}` as DeviceId)];
   }
 
-  let lastPicks: SlotPick[] | null = null;
-  let lastSetup: { stage: string; stocks: number; time: number } | null = null;
-  let lastTraining = false;
-
-  function startMatch(picks: SlotPick[], setup: { stage: string; stocks: number; time: number }, training: boolean): Screen {
-    lastPicks = picks; lastSetup = setup; lastTraining = training;
-    const filled = picks.filter((p) => p.device || p.cpu);
-    const cfg = { stage: setup.stage, players: filled.map((p) => ({ fighter: rosterList[p.fighter].id, cpu: p.cpu })), rules: { stocks: setup.stocks, time: setup.time }, seed: (Math.random() * 0xffffffff) >>> 0 };
-    const sources = filled.map((p) => ({ device: p.device, cpu: p.cpu }));
-    return new VersusScreen(cfg, sources, () => titleScreen(), () => startMatch(lastPicks!, lastSetup!, lastTraining), training);
-  }
-
-  function titleScreen(): Screen {
-    return new TitleScreen((mode: Mode) => {
-      if (mode === "settings") return new SettingsScreen(() => titleScreen());
-      if (mode === "online") return new OnlineScreen(() => titleScreen());
-      if (mode === "draw") return new DrawScreen(() => titleScreen());
-      const training = mode === "training";
-      return new SelectScreen((picks) => new StageScreen((setup) => startMatch(picks, setup, training), () => titleScreen(), training), () => titleScreen(), training);
-    });
-  }
-
-  // URL quick start for screenshots and testing: ?quick=1&p2=cpu&cpu=9&f=sable,sable&stage=proving&seed=3
+  const nav = menus();
   const params = opts.params;
+  // back from Discord with a token in the fragment, or ?dev=<name> against a DEV_LOGIN server
+  loadAccount();
+  let signInError = "";
+  if (location.hash.includes("access_token")) {
+    try { await finishSignIn(); } catch (error) { console.error(error); signInError = error instanceof Error ? error.message : String(error); }
+  }
+  if (!signedIn() && params.get("dev")) await devSignIn(params.get("dev")!);
+  const home = (): Screen => (signedIn() ? nav.title() : signInScreen(signInError));
+
   // ?gen=<bundle url>[,<bundle url>] loads drawn fighters before the quick start / sheet below.
-  const genUrls = (params.get("gen") ?? "").split(",").filter(Boolean);
-  for (const u of genUrls) await loadGeneratedFighter(u);
+  for (const u of (params.get("gen") ?? "").split(",").filter(Boolean)) await loadGeneratedFighter(u);
   let screen: Screen;
   if (opts.resume) {
-    screen = OnlineScreen.resume(() => titleScreen(), opts.resume);
+    for (const u of opts.resume.match?.bundles ?? []) if (u) await loadGeneratedFighter(u);
+    screen = OnlineScreen.resume(() => home(), opts.resume);
   } else if (params.get("sheet")) {
+    await loadFighters([params.get("sheet")!]);
     screen = new SheetScreen(params.get("sheet")!, Number(params.get("page") ?? 0));
   } else if (params.get("quick")) {
-    const p2 = params.get("p2") ?? "cpu";
-    const fighters = (params.get("f") ?? "sable,sable").split(",").map((f) => (roster[f] ? f : "sable"));
-    const cpu = Number(params.get("cpu") ?? 6);
-    const p1 = (params.get("p1") ?? "kb1") as DeviceId;
-    const p1cpu = params.get("p1") === "cpu";
-    const picks: SlotPick[] = fighters.map((f, i) => ({ device: i === 0 ? (p1cpu ? null : p1) : i === 1 && p2 !== "cpu" ? "kb2" : null, cpu: (i === 0 && !p1cpu) || (i === 1 && p2 !== "cpu") ? 0 : cpu, fighter: rosterList.findIndex((d) => d.id === f), ready: true }));
-    while (picks.length < 4) picks.push({ device: null, cpu: 0, fighter: 0, ready: false });
-    screen = startMatch(picks, { stage: params.get("stage") ?? "proving", stocks: Number(params.get("stocks") ?? 3), time: 0 }, params.get("training") === "1");
-    const v = screen as VersusScreen;
-    v.countdown = 0;
-    if (params.get("seed")) v.match.state.seed = Number(params.get("seed"));
-    if (params.get("boxes") === "1") v.renderer.showHitboxes = true;
+    screen = await quickMatch(params, () => home());
   } else {
-    screen = titleScreen();
+    screen = home();
   }
   screen.enter?.();
 
@@ -131,7 +107,14 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     last = now;
     const menu = readMenu(allDevices());
     document.body.style.cursor = "default";
-    const next = screen.update(dt, menu) ?? takeHandoff();
+    let next = screen.update(dt, menu) ?? takeHandoff();
+    // signed out (a 401 anywhere, or SIGN OUT): back to the door, except mid-match or on a no-account page
+    const current = next ?? screen;
+    if (!signedIn() && !(current instanceof SignInScreen || current instanceof VersusScreen || current instanceof SheetScreen)) {
+      current.abandon?.();
+      forgetLibrary();
+      next = signInScreen();
+    }
     if (next) { screen = next; screen.enter?.(); }
     endInputFrame();
     if (!running) return; // the screen asked the shell for another bundle

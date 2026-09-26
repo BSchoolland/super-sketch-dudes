@@ -9,6 +9,8 @@ export interface Screen {
   draw(ctx: CanvasRenderingContext2D, dt: number): void;
   /** Called when the screen becomes active. */
   enter?(): void;
+  /** The app is dropping this screen without its say (the account signed out): release what it holds. */
+  abandon?(): void;
 }
 
 export function bg(ctx: CanvasRenderingContext2D, _t: number): void {
@@ -48,8 +50,8 @@ export function hint(ctx: CanvasRenderingContext2D, text: string): void {
   label(ctx, text, VIEW_W / 2, VIEW_H - 36, 22, "rgba(41,39,34,0.8)");
 }
 
-export interface Settings { volume: number; music: number; shake: number; tapJump: boolean; rumble: boolean; stocks: number; time: number; cpuLevel: number; name: string }
-export const settings: Settings = { volume: 0.8, music: 0.5, shake: 1, tapJump: true, rumble: true, stocks: 3, time: 0, cpuLevel: 5, name: "" };
+export interface Settings { volume: number; music: number; shake: number; tapJump: boolean; rumble: boolean; stocks: number; time: number; cpuLevel: number }
+export const settings: Settings = { volume: 0.8, music: 0.5, shake: 1, tapJump: true, rumble: true, stocks: 3, time: 0, cpuLevel: 5 };
 export function loadSettings(): void {
   try { Object.assign(settings, JSON.parse(localStorage.getItem("sketchbattle.settings") ?? "{}")); } catch { /* ignore */ }
 }
