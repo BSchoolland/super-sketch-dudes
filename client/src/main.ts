@@ -13,6 +13,7 @@ import { loadSettings, settings, type Screen } from "./screens/ui";
 import { SheetScreen } from "./screens/sheet";
 import { setVolume } from "./audio/audio";
 import { logClient } from "./telemetry";
+import { loadGeneratedFighter } from "./gen";
 
 loadSettings();
 setVolume(settings.volume);
@@ -60,6 +61,9 @@ function titleScreen(): Screen {
 
 // URL quick start for screenshots and testing: ?quick=1&p2=cpu&cpu=9&f=sable,sable&stage=proving&seed=3
 const params = new URLSearchParams(location.search);
+// ?gen=<bundle url>[,<bundle url>] loads drawn fighters before the quick start / sheet below.
+const genUrls = (params.get("gen") ?? "").split(",").filter(Boolean);
+for (const u of genUrls) await loadGeneratedFighter(u);
 let screen: Screen;
 if (params.get("sheet")) {
   screen = new SheetScreen(params.get("sheet")!, Number(params.get("page") ?? 0));

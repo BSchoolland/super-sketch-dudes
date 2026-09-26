@@ -131,7 +131,7 @@ function moveNearReach(attacker: Fighter, victim: Fighter, moveId: string, facin
 
 function attackThreatens(attacker: Fighter, victim: Fighter, level: number): boolean {
   if (attacker.action !== "attack" || !attacker.move || attacker.frame < REACTION[level]) return false;
-  const info = REACH[attacker.id]?.[attacker.move];
+  const info = reachOf(attacker.id)[attacker.move];
   if (!info || attacker.frame > info.last + 1) return false;
   const startupLead = level >= 8 ? 5 : level >= 6 ? 3 : 1;
   if (attacker.frame + startupLead < info.first) return false;
@@ -380,7 +380,7 @@ function handleCommitted(state: State, f: Fighter, target: Fighter | null, level
     const out = blank();
     const danger = target && attackThreatens(target, f, level);
     if (danger && f.shield > 10) out.b = B.SHIELD;
-    else if (target && Math.abs(target.x - f.x) < 95 && target.action === "attack" && currentMove(target) && target.frame > (REACH[target.id][target.move!]?.last ?? 0)) out.b = pulse(state, f.slot, B.GRAB);
+    else if (target && Math.abs(target.x - f.x) < 95 && target.action === "attack" && currentMove(target) && target.frame > (reachOf(target.id)[target.move!]?.last ?? 0)) out.b = pulse(state, f.slot, B.GRAB);
     return out;
   }
   if (f.action === "grabHold") {
@@ -525,7 +525,7 @@ function groundNeutral(state: State, f: Fighter, target: Fighter, level: number,
   if (edgeguard) return edgeguard;
 
   const opponentMove = currentMove(target);
-  const opponentInfo = target.move ? REACH[target.id]?.[target.move] : null;
+  const opponentInfo = target.move ? reachOf(target.id)[target.move] : null;
   const punishable = target.action === "attack" && opponentMove && opponentInfo && target.frame > opponentInfo.last && opponentMove.total - target.frame >= Math.max(4, REACTION[level] - 2);
   if (punishable && distance < 190 + level * 10) {
     if (distance < 90 && hash(state, f, 0x9a11, 20) % 100 < 30 + level * 5) { out.b = pulse(state, f.slot, B.GRAB); return out; }
@@ -555,7 +555,7 @@ function groundNeutral(state: State, f: Fighter, target: Fighter, level: number,
     }
   }
 
-  if (target.shieldHeld && distance < (REACH[f.id].grab?.maxX ?? 60) + defOf(target).stats.width * 0.5 + 12 && hash(state, f, 0x6ab, 18) % 100 < 35 + level * 5) {
+  if (target.shieldHeld && distance < (reachOf(f.id).grab?.maxX ?? 60) + defOf(target).stats.width * 0.5 + 12 && hash(state, f, 0x6ab, 18) % 100 < 35 + level * 5) {
     out.b = pulse(state, f.slot, B.GRAB);
     return out;
   }
@@ -576,7 +576,7 @@ function groundNeutral(state: State, f: Fighter, target: Fighter, level: number,
     return startTilt(state, f, moveCycle & 1 ? "jab1" : "ftilt", facing);
   }
 
-  const ftilt = REACH[f.id].ftilt ?? EMPTY_MOVE;
+  const ftilt = reachOf(f.id).ftilt ?? EMPTY_MOVE;
   const desired = Math.max(55, ftilt.maxX + defOf(target).stats.width * 0.35 - (level <= 3 ? 25 : 5));
   if (distance > desired + 28) {
     out.x = facing * (distance > desired + 110 ? 100 : 45);

@@ -8,7 +8,7 @@ export const CORE_MOVES = ["jab1", "ftilt", "utilt", "dtilt", "dashAttack", "fsm
 /** Source patterns that would break determinism or reach outside the sim. Same list as scripts/lint-determinism.mjs plus the browser. */
 const BANNED: [RegExp, string][] = [
   [/Math\.(sin|cos|tan|atan2|atan|asin|acos|pow|exp|log|log2|log10|random|hypot|cbrt|sinh|cosh|tanh)\b/, "non-deterministic Math (use api.sinDeg/cosDeg/atan2Deg and arithmetic)"], // determinism-ok
-  [/\bDate\b|performance\.now|structuredClone|parseFloat\(|toFixed\(/, "non-deterministic builtin"], // determinism-ok
+  [/\bDate\b|performance\.now|structuredClone|parseFloat\(|toFixed\(/, "non-deterministic builtin"], // determinism-ok // determinism-ok
   [/\b(fetch|XMLHttpRequest|WebSocket|document|window|globalThis|localStorage|sessionStorage|indexedDB|navigator|process|require|setTimeout|setInterval|queueMicrotask|eval|Function|Worker|importScripts)\b/, "reaches outside the sim"],
   [/\bimport\s*\(|^\s*import\s/m, "imports are not allowed; everything comes from the api argument"],
   [/\basync\b|\bawait\b|\.then\(/, "must be synchronous"],
@@ -107,7 +107,7 @@ export function validateGenerated(def: FighterDef): string[] {
   else {
     let sp: unknown;
     try { sp = def.special(); } catch (e) { p.push(`special() threw: ${e instanceof Error ? e.message : e}`); }
-    if (sp && typeof sp === "object") for (const [k, v] of Object.entries(sp)) if (typeof v !== "number") p.push(`special().${k} must be a number`);
+    if (sp && typeof sp === "object") { for (const [k, v] of Object.entries(sp)) if (typeof v !== "number") p.push(`special().${k} must be a number`); }
     else if (sp !== undefined) p.push("special() must return an object");
   }
   if (!def.hooks || typeof def.hooks !== "object") p.push("hooks must be an object (may be empty)");
