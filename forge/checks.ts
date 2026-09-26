@@ -30,7 +30,7 @@ export const LADDER: readonly HouseId[] = ["lampjack", "tank", "sirsticks", "diz
 /** The punching bag for the move, recovery and KO checks. */
 const DUMMY: HouseId = "lampjack";
 const LADDER_MATCHES = 2, LEVEL = 9, CAP_FRAMES = 60 * 180, SOFT_SECONDS = 25;
-const KO_MOVES = ["ftilt", "fsmash", "usmash", "dsmash", "fair", "bair", "uair", "dair", "nair", "nspecial", "sspecial", "dspecial", "fthrow", "bthrow", "uthrow", "dthrow"];
+const KO_MOVES = ["ftilt", "fsmash", "usmash", "dsmash", "fair", "bair", "uair", "dair", "nair", "nspecial", "sspecial", "dspecial"];
 
 class HookLog {
   byMove = new Map<string, { error: string; n: number }>();

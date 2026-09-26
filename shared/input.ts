@@ -12,7 +12,6 @@ export const B = {
   ATTACK: 2,
   SPECIAL: 4,
   SHIELD: 8,
-  GRAB: 16,
   TAUNT: 32,
   PAUSE: 64,
   SMASH: 128, // keyboard smash modifier

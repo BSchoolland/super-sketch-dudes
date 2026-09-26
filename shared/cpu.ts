@@ -334,7 +334,6 @@ function handleCommitted(state: State, f: Fighter, target: Fighter | null, level
     const out = blank();
     const danger = target && attackThreatens(target, f, level);
     if (danger && f.shield > 10) out.b = B.SHIELD;
-    else if (target && Math.abs(target.x - f.x) < 95 && target.action === "attack" && currentMove(target) && target.frame > (reachOf(target)[target.move!]?.last ?? 0)) out.b = pulse(state, f.slot, B.GRAB);
     return out;
   }
   if (f.action === "grabHold") {
@@ -487,7 +486,7 @@ function groundNeutral(state: State, f: Fighter, target: Fighter, level: number,
   const opponentInfo = target.move ? reachOf(target)[target.move] : null;
   const punishable = target.action === "attack" && opponentMove && opponentInfo && target.frame > opponentInfo.last && opponentMove.total - target.frame >= Math.max(4, REACTION[level] - 2);
   if (punishable && distance < 190 + level * 10) {
-    if (distance < 90 && hash(state, f, 0x9a11, 20) % 100 < 30 + level * 5) { out.b = pulse(state, f.slot, B.GRAB); return out; }
+    if (distance < 90 && hash(state, f, 0x9a11, 20) % 100 < 30 + level * 5) return startTilt(state, f, "jab1", facing);
     if (moveCanReach(f, target, "ftilt", facing)) return startTilt(state, f, "ftilt", facing);
     out.x = facing * 100;
     return out;
@@ -502,11 +501,6 @@ function groundNeutral(state: State, f: Fighter, target: Fighter, level: number,
   const special = specialChoice(state, f, target, level, facing, distance, stage);
   if (special) return special;
 
-  if (target.shieldHeld && distance < (reachOf(f).grab?.maxX ?? 60) + defOf(target).stats.width * 0.5 + 12 && hash(state, f, 0x6ab, 18) % 100 < 35 + level * 5) {
-    out.b = pulse(state, f.slot, B.GRAB);
-    return out;
-  }
-
   if (dy < -65) {
     if (moveCanReach(f, target, "utilt", facing)) return startTilt(state, f, "utilt", facing);
     if (distance < 180 + level * 8) { out.x = facing * 65; out.b = pulse(state, f.slot, B.JUMP); return out; }
@@ -517,7 +511,7 @@ function groundNeutral(state: State, f: Fighter, target: Fighter, level: number,
     if (moveCycle === 0 && moveCanReach(f, target, "dtilt", facing)) return startTilt(state, f, "dtilt", facing);
     if (moveCycle === 1 && distance < 85) return startTilt(state, f, "jab1", facing);
     if (moveCycle === 2 && moveCanReach(f, target, "ftilt", facing)) return startTilt(state, f, "ftilt", facing);
-    if (moveCycle === 3 && distance < 82) { out.b = pulse(state, f.slot, B.GRAB); return out; }
+    if (moveCycle === 3 && distance < 82) return startTilt(state, f, "jab1", facing);
     if (moveCycle === 4 && moveCanReach(f, target, "ftilt", facing)) return startTilt(state, f, "ftilt", facing);
   } else if (distance < 150 && state.frame % THINK[level] === 0) {
     return startTilt(state, f, moveCycle & 1 ? "jab1" : "ftilt", facing);

@@ -8,6 +8,7 @@ import { label, title, INK } from "../ui";
 import { drawCharacterArt, RED } from "./character";
 import { fighterLoad } from "../../gen";
 import type { DrawHost, DrawView } from "./view";
+import { cardLines } from "../../../../shared/account";
 
 interface Entry { player: DrawPlayer; ch: DrawCharacter }
 
@@ -67,7 +68,7 @@ export class LineupView implements DrawView {
       ctx.fillRect(cx - 50, top + size + 96, 100, 5);
       label(ctx, e.player.name, cx, top + size + 140, 34, e.player.connected ? INK : PENCIL, "center", 800);
       label(ctx, this.stateOf(e), cx, top + size + 186, 28, this.stateColor(e));
-      (e.ch.card ?? []).forEach((line, j) => {
+      cardLines(e.ch.card).forEach((line, j) => {
         const [button, ...rest] = line.split(/\s{2,}/);
         label(ctx, button, cx - size / 2 + 8, top + size + 236 + j * 34, 22, PENCIL, "left", 800);
         label(ctx, rest.join(" "), cx - size / 2 + 150, top + size + 236 + j * 34, 22, INK, "left", 600);

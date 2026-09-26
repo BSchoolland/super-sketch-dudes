@@ -86,7 +86,7 @@ describe("hits", () => {
     expect(v.hitlag).toBeGreaterThan(0);
     expect(v.action).toBe("hitstun");
   });
-  it("shield blocks, and grab beats shield", () => {
+  it("shield blocks", () => {
     const s = two();
     const a = s.fighters[0], v = s.fighters[1];
     a.x = 0; v.x = 90; v.facing = -1;
@@ -96,11 +96,6 @@ describe("hits", () => {
     for (let i = 0; i < 8; i++) step(s, [EMPTY_INPUT, inp({ b: B.SHIELD })]);
     expect(v.percent).toBe(0);
     expect(v.shield).toBeLessThan(50);
-    for (let i = 0; i < 40; i++) step(s, [EMPTY_INPUT, inp({ b: B.SHIELD })]);
-    step(s, [inp({ b: B.GRAB }), inp({ b: B.SHIELD })]);
-    for (let i = 0; i < 10; i++) step(s, [EMPTY_INPUT, inp({ b: B.SHIELD })]);
-    expect(v.action).toBe("grabbed");
-    expect(a.action).toBe("grabHold");
   });
   it("every move's hitboxes are within its total frames", () => {
     for (const def of Object.values(roster)) for (const m of Object.values(def.moves)) for (const h of m.hitboxes) {

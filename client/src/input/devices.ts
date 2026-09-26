@@ -4,15 +4,15 @@ export type DeviceId = "kb1" | "kb2" | `pad${number}`;
 
 export interface KeyBindings {
   left: string[]; right: string[]; up: string[]; down: string[];
-  jump: string[]; attack: string[]; special: string[]; shield: string[]; grab: string[]; smash: string[]; taunt: string[]; pause: string[];
+  jump: string[]; attack: string[]; special: string[]; shield: string[]; smash: string[]; taunt: string[]; pause: string[];
 }
 export const KB1: KeyBindings = {
   left: ["KeyA"], right: ["KeyD"], up: ["KeyW"], down: ["KeyS"],
-  jump: ["KeyW", "Space"], attack: ["Mouse0"], special: ["Mouse2"], shield: ["ShiftLeft"], grab: ["KeyI"], smash: ["KeyU"], taunt: ["KeyT"], pause: ["Escape"],
+  jump: ["KeyW", "Space"], attack: ["Mouse0"], special: ["Mouse2"], shield: ["ShiftLeft"], smash: ["KeyU"], taunt: ["KeyT"], pause: ["Escape"],
 };
 export const KB2: KeyBindings = {
   left: ["ArrowLeft"], right: ["ArrowRight"], up: ["ArrowUp"], down: ["ArrowDown"],
-  jump: ["ArrowUp", "Numpad0"], attack: ["Numpad1"], special: ["Numpad2"], shield: ["Numpad3", "ShiftRight"], grab: ["Numpad4"], smash: ["Numpad6"], taunt: ["Numpad5"], pause: ["Escape"],
+  jump: ["ArrowUp", "Numpad0"], attack: ["Numpad1"], special: ["Numpad2"], shield: ["Numpad3", "ShiftRight"], smash: ["Numpad6"], taunt: ["Numpad5"], pause: ["Escape"],
 };
 
 const keys = new Set<string>();
@@ -71,7 +71,6 @@ export function readDevice(dev: DeviceId, opts: { tapJump: boolean; mouse?: bool
     if (down(b.attack)) bits |= B.ATTACK;
     if (down(b.special)) bits |= B.SPECIAL;
     if (down(b.shield)) bits |= B.SHIELD;
-    if (down(b.grab)) bits |= B.GRAB;
     if (down(b.smash)) bits |= B.SMASH;
     if (down(b.taunt)) bits |= B.TAUNT;
     if (down(b.pause)) bits |= B.PAUSE;
@@ -91,7 +90,6 @@ export function readDevice(dev: DeviceId, opts: { tapJump: boolean; mouse?: bool
   if (btn(1)) bits |= B.SPECIAL;
   if (btn(2) || btn(3)) bits |= B.JUMP;
   if (btn(4) || btn(5) || btn(6)) bits |= B.SHIELD;
-  if (btn(7)) bits |= B.GRAB;
   if (btn(9)) bits |= B.PAUSE;
   if (btn(13) && !btn(12)) bits |= B.TAUNT;
   // tap jump: a stick flick up counts as a jump press for 2 frames and holds while the stick stays up
@@ -114,8 +112,8 @@ export function readDevice(dev: DeviceId, opts: { tapJump: boolean; mouse?: bool
 export function pollJoinPresses(): DeviceId[] {
   const out: DeviceId[] = [];
   if (pressedThisFrame.size) {
-    const kb1 = [...KB1.jump, ...KB1.attack, ...KB1.special, ...KB1.shield, ...KB1.grab];
-    const kb2 = [...KB2.jump, ...KB2.attack, ...KB2.special, ...KB2.shield, ...KB2.grab];
+    const kb1 = [...KB1.jump, ...KB1.attack, ...KB1.special, ...KB1.shield];
+    const kb2 = [...KB2.jump, ...KB2.attack, ...KB2.special, ...KB2.shield];
     if ([...pressedThisFrame].some((k) => !isMouse(k) && kb1.includes(k))) out.push("kb1");
     if ([...pressedThisFrame].some((k) => !isMouse(k) && kb2.includes(k))) out.push("kb2");
   }

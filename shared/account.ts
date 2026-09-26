@@ -41,3 +41,6 @@ export function isBundlePath(url: string, fighter: string): boolean {
   const m = /^\/(?:[\w-]+\/)*(?:gen|house)\/([\w-]+)\/(?:[0-9a-f]{8}\/)?bundle\.json(?:\?v=[\w.-]+)?$/.exec(url);
   return !!m && m[1] === fighter;
 }
+
+/** The card lines to show. Cards made before grab left the game carry a GRAB line. */
+export const cardLines = (card: string[] | null | undefined): string[] => (card ?? []).filter((l) => !/^GRAB\b/i.test(l));

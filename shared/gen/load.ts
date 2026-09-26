@@ -5,7 +5,7 @@ import { generatedApi } from "./api";
 import { SPRITE_CELLS, defaultCellForMove, STATE_CELLS } from "./sprite";
 
 /** Moves every fighter must define: the CPU, the input layer and the tests all assume them. */
-export const CORE_MOVES = ["jab1", "ftilt", "utilt", "dtilt", "dashAttack", "fsmash", "usmash", "dsmash", "nair", "fair", "bair", "uair", "dair", "grab", "fthrow", "bthrow", "uthrow", "dthrow", "nspecial", "sspecial", "uspecial", "dspecial"] as const;
+export const CORE_MOVES = ["jab1", "ftilt", "utilt", "dtilt", "dashAttack", "fsmash", "usmash", "dsmash", "nair", "fair", "bair", "uair", "dair", "nspecial", "sspecial", "uspecial", "dspecial"] as const;
 
 /** Source patterns that would break determinism or reach outside the sim. Same list as scripts/lint-determinism.mjs plus the browser. */
 const BANNED: [RegExp, string][] = [

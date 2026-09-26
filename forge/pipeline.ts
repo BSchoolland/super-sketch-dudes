@@ -24,7 +24,7 @@ export interface CompletePayload {
   name: string;
   tagline: string;
   description: string;
-  /** Four lines the players read while the fight loads: attack, special, up+special, grab. */
+  /** Three lines the players read while the fight loads: attack, special, up+special. */
   card: string[];
   source: string;
   sprite: { px: number; feetPx: number; heightPx: number; anims: Record<string, string> };

@@ -197,11 +197,6 @@ function tryGroundActions(state: State, f: Fighter, def: FighterDef, input: Inpu
     setAction(f, "jumpSquat");
     return true;
   }
-  if ((buffered(f, e, B.GRAB) || (buffered(f, e, B.ATTACK) && (e.held & B.SHIELD))) && allowMoves) {
-    consume(f, B.GRAB); consume(f, B.ATTACK);
-    startMove(state, f, f.action === "run" || f.action === "dash" ? "dashGrab" : "grab", { keepVel: f.action === "run" || f.action === "dash" });
-    return true;
-  }
   if (allowMoves) {
     const sp = specialFromInput(f, input, e);
     if (sp) {
@@ -422,7 +417,7 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
   const e = edges(input, prev);
 
   // buffers and timers run even in hitlag so a press during freeze comes out on the first free frame
-  if (e.pressed) { f.buf |= e.pressed & (B.JUMP | B.ATTACK | B.SPECIAL | B.SHIELD | B.GRAB | B.TAUNT); f.bufAge = 0; }
+  if (e.pressed) { f.buf |= e.pressed & (B.JUMP | B.ATTACK | B.SPECIAL | B.SHIELD | B.TAUNT); f.bufAge = 0; }
   else if (f.buf) { f.bufAge++; if (f.bufAge > C.BUFFER) f.buf = 0; }
   updateFlicks(f, input, prev);
   if (f.invuln > 0) f.invuln--;
@@ -451,7 +446,7 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
   switch (f.action) {
     case "respawn": {
       f.invuln = Math.max(f.invuln, 2);
-      const any = (e.pressed & (B.JUMP | B.ATTACK | B.SPECIAL | B.SHIELD | B.GRAB)) || Math.abs(input.x) >= STICK_RUN || input.y >= STICK_RUN;
+      const any = (e.pressed & (B.JUMP | B.ATTACK | B.SPECIAL | B.SHIELD)) || Math.abs(input.x) >= STICK_RUN || input.y >= STICK_RUN;
       if (f.frame >= C.RESPAWN_PLATFORM || (f.frame > 10 && any)) {
         setAction(f, "air");
         f.grounded = false;
@@ -537,7 +532,6 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
     }
     case "jumpSquat": {
       groundFriction(f, def, 0.5);
-      if (buffered(f, e, B.GRAB) || ((e.held & B.SHIELD) && buffered(f, e, B.ATTACK))) { consume(f, B.GRAB); startMove(state, f, "grab"); break; }
       if (f.frame >= C.JUMP_SQUAT) {
         const full = (e.held & B.JUMP) !== 0;
         jump(state, f, def, full, false);
@@ -586,7 +580,6 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
       f.shield = Math.max(0, f.shield - C.SHIELD_DRAIN);
       if (f.shield <= 0) { shieldBreak(state, f); break; }
       if (buffered(f, e, B.JUMP)) { consume(f, B.JUMP); f.shieldHeld = false; setAction(f, "jumpSquat"); break; }
-      if (buffered(f, e, B.GRAB) || buffered(f, e, B.ATTACK)) { consume(f, B.GRAB); consume(f, B.ATTACK); f.shieldHeld = false; startMove(state, f, "grab"); break; }
       if (f.flickT > 0 && f.flickX !== 0) {
         f.shieldHeld = false;
         f.facing = f.flickX as 1 | -1;
@@ -775,7 +768,7 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
       if (buffered(f, e, B.ATTACK) && f.frame > 4 && !(f.flickT > 0)) { consume(f, B.ATTACK); startMove(state, f, "pummel"); break; }
       const d = stickDir(f, input);
       const flick = f.flickT > 0 && (f.flickX !== 0 || f.flickY !== 0);
-      if ((flick || (e.pressed & (B.GRAB | B.SPECIAL))) && f.frame > 3) {
+      if ((flick || (e.pressed & B.SPECIAL)) && f.frame > 3) {
         const t = d === "u" ? "uthrow" : d === "d" ? "dthrow" : d === "b" ? "bthrow" : "fthrow";
         startMove(state, f, t);
         v.action = "thrown";

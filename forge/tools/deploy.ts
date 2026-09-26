@@ -1,5 +1,5 @@
 // Push a finished fighter to the live game. Usage:
-//   npx tsx forge/tools/deploy.ts <fighter.js> <cellsDir> --name "NAME" --tagline "one line" --card "ATTACK  ...|SPECIAL  ...|UP+SPECIAL  ...|GRAB  ..." [--description "..."] [--anims '{"crouch":"block"}']
+//   npx tsx forge/tools/deploy.ts <fighter.js> <cellsDir> --name "NAME" --tagline "one line" --card "ATTACK  ...|SPECIAL  ...|UP+SPECIAL  ..." [--description "..."] [--anims '{"crouch":"block"}']
 // Runs the checks first and refuses if they fail. Only the module and the cells go up: it writes the
 // upload next to the cells as payload.json and the worker sends it; nothing else you changed leaves here.
 import fs from "node:fs";

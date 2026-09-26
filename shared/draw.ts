@@ -23,7 +23,7 @@ export interface DrawCharacter {
   name: string | null;
   tagline: string | null;
   description: string | null;
-  /** Four lines: attack, special, up+special, grab. Shown while the fight loads. */
+  /** Three lines: attack, special, up+special. Shown while the fight loads. */
   card: string[] | null;
   error: string | null;
   /** Lost a battle with it. */

@@ -22,9 +22,9 @@ Match its structure exactly. It is the only example that exists; everything it u
 
 ## The api object
 Your module is `export default function make(api) { ... return def }`, a plain ES module with NO
-imports and nothing async. `api` has exactly: hb, cap, key, mv, throwMove, setAction, startMove,
-releaseGrab, throwVictim, spawnProjectile, knockback, approach, clamp, lerp, sign, sinDeg, cosDeg,
-atan2Deg, B (button bits: JUMP ATTACK SPECIAL SHIELD GRAB TAUNT SMASH PAUSE), STICK_DEAD,
+imports and nothing async. `api` has: hb, cap, key, mv, setAction, startMove, spawnProjectile,
+knockback, approach, clamp, lerp, sign, sinDeg, cosDeg, atan2Deg, B (button bits: JUMP ATTACK
+SPECIAL SHIELD TAUNT SMASH PAUSE), STICK_DEAD,
 STICK_RUN, STICK_WALK, C (engine constants), spriteAnims(), spriteLoops, SPRITE_CELLS.
 
 Determinism is non-negotiable (every client re-runs your code and must get identical bits):
@@ -34,13 +34,13 @@ Determinism is non-negotiable (every client re-runs your code and must get ident
 - `special()` must return an object whose EVERY key exists from the start, all numbers. Never add a
   key later. The state hash walks these keys.
 - Hooks get `{ state, f, input, prev }`. `f` is the fighter (x, y, vx, vy, facing, moveFacing,
-  frame, grounded, special, chargeMul, grabbing, …), `state.fighters` the others, `input.b` the
+  frame, grounded, special, chargeMul, …), `state.fighters` the others, `input.b` the
   button bits, `input.x/y` the stick in -100..100. Mutate `f` freely; that's the point.
 
-## One strike, one gimmick, one recovery, one grab
-The player learns this character in the first five seconds of a fight, so it has four moves, the
-ones in the design. The engine has 22+ slots and every one must exist, but they are AIMINGS of
-those four, exactly like the exemplar's `aim()`:
+## One strike, one gimmick, one recovery
+The player learns this character in the first five seconds of a fight, so it has three moves, the
+ones in the design. The engine has 17+ slots and every one must exist, but they are AIMINGS of
+those three, exactly like the exemplar's `aim()`:
 - the strike, forward: jab1 (quicker, weaker), ftilt, dashAttack (with `motion`), nair, fair, bair
   (`cellFlip: true`); aimed up: utilt, uair; aimed down: dtilt, dair (dair may spike); charged:
   fsmash, usmash, dsmash (bigger, slower, `smash: true`). Same part, same cell family, startup
@@ -50,7 +50,6 @@ those four, exactly like the exemplar's `aim()`:
   dspecial the gimmick held down (a charged, planted or defensive version), or literally the same
   move again if the design has nothing to say. Hooks live here.
 - the recovery: uspecial, and nothing else.
-- the grab: grab, dashGrab, pummel, and the four throws as one toss aimed four ways.
 - plus ledgeAttack, getupAttack, taunt (aimings of the strike, or trivial).
 Every move's `cell` is one of the nine (defaults: up-moves atk-up, down-moves atk-down, the rest
 atk-fwd; bair `cell: "atk-fwd", cellFlip: true`). Poses are squash/stretch/lean/offset keys on the

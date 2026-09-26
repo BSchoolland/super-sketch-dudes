@@ -1,19 +1,18 @@
 // LAMPJACK — a desk lamp that floats on a propeller and fights with its own coiled cord.
 // Drawn fighter exemplar: a plain ES module, no imports, everything from `api`.
 //
-// A drawn fighter has FOUR things to learn, and a player should know all four within seconds:
+// A drawn fighter has THREE things to learn, and a player should know all three within seconds:
 //   STRIKE   (attack button)        the cord whips out. Aimed forward, up or down; charged for the smash.
 //   GIMMICK  (special button)       BULB FLASH: hold to charge, then a blinding burst around the shade.
 //   RECOVERY (up + special)         the propeller lifts it back to the stage.
-//   GRAB     (grab button)          the plug hooks them; the throw tosses them the way you hold.
-// The engine has 22+ move slots; `aim()` fills them all from those four so every button feels like
+// The engine has 17+ move slots; `aim()` fills them all from those three so every button feels like
 // the move you already learned (same startup, same damage, just pointed somewhere else).
 //
 // Fighter space: +x is the facing direction, +y is DOWN, the origin is at the feet. Frames are 1-based.
 // Hitboxes: hb([first,last], x, y, r, damage, angle, base, growth, extra); cap(...) is a capsule from
 // (x,y) to (x2,y2). Angle 0 launches away from the attacker, 90 up, 270 down (a spike), 180 pulls in.
 export default function make(api) {
-  const { hb, cap, key, mv, throwMove, spawnProjectile, spriteAnims, spriteLoops, B } = api;
+  const { hb, cap, key, mv, spawnProjectile, spriteAnims, spriteLoops, B } = api;
 
   const stats = {
     weight: 78, walk: 3.2, run: 5.6, dashInit: 6.5, airSpeed: 4.2, airAccel: 0.2,
@@ -55,9 +54,6 @@ export default function make(api) {
     return mv(id, s.total, [cap([s.hit, s.hit + s.active - 1], start[0], start[1], end[0], end[1], s.r, s.damage, angle, s.base ?? 40, s.growth ?? 85, { ...CORD, ...(s.hb ?? {}) })],
       strikePoses(s.total, s.hit, lean, extra), { cell, cellFlip: dir === "b", ...(s.mv ?? {}) });
   };
-  // GRAB and the throw, tossed the way you hold
-  const GRAB = { total: 36, hit: 7, damage: 9 };
-  const toss = (id, angle, base, growth, pose) => throwMove(id, 32, 14, GRAB.damage, angle, base, growth, [key(0, P({ rot: 6 })), key(14, P(pose)), key(32, rest)]);
 
   const moves = {
     // strike, forward: the quick versions on the ground and in the air
@@ -83,14 +79,6 @@ export default function make(api) {
       cap([16, 19], 10, -20, 120, -20, 22, 16, 30, 45, 88, { ...CORD, group: 0 }),
       cap([22, 25], -10, -20, -120, -20, 22, 16, 30, 45, 88, { ...CORD, group: 1 }),
     ], [key(0, P({ sy: 0.9 })), key(16, P({ rot: 20, sx: 1.15, sy: 0.8 })), key(22, P({ rot: -20, sx: 1.15, sy: 0.8 })), key(54, rest)], { smash: true, cell: "atk-down" }),
-    // grab: the plug hooks them
-    grab: mv("grab", GRAB.total, [hb([GRAB.hit, GRAB.hit + 2], 60, -70, 26, 0, 0, 0, 0, { grab: true })], strikePoses(GRAB.total, GRAB.hit, 12), { isGrab: true }),
-    dashGrab: mv("dashGrab", 42, [hb([9, 11], 74, -70, 28, 0, 0, 0, 0, { grab: true })], strikePoses(42, 9, 20), { isGrab: true, motion: [[1, 5, 0], [9, 0, 0]] }),
-    pummel: mv("pummel", 16, [], [key(0, P({ rot: 6 })), key(6, P({ rot: 14, sx: 1.06 })), key(16, P({ rot: 6 }))]),
-    fthrow: toss("fthrow", 45, 60, 72, { rot: 26, sx: 1.1 }),
-    bthrow: toss("bthrow", 40, 65, 80, { rot: -40 }),
-    uthrow: toss("uthrow", 90, 70, 92, { dy: -14, sy: 1.14 }),
-    dthrow: toss("dthrow", 68, 45, 42, { sy: 0.8, sx: 1.15, dy: 16 }),
     // GIMMICK, BULB FLASH: hold to charge, then a blinding multi-hit burst around the shade
     nspecial: mv("nspecial", 64, [hb([26, 38], 0, -90, 62, 3, 80, 20, 40, { fx: "burst", rehit: 4 }), hb([39, 41], 0, -90, 76, 8, 60, 45, 95, { fx: "burst", group: 1 })], [key(0, P({ sy: 0.94 })), key(25, P({ sy: 0.88, sx: 1.08 })), key(26, P({ sy: 1.16, sx: 1.12 })), key(42, P({ sy: 1.02 })), key(64, rest)], { hook: "flash", cell: "atk-up", fx: "quake" }),
     // the gimmick with a direction held: the plug is thrown as a hook that pulls them in

@@ -1,5 +1,5 @@
 import { PENCIL } from "../render/paper";
-import type { LibraryEntry } from "../../../shared/account";
+import { cardLines, type LibraryEntry } from "../../../shared/account";
 import { title, INK } from "./ui";
 import { drawCharacterArt } from "./draw/character";
 import { wrapped } from "./draw/text";
@@ -11,5 +11,5 @@ export function drawCharacterDetail(ctx: CanvasRenderingContext2D, e: LibraryEnt
   title(ctx, e.name ?? "?", tx, y + 90, e.name && e.name.length > 10 ? 72 : 96, INK, "left");
   let ty = y + 160;
   if (e.tagline) ty += wrapped(ctx, e.tagline, tx, ty, textW, 34, INK, 3, "left") + 30;
-  for (const line of e.card ?? []) ty += wrapped(ctx, line, tx, ty, textW, 28, PENCIL, 2, "left", 700) + 10;
+  for (const line of cardLines(e.card)) ty += wrapped(ctx, line, tx, ty, textW, 28, PENCIL, 2, "left", 700) + 10;
 }

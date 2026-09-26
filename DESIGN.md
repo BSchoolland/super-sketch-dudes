@@ -54,8 +54,6 @@ look became pencil and ink, and the name followed.
 - **Shield**: 50 HP, drains 0.15/frame held, hits drain damage * 1.19, regenerates 0.08/frame
   when down. Shield stun = damage * 0.8 + 2. Shield break: 5 seconds of stun, launched slightly.
   Parry: shield pressed within 3 frames before a hit; no stun, 8 frames of advantage.
-- **Grab** beats shield. 6 frames of startup, 30 of whiff recovery. Throws: forward, back, up,
-  down. Pummel 3 damage. Mash out faster at low percent.
 - **Dodges**: spot dodge (2f startup, 20 invulnerable, 26 total), roll (4/26/32), air dodge
   (3/29/38, directional, one per airtime, 10 frames of landing lag).
 - **Ledge**: grab when falling past the ledge box (facing it or not), 40 invulnerable frames,
@@ -67,7 +65,7 @@ look became pencil and ink, and the name followed.
   percent decide. Sudden death at 300% if tied.
 - **Ground moves**: jab (3-hit rapid), forward/up/down tilt, forward/up/down smash (chargeable
   up to 60 frames for 1.4x), dash attack. **Aerials**: neutral, forward, back, up, down.
-  **Specials**: neutral, side, up, down. **Grab and 4 throws.** 22 moves per fighter.
+  **Specials**: neutral, side, up, down. 17 attacks per fighter, plus ledge attack, get-up attack and taunt.
 - **Movement**: walk, run (initial dash 12 frames, dash-dance by reversing), jump squat 3
   frames, short hop (release jump within squat), full hop, double jump, fast fall (hold down at
   apex or after), crouch, wall jump for the fighters marked for it, footstool.
@@ -114,10 +112,9 @@ character select screen by pressing a button on it.
 |---|---|---|---|
 | Move | WASD | Arrows | Left stick / d-pad |
 | Jump | W / Space | Up / Numpad 0 | X, Y (or stick up, toggle) |
-| Attack | J | Numpad 1 | A |
-| Special | K | Numpad 2 | B |
-| Shield | L / Shift | Numpad 3 / Right Shift | LB, RB, LT |
-| Grab | I | Numpad 4 | RT, or Shield+Attack |
+| Attack | Left click | Numpad 1 | A |
+| Special | Right click | Numpad 2 | B |
+| Shield | Shift | Numpad 3 / Right Shift | LB, RB, LT |
 | Smash (c-stick) | — | — | Right stick |
 | Taunt | T | Numpad 5 | d-pad down |
 | Pause | Esc | Esc | Start |
