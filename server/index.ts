@@ -21,7 +21,7 @@ fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const app = express();
 // forge completions carry nine PNG cells + a sheet as base64; a new character carries its drawing
-app.use((req, res, next) => express.json({ limit: req.path.includes("/forge/") ? "12mb" : req.path.includes("/games") ? "40mb" : req.path.endsWith("/characters") ? "2mb" : "8kb" })(req, res, next));
+app.use((req, res, next) => express.json({ limit: req.path.includes("/forge/") || req.path.endsWith("/characters/import") ? "12mb" : req.path.includes("/games") ? "40mb" : req.path.endsWith("/characters") ? "2mb" : "8kb" })(req, res, next));
 const api = express.Router();
 // Apache proxies /sketch-battle/* to / here; when hit directly the prefix is still present, so mount both.
 app.use("/api", api);
