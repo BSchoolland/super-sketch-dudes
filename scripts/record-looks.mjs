@@ -1,0 +1,33 @@
+// Records LAMPJACK (plug crop projectile, glowing burst) vs a SLUGBERT CPU (slime puddles, spinning gobs).
+// Usage: node scripts/record-looks.mjs [base] [outdir]
+import { chromium } from "playwright";
+import { mkdirSync, readdirSync, renameSync } from "node:fs";
+const base = process.argv[2] ?? "http://localhost:5178/sketch-battle/";
+const out = process.argv[3] ?? "/tmp/tf/looks";
+mkdirSync(out, { recursive: true });
+const browser = await chromium.launch();
+const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, recordVideo: { dir: out, size: { width: 1280, height: 720 } } });
+const page = await context.newPage();
+const errors = [];
+page.on("pageerror", (e) => errors.push(String(e)));
+page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
+await page.goto(`${base}?quick=1&p2=cpu&cpu=5&f=lampjack,slugbert&stage=proving&seed=3`);
+await page.waitForFunction(() => window.sketchbattle?.screen);
+const k = page.keyboard;
+const wait = (ms) => page.waitForTimeout(ms);
+const tap = async (key, ms = 60) => { await k.down(key); await wait(ms); await k.up(key); };
+const withHeld = async (held, key, ms = 60) => { await k.down(held); await wait(40); await tap(key, ms); await wait(40); await k.up(held); };
+const shot = (n) => page.screenshot({ path: `${out}/${n}.png` });
+await wait(3400);
+await withHeld("KeyD", "KeyK"); await wait(280); await shot("hook-1"); await wait(200); await shot("hook-2"); await wait(600);
+await withHeld("KeyD", "KeyK"); await wait(300); await shot("hook-3"); await wait(700);
+await k.down("KeyK"); await wait(700); await k.up("KeyK"); await wait(120); await shot("burst-1"); await wait(120); await shot("burst-2"); await wait(900);
+await k.down("KeyD"); await wait(500); await k.up("KeyD");
+await withHeld("KeyD", "KeyJ"); await wait(300); await shot("whip"); await wait(600);
+await tap("KeyK"); await wait(700); await shot("burst-3"); await wait(2500); await shot("slime-1"); await wait(2500); await shot("slime-2");
+const hookErr = await page.evaluate(() => window.sketchbattle?.screen?.hookErr ?? null);
+await context.close();
+await browser.close();
+const webm = readdirSync(out).find((f) => f.endsWith(".webm"));
+renameSync(`${out}/${webm}`, `${out}/looks.webm`);
+console.log(JSON.stringify({ errors, hookErr }));

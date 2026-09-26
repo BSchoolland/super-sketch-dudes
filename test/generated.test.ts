@@ -67,6 +67,21 @@ describe("generated fighters", () => {
     unregisterFighter("gen-bad");
   });
 
+  it("validates looks and the hitbox fx that name them", async () => {
+    const def = await buildGenerated({ id: "gen-look", source, sprite, player: "test", description: "" });
+    expect(def.looks?.hook.crop).toEqual([400, 225, 55, 70]);
+    const bad = { ...def, looks: { ...def.looks, weird: { cell: "nope", crop: [0, 0, 600, 10], shape: "cube", texture: "fur", trail: "rainbow", size: 2 } } } as unknown as typeof def;
+    const problems = validateGenerated(bad, { strict: true });
+    expect(problems).toEqual(expect.arrayContaining([
+      expect.stringContaining("looks.weird.cell"), expect.stringContaining("looks.weird.crop outside"), expect.stringContaining("looks.weird.shape"),
+      expect.stringContaining("looks.weird.texture"), expect.stringContaining("looks.weird.trail"), expect.stringContaining("looks.weird.size"),
+    ]));
+    const orphan = { ...def, moves: { ...def.moves, jab1: { ...def.moves.jab1, hitboxes: [{ ...def.moves.jab1.hitboxes[0], fx: "missing" }] } } };
+    expect(validateGenerated(orphan, { strict: true }).some((m) => m.includes('jab1.hitboxes[0].fx "missing"'))).toBe(true);
+    expect(validateGenerated(orphan)).toEqual([]);
+    expect(validateGenerated(def, { strict: true })).toEqual([]);
+  });
+
   it("rejects sources that reach outside the sim or would desync", () => {
     expect(lintGeneratedSource("export default function make(api) { return Math.random(); }")).toHaveLength(1);
     expect(lintGeneratedSource("export default function make(api) { fetch('x'); }")).toHaveLength(1);

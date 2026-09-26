@@ -7,7 +7,7 @@ import { hitOf } from "../shared/hits";
 import { B, EMPTY_INPUT } from "../shared/input";
 import { startMove } from "../shared/fighter";
 import { registerFighter, roster } from "../shared/fighters/index";
-import { buildGenerated, lintGeneratedSource, type GeneratedBundle } from "../shared/gen/load";
+import { buildGenerated, lintGeneratedSource, validateGenerated, type GeneratedBundle } from "../shared/gen/load";
 import type { FighterDef, State } from "../shared/types";
 import type { HouseId } from "../shared/house";
 import { loadHouse } from "../test/house";
@@ -61,6 +61,7 @@ export async function runChecks(input: CheckInput): Promise<CheckReport> {
     for (const l of String((e as Error).message).split("\n").filter(Boolean)) hard(`build: ${l}`);
     return r;
   }
+  for (const l of validateGenerated(def, { strict: true })) hard(`build: ${l}`);
   if (def.stats.height !== height) hard(`stats.height is ${def.stats.height} but the cell boxes were converted at ${height}; set stats.height = ${height} so the drawing and the hitboxes line up`);
   if (!def.moves.uspecial.helpless || !def.moves.uspecial.ledgeOk) hard("uspecial must have helpless: true and ledgeOk: true");
 

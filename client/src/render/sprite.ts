@@ -7,7 +7,7 @@ import { roster } from "../../../shared/fighters/index";
  * with the character facing right, feet on row `feetPx`; `heightPx` of image maps onto
  * `stats.height` world units so every cell shares one scale (see SpriteRig).
  */
-interface CellImages { base: HTMLImageElement | null; flash: HTMLCanvasElement | null; ghost: HTMLCanvasElement | null; failed: boolean }
+export interface CellImages { base: HTMLImageElement | null; flash: HTMLCanvasElement | null; ghost: HTMLCanvasElement | null; failed: boolean }
 const cache = new Map<string, CellImages>();
 
 function tinted(img: HTMLImageElement, color: string): HTMLCanvasElement {
@@ -20,7 +20,7 @@ function tinted(img: HTMLImageElement, color: string): HTMLCanvasElement {
   return c;
 }
 
-function load(url: string): CellImages {
+export function cellImages(url: string): CellImages {
   let e = cache.get(url);
   if (e) return e;
   e = { base: null, flash: null, ghost: null, failed: false };
@@ -36,7 +36,7 @@ function load(url: string): CellImages {
 export function preloadSprite(def: FighterDef): Promise<void> {
   const urls = Object.values(def.sprite.cells);
   return new Promise((resolve) => {
-    const check = () => { if (urls.every((u) => { const e = load(u); return e.base || e.failed; })) resolve(); else setTimeout(check, 30); };
+    const check = () => { if (urls.every((u) => { const e = cellImages(u); return e.base || e.failed; })) resolve(); else setTimeout(check, 30); };
     check();
   });
 }
@@ -50,7 +50,7 @@ export interface SpriteDrawOpts { alpha?: number; flash?: boolean; ghost?: boole
 export function drawSprite(ctx: CanvasRenderingContext2D, def: FighterDef, cell: string, pose: Pose, opts: SpriteDrawOpts = {}): void {
   const sp = def.sprite;
   const url = sp.cells[cell] ?? sp.cells.idle;
-  const e = load(url);
+  const e = cellImages(url);
   const u = (roster[def.id] ?? def).stats.height / sp.heightPx;
   ctx.save();
   if (opts.alpha !== undefined) ctx.globalAlpha *= opts.alpha;

@@ -67,8 +67,8 @@ export interface Hitbox {
   unblockable?: boolean;
   /** Knockback direction ignores attacker facing and always launches away from the attacker's centre. */
   radial?: boolean;
-  /** Sound/visual family for the renderer. */
-  fx?: "hit" | "slash" | "heavy" | "tip" | "fire" | "energy";
+  /** Renderer family ("hit" | "slash" | "heavy" | "tip" | "fire" | "energy") or the name of one of the def's `looks`. */
+  fx?: string;
   /** Windbox: pushes without damage or hitstun. */
   wind?: boolean;
 }
@@ -188,6 +188,39 @@ export interface FighterForm {
   loops?: Record<string, number>;
 }
 
+export const LOOK_SHAPES = ["ball", "bolt", "ring", "blob", "star", "shard", "cloud", "puddle", "slash", "bar"] as const;
+export const LOOK_TEXTURES = ["solid", "hatch", "dots", "scribble", "flame", "glow"] as const;
+export const LOOK_TRAILS = ["none", "ghost", "streak", "smoke", "sparks"] as const;
+export const HIT_FAMILIES = ["hit", "slash", "heavy", "tip", "fire", "energy"] as const;
+
+/**
+ * How a projectile, strike or area attack is drawn. Purely visual: the sim never reads it.
+ * Either a piece of the drawing (`cell` + optional `crop`) or a shape, with colours and a texture.
+ * Named in `FighterDef.looks`; a projectile uses the look named by its `kind`, a hitbox the one named by its `fx`.
+ */
+export interface Look {
+  /** Sheet cell to draw (e.g. "atk-fwd"); with `crop` = [x, y, w, h] in cell pixels to draw just the sword, the fist, the hat. */
+  cell?: string;
+  crop?: [number, number, number, number];
+  /** Drawn instead of a cell. Default "ball". */
+  shape?: (typeof LOOK_SHAPES)[number];
+  /** Any CSS colour: fill (shape) or tint of the hit sparks. Outline defaults to ink. */
+  color?: string;
+  ink?: string;
+  /** Surface treatment. Default "solid". */
+  texture?: (typeof LOOK_TEXTURES)[number];
+  /** Long side in world units. Default: the hitbox size (projectile radius / capsule length), or the crop's natural size for cells. */
+  size?: number;
+  /** Degrees per frame of rotation (a thrown sword spins at about 20). */
+  spin?: number;
+  /** Rotate to face the direction of travel (projectiles) or along the capsule (strikes). Default true for shapes, false for cells. */
+  aim?: boolean;
+  /** Motion trail for projectiles. Default "none" for cells, "streak" for shapes. */
+  trail?: (typeof LOOK_TRAILS)[number];
+  /** Mirror the cell horizontally (a bair crop that should face the other way). */
+  flip?: boolean;
+}
+
 export interface FighterDef {
   id: FighterId;
   name: string;
@@ -214,6 +247,8 @@ export interface FighterDef {
   meters?: { label: string; color: string; get: (f: Fighter) => number; max?: (f: Fighter) => number }[];
   /** Renderer-only per-frame look: overall scale and glow strength 0..1 (e.g. a heat meter). */
   visual?: (f: Fighter) => { scale?: number; glow?: number };
+  /** Named looks for projectiles (by `kind`) and hitboxes (by `fx`). See Look. */
+  looks?: Record<string, Look>;
 }
 
 export interface HookCtx {
@@ -349,6 +384,9 @@ export interface Fighter {
 export interface Projectile {
   id: number;
   owner: number;
+  /** Slot that spawned it; the renderer takes the look from that fighter's def (owner changes on reflect). */
+  from: number;
+  /** Also names the projectile's look in the spawner's `looks`. */
   kind: string;
   x: number;
   y: number;

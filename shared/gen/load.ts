@@ -1,5 +1,6 @@
 import { formDef } from "../fighter";
-import type { Move, FighterDef, SpriteRig } from "../types";
+import { HIT_FAMILIES, LOOK_SHAPES, LOOK_TEXTURES, LOOK_TRAILS } from "../types";
+import type { Look, Move, FighterDef, SpriteRig } from "../types";
 import { generatedApi } from "./api";
 import { SPRITE_CELLS, defaultCellForMove, STATE_CELLS } from "./sprite";
 
@@ -86,7 +87,29 @@ const STAT_RANGES: Record<string, [number, number]> = {
   crouchHeight: [30, 300], landLag: [0, 30], ledgeReach: [0, 120],
 };
 
-function checkMoves(moves: Record<string, Move>, def: FighterDef, cells: Set<string>, p: string[], at: string): void {
+function checkLooks(looks: unknown, cells: Set<string>, px: number, p: string[]): void {
+  if (!looks || typeof looks !== "object") { p.push("looks must be an object of named looks"); return; }
+  for (const [name, l] of Object.entries(looks as Record<string, Look>)) {
+    const at = `looks.${name}`;
+    if (!l || typeof l !== "object") { p.push(`${at} must be an object`); continue; }
+    if (l.cell !== undefined && !cells.has(l.cell)) p.push(`${at}.cell "${l.cell}" is not on the sheet`);
+    if (l.crop !== undefined) {
+      if (l.cell === undefined) p.push(`${at}.crop needs a cell`);
+      if (!Array.isArray(l.crop) || l.crop.length !== 4 || l.crop.some((v) => typeof v !== "number" || !isFinite(v))) p.push(`${at}.crop must be [x, y, w, h] in cell pixels`);
+      else if (l.crop[0] < 0 || l.crop[1] < 0 || l.crop[2] <= 0 || l.crop[3] <= 0 || l.crop[0] + l.crop[2] > px || l.crop[1] + l.crop[3] > px) p.push(`${at}.crop outside the ${px}x${px} cell`);
+    }
+    if (l.shape !== undefined && !(LOOK_SHAPES as readonly string[]).includes(l.shape)) p.push(`${at}.shape "${l.shape}" is not one of ${LOOK_SHAPES.join(", ")}`);
+    if (l.texture !== undefined && !(LOOK_TEXTURES as readonly string[]).includes(l.texture)) p.push(`${at}.texture "${l.texture}" is not one of ${LOOK_TEXTURES.join(", ")}`);
+    if (l.trail !== undefined && !(LOOK_TRAILS as readonly string[]).includes(l.trail)) p.push(`${at}.trail "${l.trail}" is not one of ${LOOK_TRAILS.join(", ")}`);
+    for (const k of ["color", "ink"] as const) if (l[k] !== undefined && (typeof l[k] !== "string" || !l[k])) p.push(`${at}.${k} must be a CSS colour string`);
+    for (const k of ["size", "spin"] as const) if (l[k] !== undefined && (typeof l[k] !== "number" || !isFinite(l[k]))) p.push(`${at}.${k} must be a finite number`);
+    if (l.size !== undefined && (l.size < 4 || l.size > 800)) p.push(`${at}.size outside 4..800`);
+    for (const k of ["aim", "flip"] as const) if (l[k] !== undefined && typeof l[k] !== "boolean") p.push(`${at}.${k} must be a boolean`);
+  }
+}
+
+function checkMoves(moves: Record<string, Move>, def: FighterDef, cells: Set<string>, p: string[], at: string, strict: boolean): void {
+  const looks = new Set([...HIT_FAMILIES, ...Object.keys(def.looks ?? {})]);
   for (const [id, mv] of Object.entries(moves)) {
     if (mv.id !== id) p.push(`${at}moves.${id}.id is ${mv.id}`);
     if (!Number.isInteger(mv.total) || mv.total < 1 || mv.total > 600) p.push(`${at}${id}.total must be 1..600`);
@@ -98,6 +121,7 @@ function checkMoves(moves: Record<string, Move>, def: FighterDef, cells: Set<str
       else if (!mv.throwFrame && h.frames[1] > mv.total) p.push(`${at}${id}.hitboxes[${i}] active past total`);
       if (h.r < 0 || h.r > 400) p.push(`${at}${id}.hitboxes[${i}].r outside 0..400`);
       if (h.damage < 0 || h.damage > 999) p.push(`${at}${id}.hitboxes[${i}].damage outside 0..999`);
+      if (strict && h.fx !== undefined && !looks.has(h.fx)) p.push(`${at}${id}.hitboxes[${i}].fx "${h.fx}" is neither a hit family (${HIT_FAMILIES.join(", ")}) nor one of the def's looks`);
     }
     const cell = mv.cell ?? defaultCellForMove(id);
     if (!cells.has(cell)) p.push(`${at}${id} shows cell "${cell}" which the sheet doesn't have`);
@@ -118,7 +142,8 @@ function checkAnims(anims: Record<string, string>, cells: Set<string>, p: string
   }
 }
 
-export function validateGenerated(def: FighterDef): string[] {
+/** `strict` (the forge) also rejects hitbox fx names that are neither a family nor a look; the loader lets old fighters through. */
+export function validateGenerated(def: FighterDef, { strict = false } = {}): string[] {
   const p: string[] = [];
   if (typeof def.name !== "string" || !def.name.trim()) p.push("name missing");
   if (typeof def.tagline !== "string") p.push("tagline missing");
@@ -132,7 +157,8 @@ export function validateGenerated(def: FighterDef): string[] {
   for (const m of CORE_MOVES) if (!def.moves[m]) p.push(`missing core move ${m}`);
   const cells = new Set(Object.keys(def.sprite?.cells ?? {}));
   for (const c of SPRITE_CELLS) if (!cells.has(c)) p.push(`sprite is missing cell ${c}`);
-  checkMoves(def.moves, def, cells, p, "");
+  if (def.looks !== undefined) checkLooks(def.looks, cells, def.sprite?.px ?? 512, p);
+  checkMoves(def.moves, def, cells, p, "", strict);
   checkAnims(def.sprite?.anims ?? {}, cells, p, "sprite.anims");
   if (def.forms !== undefined || def.form !== undefined) {
     if (!def.forms || typeof def.forms !== "object") p.push("forms must be an object of form overlays");
@@ -145,7 +171,7 @@ export function validateGenerated(def: FighterDef): string[] {
         if (typeof v !== "number" || !isFinite(v)) p.push(`forms.${name}.stats.${k} must be a finite number`);
         else if (v < lo || v > hi) p.push(`forms.${name}.stats.${k}=${v} outside ${lo}..${hi}`);
       }
-      if (o.moves) checkMoves(o.moves, merged, cells, p, `forms.${name}.`);
+      if (o.moves) checkMoves(o.moves, merged, cells, p, `forms.${name}.`, strict);
       checkAnims(o.anims ?? {}, cells, p, `forms.${name}.anims`);
     }
   }

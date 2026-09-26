@@ -8,18 +8,22 @@ import { Fx } from "./fx";
 import { animFor, poseAt } from "./rig";
 import { drawSprite } from "./sprite";
 import { cellFor } from "../../../shared/gen/sprite";
-import type { FighterDef, Pose } from "../../../shared/types";
+import type { FighterDef, Look, Pose } from "../../../shared/types";
 import { drawBackdrop, drawShadow, drawStage } from "./stage";
 import { SLOT_COLORS, createHud, drawHud, type HudState } from "./hud";
 import { drawStrikes, inWindup } from "./strikes";
+import { drawLook, lookColor, lookOf, type LookAt } from "./looks";
+import type { Projectile } from "../../../shared/types";
 
 interface Ghost { x: number; y: number; facing: number; age: number; def: FighterDef; cell: string; flip: boolean; pose: Pose }
+interface ProjGhost { def: FighterDef; look: Look; at: LookAt; age: number }
 
 export class Renderer {
   cam = new Camera();
   fx: Fx;
   hud: HudState;
   ghosts: Ghost[] = [];
+  projGhosts: ProjGhost[] = [];
   time = 0;
   showHitboxes = false;
   names: string[];
@@ -42,6 +46,19 @@ export class Renderer {
     this.curPos = state.fighters.map((f) => ({ x: f.x, y: f.y }));
     this.prevProj = this.curProj;
     this.curProj = new Map(state.projectiles.map((p) => [p.id, { x: p.x, y: p.y }]));
+    for (const p of state.projectiles) {
+      if (p.dead) continue;
+      const def = defOf(state.fighters[p.from]);
+      const look = lookOf(def, p.kind);
+      if (!look) continue;
+      const trail = look.trail ?? (look.cell ? "none" : "streak");
+      const color = lookColor(look, SLOT_COLORS[p.owner] ?? "#fff");
+      const ang = Math.atan2(p.vy, p.vx);
+      if (trail === "ghost" && state.frame % 2 === 0) this.projGhosts.push({ def, look, at: this.projAt(p, p.x, p.y, true), age: 0 });
+      else if (trail === "streak") this.fx.streak(p.x, p.y, ang, Math.hypot(p.vx, p.vy) * 3, color);
+      else if (trail === "smoke") this.fx.dust(p.x, p.y + 4, 1, 0);
+      else if (trail === "sparks" && state.frame % 2 === 0) this.fx.spark(p.x, p.y, 2, 140, color, 3, 0.3);
+    }
     // afterimages for fast moves
     state.fighters.forEach((f) => {
       const mv = f.action === "attack" ? currentMove(f) : null;
@@ -68,6 +85,8 @@ export class Renderer {
     this.cam.update(dt);
     this.fx.update(dt);
     for (const g of this.ghosts) g.age += dt;
+    for (const g of this.projGhosts) g.age += dt;
+    this.projGhosts = this.projGhosts.filter((g) => g.age < 0.22);
     this.ghosts = this.ghosts.filter((g) => g.age < 0.22);
 
     ctx.save();
@@ -86,10 +105,14 @@ export class Renderer {
       ctx.restore();
     }
     // projectiles
+    for (const g of this.projGhosts) drawLook(ctx, g.def, g.look, { ...g.at, alpha: 0.35 * (1 - g.age / 0.22) });
     for (const p of state.projectiles) {
       const a = this.prevProj.get(p.id) ?? p, b = this.curProj.get(p.id) ?? p;
       const x = a.x + (b.x - a.x) * alpha, y = a.y + (b.y - a.y) * alpha;
-      drawProjectile(ctx, x, y, p.vx, p.vy, p.hb.r, SLOT_COLORS[p.owner] ?? "#fff");
+      const def = defOf(state.fighters[p.from]);
+      const look = lookOf(def, p.kind);
+      if (look) drawLook(ctx, def, look, this.projAt(p, x, y));
+      else drawProjectile(ctx, x, y, p.vx, p.vy, p.hb.r, SLOT_COLORS[p.owner] ?? "#fff");
     }
     // fighters, back to front by slot (the one who was hit last draws on top)
     const order = state.fighters.map((f) => f).sort((a, b) => a.lastHitFrame - b.lastHitFrame);
@@ -101,6 +124,10 @@ export class Renderer {
     this.fx.drawScreen(ctx, VIEW_W, VIEW_H, this.cam);
     drawHud(ctx, state, this.hud, dt, this.names);
     ctx.restore();
+  }
+
+  private projAt(p: Projectile, x: number, y: number, ghost = false): LookAt {
+    return { x, y, angle: Math.atan2(p.vy, p.vx), r: p.hb.r, len: 0, facing: p.facing, frame: p.age, ghost };
   }
 
   private drawFighter(ctx: CanvasRenderingContext2D, state: State, f: Fighter, pos: { x: number; y: number }): void {

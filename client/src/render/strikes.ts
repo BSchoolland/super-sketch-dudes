@@ -2,6 +2,7 @@ import type { Fighter, Hitbox, Move } from "../../../shared/types";
 import { hitboxWorld } from "../../../shared/hits";
 import { defOf, currentMove } from "../../../shared/fighter";
 import { hatch, inkArc, inkLine, inkPath, inkRect, INK } from "./paper";
+import { drawLook, lookOf } from "./looks";
 
 const SLASH = "#00bddd";
 
@@ -15,8 +16,14 @@ export function drawStrikes(ctx: CanvasRenderingContext2D, f: Fighter, pos: { x:
     const c = hitboxWorld({ ...f, x: pos.x, y: pos.y }, hb);
     const t = (f.frame - hb.frames[0] + 1) / (hb.frames[1] - hb.frames[0] + 7);
     ctx.save(); ctx.globalAlpha = 0.95 - t * 0.5;
+    const look = lookOf(def, hb.fx);
     if (hb.grab) {
       ctx.setLineDash([5, 5]); inkArc(ctx, c.x1, c.y1, c.r, 0, Math.PI * 2, slotColor, 2.5);
+    } else if (look) {
+      const len = Math.hypot(c.x2 - c.x1, c.y2 - c.y1);
+      const angle = len > 0 ? Math.atan2(c.y2 - c.y1, c.x2 - c.x1) : f.moveFacing === 1 ? 0 : Math.PI;
+      // shapes go a little translucent so an area attack doesn't hide the fighter inside it
+      drawLook(ctx, def, look, { x: len > 0 && !look.cell ? c.x1 : (c.x1 + c.x2) / 2, y: len > 0 && !look.cell ? c.y1 : (c.y1 + c.y2) / 2, angle, r: c.r, len: look.cell ? 0 : len, facing: f.moveFacing, frame: f.frame - hb.frames[0], alpha: look.cell ? 1 : 0.75 });
     } else {
       const family = hb.fx ?? mv.hitboxes[0]?.fx ?? "hit";
       if (family === "slash" || family === "tip") {

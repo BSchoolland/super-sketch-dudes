@@ -56,6 +56,16 @@ Every move's `cell` is one of the nine (defaults: up-moves atk-up, down-moves at
 atk-fwd; bair `cell: "atk-fwd", cellFlip: true`). Poses are squash/stretch/lean/offset keys on the
 whole cell: key(frame, { sx, sy, rot, dx, dy }). Lean into every strike.
 
+## Looks: what attacks look like
+Projectiles and hitboxes are drawn from `def.looks`, a table of named looks: a projectile uses the look
+named by its `kind`, a hitbox the one named by its `fx`. A look is a crop of one of the nine cells
+(`{ cell: "atk-fwd", crop: [x, y, w, h] }` in cell pixels; `spin` degrees per frame, `aim: true` to point
+it along its flight) or a shape (`ball bolt ring blob star shard cloud puddle slash bar`) with any CSS
+`color`, an outline `ink`, a `texture` (`solid hatch dots scribble flame glow`) and a projectile `trail`
+(`none ghost streak smoke sparks`). A thrown sword is the sword cropped out of the drawing, spinning; a
+fireball is a `blob` in `flame`; a shockwave is a `ring` in `glow`. Anything without a look uses the
+built-in families (`hit slash heavy tip fire energy`). See the exemplar's `looks`.
+
 ## Required
 - uspecial must actually recover: it must gain height (set f.vy negative in a hook or use
   `motion`), and it must be `helpless: true, ledgeOk: true`. The check knocks the fighter out to

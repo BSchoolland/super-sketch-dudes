@@ -31,6 +31,15 @@ export default function make(api) {
     key(total, rest),
   ];
   const CORD = { fx: "energy" };
+  // Looks: how projectiles (by kind) and hitboxes (by fx) are drawn. A look is either a crop of one of the
+  // drawn cells, in cell pixels ([x, y, w, h] of the 512x512 sheet), or a shape with colour and texture.
+  // Anything without a look falls back to the built-in families (hit, slash, heavy, tip, fire, energy).
+  const looks = {
+    // the thrown plug is literally the plug cut out of the atk-fwd drawing, pointed along its flight
+    hook: { cell: "atk-fwd", crop: [400, 225, 55, 70], aim: true, trail: "streak", color: "#ffd94a" },
+    // the lamp burst: a glowing, slowly turning cloud of light
+    burst: { shape: "cloud", color: "#ffe680", ink: "#c98a10", texture: "glow", spin: 5 },
+  };
 
   // THE STRIKE: the cord whips out from the shade (about 70 units up) to 130 units away, 12 damage.
   // `aim` points it: dir "f" forward, "u" up, "b" behind, "d" low along the floor.
@@ -83,7 +92,7 @@ export default function make(api) {
     uthrow: toss("uthrow", 90, 70, 92, { dy: -14, sy: 1.14 }),
     dthrow: toss("dthrow", 68, 45, 42, { sy: 0.8, sx: 1.15, dy: 16 }),
     // GIMMICK, BULB FLASH: hold to charge, then a blinding multi-hit burst around the shade
-    nspecial: mv("nspecial", 64, [hb([26, 38], 0, -90, 62, 3, 80, 20, 40, { ...CORD, rehit: 4 }), hb([39, 41], 0, -90, 76, 8, 60, 45, 95, { fx: "heavy", group: 1 })], [key(0, P({ sy: 0.94 })), key(25, P({ sy: 0.88, sx: 1.08 })), key(26, P({ sy: 1.16, sx: 1.12 })), key(42, P({ sy: 1.02 })), key(64, rest)], { hook: "flash", cell: "atk-up", fx: "quake" }),
+    nspecial: mv("nspecial", 64, [hb([26, 38], 0, -90, 62, 3, 80, 20, 40, { fx: "burst", rehit: 4 }), hb([39, 41], 0, -90, 76, 8, 60, 45, 95, { fx: "burst", group: 1 })], [key(0, P({ sy: 0.94 })), key(25, P({ sy: 0.88, sx: 1.08 })), key(26, P({ sy: 1.16, sx: 1.12 })), key(42, P({ sy: 1.02 })), key(64, rest)], { hook: "flash", cell: "atk-up", fx: "quake" }),
     // the gimmick with a direction held: the plug is thrown as a hook that pulls them in
     sspecial: mv("sspecial", 44, [], strikePoses(44, 12, 18), { hook: "cast" }),
     // the gimmick held down: the shade is a counter
@@ -104,6 +113,7 @@ export default function make(api) {
     moves,
     rig: { anims: spriteAnims(), loops: spriteLoops },
     palette: { colors: { marker: "#c94a3c" }, outline: "#292722" },
+    looks,
     // every key must exist from the start: the state hash walks these
     special: () => ({ charge: 0, heat: 0 }),
     hooks: {
@@ -124,7 +134,7 @@ export default function make(api) {
         if (f.frame === 12) {
           // angle 180: the hit pulls the victim back toward the lamp
           spawnProjectile(state, f, "hook", f.x + f.moveFacing * 40, f.y - 70, f.moveFacing * 11, -1.5, 40,
-            { frames: [0, 999], x: 0, y: 0, r: 16, damage: 6, angle: 180, base: 30, growth: 20, fx: "energy" }, { g: 0.18 });
+            { frames: [0, 999], x: 0, y: 0, r: 16, damage: 6, angle: 180, base: 30, growth: 20 }, { g: 0.18 });
         }
       },
       lift: ({ f, input }) => {

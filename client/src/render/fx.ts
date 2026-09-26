@@ -1,6 +1,8 @@
 import { inkArc, inkLine, inkPath, INK, PENCIL } from "./paper";
 import type { GameEvent, State } from "../../../shared/types";
 import type { Camera } from "./camera";
+import { defOf } from "../../../shared/fighter";
+import { lookColor, lookOf } from "./looks";
 
 interface Particle { x: number; y: number; vx: number; vy: number; life: number; age: number; size: number; color: string; kind: "spark" | "dust" | "ring" | "line" | "star" | "ember"; grav: number; ang?: number; len?: number; drag: number }
 interface Flash { life: number; age: number; color: string; alpha: number }
@@ -41,16 +43,22 @@ export class Fx {
     }
   }
   flash(color: string, alpha: number, life: number): void { this.flashes.push({ life, age: 0, color, alpha }); }
+  streak(x: number, y: number, ang: number, len: number, color: string): void {
+    this.particles.push({ x, y, vx: 0, vy: 0, life: 0.12, age: 0, size: 2, color, kind: "line", grav: 0, drag: 0, ang, len });
+  }
 
   consume(state: State, events: GameEvent[], cam: Camera): void {
     for (const e of events) {
       switch (e.t) {
         case "hit": {
+          const look = e.attacker >= 0 ? lookOf(defOf(state.fighters[e.attacker]), e.fx) : null;
           const family = e.fx === "fire" ? "#ffc43a" : e.fx === "energy" ? "#35e0ff" : e.fx === "slash" || e.fx === "tip" ? "#f4f0ff" : null;
-          const c = family ?? this.colors[e.attacker] ?? "#fff";
+          const c = look ? lookColor(look, this.colors[e.attacker] ?? "#fff") : family ?? this.colors[e.attacker] ?? "#fff";
           const big = e.damage >= 12;
-          if (e.fx === "fire") for (let i = 0; i < 6; i++) this.particles.push({ x: e.x, y: e.y, vx: this.rnd(-80, 80), vy: this.rnd(-260, -80), life: this.rnd(0.3, 0.6), age: 0, size: this.rnd(6, 12), color: "#ff4d2e", kind: "ember", grav: -120, drag: 2 });
-          if (e.fx === "energy") { this.ring(e.x, e.y, 90, "#35e0ff", 0.3); this.lineBurst(e.x, e.y, 0, 6, "#35e0ff", 90); }
+          const flame = e.fx === "fire" || look?.texture === "flame";
+          const energy = e.fx === "energy" || look?.texture === "glow";
+          if (flame) for (let i = 0; i < 6; i++) this.particles.push({ x: e.x, y: e.y, vx: this.rnd(-80, 80), vy: this.rnd(-260, -80), life: this.rnd(0.3, 0.6), age: 0, size: this.rnd(6, 12), color: look?.color ?? "#ff4d2e", kind: "ember", grav: -120, drag: 2 });
+          if (energy) { this.ring(e.x, e.y, 90, c, 0.3); this.lineBurst(e.x, e.y, 0, 6, c, 90); }
           const ang = Math.atan2(-Math.sin(e.angle * Math.PI / 180), Math.cos(e.angle * Math.PI / 180) * e.facing);
           this.spark(e.x, e.y, Math.min(26, 6 + e.damage * 1.2), 300 + e.damage * 30, "#fff", 5, 0.3);
           this.spark(e.x, e.y, Math.min(18, 4 + e.damage), 200 + e.damage * 20, c, 4, 0.4);
@@ -120,7 +128,6 @@ export class Fx {
         default: break;
       }
     }
-    void state;
   }
 
   update(dt: number): void {
