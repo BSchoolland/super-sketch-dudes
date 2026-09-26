@@ -1,63 +1,70 @@
-import { bell, fm, noise, semis, tone, type Voice } from "./synth";
+import { fm, noise, semis, tone, type Voice } from "./synth";
 
 /**
- * The sound set: sketchbook foley with arcade punch. Menus are pencil ticks, marker caps and
- * eraser swipes; fights are paper smacks over a real thump, and KOs tear the page.
+ * The sound set: heavy and physical. Weight lives under 400 Hz; highs are only the crack of contact.
+ * No chimes, no sparkle.
  */
 
 // ---- fight -------------------------------------------------------------------------------
 
-/** The shared core of every hit: a snap, a pitched thump and a paper smack, all scaled by damage. */
+/** The shared core of every hit, Smash-style: a slap-crack up front, a saturated body, dirt under it. */
 function impact(v: Voice, d: number): void {
-  const s = Math.min(1, d / 24);
-  noise(v, { type: "highpass", f: 2600, q: 0.7, dur: 0.03, gain: 0.45 + s * 0.2 });
-  tone(v, { f: 210 - s * 90, to: 48, glideTime: 0.07 + s * 0.08, dur: 0.1 + s * 0.2, gain: 0.55 + s * 0.35, drive: 1.5 + s * 2.5 });
-  noise(v, { src: "crackle", type: "bandpass", f: 2200 - s * 700, q: 0.9, dur: 0.07 + s * 0.12, gain: 0.8 + s * 0.4, rate: 1.3 - s * 0.4 });
-  noise(v, { type: "lowpass", f: 1400 - s * 600, to: 200, dur: 0.08 + s * 0.14, gain: 0.35 + s * 0.3 });
+  const s = Math.min(1, d / 24), g = 0.5 + 0.5 * s;
+  noise(v, { type: "highpass", f: 2200, q: 0.7, dur: 0.018, gain: 0.9 * g });
+  noise(v, { type: "bandpass", f: 1300 - s * 400, q: 1, dur: 0.04 + s * 0.03, gain: 1.3 * g, drive: 3 });
+  tone(v, { f: 150 - s * 60, to: 45, glideTime: 0.05 + s * 0.08, dur: 0.14 + s * 0.24, gain: 1.1 * g, drive: 3 + s * 3 });
+  noise(v, { type: "lowpass", f: 1100 - s * 400, to: 120, q: 0.9, dur: 0.1 + s * 0.18, gain: 0.85 * g, drive: 2 });
+  if (d >= 14) crunch(v, s);
+}
+
+/** The KRAK of a strong hit: a distorted burst with a short room tail. */
+function crunch(v: Voice, s: number): void {
+  v.send.gain.value = Math.max(v.send.gain.value, 0.3);
+  noise(v, { type: "bandpass", f: 900, to: 400, q: 0.9, dur: 0.12 + s * 0.08, gain: 1, drive: 6 });
+  noise(v, { src: "crackle", type: "bandpass", f: 1500, dur: 0.1, gain: 0.8, rate: 0.8 });
 }
 
 const FX: Record<string, (v: Voice, d: number) => void> = {
-  /** Sweet spot: a clean struck-bar ding over the hit. */
+  /** Sweet spot: a bat-crack with a steel knock inside it. */
   tip(v) {
-    v.send.gain.value = 0.35;
-    bell(v, { f: 1568, dur: 0.9, gain: 0.32 });
-    tone(v, { f: 3136, dur: 0.18, gain: 0.08, type: "triangle" });
+    v.send.gain.value = 0.25;
+    noise(v, { type: "bandpass", f: 1200, q: 2, dur: 0.05, gain: 0.8, drive: 3 });
+    fm(v, { f: 220, ratio: 1.4, index: 3, indexTo: 0.2, dur: 0.3, gain: 0.35, drive: 2 });
   },
   heavy(v, d) {
-    v.send.gain.value = 0.28;
-    tone(v, { f: 70, to: 32, dur: 0.45, gain: 0.7, drive: 2 });
-    noise(v, { type: "lowpass", f: 900, to: 120, q: 0.8, dur: 0.35, gain: 0.45 + d * 0.01, drive: 3 });
+    v.send.gain.value = 0.25;
+    tone(v, { f: 62, to: 30, dur: 0.5, gain: 0.8, drive: 3 });
+    noise(v, { type: "lowpass", f: 700, to: 90, q: 0.8, dur: 0.4, gain: 0.5 + d * 0.01, drive: 4 });
   },
   energy(v) {
-    v.send.gain.value = 0.22;
-    fm(v, { f: 880, to: 180, ratio: 1.41, index: 6, indexTo: 0.5, dur: 0.22, gain: 0.26 });
-    noise(v, { type: "bandpass", f: 5000, to: 1500, q: 3, dur: 0.18, gain: 0.3 });
+    v.send.gain.value = 0.2;
+    fm(v, { f: 180, to: 60, ratio: 1.41, index: 5, indexTo: 0.5, dur: 0.28, gain: 0.4, drive: 3 });
+    noise(v, { type: "bandpass", f: 1400, to: 500, q: 2, dur: 0.2, gain: 0.35, drive: 2 });
   },
   slash(v) {
-    v.send.gain.value = 0.2;
-    noise(v, { type: "bandpass", f: 7000, to: 2400, q: 5, dur: 0.14, gain: 0.55 });
-    bell(v, { f: 2350, dur: 0.35, gain: 0.12, partials: [1, 1.51, 2.37] });
+    v.send.gain.value = 0.15;
+    noise(v, { type: "bandpass", f: 2600, to: 900, q: 3, dur: 0.12, gain: 0.7 });
+    tone(v, { f: 120, to: 60, dur: 0.12, gain: 0.35, drive: 2 });
   },
   quake(v) {
     v.send.gain.value = 0.3;
-    noise(v, { type: "lowpass", f: 180, q: 1.2, dur: 0.7, gain: 0.9, trem: [17, 0.8], drive: 2 });
-    tone(v, { f: 44, to: 30, dur: 0.6, gain: 0.6 });
+    noise(v, { type: "lowpass", f: 160, q: 1.2, dur: 0.8, gain: 1.1, trem: [14, 0.8], drive: 3 });
+    tone(v, { f: 40, to: 28, dur: 0.7, gain: 0.7 });
   },
-  /** Counter-style hits: a hard wood knock. */
+  /** Counter-style hits: a thick wooden slam. */
   guard(v) {
     v.send.gain.value = 0.25;
-    tone(v, { f: 620, to: 560, dur: 0.12, gain: 0.35, type: "triangle" });
-    tone(v, { f: 1480, dur: 0.06, gain: 0.15 });
-    noise(v, { type: "bandpass", f: 950, q: 9, dur: 0.1, gain: 0.5 });
+    tone(v, { f: 240, to: 180, dur: 0.14, gain: 0.5, type: "triangle", drive: 2 });
+    noise(v, { type: "bandpass", f: 500, q: 5, dur: 0.12, gain: 0.7 });
   },
   burst(v) {
     v.send.gain.value = 0.35;
-    noise(v, { type: "lowpass", f: 2400, to: 160, q: 0.6, dur: 0.55, gain: 0.7, drive: 3 });
-    tone(v, { f: 60, to: 28, dur: 0.5, gain: 0.6 });
+    noise(v, { type: "lowpass", f: 1400, to: 90, q: 0.6, dur: 0.65, gain: 0.9, drive: 4 });
+    tone(v, { f: 55, to: 26, dur: 0.6, gain: 0.8, drive: 2 });
   },
   fire(v) {
-    noise(v, { src: "crackle", type: "highpass", f: 1400, dur: 0.4, gain: 0.9, rate: 1.6 });
-    noise(v, { type: "bandpass", f: 3000, to: 900, q: 0.6, dur: 0.3, gain: 0.25 });
+    noise(v, { type: "lowpass", f: 1800, to: 300, q: 0.7, dur: 0.4, gain: 0.5, drive: 3 });
+    noise(v, { src: "crackle", type: "bandpass", f: 1200, dur: 0.35, gain: 0.8, rate: 0.9 });
   },
 };
 
@@ -68,116 +75,111 @@ export function hit(v: Voice, damage: number, fx: string, kb: number): void {
   if (kb > 140) launch(v, kb);
 }
 
-/** A big launch: wind tearing past, longer the harder they fly. */
+/** A big launch: a low roar of wind behind them. */
 function launch(v: Voice, kb: number): void {
   const s = Math.min(1, (kb - 140) / 160);
-  v.send.gain.value = Math.max(v.send.gain.value, 0.3);
-  noise(v, { type: "bandpass", f: 500, to: 2600, q: 1.6, dur: 0.45 + s * 0.35, gain: 0.3 + s * 0.2, attack: 0.03, delay: 0.03 });
-  noise(v, { type: "highpass", f: 6000, dur: 0.3, gain: 0.15, delay: 0.03 });
+  v.send.gain.value = Math.max(v.send.gain.value, 0.25);
+  noise(v, { type: "bandpass", f: 250, to: 900, q: 1.2, dur: 0.5 + s * 0.4, gain: 0.5 + s * 0.3, attack: 0.04, delay: 0.03, drive: 2 });
 }
 
-/** Rubbery bubble shield: a hollow bwomp and a plastic tick. */
+/** Thick rubber shield: a dull bwomp. */
 export function shieldHit(v: Voice, damage: number): void {
   const s = Math.min(1, damage / 20);
-  fm(v, { f: 330 - s * 80, to: 240 - s * 60, ratio: 0.5, index: 2.5, indexTo: 0.2, dur: 0.16 + s * 0.1, gain: 0.35 + s * 0.2 });
-  noise(v, { type: "bandpass", f: 2600, q: 5, dur: 0.04, gain: 0.4 });
+  fm(v, { f: 180 - s * 50, to: 120 - s * 30, ratio: 0.5, index: 2, indexTo: 0.2, dur: 0.18 + s * 0.12, gain: 0.55 + s * 0.3, drive: 2 });
+  noise(v, { type: "lowpass", f: 900, dur: 0.06, gain: 0.45 });
 }
 
+/** Steel on steel: a hard clang with a low ring. */
 export function parry(v: Voice): void {
-  v.send.gain.value = 0.45;
-  noise(v, { type: "highpass", f: 4000, dur: 0.08, gain: 0.4 });
-  bell(v, { f: 2637, dur: 1.1, gain: 0.3 });
-  bell(v, { f: 3951, dur: 0.8, gain: 0.18, delay: 0.05 });
-  noise(v, { type: "bandpass", f: 1800, to: 6000, q: 2, dur: 0.18, gain: 0.25 });
+  v.send.gain.value = 0.35;
+  noise(v, { type: "bandpass", f: 1600, q: 1.5, dur: 0.05, gain: 0.8, drive: 3 });
+  fm(v, { f: 330, ratio: 2.76, index: 2.5, indexTo: 0.3, dur: 0.7, gain: 0.35, drive: 1.5 });
+  tone(v, { f: 110, to: 70, dur: 0.25, gain: 0.5, drive: 2 });
 }
 
-/** Ceramic shatter, then a dizzy wobble falling away. */
+/** The shield blows apart and they reel. */
 export function shieldBreak(v: Voice): void {
-  v.send.gain.value = 0.4;
-  noise(v, { src: "crackle", type: "highpass", f: 2800, dur: 0.8, gain: 1.4, rate: 0.8 });
-  noise(v, { type: "highpass", f: 5000, dur: 0.25, gain: 0.35 });
-  for (let i = 0; i < 6; i++) bell(v, { f: 2200 + Math.random() * 4000, dur: 0.35, gain: 0.08, delay: i * 0.035 + Math.random() * 0.03, partials: [1, 2.3] });
-  tone(v, { f: 520, to: 90, dur: 0.9, gain: 0.25, type: "triangle", vib: [9, 30], delay: 0.1 });
+  v.send.gain.value = 0.35;
+  noise(v, { type: "lowpass", f: 2200, to: 150, q: 0.6, dur: 0.6, gain: 1, drive: 4 });
+  noise(v, { src: "crackle", type: "bandpass", f: 1200, dur: 0.5, gain: 1.2, rate: 0.6 });
+  tone(v, { f: 70, to: 30, dur: 0.6, gain: 0.8, drive: 3 });
+  tone(v, { f: 200, to: 60, dur: 1.0, gain: 0.25, type: "triangle", vib: [7, 12], delay: 0.15 });
 }
 
 export function land(v: Voice, hard: boolean): void {
   if (hard) {
-    tone(v, { f: 120, to: 55, dur: 0.14, gain: 0.45 });
-    noise(v, { type: "lowpass", f: 700, to: 150, dur: 0.18, gain: 0.4 });
-    noise(v, { src: "scribble", type: "bandpass", f: 900, q: 0.8, dur: 0.22, gain: 0.15, attack: 0.02 });
+    tone(v, { f: 95, to: 42, dur: 0.18, gain: 0.7, drive: 2.5 });
+    noise(v, { type: "lowpass", f: 600, to: 100, dur: 0.22, gain: 0.55, drive: 2 });
   } else {
-    tone(v, { f: 150, to: 80, dur: 0.07, gain: 0.4 });
-    noise(v, { type: "lowpass", f: 900, dur: 0.06, gain: 0.35 });
+    tone(v, { f: 110, to: 60, dur: 0.08, gain: 0.5, drive: 2 });
+    noise(v, { type: "lowpass", f: 700, dur: 0.06, gain: 0.35 });
   }
 }
 
-/** A page flick; the double jump adds an airy lift. */
+/** Push off the ground; the double jump is a heavier gust. */
 export function jump(v: Voice, double: boolean): void {
-  noise(v, { type: "bandpass", f: 900, to: 2400, q: 1.4, dur: 0.09, gain: 0.9, attack: 0.008 });
-  if (double) {
-    noise(v, { type: "bandpass", f: 1500, to: 4200, q: 2.2, dur: 0.18, gain: 0.7, attack: 0.02 });
-    tone(v, { f: 420, to: 880, dur: 0.14, gain: 0.07, type: "triangle" });
-  }
+  tone(v, { f: 90, to: 140, dur: 0.07, gain: 0.35, drive: 2 });
+  noise(v, { type: "bandpass", f: 500, to: 1100, q: 1.2, dur: 0.1, gain: 0.6, attack: 0.008 });
+  if (double) noise(v, { type: "bandpass", f: 300, to: 900, q: 1.1, dur: 0.2, gain: 0.7, attack: 0.02 });
 }
 
-/** Pencil scrape. */
+/** Boots scuffing off. */
 export function dash(v: Voice): void {
-  noise(v, { src: "scribble", type: "bandpass", f: 2000, to: 3200, q: 1.2, dur: 0.15, gain: 0.8, attack: 0.01 });
+  noise(v, { type: "bandpass", f: 700, to: 400, q: 1.2, dur: 0.14, gain: 0.8, attack: 0.008 });
+  tone(v, { f: 80, dur: 0.06, gain: 0.3 });
 }
 
-/** Whooshes by weight: jabs and tilts flick, aerials and specials swipe, smashes haul through the air. */
+/** Whooshes by weight, all low and thick; smashes haul a lot of air. */
 export function swing(v: Voice, weight: 0 | 1 | 2): void {
-  if (weight === 0) noise(v, { type: "bandpass", f: 1500, to: 3400, q: 1.5, dur: 0.09, gain: 0.6, attack: 0.012 });
-  else if (weight === 1) noise(v, { type: "bandpass", f: 800, to: 2600, q: 1.3, dur: 0.15, gain: 0.65, attack: 0.02 });
+  if (weight === 0) noise(v, { type: "bandpass", f: 600, to: 1300, q: 1.3, dur: 0.1, gain: 0.8, attack: 0.015 });
+  else if (weight === 1) noise(v, { type: "bandpass", f: 350, to: 1000, q: 1.2, dur: 0.17, gain: 0.95, attack: 0.025 });
   else {
-    noise(v, { type: "bandpass", f: 350, to: 1700, q: 1.1, dur: 0.24, gain: 0.45, attack: 0.04 });
-    tone(v, { f: 95, to: 60, dur: 0.2, gain: 0.2, attack: 0.03 });
+    noise(v, { type: "bandpass", f: 180, to: 800, q: 1, dur: 0.28, gain: 1.1, attack: 0.05, drive: 2 });
+    tone(v, { f: 70, to: 45, dur: 0.25, gain: 0.4, attack: 0.04 });
   }
 }
 
-/** Smash charge: a rising, trembling strain. level 0..1. Short grains; the caller retriggers. */
+/** Smash charge: a low growl that tightens. level 0..1. Short grains; the caller retriggers. */
 export function charge(v: Voice, level: number): void {
-  tone(v, { f: 110 + level * 110, dur: 0.09, gain: 0.05 + level * 0.05, type: "sawtooth", lp: 500 + level * 1500, attack: 0.02, vib: [11, 4 + level * 6] });
+  tone(v, { f: 55 + level * 40, dur: 0.09, gain: 0.12 + level * 0.1, type: "sawtooth", lp: 250 + level * 500, attack: 0.02, vib: [9, 2 + level * 4], drive: 2 });
 }
 
 export function tech(v: Voice): void {
-  noise(v, { type: "highpass", f: 3000, dur: 0.03, gain: 0.35 });
-  tone(v, { f: 1100, to: 1900, dur: 0.1, gain: 0.12, type: "triangle" });
+  tone(v, { f: 140, to: 80, dur: 0.08, gain: 0.5, drive: 2 });
+  noise(v, { type: "bandpass", f: 900, q: 1.5, dur: 0.05, gain: 0.5 });
 }
 
 export function ledge(v: Voice): void {
-  noise(v, { src: "crackle", type: "bandpass", f: 1800, dur: 0.1, gain: 1.2 });
-  tone(v, { f: 180, to: 110, dur: 0.06, gain: 0.2 });
+  tone(v, { f: 120, to: 80, dur: 0.07, gain: 0.45, drive: 2 });
+  noise(v, { type: "lowpass", f: 900, dur: 0.07, gain: 0.4 });
 }
 
 export function grab(v: Voice): void {
-  noise(v, { type: "lowpass", f: 1300, dur: 0.1, gain: 0.35 });
-  noise(v, { src: "crackle", type: "bandpass", f: 900, q: 1.2, dur: 0.12, gain: 0.6 });
-  tone(v, { f: 140, to: 100, dur: 0.08, gain: 0.25 });
+  noise(v, { type: "lowpass", f: 900, dur: 0.12, gain: 0.6 });
+  tone(v, { f: 100, to: 70, dur: 0.1, gain: 0.5, drive: 2 });
 }
 
 export function throwSound(v: Voice): void {
-  noise(v, { type: "bandpass", f: 600, to: 2200, q: 1.3, dur: 0.22, gain: 0.55, attack: 0.03 });
-  tone(v, { f: 110, to: 70, dur: 0.12, gain: 0.25 });
+  noise(v, { type: "bandpass", f: 300, to: 900, q: 1.1, dur: 0.24, gain: 0.8, attack: 0.03 });
+  tone(v, { f: 85, to: 50, dur: 0.15, gain: 0.45, drive: 2 });
 }
 
-/** The page tears: crunch, a deep boom with a long room, and a little sparkle as they vanish. */
+/** KABOOM: the blast-line whoosh, a detonation with a long low tail, and debris. */
 export function ko(v: Voice): void {
-  v.send.gain.value = 0.5;
+  v.send.gain.value = 0.45;
   impact(v, 30);
-  noise(v, { src: "crackle", type: "bandpass", f: 3000, q: 0.6, dur: 0.7, gain: 1.6, rate: 0.7, delay: 0.02 });
-  noise(v, { src: "scribble", type: "highpass", f: 2500, dur: 0.5, gain: 0.3, delay: 0.02 });
-  tone(v, { f: 58, to: 26, dur: 1.4, gain: 0.8, drive: 2.5, delay: 0.03 });
-  noise(v, { type: "lowpass", f: 1800, to: 80, q: 0.7, dur: 1.2, gain: 0.7, drive: 2, delay: 0.03 });
-  [0, 4, 7, 12, 16].forEach((n, i) => bell(v, { f: semis(1318, n), dur: 0.5, gain: 0.07, delay: 0.25 + i * 0.055 }));
+  noise(v, { type: "bandpass", f: 400, to: 2400, q: 0.8, dur: 0.9, gain: 0.7, drive: 3, attack: 0.02 });
+  tone(v, { f: 48, to: 22, dur: 1.8, gain: 1, drive: 4, delay: 0.02 });
+  noise(v, { type: "lowpass", f: 2500, to: 60, q: 0.7, dur: 1.6, gain: 1.1, drive: 6, delay: 0.02 });
+  noise(v, { type: "lowpass", f: 300, q: 1, dur: 1.4, gain: 0.7, trem: [11, 0.6], attack: 0.1, delay: 0.1 });
+  noise(v, { src: "crackle", type: "bandpass", f: 900, dur: 1, gain: 1.2, rate: 0.5, attack: 0.05, delay: 0.12 });
 }
 
-/** Drawn back in: a marker squeak and a soft rising chime. */
+/** Back on the stage: a low rising swell that thuds down. */
 export function respawn(v: Voice): void {
-  v.send.gain.value = 0.35;
-  tone(v, { f: 1700, to: 2600, dur: 0.32, gain: 0.07, vib: [32, 140], attack: 0.03 });
-  noise(v, { src: "scribble", type: "bandpass", f: 3500, q: 2, dur: 0.3, gain: 0.2, attack: 0.03 });
-  [0, 4, 7].forEach((n, i) => bell(v, { f: semis(1046.5, n), dur: 0.6, gain: 0.09, delay: 0.1 + i * 0.07, partials: [1, 3.01] }));
+  v.send.gain.value = 0.3;
+  noise(v, { type: "bandpass", f: 150, to: 700, q: 1.2, dur: 0.45, gain: 0.6, attack: 0.3 });
+  tone(v, { f: 90, to: 50, dur: 0.2, gain: 0.55, drive: 2, delay: 0.38 });
 }
 
 /** Projectiles get a stable pitch per kind, so each fighter's shot has its own voice. */
@@ -185,67 +187,65 @@ export function projectile(v: Voice, kind: string): void {
   let h = 0;
   for (let i = 0; i < kind.length; i++) h = (h * 31 + kind.charCodeAt(i)) >>> 0;
   const p = 0.75 + (h % 9) * 0.07;
-  noise(v, { type: "bandpass", f: 3200 * p, to: 900 * p, q: 2, dur: 0.13, gain: 0.7 });
-  tone(v, { f: 1200 * p, to: 420 * p, dur: 0.11, gain: 0.22, type: "triangle" });
+  noise(v, { type: "bandpass", f: 1100 * p, to: 350 * p, q: 1.5, dur: 0.15, gain: 0.75, drive: 2 });
+  tone(v, { f: 160 * p, to: 70 * p, dur: 0.12, gain: 0.4, drive: 2 });
 }
 
 // ---- match flow ---------------------------------------------------------------------------
 
-/** Ink stamp. */
+/** A war drum. */
 export function countdown(v: Voice): void {
-  v.send.gain.value = 0.3;
-  tone(v, { f: 523, to: 500, dur: 0.16, gain: 0.3, type: "triangle" });
-  tone(v, { f: 130, to: 80, dur: 0.1, gain: 0.35 });
-  noise(v, { type: "bandpass", f: 1100, q: 3, dur: 0.05, gain: 0.45 });
+  v.send.gain.value = 0.35;
+  tone(v, { f: 110, to: 60, dur: 0.3, gain: 0.8, drive: 2.5 });
+  noise(v, { type: "lowpass", f: 900, to: 200, dur: 0.12, gain: 0.5 });
 }
 
-/** A heavier stamp, a bright chord stab and a cymbal of paper. */
+/** A bigger drum and a low brass stab. */
 export function go(v: Voice): void {
   v.send.gain.value = 0.4;
-  tone(v, { f: 150, to: 60, dur: 0.18, gain: 0.5, drive: 2 });
-  noise(v, { type: "bandpass", f: 1300, q: 2.5, dur: 0.07, gain: 0.5 });
-  for (const n of [0, 7, 12, 16, 19]) tone(v, { f: semis(261.6, n), dur: 0.7, gain: 0.07, type: "sawtooth", lp: 5000, lpTo: 900, attack: 0.005 });
-  noise(v, { type: "highpass", f: 6000, dur: 0.9, gain: 0.2 });
+  tone(v, { f: 90, to: 40, dur: 0.5, gain: 1, drive: 3 });
+  noise(v, { type: "lowpass", f: 1500, to: 150, dur: 0.35, gain: 0.7, drive: 2 });
+  for (const n of [0, 7, 12]) tone(v, { f: semis(98, n), dur: 0.8, gain: 0.14, type: "sawtooth", lp: 1800, lpTo: 300, attack: 0.01, drive: 2 });
 }
 
-/** GAME: the stamp comes down and the chord resolves. */
+/** GAME: two slams and a low chord that hangs. */
 export function gameEnd(v: Voice): void {
-  v.send.gain.value = 0.5;
-  tone(v, { f: 100, to: 40, dur: 0.4, gain: 0.6, drive: 2 });
-  noise(v, { type: "lowpass", f: 1500, to: 200, dur: 0.35, gain: 0.5 });
-  const chord = [0, 4, 7, 12, 16];
-  for (const n of chord) tone(v, { f: semis(196, n), dur: 1.6, gain: 0.06, type: "sawtooth", lp: 3500, lpTo: 600, delay: 0.02 });
-  for (const n of chord) tone(v, { f: semis(261.6, n), dur: 2.2, gain: 0.06, type: "sawtooth", lp: 4000, lpTo: 700, delay: 0.36 });
-  noise(v, { type: "highpass", f: 5000, dur: 1.4, gain: 0.2, delay: 0.36 });
+  v.send.gain.value = 0.45;
+  for (const d of [0, 0.32]) {
+    tone(v, { f: 80, to: 32, dur: 0.6, gain: 1, drive: 3, delay: d });
+    noise(v, { type: "lowpass", f: 1200, to: 100, dur: 0.4, gain: 0.6, drive: 2, delay: d });
+  }
+  for (const n of [0, 7, 12, 15]) tone(v, { f: semis(73.4, n), dur: 2.2, gain: 0.12, type: "sawtooth", lp: 1400, lpTo: 250, delay: 0.32, drive: 1.5 });
 }
 
-/** Sudden death: a low, sour alarm and two heartbeats. */
+/** Sudden death: a low, sour drone and two heartbeats. */
 export function suddenDeath(v: Voice): void {
   v.send.gain.value = 0.35;
-  for (const f of [110, 116.5]) tone(v, { f, dur: 1.2, gain: 0.12, type: "sawtooth", lp: 1200, lpTo: 300 });
-  for (const d of [0.1, 0.35]) tone(v, { f: 60, to: 40, dur: 0.18, gain: 0.55, delay: d });
+  for (const f of [55, 58.3]) tone(v, { f, dur: 1.4, gain: 0.25, type: "sawtooth", lp: 600, lpTo: 150, drive: 2 });
+  for (const d of [0.1, 0.38]) tone(v, { f: 55, to: 35, dur: 0.2, gain: 0.8, drive: 2, delay: d });
 }
 
 // ---- menus --------------------------------------------------------------------------------
 
-/** Pencil tick. */
+/** A chunky button: a low knock with a dull click on top. */
+function thock(v: Voice, f: number, gain: number, delay = 0): void {
+  tone(v, { f, to: f * 0.6, dur: 0.07, gain, drive: 2, delay });
+  noise(v, { type: "lowpass", f: 1400, dur: 0.02, gain: gain * 0.8, delay });
+}
+
 export function menuMove(v: Voice): void {
-  noise(v, { type: "bandpass", f: 3800, q: 3, dur: 0.03, gain: 0.7 });
-  tone(v, { f: 2100, dur: 0.025, gain: 0.1 });
+  thock(v, 190, 0.4);
 }
 
-/** Marker cap pop and a two-note chime up. */
+/** A swipe that lands on a heavy knock. */
 export function menuConfirm(v: Voice): void {
-  noise(v, { type: "bandpass", f: 1500, q: 4, dur: 0.03, gain: 0.45 });
-  tone(v, { f: 520, to: 260, dur: 0.04, gain: 0.25 });
   v.send.gain.value = 0.25;
-  bell(v, { f: 1318.5, dur: 0.3, gain: 0.1, delay: 0.02, partials: [1, 3.01] });
-  bell(v, { f: 1975.5, dur: 0.45, gain: 0.1, delay: 0.09, partials: [1, 3.01] });
+  noise(v, { type: "bandpass", f: 500, to: 1800, q: 1.1, dur: 0.08, gain: 0.3, attack: 0.03 });
+  thock(v, 150, 0.4, 0.07);
+  noise(v, { type: "bandpass", f: 1100, q: 1, dur: 0.03, gain: 0.15, drive: 3, delay: 0.07 });
 }
 
-/** Eraser swipe and a note down. */
 export function menuBack(v: Voice): void {
-  noise(v, { src: "scribble", type: "bandpass", f: 1400, to: 800, q: 1.2, dur: 0.12, gain: 0.4, attack: 0.01 });
-  bell(v, { f: 987.8, dur: 0.25, gain: 0.07, partials: [1, 3.01] });
-  bell(v, { f: 659.3, dur: 0.3, gain: 0.07, delay: 0.06, partials: [1, 3.01] });
+  thock(v, 140, 0.45);
+  noise(v, { type: "bandpass", f: 700, to: 300, q: 1.2, dur: 0.1, gain: 0.4, delay: 0.02 });
 }
