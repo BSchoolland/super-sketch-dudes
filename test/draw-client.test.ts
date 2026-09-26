@@ -38,7 +38,7 @@ describe("draw client logic", () => {
 
   it("times each phase the way the server's timer does", () => {
     expect(phaseMs({ phase: "draw", drawSeconds: 45 })).toBe(45_000 + DRAW_GRACE_MS);
-    expect(phaseMs({ phase: "reveal", drawSeconds: 45 })).toBe(30_000);
+    expect(() => phaseMs({ phase: "reveal", drawSeconds: 45 })).toThrow();
     expect(phaseMs({ phase: "between", drawSeconds: 45 })).toBe(8_000);
     expect(() => phaseMs({ phase: "loading", drawSeconds: 45 })).toThrow();
   });

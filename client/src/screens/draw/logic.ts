@@ -54,7 +54,6 @@ export function secondsLeft(deadline: number, now: number, graceMs = 0): number 
 /** How long the server's timer runs for the phase it just started, so the clock runs on local time. */
 export function phaseMs(room: Pick<DrawRoomState, "phase" | "drawSeconds">): number {
   if (room.phase === "draw") return room.drawSeconds * 1000 + DRAW_GRACE_MS;
-  if (room.phase === "reveal") return DRAW_DEFAULTS.revealSeconds * 1000;
   if (room.phase === "between") return DRAW_DEFAULTS.betweenSeconds * 1000;
   throw new Error(`the server set a deadline in phase ${room.phase}`);
 }

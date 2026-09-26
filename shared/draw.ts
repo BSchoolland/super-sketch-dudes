@@ -91,6 +91,6 @@ export type DrawServerMessage =
   /** The battle is starting: same shape as the classic online `start`, so the same match screen runs it. */
   | { t: "start"; seed: number; config: { stage: string; rules: { stocks: number; time: number }; inputDelay: number; players: { fighter: string }[] }; members: { id: number; name: string; slot: number }[] };
 
-export const DRAW_DEFAULTS = { rounds: 3, drawSeconds: 90, betweenSeconds: 8, stocks: 3, minPlayers: 2, maxPlayers: 4 };
+export const DRAW_DEFAULTS = { rounds: 1, drawSeconds: 90, betweenSeconds: 8, stocks: 3, minPlayers: 2, maxPlayers: 4 };
 /** Longest side of the drawing the client uploads; the server rejects bigger. */
 export const DRAW_PNG_MAX_BYTES = 900_000;
