@@ -103,6 +103,32 @@ export function enqueueJob(spec: { fighterId: string; player: Player; siblings: 
   return job;
 }
 
+/** Writes a finished character's files under /gen/<id>/ (validating the module) and returns what the library shows. */
+export async function storeCharacter(fighterId: string, playerName: string, b: any): Promise<NonNullable<ForgeJob["result"]>> {
+  for (const k of ["name", "tagline", "description", "source"]) if (typeof b[k] !== "string") throw new Error(`${k} must be a string`);
+  if (!b.sprite || typeof b.sprite !== "object") throw new Error("sprite missing");
+  if (!b.cells || typeof b.cells !== "object") throw new Error("cells missing");
+  for (const c of SPRITE_CELLS) if (typeof b.cells[c] !== "string") throw new Error(`cell ${c} missing`);
+  const dir = path.join(genDir, fighterId);
+  fs.mkdirSync(dir, { recursive: true });
+  const cells: Record<string, string> = {};
+  for (const c of Object.keys(b.cells)) {
+    if (!/^[\w-]+$/.test(c)) continue;
+    fs.writeFileSync(path.join(dir, `${c}.png`), Buffer.from(b.cells[c], "base64")); cells[c] = `${genBase}/${fighterId}/${c}.png`;
+  }
+  if (typeof b.sheet === "string") fs.writeFileSync(path.join(dir, "sheet.png"), Buffer.from(b.sheet, "base64"));
+  const sprite = { px: Number(b.sprite.px), feetPx: Number(b.sprite.feetPx), heightPx: Number(b.sprite.heightPx), anims: b.sprite.anims && typeof b.sprite.anims === "object" ? b.sprite.anims : {}, cells };
+  const bundle = { id: fighterId, player: playerName, description: b.description, source: b.source, sprite };
+  await buildGenerated(bundle); // the forge already validated; this is the server refusing to serve a broken one
+  fs.writeFileSync(path.join(dir, "bundle.json"), JSON.stringify(bundle));
+  if (b.report !== undefined) fs.writeFileSync(path.join(dir, "report.json"), JSON.stringify(b.report));
+  return {
+    name: b.name.slice(0, 24), tagline: b.tagline.slice(0, 120), description: b.description.slice(0, 600),
+    card: Array.isArray(b.card) ? b.card.slice(0, 4).map((c: unknown) => String(c).slice(0, 60)) : null,
+    bundleUrl: `${genBase}/${fighterId}/bundle.json`, sheetUrl: typeof b.sheet === "string" ? `${genBase}/${fighterId}/sheet.png` : null,
+  };
+}
+
 export function newFighterId(prefix: string): string {
   return `gen-${prefix}-${crypto.randomBytes(3).toString("hex")}`;
 }
@@ -172,27 +198,8 @@ export function attachForge(api: express.Router, opts: ForgeOptions): void {
     if (!forgeAuth(req, res)) return;
     const job = jobs.get(req.params.id);
     if (!job || job.status !== "running") return res.status(409).json({ error: "job not running" });
-    const b = req.body ?? {};
     try {
-      for (const k of ["name", "tagline", "description", "source"]) if (typeof b[k] !== "string") throw new Error(`${k} must be a string`);
-      if (!b.sprite || typeof b.sprite !== "object") throw new Error("sprite missing");
-      if (!b.cells || typeof b.cells !== "object") throw new Error("cells missing");
-      for (const c of SPRITE_CELLS) if (typeof b.cells[c] !== "string") throw new Error(`cell ${c} missing`);
-      const dir = path.join(genDir, job.fighterId);
-      fs.mkdirSync(dir, { recursive: true });
-      const cells: Record<string, string> = {};
-      for (const c of SPRITE_CELLS) { fs.writeFileSync(path.join(dir, `${c}.png`), Buffer.from(b.cells[c], "base64")); cells[c] = `${genBase}/${job.fighterId}/${c}.png`; }
-      if (typeof b.sheet === "string") fs.writeFileSync(path.join(dir, "sheet.png"), Buffer.from(b.sheet, "base64"));
-      const sprite = { px: Number(b.sprite.px), feetPx: Number(b.sprite.feetPx), heightPx: Number(b.sprite.heightPx), anims: b.sprite.anims && typeof b.sprite.anims === "object" ? b.sprite.anims : {}, cells };
-      const bundle = { id: job.fighterId, player: job.playerName, description: b.description, source: b.source, sprite };
-      await buildGenerated(bundle); // the forge already validated; this is the server refusing to serve a broken one
-      fs.writeFileSync(path.join(dir, "bundle.json"), JSON.stringify(bundle));
-      if (b.report !== undefined) fs.writeFileSync(path.join(dir, "report.json"), JSON.stringify(b.report));
-      job.result = {
-        name: b.name.slice(0, 24), tagline: b.tagline.slice(0, 120), description: b.description.slice(0, 600),
-        card: Array.isArray(b.card) ? b.card.slice(0, 4).map((c: unknown) => String(c).slice(0, 60)) : null,
-        bundleUrl: `${genBase}/${job.fighterId}/bundle.json`, sheetUrl: typeof b.sheet === "string" ? `${genBase}/${job.fighterId}/sheet.png` : null,
-      };
+      job.result = await storeCharacter(job.fighterId, job.playerName, req.body ?? {});
       setStatus(job, "done", "");
       res.status(204).end();
     } catch (e) {

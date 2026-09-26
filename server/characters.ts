@@ -1,11 +1,14 @@
+import fs from "node:fs";
+import path from "node:path";
 import type express from "express";
 import { DRAW_PNG_MAX_BYTES } from "../shared/draw";
 import { playerOf } from "./auth";
-import { enqueueJob, entryOf, jobOf, newFighterId } from "./forge";
+import { drawingUrlOf, enqueueJob, entryOf, jobOf, newFighterId, storeCharacter } from "./forge";
+import { upsertCharacter } from "./library";
 import { libraryOf, removeCharacter, setStarters, starterEntries, starterIds } from "./library";
 
 /** The character creator and the library, over HTTP, for signed-in players. */
-export function attachCharacters(api: express.Router, forgeToken = ""): void {
+export function attachCharacters(api: express.Router, forgeToken = "", dataDir = ""): void {
   api.get("/library", (req, res) => {
     const player = playerOf(req);
     if (!player) return res.status(401).json({ error: "not signed in" });
@@ -44,6 +47,19 @@ export function attachCharacters(api: express.Router, forgeToken = ""): void {
     const forge = req.body?.forge === "v2" ? "v2" : req.body?.forge === "v1" ? "v1" : undefined;
     const job = enqueueJob({ fighterId: newFighterId(player.id.replace(/\W+/g, "").slice(-4) || "p"), player, siblings, png, origin: "creator", hint, forge });
     res.json({ character: entryOf(job) });
+  });
+
+  // a finished character made elsewhere (a CLI forge run), dropped straight into a player's library
+  api.post("/characters/import", async (req, res) => {
+    if (!forgeToken || req.get("x-forge-token") !== forgeToken) return res.status(401).json({ error: "bad token" });
+    const owner = String(req.body?.owner ?? ""), id = String(req.body?.id ?? "");
+    if (!owner || !/^gen-[\w-]+$/.test(id)) return res.status(400).json({ error: "owner and a gen-… id required" });
+    try {
+      const result = await storeCharacter(id, String(req.body?.player ?? "player"), req.body);
+      if (typeof req.body?.drawing === "string") { const f = path.join(dataDir, "gen", "drawings", `${id}.png`); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, Buffer.from(req.body.drawing, "base64")); }
+      const entry = upsertCharacter({ id, owner, status: "ready", stage: "", error: null, ...result, drawingUrl: drawingUrlOf(id), createdAt: Date.now(), origin: "creator" });
+      res.json({ character: entry });
+    } catch (e) { res.status(400).json({ error: (e as Error).message }); }
   });
 
   api.get("/characters/:id", (req, res) => {
