@@ -20,7 +20,7 @@ interface Contender { id: string; bundleUrl: string }
 
 /**
  * The fight under the title screen: CPUs drawn from every library and the house, dropped in
- * one at a time, no sound and no HUD. Runs the sim on its own fixed step and draws through the
+ * one at a time, one stock each (the fallen stay fallen), no sound and no HUD. Runs the sim on its own fixed step and draws through the
  * normal renderer with a fixed camera.
  */
 export class MenuBrawl {
@@ -63,7 +63,7 @@ export class MenuBrawl {
   }
 
   private begin(a: string, b: string): void {
-    const cfg: MatchConfig = { stage: "menu", players: [a, b].map((fighter) => ({ fighter, cpu: CPU_LEVELS[this.rand(CPU_LEVELS.length)] })), rules: { stocks: 99, time: 0 }, seed: this.rng };
+    const cfg: MatchConfig = { stage: "menu", players: [a, b].map((fighter) => ({ fighter, cpu: CPU_LEVELS[this.rand(CPU_LEVELS.length)] })), rules: { stocks: 1, time: 0 }, seed: this.rng };
     this.state = createMatch(cfg);
     this.cpus = this.state.fighters.map((f) => f.cpu);
     this.inputs = this.state.fighters.map(() => cloneInput(EMPTY_INPUT));
@@ -73,13 +73,18 @@ export class MenuBrawl {
     this.renderer.cam.fixed = true;
   }
 
-  /** Drops a fighter in from the top: a new slot while there's room, else the slot that has been here longest. */
+  /** Drops a fighter in from the top: a dead fighter's slot first, then a new slot while there's room, else the slot that has been here longest. */
   private spawn(id: string): void {
     const st = this.state!;
     const stage = stageOf(st);
     const cpu = CPU_LEVELS[this.rand(CPU_LEVELS.length)];
     let slot: number;
-    if (st.fighters.length < MAX_FIGHTERS) {
+    const dead = st.fighters.findIndex((f) => f.stocks <= 0);
+    if (dead >= 0) {
+      slot = dead;
+      st.fighters[slot] = createFighter(slot, id, stage, st.rules, slot, cpu);
+      this.cpus[slot] = cpu;
+    } else if (st.fighters.length < MAX_FIGHTERS) {
       slot = st.fighters.length;
       st.fighters.push(createFighter(slot, id, stage, st.rules, slot, cpu));
       st.inputs.push(cloneInput(EMPTY_INPUT));
