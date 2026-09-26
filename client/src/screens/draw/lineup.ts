@@ -67,6 +67,11 @@ export class LineupView implements DrawView {
       ctx.fillRect(cx - 50, top + size + 96, 100, 5);
       label(ctx, e.player.name, cx, top + size + 140, 34, e.player.connected ? INK : PENCIL, "center", 800);
       label(ctx, this.stateOf(e), cx, top + size + 186, 28, this.stateColor(e));
+      (e.ch.card ?? []).forEach((line, j) => {
+        const [button, ...rest] = line.split(/\s{2,}/);
+        label(ctx, button, cx - size / 2 + 8, top + size + 236 + j * 34, 22, PENCIL, "left", 800);
+        label(ctx, rest.join(" "), cx - size / 2 + 150, top + size + 236 + j * 34, 22, INK, "left", 600);
+      });
       if (i < n - 1) title(ctx, "vs", x + size + gap / 2, top + size / 2 + 20, 56, PENCIL);
     });
     if (!this.fighting) label(ctx, "you're watching this one", VIEW_W / 2, VIEW_H - 60, 32, PENCIL);

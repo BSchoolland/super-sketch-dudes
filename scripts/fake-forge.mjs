@@ -90,6 +90,7 @@ async function work(job, n) {
   const name = NAMES[n % NAMES.length];
   await api(`/forge/jobs/${job.id}/complete`, {
     name, tagline: `${job.playerName}'s desk lamp with a grudge and a very long cord`, description: "A floating desk lamp that whips its cord.",
+    card: ["ATTACK  cord whip, aim it", "SPECIAL  hold: bulb flash burst", "UP+SPECIAL  propeller lift", "GRAB  plug hook, toss"],
     source, sprite: { px: 512, feetPx: 448, heightPx: 360, anims: {} }, cells, sheet,
   });
   console.log(`  done: ${name}`);

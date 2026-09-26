@@ -19,12 +19,17 @@ Write ONE JSON file to {{OUT}} with the Write tool and nothing else. Shape:
   "gimmick": "the one mechanic that makes it this character and not a generic fighter, in a sentence. Use the parts on the page.",
   "stats_note": "heavy/light, fast/slow, floaty/falls like a rock, how many jumps and why",
   "moves": {
-    "jab": "…", "ftilt": "…", "utilt": "…", "dtilt": "…", "dashAttack": "…",
-    "fsmash": "…", "usmash": "…", "dsmash": "…",
-    "nair": "…", "fair": "…", "bair": "…", "uair": "…", "dair": "…",
-    "grab": "…", "throws": "…",
-    "nspecial": "…", "sspecial": "…", "uspecial": "…", "dspecial": "…"
+    "strike": "THE attack. What part hits, how it moves, how it feels (quick poke, heavy swing, long reach). It gets aimed forward, up and down, and charged for the smash, but it is one move.",
+    "gimmick": "THE special. The one mechanic that makes it this character, using its parts. Held sideways or down it may vary (a thrown version, a charged version), still recognisably the same thing.",
+    "recovery": "up + special: how it gets back to the stage. A jump, a flap, a thrust, a grapple. Name the part.",
+    "grab": "how it grabs, and what the throw looks like"
   },
+  "card": [
+    "ATTACK  <the strike in 3-6 words>",
+    "SPECIAL  <the gimmick in 3-6 words>",
+    "UP+SPECIAL  <the recovery in 3-6 words>",
+    "GRAB  <the grab in 3-6 words>"
+  ],
   "cells": {
     "idle": "how it stands/hovers/sits at rest",
     "walk": "how it moves along the ground, in its own terms",
@@ -43,7 +48,11 @@ and deformation. No speed lines, stars, bursts or impact marks (the game draws t
 must be readable at a glance and clearly different from the others. Loose parts (cords, tails,
 scarves, antennae, long arms) swing and trail. Name only parts that are actually in the drawing.
 
-Rules for `moves`: each line says what the drawing DOES for that move and what it should feel like
-(fast poke, slow heavy swing, projectile, command grab, counter, hover, charge). Specials are where
-the gimmick lives. Ridiculous is fine if it is true to the drawing; the balance pass will handle the
-numbers. Tie every move to a visible part.
+Rules for `moves`: a player must learn the whole character in the first seconds of a fight, so it
+has exactly four things: a strike, a gimmick, a recovery and a grab. Each line says what the
+drawing DOES and what it should feel like (fast poke, slow heavy swing, projectile, command grab,
+counter, hover, charge). The gimmick is where the character lives. Ridiculous is fine if it is true
+to the drawing; the balance pass will handle the numbers. Tie every move to a visible part.
+
+Rules for `card`: four lines, shown to the players while the fight loads, each under 40 characters
+after the button name. Plain words, no frame data.

@@ -71,7 +71,7 @@ describe("generated fighters", () => {
   });
 
   it("reports every validation problem at once", async () => {
-    const broken = source.replace("fullHop: 13", "fullHop: 999").replace('mv("dtilt"', 'mv("dtiltx"');
+    const broken = source.replace("fullHop: 13", "fullHop: 999").replace('aim("dtilt"', 'aim("dtiltx"');
     await expect(buildGenerated({ id: "gen-broken", source: broken, sprite, player: "t", description: "" })).rejects.toThrow(/fullHop=999[\s\S]*dtilt\.id/);
   });
 });

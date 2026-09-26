@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { abandonedResult, battleReporter, DRAW_GRACE_MS, ladderHistory, phaseMs, secondsLeft, standings } from "../client/src/screens/draw/logic";
 import type { DrawCharacter, DrawPlayer, DrawRoomState } from "../shared/draw";
 
-const ch = (round: number, name: string, status: DrawCharacter["status"] = "ready"): DrawCharacter => ({ round, status, stage: "", drawingUrl: null, fighterId: name, bundleUrl: null, sheetUrl: null, name, tagline: null, description: null, error: null, spent: false });
+const ch = (round: number, name: string, status: DrawCharacter["status"] = "ready"): DrawCharacter => ({ round, status, stage: "", drawingUrl: null, fighterId: name, bundleUrl: null, sheetUrl: null, name, tagline: null, description: null, card: null, error: null, spent: false });
 const player = (id: number, characters: DrawCharacter[]): DrawPlayer => ({ id, name: `P${id}`, slot: id, ready: false, loaded: [], characters, current: 0, alive: true, wins: 0, connected: true });
 const room = (players: DrawPlayer[], battles: [number[], number][], host = 1): DrawRoomState => ({
   code: "ABCD", host, phase: "between", round: 2, rounds: 2, drawSeconds: 90, deadline: 0, players,

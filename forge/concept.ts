@@ -11,9 +11,12 @@ export interface Concept {
   archetype: (typeof ARCHETYPES)[number];
   gimmick: string;
   stats_note: string;
-  moves: Record<string, string>;
+  moves: Record<"strike" | "gimmick" | "recovery" | "grab", string>;
+  /** Four lines the players read while the fight loads. */
+  card: string[];
   cells: Record<SpriteCell, string>;
 }
+export const MOVE_KEYS = ["strike", "gimmick", "recovery", "grab"] as const;
 
 /** Reads the pass-1 file; returns the concept or every problem with it. */
 export function readConcept(file: string): { concept: Concept | null; problems: string[] } {
@@ -26,6 +29,8 @@ export function readConcept(file: string): { concept: Concept | null; problems: 
   if (!Array.isArray(j.counts) || !j.counts.length || j.counts.some((c: unknown) => typeof c !== "string")) p.push(`"counts" must be a non-empty array of strings`);
   if (!ARCHETYPES.includes(j.archetype)) p.push(`"archetype" must be one of ${ARCHETYPES.join(" | ")}`);
   if (!j.moves || typeof j.moves !== "object") p.push(`"moves" missing`);
+  else for (const k of MOVE_KEYS) if (typeof j.moves[k] !== "string" || !j.moves[k].trim()) p.push(`"moves.${k}" must be a non-empty string (the four moves are strike, gimmick, recovery, grab)`);
+  if (!Array.isArray(j.card) || j.card.length !== 4 || j.card.some((c: unknown) => typeof c !== "string" || !(c as string).trim() || (c as string).length > 60)) p.push(`"card" must be four short strings (under 60 chars each)`);
   if (!j.cells || typeof j.cells !== "object") p.push(`"cells" missing`);
   else for (const c of SPRITE_CELLS) if (typeof j.cells[c] !== "string" || !j.cells[c].trim()) p.push(`"cells.${c}" must be a non-empty string`);
   return p.length ? { concept: null, problems: p } : { concept: j as Concept, problems: [] };

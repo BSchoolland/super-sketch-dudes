@@ -37,13 +37,26 @@ Determinism is non-negotiable (every client re-runs your code and must get ident
   frame, grounded, special, chargeMul, grabbing, …), `state.fighters` the others, `input.b` the
   button bits, `input.x/y` the stick in -100..100. Mutate `f` freely; that's the point.
 
+## One strike, one gimmick, one recovery, one grab
+The player learns this character in the first five seconds of a fight, so it has four moves, the
+ones in the design. The engine has 22+ slots and every one must exist, but they are AIMINGS of
+those four, exactly like the exemplar's `aim()`:
+- the strike, forward: jab1 (quicker, weaker), ftilt, dashAttack (with `motion`), nair, fair, bair
+  (`cellFlip: true`); aimed up: utilt, uair; aimed down: dtilt, dair (dair may spike); charged:
+  fsmash, usmash, dsmash (bigger, slower, `smash: true`). Same part, same cell family, startup
+  within a few frames and damage within a few points of each other, so what the first hit taught
+  applies to every button.
+- the gimmick: nspecial; sspecial is the gimmick held sideways (a thrown or moving version),
+  dspecial the gimmick held down (a charged, planted or defensive version), or literally the same
+  move again if the design has nothing to say. Hooks live here.
+- the recovery: uspecial, and nothing else.
+- the grab: grab, dashGrab, pummel, and the four throws as one toss aimed four ways.
+- plus ledgeAttack, getupAttack, taunt (aimings of the strike, or trivial).
+Every move's `cell` is one of the nine (defaults: up-moves atk-up, down-moves atk-down, the rest
+atk-fwd; bair `cell: "atk-fwd", cellFlip: true`). Poses are squash/stretch/lean/offset keys on the
+whole cell: key(frame, { a: {}, sx, sy, rot, dx, dy }). Lean into every strike.
+
 ## Required
-- Every core move: jab1 ftilt utilt dtilt dashAttack fsmash usmash dsmash nair fair bair uair dair
-  grab fthrow bthrow uthrow dthrow nspecial sspecial uspecial dspecial, plus pummel, dashGrab,
-  ledgeAttack, getupAttack, taunt. Extra moves for hooks to chain into are welcome.
-- Every move's `cell` is one of the nine (defaults: up-moves atk-up, down-moves atk-down, the rest
-  atk-fwd; bair usually `cell: "atk-fwd", cellFlip: true`). Poses are squash/stretch/lean/offset
-  keys on the whole cell: key(frame, { a: {}, sx, sy, rot, dx, dy }). Lean into every strike.
 - uspecial must actually recover: it must gain height (set f.vy negative in a hook or use
   `motion`), and it must be `helpless: true, ledgeOk: true`. The check knocks the fighter out to
   about 200 units past the ledge at ledge height; uspecial (plus its jumps) must bring it back

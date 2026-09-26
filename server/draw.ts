@@ -83,7 +83,7 @@ export function attachDraw(api: express.Router, opts: DrawOptions): void {
   const charOf = (d: DrawState, playerId: number, round: number): DrawCharacter | undefined => d.players.get(playerId)?.characters[round - 1];
 
   function newCharacter(round: number): DrawCharacter {
-    return { round, status: "waiting", stage: "", drawingUrl: null, fighterId: null, bundleUrl: null, sheetUrl: null, name: null, tagline: null, description: null, error: null, spent: false };
+    return { round, status: "waiting", stage: "", drawingUrl: null, fighterId: null, bundleUrl: null, sheetUrl: null, name: null, tagline: null, description: null, card: null, error: null, spent: false };
   }
   function addPlayer(room: Room, c: Client): void {
     const d = stateOf(room);
@@ -286,6 +286,7 @@ export function attachDraw(api: express.Router, opts: DrawOptions): void {
       const r = jobRoom(job);
       if (r) {
         r.ch.name = b.name.slice(0, 24); r.ch.tagline = b.tagline.slice(0, 120); r.ch.description = b.description.slice(0, 600);
+        r.ch.card = Array.isArray(b.card) ? b.card.slice(0, 4).map((c: unknown) => String(c).slice(0, 60)) : null;
         r.ch.bundleUrl = `${opts.genBase}/${job.fighterId}/bundle.json`;
         r.ch.sheetUrl = typeof b.sheet === "string" ? `${opts.genBase}/${job.fighterId}/sheet.png` : null;
       }

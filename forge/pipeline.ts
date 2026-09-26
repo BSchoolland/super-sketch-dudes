@@ -22,6 +22,8 @@ export interface CompletePayload {
   name: string;
   tagline: string;
   description: string;
+  /** Four lines the players read while the fight loads: attack, special, up+special, grab. */
+  card: string[];
   source: string;
   sprite: { px: number; feetPx: number; heightPx: number; anims: Record<string, string> };
   cells: Record<string, string>;
@@ -155,7 +157,7 @@ export async function runPipeline(job: JobSpec, drawingSrc: string, dir: string,
   fs.writeFileSync(path.join(dir, "report.json"), JSON.stringify(report, null, 1));
   const b64 = (f: string) => fs.readFileSync(f).toString("base64");
   return {
-    name: concept.name, tagline: concept.tagline, description: concept.description, source: passed.source,
+    name: concept.name, tagline: concept.tagline, description: concept.description, card: concept.card, source: passed.source,
     sprite: { px: meta.px, feetPx: meta.feetPx, heightPx: meta.heightPx, anims: passed.anims },
     cells: Object.fromEntries(SPRITE_CELLS.map((c) => [c, b64(path.join(cellsDir, `${c}.png`))])),
     sheet: b64(sheetPath),
