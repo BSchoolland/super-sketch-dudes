@@ -16,6 +16,7 @@ const TIMEOUT_MS = 15 * 60_000;
 
 export async function runV2(job: JobSpec, drawingSrc: string, dir: string, io: PipelineIO): Promise<CompletePayload> {
   const t0 = Date.now();
+  fs.mkdirSync(dir, { recursive: true });
   const wt = path.join(root, "..", "forge-v2", job.id);
   fs.mkdirSync(path.dirname(wt), { recursive: true });
   const git = (...a: string[]) => { const r = spawnSync("git", a, { cwd: root, encoding: "utf8" }); if (r.status !== 0) throw new Error(`git ${a[0]}: ${r.stderr.trim()}`); return r.stdout; };
