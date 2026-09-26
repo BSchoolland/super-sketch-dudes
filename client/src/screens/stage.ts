@@ -64,7 +64,7 @@ export class StageScreen implements Screen {
         const d = arrows(ctx, VIEW_W / 2 + 190, y + 52, 70, 26);
         if (d) { if (r === 1) settings.stocks = Math.max(1, Math.min(10, settings.stocks + d)); else settings.time = Math.max(0, Math.min(10, settings.time + d)); saveSettings(); sfx.menuMove(); }
         label(ctx, text, VIEW_W / 2 - 270, y + 52, 30, INK, "left", 900);
-        label(ctx, `◀  ${value}  ▶`, VIEW_W / 2 + 270, y + 52, 30, INK, "right", 900);
+        label(ctx, value, VIEW_W / 2 + 190, y + 52, 30, INK, "center", 900);
       };
       rowCard(1, ry, "STOCKS", `${settings.stocks}`);
       rowCard(2, ry + 100, "TIME", settings.time ? `${settings.time}:00` : "none");

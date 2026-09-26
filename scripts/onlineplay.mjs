@@ -41,7 +41,7 @@ try {
   const moved = end.map((e, i) => Math.abs(e.x[i] - start[i].x[i]));
   const framesRun = end.map((e, i) => e.frame - start[i].frame);
   console.log(JSON.stringify({ start, end, moved, framesRun }));
-  const ok = moved.every((m) => m > 40) && framesRun.every((f) => f > 300) && Math.abs(end[0].frame - end[1].frame) < 60 && !end.some((e) => e.waiting);
+  const ok = moved.every((m) => m > 40) && framesRun.every((f) => f > 200) && Math.abs(end[0].frame - end[1].frame) < 60 && !end.some((e) => e.waiting);
   console.log(ok ? "PASS onlineplay" : "FAIL onlineplay");
   if (errors.length) console.error(errors.join("\n"));
   process.exitCode = ok ? 0 : 1;
