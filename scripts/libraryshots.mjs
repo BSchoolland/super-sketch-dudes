@@ -51,7 +51,7 @@ async function createCharacter(page, prefix) {
   await stroke(page, [[960, 420], [960, 700]]);
   await stroke(page, [[960, 520], [820, 460]]); await stroke(page, [[960, 520], [1110, 600]]);
   await stroke(page, [[960, 700], [860, 950]]); await stroke(page, [[960, 700], [1060, 950]]);
-  await tap(page, 90 + 56 + 28, 100 + 32);
+  await tap(page, 90 + 42 + 21, 100 + 32);
   await stroke(page, [[870, 250], [1050, 250], [1000, 180], [920, 180], [870, 250]]);
   if (prefix) await shot(page, `${prefix}-create`);
   await tap(page, 1490 + 170, 700 + 65);

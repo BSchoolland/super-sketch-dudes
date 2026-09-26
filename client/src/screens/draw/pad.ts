@@ -3,7 +3,7 @@ import { PAPER, INK } from "../../render/paper";
 
 export const PAD_PX = 768;
 /** Pen colours, black first. Lines are solid: the sheet model reads clean ink best. */
-export const COLORS = [INK, "#e4483f", "#e98a2d", "#ddb51d", "#329854", "#287ad4"];
+export const COLORS = [INK, "#e4483f", "#e98a2d", "#ddb51d", "#329854", "#287ad4", "#8b5a2b", "#7b4fb8"];
 export const SIZES = [0.5, 1, 2];
 
 export type ToolKind = "pen" | "eraser";
