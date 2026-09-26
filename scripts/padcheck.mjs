@@ -10,7 +10,8 @@ await page.addInitScript(() => {
   window.__pad = pad;
   navigator.getGamepads = () => [pad, null, null, null];
 });
-await page.goto(`${base}?quick=1&p1=pad0&p2=cpu&cpu=0&f=sable,brick&stage=proving`);
+await page.goto(`${base}?quick=1&p1=pad0&p2=cpu&cpu=0&f=lampjack,tank&stage=proving`);
+await page.waitForFunction(() => window.sketchbattle?.screen, null, { timeout: 20000 });
 await page.waitForTimeout(500);
 const setPad = (axes, buttons) => page.evaluate(([a, b]) => { const p = window.__pad; p.axes = a; p.buttons.forEach((x, i) => { x.pressed = b.includes(i); x.value = b.includes(i) ? 1 : 0; }); }, [axes, buttons]);
 const fighter = () => page.evaluate(() => { const f = window.sketchbattle.screen.match.state.fighters[0]; return { action: f.action, move: f.move, x: Math.round(f.x), vx: +f.vx.toFixed(1), grounded: f.grounded }; });

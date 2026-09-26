@@ -1,4 +1,5 @@
 import { chromium } from "playwright";
+import { openOnline as signInOnline } from "./menu-nav.mjs";
 
 const base = process.argv[2] ?? "http://localhost:5175/sketch-battle/";
 const server = process.argv[3] ?? base;
@@ -14,8 +15,8 @@ try {
   if (!response.ok) fail(`server health returned ${response.status} at ${health}`);
 
   browser = await chromium.launch();
-  const pageA = await browser.newPage({ viewport: { width: 1280, height: 720 } });
-  const pageB = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  const pageA = await (await browser.newContext({ viewport: { width: 1280, height: 720 } })).newPage();
+  const pageB = await (await browser.newContext({ viewport: { width: 1280, height: 720 } })).newPage();
   const errors = [];
   for (const [name, page] of [["host", pageA], ["guest", pageB]]) {
     page.on("pageerror", (error) => errors.push(`${name} page error: ${error}`));
@@ -29,23 +30,14 @@ try {
     await page.waitForTimeout(80);
   }
 
-  async function openOnline(page) {
-    await page.goto(base);
-    await page.waitForFunction(() => window.sketchbattle?.screen);
-    await press(page, "ArrowDown");
-    await press(page, "KeyJ");
-    await page.waitForFunction(() => "roomCode" in window.sketchbattle.screen);
-    await page.waitForTimeout(200);
-  }
-
-  await openOnline(pageA);
+  await signInOnline(pageA, base, "Host");
   await press(pageA, "ArrowDown");
   await press(pageA, "Space");
   await pageA.waitForFunction(() => window.sketchbattle.screen.roomCode !== null);
   const code = await pageA.evaluate(() => window.sketchbattle.screen.roomCode);
   if (!/^[A-Z2-9]{4}$/.test(code)) fail(`invalid room code ${code}`);
 
-  await openOnline(pageB);
+  await signInOnline(pageB, base, "Guest");
   await press(pageB, "ArrowDown");
   await press(pageB, "ArrowDown");
   await press(pageB, "Space");
@@ -62,7 +54,7 @@ try {
     pageA.waitForFunction(() => window.sketchbattle.screen.lobbyDebug?.()?.members.every((member) => member.ready)),
     pageB.waitForFunction(() => window.sketchbattle.screen.lobbyDebug?.()?.members.every((member) => member.ready)),
   ]);
-  await press(pageA, "Escape");
+  await press(pageA, "Enter");
 
   await Promise.all([
     pageA.waitForFunction(() => typeof window.sketchbattle.screen.netDebug === "function"),

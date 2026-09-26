@@ -1,17 +1,16 @@
 // Two real browsers play online with one of them CPU-throttled 6x: both fighters must move and frames must keep
 // flowing without long WAITING stalls. Expects the dev servers. Usage: node scripts/onlineplay.mjs [base]
 import { chromium } from "playwright";
+import { openOnline as signInOnline } from "./menu-nav.mjs";
 const base = process.argv[2] ?? "http://localhost:5175/sketch-battle/";
 const browser = await chromium.launch();
-const pages = [await browser.newPage({ viewport: { width: 1280, height: 720 } }), await browser.newPage({ viewport: { width: 1280, height: 720 } })];
+const page = async () => (await browser.newContext({ viewport: { width: 1280, height: 720 } })).newPage();
+const pages = [await page(), await page()];
 const errors = [];
 for (const [i, p] of pages.entries()) p.on("pageerror", (e) => errors.push(`page${i}: ${e}`));
 const press = async (p, k) => { await p.keyboard.press(k); await p.waitForTimeout(90); };
-async function openOnline(p) {
-  await p.goto(base); await p.waitForFunction(() => window.sketchbattle?.screen);
-  await press(p, "ArrowDown"); await press(p, "Enter");
-  await p.waitForFunction(() => "roomCode" in window.sketchbattle.screen);
-}
+let players = 0;
+const openOnline = (p) => signInOnline(p, base, `Player${++players}`);
 try {
   const [host, guest] = pages;
   await openOnline(host); await press(host, "ArrowDown"); await press(host, "Enter");
