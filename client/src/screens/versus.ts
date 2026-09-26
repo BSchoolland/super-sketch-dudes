@@ -5,7 +5,7 @@ import { LocalMatch, type MatchDriver, type SlotSource } from "../match";
 import { Renderer } from "../render/render";
 import { drawBanner, SLOT_COLORS } from "../render/hud";
 import { Music, playEvents, sfx } from "../audio/audio";
-import { card, label, title, type Screen, INK, settings } from "./ui";
+import { card, label, title, button, goTo, type Screen, INK, settings } from "./ui";
 import { stageOf, type MatchConfig } from "../../../shared/sim";
 import { B } from "../../../shared/input";
 import { roster } from "../../../shared/fighters/index";
@@ -28,7 +28,8 @@ export class VersusScreen implements Screen {
   dummyToggled = false;
   /** A generated fighter's hook threw: shown for a few seconds. */
   hookErr: { text: string; detail: string; t: number } | null = null;
-  endHint = "attack: rematch · shield: back to menu";
+  /** REMATCH / MENU on the result screen; a mode that moves on by itself turns them off. */
+  endButtons = true;
   constructor(cfg: MatchConfig, sources: SlotSource[], private onExit: () => Screen, private onRematch: () => Screen, training = false, driver?: MatchDriver) {
     this.match = driver ?? new LocalMatch(cfg, sources);
     this.training = training;
@@ -163,14 +164,14 @@ export class VersusScreen implements Screen {
           label(ctx, `KOs ${f.kos}   falls ${f.falls}`, x + 100, y + 86, 18, INK);
           label(ctx, `dealt ${Math.round(f.dealt)}%`, x + 100, y + 112, 18, INK);
         });
-        if (this.endHint) label(ctx, this.endHint, VIEW_W / 2, y + 180, 24, INK);
+        if (this.endButtons && button(ctx, VIEW_W / 2 - 330, y + 160, 300, 70, "REMATCH", { key: "Enter", size: 28 })) { this.music.stop(); goTo(this.onRematch()); }
+        if (this.endButtons && button(ctx, VIEW_W / 2 + 30, y + 160, 300, 70, "MENU", { key: "Esc", size: 28 })) { this.music.stop(); goTo(this.onExit()); }
       }
     } else if (this.match.paused) {
       drawBanner(ctx, "PAUSED", "", INK, 1);
       const y = VIEW_H / 2 + 80;
       ["RESUME", "QUIT TO MENU"].forEach((t, i) => {
-        card(ctx, VIEW_W / 2 - 200, y + i * 80, 400, 64, this.pauseSel === i ? "#ffc43a" : "rgba(18,16,26,0.8)", this.pauseSel === i);
-        label(ctx, t, VIEW_W / 2, y + i * 80 + 44, 28, INK, "center", 900);
+        if (button(ctx, VIEW_W / 2 - 200, y + i * 80, 400, 64, t, { focused: this.pauseSel === i, size: 26, key: i === 0 ? "Esc" : undefined })) { if (i === 0) this.match.paused = false; else { this.music.stop(); goTo(this.onExit()); } }
       });
     }
   }

@@ -1,7 +1,7 @@
 import { VIEW_W } from "../render/camera";
 import type { MenuInput } from "../input/devices";
 import { setVolume, sfx } from "../audio/audio";
-import { bg, card, hint, label, title, type Screen, INK, settings, saveSettings } from "./ui";
+import { bg, card, hint, label, title, hover, arrows, backButton, goTo, type Screen, INK, settings, saveSettings } from "./ui";
 
 export class SettingsScreen implements Screen {
   t = 0;
@@ -29,7 +29,10 @@ export class SettingsScreen implements Screen {
     this.rows.forEach((r, i) => {
       const y = 160 + i * 96;
       const sel = i === this.sel;
+      if (hover(VIEW_W / 2 - 400, y, 800, 76)) this.sel = i;
       card(ctx, VIEW_W / 2 - 400, y, 800, 76, sel ? INK : "rgba(18,16,26,0.6)", sel);
+      const d = arrows(ctx, VIEW_W / 2 + 250, y + 50, 90, 26);
+      if (d) { r.adj(d); saveSettings(); sfx.menuMove(); }
       label(ctx, r.name, VIEW_W / 2 - 370, y + 50, 28, INK, "left", 900);
       label(ctx, `◀  ${r.get()}  ▶`, VIEW_W / 2 + 370, y + 50, 28, INK, "right", 900);
     });
@@ -38,6 +41,7 @@ export class SettingsScreen implements Screen {
     label(ctx, "KEYBOARD 2: arrows move · Up/Numpad0 jump · Numpad1 attack · 2 special · 3/RShift shield · 4 grab · 6 smash modifier · 5 taunt", VIEW_W / 2, y + 30, 18, INK, "center", 600);
     label(ctx, "GAMEPAD: left stick move · X/Y jump · A attack · B special · LB/RB/LT shield · RT grab · right stick smash · Start pause", VIEW_W / 2, y + 60, 18, INK, "center", 600);
     label(ctx, "tilts: hold a direction then attack · smashes: flick a direction with attack, or the modifier, or the right stick", VIEW_W / 2, y + 100, 18, INK, "center", 600);
-    hint(ctx, "shield / start: back");
+    if (backButton(ctx)) { sfx.menuBack(); goTo(this.onBack()); }
+    hint(ctx, "click the arrows, or up/down + left/right · Esc: back");
   }
 }

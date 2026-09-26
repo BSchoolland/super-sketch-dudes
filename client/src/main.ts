@@ -11,7 +11,7 @@ import { OnlineScreen } from "./screens/online";
 import { DrawScreen } from "./screens/draw/screen";
 import { SettingsScreen } from "./screens/settings";
 import { VersusScreen } from "./screens/versus";
-import { loadSettings, settings, type Screen } from "./screens/ui";
+import { loadSettings, settings, takeHandoff, type Screen } from "./screens/ui";
 import { SheetScreen } from "./screens/sheet";
 import { setVolume } from "./audio/audio";
 import { logClient } from "./telemetry";
@@ -99,10 +99,10 @@ function frame(now: number): void {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   const menu = readMenu(allDevices());
-  const next = screen.update(dt, menu);
+  document.body.style.cursor = "default";
+  const next = screen.update(dt, menu) ?? takeHandoff();
   if (next) { screen = next; screen.enter?.(); }
   endInputFrame();
-  endPointerFrame();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = "#f4efe4";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -111,6 +111,7 @@ function frame(now: number): void {
   ctx.beginPath(); ctx.rect(0, 0, VIEW_W, VIEW_H); ctx.clip();
   screen.draw(ctx, dt);
   ctx.restore();
+  endPointerFrame();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

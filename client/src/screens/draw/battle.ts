@@ -15,7 +15,7 @@ export class DrawBattleScreen extends NetVersusScreen {
 
   constructor(opts: NetVersusOptions, private report: BattleReport) {
     super(opts);
-    this.endHint = "";
+    this.endButtons = false;
   }
 
   override update(dt: number, menu: MenuInput): Screen | null {

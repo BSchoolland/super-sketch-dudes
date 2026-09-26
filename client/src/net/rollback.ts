@@ -41,6 +41,8 @@ export class RollbackSession {
   private localHashes = new Map<number, number>();
   private remoteHashes = new Map<number, Map<number, number>>();
   private nextHashFrame = 30;
+  private remoteNewest = new Map<number, number>();
+  private slowTick = 0;
   private unsubscribers: Unsubscribe[];
   private onDesync?: (info: DesyncInfo) => void;
 
@@ -82,6 +84,9 @@ export class RollbackSession {
       this.waiting = true;
       return false;
     }
+    // time sync: when we are ahead of a remote, give up every other tick so they can catch up instead of us stalling later
+    const lead = this.frameLead();
+    if (lead > 2 && (this.slowTick++ & 1) === 0) { this.waiting = false; return false; }
 
     this.waiting = false;
     const inputs = this.inputsForFrame(nextFrame);
@@ -140,8 +145,16 @@ export class RollbackSession {
     this.unsubscribers.length = 0;
   }
 
+  /** How many frames our sim is ahead of the slowest remote's, estimated from the newest input frame each remote has sent. */
+  frameLead(): number {
+    let lead = 0;
+    for (const [, newest] of this.remoteNewest) lead = Math.max(lead, this.state.frame - (newest - this.inputDelay));
+    return lead;
+  }
+
   private receiveInputs(slot: number, newestFrame: number, inputs: InputFrame[]): void {
     if (!this.humanSlots.includes(slot) || slot === this.localSlot) return;
+    this.remoteNewest.set(slot, Math.max(this.remoteNewest.get(slot) ?? 0, newestFrame));
     const firstFrame = newestFrame - inputs.length + 1;
     for (let i = 0; i < inputs.length; i++) {
       const frame = firstFrame + i;
@@ -206,7 +219,14 @@ export class RollbackSession {
   }
 
   private sendLocalWindow(newestFrame: number): void {
-    const firstFrame = Math.max(1, newestFrame - 7);
+    // resend everything a remote might still be missing: from just before the slowest remote's sim frame, capped at 120 frames
+    let firstFrame = newestFrame - 7;
+    for (const slot of this.humanSlots) {
+      if (slot === this.localSlot) continue;
+      const newest = this.remoteNewest.get(slot);
+      firstFrame = Math.min(firstFrame, newest === undefined ? 1 : newest - this.inputDelay - 4);
+    }
+    firstFrame = Math.max(1, firstFrame, newestFrame - 120);
     const inputs: InputFrame[] = [];
     for (let frame = firstFrame; frame <= newestFrame; frame++) {
       const input = this.realInputs[this.localSlot].get(frame);
@@ -251,7 +271,10 @@ export class RollbackSession {
     const oldest = this.state.frame - this.maxRollback;
     for (const frame of this.snapshots.keys()) if (frame < oldest) this.snapshots.delete(frame);
     for (const frame of this.usedInputs.keys()) if (frame < oldest + 1) this.usedInputs.delete(frame);
-    for (const inputs of this.realInputs) for (const frame of inputs.keys()) if (frame < oldest) inputs.delete(frame);
+    this.realInputs.forEach((inputs, slot) => {
+      const keep = slot === this.localSlot ? this.state.frame - 150 : oldest;
+      for (const frame of inputs.keys()) if (frame < keep) inputs.delete(frame);
+    });
     for (const hashesFrame of this.remoteHashes.keys()) if (hashesFrame < oldest - 30) this.remoteHashes.delete(hashesFrame);
   }
 }

@@ -1,9 +1,8 @@
 import { inkLine } from "../render/paper";
 import { VIEW_H, VIEW_W } from "../render/camera";
 import type { MenuInput } from "../input/devices";
-import { consumeTaps } from "../input/pointer";
 import { sfx } from "../audio/audio";
-import { bg, card, hint, label, title, type Screen, INK } from "./ui";
+import { bg, card, hint, label, title, hover, clicked, goTo, type Screen, INK } from "./ui";
 import { rosterList } from "../../../shared/fighters/index";
 import { drawRig, poseAt, resolvePose } from "../render/rig";
 import { drawSprite } from "../render/sprite";
@@ -28,10 +27,6 @@ export class TitleScreen implements Screen {
     if (m.up) { this.sel = (this.sel + this.items.length - 1) % this.items.length; sfx.menuMove(); }
     if (m.down) { this.sel = (this.sel + 1) % this.items.length; sfx.menuMove(); }
     if (m.confirm || m.start) { sfx.menuConfirm(); return this.onPick(this.items[this.sel].id); }
-    for (const tap of consumeTaps()) {
-      const i = Math.floor((tap.y - MENU_Y) / MENU_STEP);
-      if (Math.abs(tap.x - VIEW_W / 2) <= 220 && i >= 0 && i < this.items.length && tap.y - MENU_Y - i * MENU_STEP <= 80) { sfx.menuConfirm(); return this.onPick(this.items[i].id); }
-    }
     return null;
   }
   draw(ctx: CanvasRenderingContext2D, dt: number): void {
@@ -51,8 +46,10 @@ export class TitleScreen implements Screen {
     this.items.forEach((it, i) => {
       const y = MENU_Y + i * MENU_STEP;
       const sel = i === this.sel;
-      card(ctx, x, y, 440, 80, sel ? "#ffc43a" : "rgba(18,16,26,0.7)", sel);
-      title(ctx, it.name, x + 220, y + 55, 40, INK);
+      if (hover(x, y, 440, 86)) { this.sel = i; document.body.style.cursor = "pointer"; }
+      if (clicked(x, y, 440, 86)) { sfx.menuConfirm(); goTo(this.onPick(it.id)); }
+      card(ctx, x, y, 440, 86, sel ? "#ffc43a" : "rgba(18,16,26,0.7)", sel);
+      title(ctx, it.name, x + 220, y + 58, 40, INK);
     });
     label(ctx, this.items[this.sel].desc, VIEW_W / 2, MENU_Y + this.items.length * MENU_STEP + 20, 24, INK);
     // roster parade on the right
@@ -65,7 +62,7 @@ export class TitleScreen implements Screen {
       else drawRig(ctx, resolvePose(def, pose), def.palette.colors, def.palette.outline);
       ctx.restore();
     });
-    hint(ctx, "keyboard: WASD/arrows move · J/Numpad1 confirm · gamepad: A confirm");
+    hint(ctx, "click, or arrows + Enter · gamepad: stick + A");
     label(ctx, `build ${__BUILD__}`, VIEW_W - 20, VIEW_H - 16, 14, "rgba(41,39,34,0.5)", "right", 400);
   }
 }

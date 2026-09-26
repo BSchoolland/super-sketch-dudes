@@ -54,6 +54,7 @@ export class NetVersusScreen extends VersusScreen {
   protected failure: { title: string; detail: string; automatic: boolean } | null = null;
   private failureTime = 0;
   private pingTime = 0;
+  private waitingFor = 0;
   private unsubscribers: Unsubscribe[] = [];
   private cleanupMatch: () => void;
 
@@ -108,6 +109,7 @@ export class NetVersusScreen extends VersusScreen {
       this.pingTime -= 1;
       this.opts.transport.ping();
     }
+    this.waitingFor = this.session.waiting ? this.waitingFor + dt : 0;
     if (this.session.desync && !this.failure) {
       const desync = this.session.desync;
       this.failure = { title: "DESYNC", detail: `frame ${desync.frame} · ${desync.localHash} ≠ ${desync.remoteHash}`, automatic: false };
@@ -140,7 +142,7 @@ export class NetVersusScreen extends VersusScreen {
     const status = this.session.waiting ? "WAITING" : `${Math.round(this.opts.transport.rtt())} ms · ${rollback} rb/s`;
     label(ctx, status, VIEW_W - 24, 34, 17, color, "right", 700);
     if (this.failure) drawBanner(ctx, this.failure.title, this.failure.detail, "#ff4d2e", this.failureTime);
-    else if (this.session.waiting) drawBanner(ctx, "WAITING", "Connection is catching up", INK, 1);
+    else if (this.waitingFor > 0.5) drawBanner(ctx, "WAITING", "Connection is catching up", INK, 1);
   }
 
   netDebug(frame = this.session.state.frame): { frame: number; hash: number | null } {
