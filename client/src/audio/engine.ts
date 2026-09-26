@@ -36,13 +36,15 @@ export function voiceOn(mix: Mix, t: number, pan: number, vary: number): Voice {
 let ctx: AudioContext | null = null;
 let mix: (Mix & { c: AudioContext }) | null = null;
 const volumes = { sfx: 0.8, music: 0.5 };
+/** The tracks are mastered around -15 LUFS; this sits them under the fight at any MUSIC setting. */
+const MUSIC_TRIM = 0.4;
 
 export function live(): Mix & { c: AudioContext } {
   if (mix) return mix;
   ctx = new AudioContext({ latencyHint: "interactive" });
   mix = { ...buildMix(ctx, ctx.destination), c: ctx };
   mix.sfx.gain.value = volumes.sfx;
-  mix.music.gain.value = volumes.music;
+  mix.music.gain.value = volumes.music * MUSIC_TRIM;
   return mix;
 }
 
@@ -55,7 +57,7 @@ for (const ev of ["keydown", "pointerdown", "touchstart"]) window.addEventListen
 export function running(): Mix | null { return ctx?.state === "running" ? mix : null; }
 
 export function setVolume(v: number): void { volumes.sfx = v; if (mix) mix.sfx.gain.value = v; }
-export function setMusicVolume(v: number): void { volumes.music = v; if (mix) mix.music.gain.value = v; }
+export function setMusicVolume(v: number): void { volumes.music = v; if (mix) mix.music.gain.value = v * MUSIC_TRIM; }
 
 /** Screen x in world units → stereo position. Stages are ~±1250 wide; keep it off the hard edges. */
 export const panOf = (x: number | undefined): number => (x === undefined ? 0 : Math.max(-1, Math.min(1, x / 1100)) * 0.7);
