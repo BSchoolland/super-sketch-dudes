@@ -12,14 +12,28 @@ export interface SheetResult { ms: number; tokens: { text: number; image: number
 // $ per token, gpt-image-1 list rates (sunburst's aren't published); the report calls this an estimate
 const RATE = { text: 5e-6, image: 10e-6, output: 40e-6 };
 
-export function sheetPrompt(concept: Concept): string {
-  let p = TEMPLATE.replace("{{counts}}", concept.counts.map((c) => `  - ${c}`).join("\n"));
-  for (const c of SPRITE_CELLS) p = p.replace(`{{${c}}}`, concept.cells[c].trim().replace(/\s*\|\s*/g, ", "));
+/** Pose descriptions when the sheet is drawn before the design exists (it runs alongside pass 1). */
+const GENERIC_CELLS: Record<string, string> = {
+  idle: "idle stance, at rest, weight settled",
+  walk: "walking, mid-stride, the body leaning into the step",
+  jump: "jumping, pushed off the ground, limbs or parts tucked or trailing",
+  "atk-fwd": "attacking forward: its most obvious weapon, limb or part thrust far ahead of the body, the rest counterbalancing",
+  "atk-up": "attacking upward: the same part swung high above the body, body stretched tall",
+  "atk-down": "attacking downward: the same part driven at the ground, body crouched over it",
+  hit: "getting hit: recoiling, the body folded or dented, parts flung",
+  launched: "launched flying backwards, the whole body arched and tumbling, loose parts trailing",
+  block: "blocking: braced and closed up, whatever it has pulled in front of it like a shield",
+};
+const GENERIC_COUNTS = "  - every countable feature of the input (legs, arms, eyes, wheels, dots, stripes, teeth, spikes) appears EXACTLY as many times as in the input, no more, no fewer";
+
+export function sheetPrompt(concept: Concept | null): string {
+  let p = TEMPLATE.replace("{{counts}}", concept ? concept.counts.map((c) => `  - ${c}`).join("\n") : GENERIC_COUNTS);
+  for (const c of SPRITE_CELLS) p = p.replace(`{{${c}}}`, (concept ? concept.cells[c] : GENERIC_CELLS[c]).trim().replace(/\s*\|\s*/g, ", "));
   if (/\{\{\w[\w-]*\}\}/.test(p)) throw new Error(`sheet prompt has an unfilled placeholder: ${p.match(/\{\{\w[\w-]*\}\}/)![0]}`);
   return p;
 }
 
-export async function drawSheet(drawingPath: string, concept: Concept, outPath: string): Promise<SheetResult> {
+export async function drawSheet(drawingPath: string, concept: Concept | null, outPath: string): Promise<SheetResult> {
   if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not set (forge/.env)");
   const client = new OpenAI({ timeout: 5 * 60_000, maxRetries: 1 });
   const prompt = sheetPrompt(concept);

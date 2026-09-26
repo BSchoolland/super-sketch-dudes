@@ -80,8 +80,13 @@ export async function runPipeline(job: JobSpec, drawingSrc: string, dir: string,
   const drawing = path.join(dir, "drawing.png");
   if (path.resolve(drawingSrc) !== drawing) fs.copyFileSync(drawingSrc, drawing);
 
+  // the sheet needs only the drawing, so it's drawn while pass 1 designs the fighter
+  await io.progress("designing the moveset, drawing the sheet");
+  const sheetPath = path.join(dir, "sheet.png");
+  const sheetPromise = step("sheet", () => drawSheet(drawing, null, sheetPath), (s) => s.costUsd === null ? "no usage reported" : `~$${s.costUsd.toFixed(3)}`);
+  sheetPromise.catch(() => { /* reported where it's awaited, after the concept */ });
+
   // pass 1: concept
-  await io.progress("designing the moveset");
   const conceptFile = path.join(dir, "concept.json");
   let conceptSession = "";
   const concept = await step("concept", async () => {
@@ -97,10 +102,8 @@ export async function runPipeline(job: JobSpec, drawingSrc: string, dir: string,
     return c.concept;
   }, (c) => `${c.name} (${c.archetype})`);
 
-  // sheet
-  await io.progress("drawing the sheet");
-  const sheetPath = path.join(dir, "sheet.png");
-  const sheet = await step("sheet", () => drawSheet(drawing, concept, sheetPath), (s) => s.costUsd === null ? "no usage reported" : `~$${s.costUsd.toFixed(3)}`);
+  if (!fs.existsSync(sheetPath)) await io.progress("drawing the sheet");
+  const sheet = await sheetPromise;
 
   // normalise
   await io.progress("cutting out the cells");
