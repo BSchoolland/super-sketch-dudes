@@ -193,28 +193,33 @@ function grabHit(state: State, a: Fighter, v: Fighter, hb: Hitbox): void {
   state.events.push({ t: "grab", frame: state.frame, attacker: a.slot, victim: v.slot, x: v.x, y: v.y - adef.stats.height * 0.5 });
 }
 
-function tryHit(state: State, a: Fighter, v: Fighter, hb: Hitbox, cap: Capsule, key: string, log: Record<string, number>, rehit: number | undefined): boolean {
+/**
+ * `now` is the clock a multi-hit's `rehit` counts in: the attacker's move frame for a fighter's
+ * hitboxes (hitlag freezes that frame, so a hit can't repeat until the move actually advances),
+ * the sim frame for projectiles.
+ */
+function tryHit(state: State, a: Fighter, v: Fighter, hb: Hitbox, cap: Capsule, key: string, log: Record<string, number>, rehit: number | undefined, now: number): boolean {
   const last = log[key];
-  if (last !== undefined && (rehit === undefined || state.frame - last < rehit)) return false;
+  if (last !== undefined && (rehit === undefined || now - last < rehit)) return false;
   const hurt = hurtbox(v);
   const px = (cap.x1 + cap.x2) / 2 * 0.5 + v.x * 0.5;
   const py = (cap.y1 + cap.y2) / 2 * 0.5 + (v.y - defOf(v).stats.height * 0.5) * 0.5;
   if (hb.grab) {
     if (!capsulesOverlap(cap, hurt)) return false;
-    log[key] = state.frame;
+    log[key] = now;
     grabHit(state, a, v, hb);
     return true;
   }
   if (v.shieldHeld && !hb.unblockable) {
     const sc = shieldCircle(v);
     if (capsuleCircle(cap, sc.x, sc.y, sc.r)) {
-      log[key] = state.frame;
+      log[key] = now;
       shieldHit(state, a, v, hb, px, py);
       return true;
     }
   }
   if (!capsulesOverlap(cap, hurt)) return false;
-  log[key] = state.frame;
+  log[key] = now;
   hitOf(state, a, v, hb, px, py);
   return true;
 }
@@ -236,7 +241,7 @@ export function resolveHits(state: State): void {
       for (const hb of active) {
         const key = `${a.slot}:${a.moveInstance}:${hb.group ?? 0}`;
         const cap = hitboxWorld(a, hb);
-        if (tryHit(state, a, v, hb, cap, key, v.hitLog, hb.rehit)) break;
+        if (tryHit(state, a, v, hb, cap, key, v.hitLog, hb.rehit, a.frame)) break;
       }
     }
     // reflectors, and hittable projectiles (debris chunks) that any attack can launch
@@ -299,7 +304,7 @@ export function resolveHits(state: State): void {
       // hits come from the projectile's position and direction, not the owner's
       owner.moveFacing = p.facing;
       owner.x = p.x; owner.y = p.y;
-      const hit = tryHit(state, owner, v, p.hb, cap, key, p.hitLog, p.hb.rehit);
+      const hit = tryHit(state, owner, v, p.hb, cap, key, p.hitLog, p.hb.rehit, state.frame);
       owner.moveFacing = saveFacing; owner.x = saveX; owner.y = saveY;
       if (hit) {
         owner.hitlag = 0; // projectiles don't freeze their owner
