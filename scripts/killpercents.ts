@@ -1,12 +1,14 @@
 // Kill-percent calibration: for each fighter's key moves, the lowest percent at which the victim
-// (SABLE, weight 100, no DI) dies from centre stage and from near the ledge on Proving Ground.
-// Usage: tsx scripts/killpercents.ts [victim=sable]
+// (a house fighter, no DI) dies from centre stage and from near the ledge on Proving Ground.
+// Usage: tsx scripts/killpercents.ts [victim=lampjack]
 import { createMatch, step } from "../shared/sim";
 import { EMPTY_INPUT } from "../shared/input";
 import { rosterList, roster } from "../shared/fighters/index";
 import { hitOf } from "../shared/hits";
+import { houseId, loadAllHouse } from "../test/house";
 
-const victimId = process.argv[2] ?? "sable";
+await loadAllHouse();
+const victimId = houseId(process.argv[2] ?? "lampjack");
 const MOVES = ["ftilt", "fsmash", "usmash", "bair", "fair", "uair", "dsmash", "nspecial", "bthrow", "uthrow"];
 
 function dies(attackerId: string, moveId: string, percent: number, x: number, tipper: boolean): boolean {
@@ -36,7 +38,7 @@ function killPercent(attackerId: string, moveId: string, x: number, tipper: bool
   return null;
 }
 const pad = (s: string, n: number) => (s + " ".repeat(n)).slice(0, n);
-console.log(`kill percents vs ${victimId} (no DI), centre / near ledge (x=450). "-" = no kill under 300%`);
+console.log(`kill percents vs ${victimId} (weight ${roster[victimId].stats.weight}, no DI), centre / near ledge (x=450). "-" = no kill under 300%`);
 for (const def of rosterList) {
   const row = MOVES.map((m) => {
     if (!def.moves[m]) return pad("", 12);
@@ -45,7 +47,7 @@ for (const def of rosterList) {
     const cs = c === null ? "-" : `${c}`, ls = l === null ? "-" : `${l}`;
     return pad(`${cs}/${ls}${hasTip ? "*" : ""}`, 12);
   }).join("");
-  console.log(pad(def.id, 8) + row);
+  console.log(pad(def.id, 11) + row);
 }
-console.log(pad("", 8) + MOVES.map((m) => pad(m, 12)).join(""));
+console.log(pad("", 11) + MOVES.map((m) => pad(m, 12)).join(""));
 console.log("* = tipper/sweetspot used");

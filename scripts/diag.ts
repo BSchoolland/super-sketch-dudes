@@ -1,6 +1,10 @@
 import { createMatch, step } from "../shared/sim";
 import { cpuInput } from "../shared/cpu";
-const s = createMatch({ stage: "proving", players: [{ fighter: "sable" }, { fighter: "sable" }], seed: 3 });
+import { houseId, loadAllHouse } from "../test/house";
+
+await loadAllHouse();
+const id = houseId(process.argv[2] ?? "lampjack");
+const s = createMatch({ stage: "proving", players: [{ fighter: id }, { fighter: id }], seed: 3 });
 const actions: Record<string, number> = {};
 let hits = 0, kos = 0;
 for (let i = 0; i < 60 * 120; i++) {

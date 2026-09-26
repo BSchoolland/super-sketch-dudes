@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { B, cloneInput, type InputFrame } from "../shared/input";
 import { hashState, type MatchConfig } from "../shared/sim";
 import { RollbackSession } from "../client/src/net/rollback";
 import type { HashCallback, InputsCallback, Transport, Unsubscribe } from "../client/src/net/transport";
+import { loadAllHouse } from "./house";
 
 interface Packet {
   at: number;
@@ -116,8 +117,8 @@ function makeConfig(withCpus = false): MatchConfig {
     seed: 0x51a7e,
     rules: { stocks: 99, time: 0 },
     players: withCpus
-      ? [{ fighter: "sable" }, { fighter: "wick" }, { fighter: "brick", cpu: 6 }, { fighter: "pilot", cpu: 8 }]
-      : [{ fighter: "sable" }, { fighter: "wick" }],
+      ? [{ fighter: "lampjack" }, { fighter: "slugbert" }, { fighter: "tank", cpu: 6 }, { fighter: "liftoff", cpu: 8 }]
+      : [{ fighter: "lampjack" }, { fighter: "slugbert" }],
   };
 }
 
@@ -142,6 +143,8 @@ function runPair(config: MatchConfig, seed: number, frames: number): { a: Rollba
 }
 
 describe("rollback session", () => {
+  beforeAll(loadAllHouse);
+
   it("keeps two jittered peers identical for 1800 frames", () => {
     const { a, b } = runPair(makeConfig(), 0x12345678, 1800);
     expect(a.state.frame).toBe(1800);

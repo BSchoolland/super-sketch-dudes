@@ -1,20 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
 import { createMatch, step, cloneState, hashState } from "../shared/sim";
 import { cpuInput } from "../shared/cpu";
-import { registerFighter } from "../shared/fighters/index";
-import { buildGenerated, lintGeneratedSource, validateGenerated, type GeneratedBundle } from "../shared/gen/load";
+import { lintGeneratedSource, validateGenerated } from "../shared/gen/load";
 import { defOf, startMove } from "../shared/fighter";
 import { hurtbox } from "../shared/hits";
 import { cellFor } from "../shared/gen/sprite";
 import { EMPTY_INPUT, B, type InputFrame } from "../shared/input";
 
-const bundle = JSON.parse(readFileSync(new URL("./fixtures/gearshift/bundle.json", import.meta.url), "utf8")) as GeneratedBundle;
-async function load() {
-  const def = await buildGenerated(bundle);
-  registerFighter(def);
-  return def;
-}
+import { houseBundle, loadHouse } from "./house";
+
+const bundle = houseBundle("gearshift");
+const load = () => loadHouse("gearshift");
 const hold = (x: number, b = 0): InputFrame => ({ ...EMPTY_INPUT, x, b });
 
 describe("GEARSHIFT, a two-form drawn fighter", () => {
@@ -26,8 +22,8 @@ describe("GEARSHIFT, a two-form drawn fighter", () => {
   });
 
   it("down-special folds it into the car: new stats, hurtbox, moves and cells; and back", async () => {
-    await load();
-    const s = createMatch({ stage: "proving", players: [{ fighter: "gearshift" }, { fighter: "sable" }], seed: 1 });
+    await load(); await loadHouse("lampjack");
+    const s = createMatch({ stage: "proving", players: [{ fighter: "gearshift" }, { fighter: "lampjack" }], seed: 1 });
     const f = s.fighters[0];
     const mechHeight = hurtbox(f).y1 - hurtbox(f).y2;
     startMove(s, f, "dspecial");
@@ -61,8 +57,8 @@ describe("GEARSHIFT, a two-form drawn fighter", () => {
   });
 
   it("a 4-player CPU match with two GEARSHIFTs resimulates from a snapshot to the same hash, with no hook errors", async () => {
-    await load();
-    const cfg = { stage: "proving", players: [{ fighter: "gearshift", cpu: 9 }, { fighter: "brick", cpu: 9 }, { fighter: "gearshift", cpu: 9 }, { fighter: "wick", cpu: 9 }], seed: 11 };
+    await load(); await loadHouse("tank"); await loadHouse("woodstove");
+    const cfg = { stage: "proving", players: [{ fighter: "gearshift", cpu: 9 }, { fighter: "tank", cpu: 9 }, { fighter: "gearshift", cpu: 9 }, { fighter: "woodstove", cpu: 9 }], seed: 11 };
     const a = createMatch(cfg);
     let snap: ReturnType<typeof cloneState> | null = null;
     const inputsAt: InputFrame[][] = [];

@@ -1,4 +1,4 @@
-import { cap, hb, key, mv, throwMove } from "../fighters/helpers";
+import { cap, hb, key, mv, throwMove } from "./helpers";
 import { setAction, startMove, releaseGrab, throwVictim } from "../fighter";
 import { spawnProjectile, knockback } from "../hits";
 import { approach, clamp, lerp, sign, sinDeg, cosDeg, atan2Deg } from "../fixed";

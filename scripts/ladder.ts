@@ -1,8 +1,11 @@
 // CPU-vs-CPU ladder: every fighter against every fighter, prints a win-rate matrix and match stats.
-// Usage: tsx scripts/ladder.ts [matches per pair=4] [level=9] [stage=proving]
+// Usage: tsx scripts/ladder.ts [matches per pair=4] [level=9] [stage=proving]   (the house roster)
 import { createMatch, step } from "../shared/sim";
 import { cpuInput } from "../shared/cpu";
 import { rosterList } from "../shared/fighters/index";
+import { loadAllHouse } from "../test/house";
+
+await loadAllHouse();
 
 const N = Number(process.argv[2] ?? 4), LEVEL = Number(process.argv[3] ?? 9), STAGE = process.argv[4] ?? "proving";
 const ids = rosterList.map((d) => d.id);
@@ -27,9 +30,9 @@ for (const a of ids) for (const b of ids) {
 }
 const pad = (s: string, n: number) => (s + " ".repeat(n)).slice(0, n);
 console.log(`ladder: ${N} matches per pair, CPU ${LEVEL}, stage ${STAGE}. avg match ${(totalFrames / matches / 60).toFixed(0)}s${warn ? `, ${warn} timed out` : ""}`);
-console.log(pad("", 8) + ids.map((i) => pad(i, 8)).join(""));
+console.log(pad("", 11) + ids.map((i) => pad(i, 11)).join(""));
 for (const a of ids) {
-  console.log(pad(a, 8) + ids.map((b) => (a === b ? pad("-", 8) : pad(`${wins[a][b]}-${wins[b][a]}`, 8))).join("") + `  dealt/match ${((dealt[a] ?? 0) / (N * (ids.length - 1))).toFixed(0)}%`);
+  console.log(pad(a, 11) + ids.map((b) => (a === b ? pad("-", 11) : pad(`${wins[a][b]}-${wins[b][a]}`, 11))).join("") + `  dealt/match ${((dealt[a] ?? 0) / (N * (ids.length - 1))).toFixed(0)}%`);
 }
 let worst = 0;
 for (const a of ids) for (const b of ids) if (a < b) { const t = wins[a][b] + wins[b][a]; if (t) worst = Math.max(worst, Math.abs(wins[a][b] / t - 0.5)); }

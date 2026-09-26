@@ -1,11 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { createMatch, step, cloneState, hashState } from "../shared/sim";
 import { cpuInput } from "../shared/cpu";
 import { B, EMPTY_INPUT, type InputFrame } from "../shared/input";
 import { knockback } from "../shared/hits";
 import { roster } from "../shared/fighters/index";
+import { loadAllHouse } from "./house";
 
-const two = (seed = 7) => createMatch({ stage: "proving", players: [{ fighter: "sable" }, { fighter: "sable" }], seed });
+beforeAll(loadAllHouse);
+const two = (seed = 7) => createMatch({ stage: "proving", players: [{ fighter: "lampjack" }, { fighter: "lampjack" }], seed });
 const inp = (p: Partial<InputFrame>): InputFrame => ({ ...EMPTY_INPUT, ...p });
 
 describe("determinism", () => {
@@ -45,7 +47,7 @@ describe("movement", () => {
     expect(g.vy).toBeLessThan(shortV);
     for (let i = 0; i < 5; i++) step(s2, [EMPTY_INPUT, EMPTY_INPUT]);
     step(s2, [inp({ b: B.JUMP }), EMPTY_INPUT]);
-    expect(g.jumpsLeft).toBe(0);
+    expect(g.jumpsLeft).toBe(roster.lampjack.stats.jumps - 2);
     expect(g.vy).toBeLessThan(0);
   });
   it("dash then run, and walking off the edge makes you airborne", () => {

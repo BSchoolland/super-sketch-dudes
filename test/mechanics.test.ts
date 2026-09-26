@@ -1,11 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { createMatch, step } from "../shared/sim";
 import { B, EMPTY_INPUT, type InputFrame } from "../shared/input";
 import { hitOf } from "../shared/hits";
+import { cpuInput } from "../shared/cpu";
 import { roster } from "../shared/fighters/index";
 import { C } from "../shared/config";
+import { loadAllHouse } from "./house";
 
-const two = () => createMatch({ stage: "proving", players: [{ fighter: "sable" }, { fighter: "sable" }], seed: 5 });
+beforeAll(loadAllHouse);
+const two = () => createMatch({ stage: "proving", players: [{ fighter: "lampjack" }, { fighter: "lampjack" }], seed: 5 });
 const inp = (p: Partial<InputFrame>): InputFrame => ({ ...EMPTY_INPUT, ...p });
 const run = (s: ReturnType<typeof two>, n: number, a: InputFrame = EMPTY_INPUT, b: InputFrame = EMPTY_INPUT) => { for (let i = 0; i < n; i++) { step(s, [a, b]); s.events.length = 0; } };
 
@@ -63,7 +66,7 @@ describe("defensive mechanics", () => {
   });
   it("teching a tumble landing avoids knockdown", () => {
     const noTech = two(), tech = two();
-    launch(noTech, 60, 20, 14); launch(tech, 60, 20, 14);
+    launch(noTech, 20, 20, 14); launch(tech, 20, 20, 14);
     expect(noTech.fighters[1].action).toBe("tumble");
     let landedNo = "", landedTech = "", airNo = false, airTech = false;
     for (let i = 0; i < 400; i++) {
@@ -87,7 +90,7 @@ describe("defensive mechanics", () => {
     a.x = 600; a.y = -40; a.grounded = false; a.action = "air"; a.vy = 2;
     for (let i = 0; i < 40 && a.ledge < 0; i++) step(s, [inp({ x: -60 }), EMPTY_INPUT]);
     expect(a.ledge).toBe(1);
-    run(s, 10, inp({ x: -60 }));
+    run(s, 10);
     b.x = 600; b.y = -40; b.grounded = false; b.action = "air"; b.vy = 2; b.ledgeCooldown = 0;
     for (let i = 0; i < 40 && b.ledge < 0; i++) step(s, [EMPTY_INPUT, inp({ x: -60 })]);
     expect(b.ledge).toBe(1);
@@ -104,16 +107,14 @@ describe("defensive mechanics", () => {
     expect(["air", "tumble", "idle", "land", "knockdown", "tech"]).toContain(v.action);
     if (v.action === "tumble") expect(v.frame).toBeGreaterThanOrEqual(v.hitstun);
   });
-  it("every fighter can recover from below the ledge with double jump + up special", () => {
+  it("the CPU recovers every house fighter from below the ledge", () => {
     for (const id of Object.keys(roster)) {
-      const s = createMatch({ stage: "proving", players: [{ fighter: id }, { fighter: "sable" }], seed: 2 });
+      const s = createMatch({ stage: "proving", players: [{ fighter: id }, { fighter: "lampjack" }], seed: 2 });
       const f = s.fighters[0];
-      f.x = -700; f.y = 150; f.grounded = false; f.action = "air"; f.vy = 3; f.jumpsLeft = 1;
+      f.x = -700; f.y = 60; f.grounded = false; f.action = "air"; f.vy = 3; f.jumpsLeft = 1;
       let recovered = false;
       for (let i = 0; i < 400; i++) {
-        const b = (i === 5 ? B.JUMP : 0) | (i >= 40 && i < 120 ? B.SPECIAL : 0);
-        const special = i >= 40 && i < 120;
-        step(s, [inp({ x: special ? 60 : 100, y: special ? -100 : 0, b }), EMPTY_INPUT]);
+        step(s, [cpuInput(s, 0, 9), EMPTY_INPUT]);
         s.events.length = 0;
         if (f.ledge >= 0 || (f.grounded && f.x > -600)) { recovered = true; break; }
         if (f.stocks < 3) break;

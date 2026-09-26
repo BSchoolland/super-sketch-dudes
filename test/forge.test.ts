@@ -11,7 +11,7 @@ describe("forge checks", () => {
   it("passes the exemplar and reports the ladder, recovery and kill percents", async () => {
     const r = await runChecks({ bundle: bundle("gen-forge-ok", source), height: 120 });
     expect(r.failures).toEqual([]);
-    expect(Object.keys(r.ladder)).toEqual(["sable", "brick", "wick", "pilot"]);
+    expect(Object.keys(r.ladder)).toEqual(["lampjack", "tank", "sirsticks", "dizzy"]);
     expect(r.recovery).toBeGreaterThanOrEqual(6);
     expect(r.killPercents.fsmash).toBeLessThan(300);
   });

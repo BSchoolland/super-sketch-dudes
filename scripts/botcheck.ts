@@ -3,6 +3,10 @@ import { hitOf } from "../shared/hits";
 import { B, EMPTY_INPUT } from "../shared/input";
 import { rosterList } from "../shared/fighters/index";
 import { createMatch, step } from "../shared/sim";
+import { loadAllHouse } from "../test/house";
+
+await loadAllHouse();
+const DUMMY = "lampjack";
 
 let failed = false;
 
@@ -16,7 +20,7 @@ function recoveryCheck(id: string): void {
   for (let seed = 1; seed <= 10; seed++) {
     const state = createMatch({
       stage: "proving",
-      players: [{ fighter: id, cpu: 9 }, { fighter: "sable" }],
+      players: [{ fighter: id, cpu: 9 }, { fighter: DUMMY }],
       rules: { stocks: 1 },
       seed,
     });
@@ -53,7 +57,7 @@ function techCheck(): void {
   let techs = 0;
   const attempts = 12;
   for (let seed = 1; seed <= attempts; seed++) {
-    const state = createMatch({ stage: "proving", players: [{ fighter: rosterList[seed % rosterList.length].id, cpu: 9 }, { fighter: "sable" }], seed });
+    const state = createMatch({ stage: "proving", players: [{ fighter: rosterList[seed % rosterList.length].id, cpu: 9 }, { fighter: DUMMY }], seed });
     const fighter = state.fighters[0];
     fighter.x = (seed - 6) * 35;
     fighter.y = -150 - seed * 4;
@@ -79,7 +83,7 @@ function secondUpSpecialCheck(): void {
   let violations = 0;
   let frames = 0;
   for (const def of rosterList) {
-    const state = createMatch({ stage: "proving", players: [{ fighter: def.id, cpu: 9 }, { fighter: "sable" }], seed: 71 });
+    const state = createMatch({ stage: "proving", players: [{ fighter: def.id, cpu: 9 }, { fighter: DUMMY }], seed: 71 });
     const fighter = state.fighters[0];
     fighter.x = 690;
     fighter.y = 90;
@@ -104,7 +108,7 @@ function secondUpSpecialCheck(): void {
 function koCheck(id: string): void {
   const state = createMatch({
     stage: "proving",
-    players: [{ fighter: id, cpu: 9 }, { fighter: "sable" }],
+    players: [{ fighter: id, cpu: 9 }, { fighter: DUMMY }],
     rules: { stocks: 1 },
     seed: 31337,
   });

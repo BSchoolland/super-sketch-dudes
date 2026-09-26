@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { createMatch, step, cloneState, hashState } from "../shared/sim";
 import { cpuInput } from "../shared/cpu";
@@ -7,11 +7,14 @@ import { buildGenerated, lintGeneratedSource, validateGenerated } from "../share
 import { startMove } from "../shared/fighter";
 import { EMPTY_INPUT } from "../shared/input";
 import { SPRITE_CELLS } from "../shared/gen/sprite";
+import { loadHouse } from "./house";
 
 const source = readFileSync(new URL("../forge/exemplar/lampjack.fighter.js", import.meta.url), "utf8");
 const sprite = { px: 512, feetPx: 448, heightPx: 360, anims: {}, cells: Object.fromEntries(SPRITE_CELLS.map((c) => [c, `/gen/lampjack/${c}.png`])) };
 
 describe("generated fighters", () => {
+  beforeAll(async () => { await loadHouse("tank"); await loadHouse("dizzy"); });
+
   it("the exemplar lints, builds, validates and registers", async () => {
     expect(lintGeneratedSource(source)).toEqual([]);
     const def = await buildGenerated({ id: "gen-lamp", source, sprite, player: "test", description: "a lamp" });
@@ -24,7 +27,7 @@ describe("generated fighters", () => {
   it("a 4-player CPU match with a generated fighter resimulates from a snapshot to the same hash", async () => {
     const def = await buildGenerated({ id: "gen-lamp", source, sprite, player: "test", description: "a lamp" });
     registerFighter(def);
-    const cfg = { stage: "proving", players: [{ fighter: "gen-lamp", cpu: 9 }, { fighter: "sable", cpu: 9 }, { fighter: "brick", cpu: 9 }, { fighter: "gen-lamp", cpu: 9 }], seed: 7 };
+    const cfg = { stage: "proving", players: [{ fighter: "gen-lamp", cpu: 9 }, { fighter: "tank", cpu: 9 }, { fighter: "dizzy", cpu: 9 }, { fighter: "gen-lamp", cpu: 9 }], seed: 7 };
     const a = createMatch(cfg);
     let snap: ReturnType<typeof cloneState> | null = null;
     const inputsAt: ReturnType<typeof cpuInput>[][] = [];
@@ -49,7 +52,7 @@ describe("generated fighters", () => {
     expect(bad).not.toBe(source);
     const def = await buildGenerated({ id: "gen-bad", source: bad, sprite, player: "test", description: "" });
     registerFighter(def);
-    const s = createMatch({ stage: "proving", players: [{ fighter: "gen-bad" }, { fighter: "sable" }], seed: 1 });
+    const s = createMatch({ stage: "proving", players: [{ fighter: "gen-bad" }, { fighter: "tank" }], seed: 1 });
     const f = s.fighters[0];
     startMove(s, f, "sspecial");
     const errors: string[] = [];

@@ -6,9 +6,11 @@ import { cpuInput } from "../shared/cpu";
 import { hitOf } from "../shared/hits";
 import { B, EMPTY_INPUT } from "../shared/input";
 import { startMove } from "../shared/fighter";
-import { registerFighter, STOCK_IDS, roster } from "../shared/fighters/index";
+import { registerFighter, roster } from "../shared/fighters/index";
 import { buildGenerated, lintGeneratedSource, type GeneratedBundle } from "../shared/gen/load";
 import type { FighterDef, State } from "../shared/types";
+import type { HouseId } from "../shared/house";
+import { loadHouse } from "../test/house";
 
 export interface Failure { kind: "hard" | "hook"; msg: string }
 export interface CheckInput { bundle: GeneratedBundle; height: number }
@@ -23,6 +25,10 @@ export interface CheckReport {
   timings: Record<string, number>;
 }
 
+/** The balance ladder, from the house roster: an all-rounder, a heavy, a swordsman and a floaty zoner. */
+export const LADDER: readonly HouseId[] = ["lampjack", "tank", "sirsticks", "dizzy"];
+/** The punching bag for the move, recovery and KO checks. */
+const DUMMY: HouseId = "lampjack";
 const LADDER_MATCHES = 2, LEVEL = 9, CAP_FRAMES = 60 * 180, SOFT_SECONDS = 25;
 const KO_MOVES = ["ftilt", "fsmash", "usmash", "dsmash", "fair", "bair", "uair", "dair", "nair", "nspecial", "sspecial", "dspecial", "fthrow", "bthrow", "uthrow", "dthrow"];
 
@@ -45,6 +51,9 @@ export async function runChecks(input: CheckInput): Promise<CheckReport> {
 
   for (const l of lintGeneratedSource(bundle.source)) hard(`lint: ${l}`);
   if (r.failures.length) return r;
+  const house = new Set<HouseId>([...LADDER, DUMMY]);
+  if (house.has(id as HouseId)) throw new Error(`the candidate's id ${id} would replace the house fighter it is checked against`);
+  for (const h of house) await loadHouse(h);
   // hooks that throw get disabled on the def they ran on, so every check gets a fresh build
   const fresh = async (): Promise<FighterDef> => { const d = await buildGenerated(bundle); registerFighter(d); return d; };
   let def: FighterDef;
@@ -63,7 +72,7 @@ export async function runChecks(input: CheckInput): Promise<CheckReport> {
 
   await timed("determinism", async () => {
     await fresh();
-    const cfg = { stage: "proving", players: [{ fighter: id, cpu: LEVEL }, { fighter: "sable", cpu: LEVEL }, { fighter: "brick", cpu: LEVEL }, { fighter: "wick", cpu: LEVEL }], seed: 7 };
+    const cfg = { stage: "proving", players: [{ fighter: id, cpu: LEVEL }, ...LADDER.slice(0, 3).map((h) => ({ fighter: h, cpu: LEVEL }))], seed: 7 };
     guard("the 4-player determinism match", () => {
       const a = createMatch(cfg);
       let snap: State | null = null;
@@ -87,7 +96,7 @@ export async function runChecks(input: CheckInput): Promise<CheckReport> {
 
   await timed("ladder", async () => {
     let dealt = 0;
-    for (const opp of STOCK_IDS) {
+    for (const opp of LADDER) {
       const row = { wins: 0, losses: 0, avgSeconds: 0, dealtPerMatch: 0 };
       let frames = 0;
       for (let m = 0; m < LADDER_MATCHES; m++) {
@@ -113,9 +122,9 @@ export async function runChecks(input: CheckInput): Promise<CheckReport> {
       row.dealtPerMatch = Math.round(row.dealtPerMatch / LADDER_MATCHES);
       r.ladder[opp] = row;
     }
-    if (dealt === 0) hard(`ladder: dealt 0% in ${STOCK_IDS.length * LADDER_MATCHES} CPU level-9 matches. The CPU can't land anything: check hitbox positions (x forward, y negative is UP), active frames inside total, and that jab1/ftilt/fsmash have hitboxes near the body (x 20-120, y -20..-${height})`);
+    if (dealt === 0) hard(`ladder: dealt 0% in ${LADDER.length * LADDER_MATCHES} CPU level-9 matches. The CPU can't land anything: check hitbox positions (x forward, y negative is UP), active frames inside total, and that jab1/ftilt/fsmash have hitboxes near the body (x 20-120, y -20..-${height})`);
     const all = Object.values(r.ladder);
-    const w = all.reduce((a, x) => a + x.wins, 0), total = STOCK_IDS.length * LADDER_MATCHES;
+    const w = all.reduce((a, x) => a + x.wins, 0), total = LADDER.length * LADDER_MATCHES;
     const secs = all.reduce((a, x) => a + x.avgSeconds, 0) / all.length;
     if (w === total && secs < SOFT_SECONDS) r.soft.push(`wins every ladder match in ${secs.toFixed(0)}s on average: probably overtuned`);
     if (w === 0 && secs < SOFT_SECONDS) r.soft.push(`loses every ladder match in ${secs.toFixed(0)}s on average: probably too weak or too light`);
@@ -128,7 +137,7 @@ export async function runChecks(input: CheckInput): Promise<CheckReport> {
     for (const [m, mv] of Object.entries(d.moves)) {
       if (mv.throwFrame || m === "pummel") continue;
       for (const input of [EMPTY_INPUT, held]) guard(`move ${m} started on its own`, () => {
-        const s = createMatch({ stage: "proving", players: [{ fighter: id }, { fighter: "sable" }], seed: 3 });
+        const s = createMatch({ stage: "proving", players: [{ fighter: id }, { fighter: DUMMY }], seed: 3 });
         const f = s.fighters[0], v = s.fighters[1];
         f.x = -40; v.x = 40; f.facing = 1; v.facing = -1;
         if (mv.aerial) for (const x of [f, v]) { x.y = -220; x.grounded = false; x.platform = -1; }
@@ -147,7 +156,7 @@ export async function runChecks(input: CheckInput): Promise<CheckReport> {
     let recovered = 0, usedUp = 0, bestGap = Infinity, bestRise = 0;
     guard("the recovery check", () => {
       for (let seed = 1; seed <= 10; seed++) {
-        const s = createMatch({ stage: "proving", players: [{ fighter: id, cpu: LEVEL }, { fighter: "sable" }], rules: { stocks: 1 }, seed });
+        const s = createMatch({ stage: "proving", players: [{ fighter: id, cpu: LEVEL }, { fighter: DUMMY }], rules: { stocks: 1 }, seed });
         const f = s.fighters[0], thrower = s.fighters[1];
         const side = seed % 2 ? 1 : -1;
         f.x = side * 535; f.y = 0; f.percent = 52; f.facing = (-side) as 1 | -1;
@@ -178,7 +187,7 @@ export async function runChecks(input: CheckInput): Promise<CheckReport> {
       guard(`the KO test of ${m}`, () => { r.killPercents[m] = killPercent(d, m); });
     }
     const best = Object.values(r.killPercents).filter((p): p is number => p !== null);
-    if (!best.length) hard(`KO: no move kills a weight-100 opponent from centre stage under 300% (tested ${Object.keys(r.killPercents).join(", ")}). Give fsmash or a special a hitbox with base 50-70 and growth 90-110 at a launching angle (30-60 or 80-90)`);
+    if (!best.length) hard(`KO: no move kills a weight-${roster[DUMMY].stats.weight} opponent from centre stage under 300% (tested ${Object.keys(r.killPercents).join(", ")}). Give fsmash or a special a hitbox with base 50-70 and growth 90-110 at a launching angle (30-60 or 80-90)`);
   });
 
   for (const [move, { error, n }] of hooks.byMove) r.failures.push({ kind: "hook", msg: `hook of move ${move} threw ${n}x: "${error}". The engine disables a throwing hook, so the move loses its gimmick; guard against missing targets and undefined fields` });
@@ -193,7 +202,7 @@ function killPercent(def: FighterDef, moveId: string): number | null {
   if (!hbs.length) return null;
   const hb = hbs.reduce((a, b) => (b.base + b.growth > a.base + a.growth ? b : a));
   const dies = (percent: number): boolean => {
-    const s = createMatch({ stage: "proving", players: [{ fighter: def.id }, { fighter: "sable" }], seed: 1 });
+    const s = createMatch({ stage: "proving", players: [{ fighter: def.id }, { fighter: DUMMY }], seed: 1 });
     const a = s.fighters[0], v = s.fighters[1];
     a.x = -60; v.x = 0; v.facing = -1; a.facing = 1; a.moveFacing = 1;
     v.percent = percent;

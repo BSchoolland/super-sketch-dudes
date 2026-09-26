@@ -1,7 +1,10 @@
-// Per-move hit statistics for a CPU match. Usage: tsx scripts/hitstats.ts wick brick [level=9] [stage=proving] [matches=3]
+// Per-move hit statistics for a CPU match. Usage: tsx scripts/hitstats.ts tank dizzy [level=9] [stage=proving] [matches=3]
 import { createMatch, step } from "../shared/sim";
 import { cpuInput } from "../shared/cpu";
-const [a, b] = [process.argv[2] ?? "wick", process.argv[3] ?? "brick"];
+import { houseId, loadAllHouse } from "../test/house";
+
+await loadAllHouse();
+const [a, b] = [houseId(process.argv[2] ?? "tank"), houseId(process.argv[3] ?? "dizzy")];
 const level = Number(process.argv[4] ?? 9), stage = process.argv[5] ?? "proving", N = Number(process.argv[6] ?? 3);
 const stats: Record<string, { hits: number; dmg: number; kos: number }>[] = [{}, {}];
 const moves: Record<string, string>[] = [{}, {}];

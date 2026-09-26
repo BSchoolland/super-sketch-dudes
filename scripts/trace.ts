@@ -2,8 +2,11 @@ import { createMatch, step } from "../shared/sim";
 import { EMPTY_INPUT } from "../shared/input";
 import { roster } from "../shared/fighters/index";
 import { hitOf } from "../shared/hits";
-const [att, mv, pct] = [process.argv[2] ?? "sable", process.argv[3] ?? "fsmash", Number(process.argv[4] ?? 65)];
-const s = createMatch({ stage: "proving", players: [{ fighter: att }, { fighter: "sable" }], seed: 1 });
+import { houseId, loadAllHouse } from "../test/house";
+
+await loadAllHouse();
+const [att, mv, pct] = [houseId(process.argv[2] ?? "lampjack"), process.argv[3] ?? "fsmash", Number(process.argv[4] ?? 65)];
+const s = createMatch({ stage: "proving", players: [{ fighter: att }, { fighter: "lampjack" }], seed: 1 });
 const a = s.fighters[0], v = s.fighters[1];
 a.x = -60; v.x = 0; v.facing = -1; a.facing = 1; a.moveFacing = 1; v.percent = pct;
 const m = roster[att].moves[mv];

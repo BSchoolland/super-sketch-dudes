@@ -1,5 +1,5 @@
 import type { Fighter, FighterDef, PoseKey } from "../types";
-import { key } from "../fighters/helpers";
+import { key } from "./helpers";
 
 /** The nine cells every drawn fighter's sheet has, in sheet order (3 columns x 3 rows). */
 export const SPRITE_CELLS = ["idle", "walk", "jump", "atk-fwd", "atk-up", "atk-down", "hit", "launched", "block"] as const;
