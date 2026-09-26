@@ -4,3 +4,6 @@ shots
 server-data
 .DS_Store
 agents/
+research/fightsheet/sheet-*.png
+research/fightsheet/cells-*
+research/fightsheet/frames
