@@ -61,7 +61,7 @@ export function hover(x: number, y: number, w: number, h: number): boolean {
   return pointer.present && pointer.x >= x && pointer.x <= x + w && pointer.y >= y && pointer.y <= y + h;
 }
 export function clicked(x: number, y: number, w: number, h: number): boolean {
-  return pointer.clicked && hover(x, y, w, h);
+  return pointer.clicked && pointer.tapX >= x && pointer.tapX <= x + w && pointer.tapY >= y && pointer.tapY <= y + h;
 }
 
 /** A screen can hand off to another screen from inside draw (button handlers run there). */

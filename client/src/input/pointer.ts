@@ -8,8 +8,11 @@ type StrokeListener = (stroke: PointerStroke) => void;
 
 let cssScale = 1, cssOffX = 0, cssOffY = 0;
 const taps: ViewPoint[] = [];
-/** Where the pointer is for hover, and whether it tapped this frame (ui.ts `hover`/`clicked`). */
-export const pointer = { x: -1, y: -1, clicked: false, present: false };
+/**
+ * Where the pointer is for hover, and whether it tapped this frame (ui.ts `hover`/`clicked`). The
+ * tap keeps its own position: a lifted finger leaves the canvas before the frame reads it.
+ */
+export const pointer = { x: -1, y: -1, present: false, clicked: false, tapX: -1, tapY: -1 };
 const downs = new Map<number, ViewPoint>();
 const listeners = new Set<StrokeListener>();
 
@@ -52,7 +55,7 @@ export function attachPointer(canvas: HTMLCanvasElement): () => void {
     downs.delete(e.pointerId);
     const p = toView(e.clientX, e.clientY);
     emit({ id: e.pointerId, phase: "up", points: [p] });
-    if (e.type === "pointerup" && Math.hypot(p.x - start.x, p.y - start.y) < 40) { taps.push(start); track(start); pointer.clicked = true; }
+    if (e.type === "pointerup" && Math.hypot(p.x - start.x, p.y - start.y) < 40) { taps.push(start); track(start); pointer.clicked = true; pointer.tapX = start.x; pointer.tapY = start.y; }
   };
   on("pointerleave", () => { pointer.present = false; });
   on("pointerup", end);

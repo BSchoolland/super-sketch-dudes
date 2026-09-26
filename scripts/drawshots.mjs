@@ -53,7 +53,7 @@ const a = await player("ann", () => localStorage.clear());
 const b = await player("bob", () => { localStorage.setItem("sketchbattle.settings", JSON.stringify({ name: "Bob" })); localStorage.setItem("sketchbattle.drawPassword", "sketch"); }, true);
 await b.route("**/bundle.json", async (route) => { await new Promise((r) => setTimeout(r, 4000)); await route.continue(); });
 await shot(a, "00-title");
-for (const page of [a, b]) { await tap(page, 960, 682); await page.evaluate(() => { window.__draw = window.sketchbattle.screen; }); }
+for (const page of [a, b]) { await tap(page, 960, 682); await page.waitForFunction(() => window.sketchbattle.screen?.drawDebug); await page.evaluate(() => { window.__draw = window.sketchbattle.screen; }); }
 
 await shot(a, "01-password");
 await a.keyboard.type("nope"); await a.keyboard.press("Enter"); await a.waitForTimeout(400);
@@ -67,10 +67,11 @@ await tap(a, 960, 395);
 const code = (await until(a, "a room", (r) => !!r)).code;
 await shot(a, "05-lobby-alone");
 
-await tap(b, 960, 565);
+const field = async (page) => { try { await page.waitForSelector("#overlay input", { timeout: 5000 }); } catch (e) { console.log("no text field; view:", await view(page), "errors:", errors); await page.screenshot({ path: `${out}/nofield.png` }); throw e; } };
+await tap(b, 960, 565); await field(b);
 await b.keyboard.type("ZZZZ"); await shot(b, "06-join-code"); await b.keyboard.press("Enter"); await b.waitForTimeout(500);
 await shot(b, "06b-join-error");
-await tap(b, 960, 565); await b.keyboard.type(code); await b.keyboard.press("Enter");
+await tap(b, 960, 565); await field(b); await b.keyboard.type(code); await b.keyboard.press("Enter");
 await until(a, "bob in the lobby", (r) => r.players.length === 2);
 await shot(a, "07-lobby-host");
 await shot(b, "08-lobby-guest");
