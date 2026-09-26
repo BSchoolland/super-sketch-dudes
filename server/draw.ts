@@ -379,7 +379,9 @@ export function attachDraw(api: express.Router, opts: DrawOptions): void {
           return true;
         }
         case "drawBattleEnd": {
-          if (room.host !== c) return true;
+          // an eliminated host isn't simulating the match, so relay slot 0 reports instead
+          const reporter = d.battle && !d.battle.participants.includes(room.host.id) ? d.battle.participants[0] : room.host.id;
+          if (c.id !== reporter) return true;
           endBattle(room, Number(msg.winner));
           return true;
         }
