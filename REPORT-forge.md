@@ -91,3 +91,5 @@ End to end: local server on 3011 + worker + `scripts/draw-e2e.mjs`. Both charact
 - **The facing check is a judgment call on ambiguous drawings.**
 - **Sheet cost is estimated**, not billed.
 - **`forge.service` is not installed or enabled.** It assumes node from mise at `~/.local/share/mise/installs/node/26`.
+
+Commit: `365145f` (`git log 7bb6445..365145f` for the forge work).
