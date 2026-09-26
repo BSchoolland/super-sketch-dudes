@@ -112,13 +112,12 @@ describe("draw battle", () => {
     a.send({ t: "drawStart", rounds: 2, drawSeconds: 30 });
     for (let round = 1; round <= 2; round++) {
       for (const p of peers) { await p.phase("draw"); p.send({ t: "drawSubmit", round, png: `data:image/png;base64,${png1x1}` }); }
-      await a.phase("reveal");
+      if (round < 2) await a.phase("draw"); else await a.phase("reveal");
       for (let i = 0; i < 3; i++) {
         const job = await (await api("/forge/jobs/next")).json();
         const cells = Object.fromEntries(SPRITE_CELLS.map((cell) => [cell, png1x1]));
         expect((await api(`/forge/jobs/${job.id}/complete`, { method: "POST", body: JSON.stringify({ name: `F${job.fighterId}`, tagline: "t", description: "d", source, sprite: { px: 512, feetPx: 448, heightPx: 360, anims: {} }, cells }) })).status).toBe(204);
       }
-      if (round === 1) { for (const p of peers) p.send({ t: "drawReady", ready: true }); }
     }
     await a.expect("draw", (m) => m.room.players.every((p: any) => p.characters.every((ch: any) => ch.status === "ready")));
     for (const p of peers) p.send({ t: "drawReady", ready: true });

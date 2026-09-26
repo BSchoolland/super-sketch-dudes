@@ -2,11 +2,12 @@
  * DRAW BATTLE contract, shared by server/draw.ts and the client screens.
  *
  * A game: a room of 2..4 players draws `rounds` characters each (one per draw round, `drawSeconds`
- * on the clock), sees everyone's drawings between rounds while the forge turns them into fighters,
- * then fights an elimination ladder: every alive player brings their current character; the
+ * on the clock, rounds back to back) while the forge turns them into fighters, waits for the last
+ * ones, then fights an elimination ladder: every alive player brings their current character; the
  * winner keeps theirs, everyone else's is spent and they move to their next one. Out of
  * characters means out of the game. Last player standing wins.
  */
+/** `reveal` is the wait after the last draw round while the forge finishes; draw rounds run back to back. */
 export type DrawPhase = "lobby" | "draw" | "reveal" | "loading" | "battle" | "between" | "over";
 export type CharStatus = "waiting" | "queued" | "generating" | "ready" | "failed";
 
@@ -90,6 +91,6 @@ export type DrawServerMessage =
   /** The battle is starting: same shape as the classic online `start`, so the same match screen runs it. */
   | { t: "start"; seed: number; config: { stage: string; rules: { stocks: number; time: number }; inputDelay: number; players: { fighter: string }[] }; members: { id: number; name: string; slot: number }[] };
 
-export const DRAW_DEFAULTS = { rounds: 3, drawSeconds: 90, revealSeconds: 30, betweenSeconds: 8, stocks: 3, minPlayers: 2, maxPlayers: 4 };
+export const DRAW_DEFAULTS = { rounds: 3, drawSeconds: 90, betweenSeconds: 8, stocks: 3, minPlayers: 2, maxPlayers: 4 };
 /** Longest side of the drawing the client uploads; the server rejects bigger. */
 export const DRAW_PNG_MAX_BYTES = 900_000;

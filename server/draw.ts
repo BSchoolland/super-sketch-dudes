@@ -105,21 +105,21 @@ export function attachDraw(api: express.Router, opts: DrawOptions): void {
       const ch = p.characters[d.round - 1];
       if (ch.status === "waiting") { ch.status = "failed"; ch.error = "no drawing arrived before the clock ran out"; }
     }
+    // rounds run back to back; the only wait is at the end, for the forge
+    if (d.round < d.rounds) { startDrawRound(room, d.round + 1); return; }
     d.phase = "reveal";
-    d.note = d.round < d.rounds ? "look what everyone drew" : "the forge is finishing up";
+    d.note = "the forge is finishing up";
     for (const p of d.players.values()) p.ready = false;
-    if (d.round < d.rounds) setTimer(room, DRAW_DEFAULTS.revealSeconds * 1000, () => startDrawRound(room, d.round + 1));
-    else setTimer(room, 0, () => {});
+    setTimer(room, 0, () => {});
     push(room);
     maybeAdvanceReveal(room);
   }
-  /** Reveal ends early when everyone is ready; the final reveal also needs every character settled. */
+  /** The forge wait ends when every character is settled and everyone is ready. */
   function maybeAdvanceReveal(room: Room): void {
     const d = stateOf(room);
     if (d.phase !== "reveal") return;
     const players = [...d.players.values()].filter((p) => p.connected);
     const everyoneReady = players.length > 0 && players.every((p) => p.ready);
-    if (d.round < d.rounds) { if (everyoneReady) startDrawRound(room, d.round + 1); return; }
     const settled = players.every((p) => p.characters.every((ch) => ch.status === "ready" || ch.status === "failed"));
     if (!settled) { d.note = "the forge is finishing up"; return; }
     d.note = everyoneReady ? "" : "everyone's characters are in: ready up to fight";
