@@ -51,7 +51,7 @@ export interface NetVersusOptions {
 /** A rollback match over the relay, shared by classic online rooms and DRAW BATTLE. */
 export class NetVersusScreen extends VersusScreen {
   readonly session: RollbackSession;
-  private failure: { title: string; detail: string; automatic: boolean } | null = null;
+  protected failure: { title: string; detail: string; automatic: boolean } | null = null;
   private failureTime = 0;
   private pingTime = 0;
   private unsubscribers: Unsubscribe[] = [];

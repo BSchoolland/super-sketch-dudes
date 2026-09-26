@@ -109,6 +109,13 @@ export class RollbackSession {
     this.sendConfirmedHashes();
   }
 
+  /** The newest state built only from real inputs; null while a pending rollback still has to rewrite it. */
+  confirmedState(): State | null {
+    const frame = Math.min(this.confirmedThrough, this.state.frame);
+    if (this.pendingRollback !== null && this.pendingRollback <= frame) return null;
+    return this.snapshots.get(frame) ?? null;
+  }
+
   stateHashAt(frame: number): number | null {
     const snapshot = this.snapshots.get(frame);
     return snapshot ? hashState(snapshot) : null;

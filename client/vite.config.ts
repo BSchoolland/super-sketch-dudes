@@ -15,6 +15,7 @@ export default defineConfig({
     port: 5175,
     proxy: {
       "/sketch-battle/api": { target: serverTarget, rewrite: (p) => p.replace(/^\/sketch-battle/, "") },
+      "/sketch-battle/gen": { target: serverTarget },
       "/sketch-battle/ws": { target: serverTarget, ws: true, rewrite: (p) => p.replace(/^\/sketch-battle/, "") },
     },
   },

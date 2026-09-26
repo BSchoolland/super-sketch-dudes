@@ -400,6 +400,8 @@ export function attachDraw(api: express.Router, opts: DrawOptions): void {
         broadcast(room, { t: "left", id: c.id, slot: d.battle.participants.indexOf(c.id), duringMatch: true });
         if (left.length === 1) endBattle(room, d.battle.participants.indexOf(left[0]));
         else if (left.length === 0) finish(room, "everyone left");
+        // two or more remain but the match can't continue without the missing inputs: the reporter ends it from where it stopped
+        else push(room);
         return;
       }
       if (d.phase === "reveal") maybeAdvanceReveal(room);

@@ -1,4 +1,4 @@
-import type { DrawCharacter, DrawPlayer, DrawRoomState } from "../../../../shared/draw";
+import { DRAW_DEFAULTS, type DrawCharacter, type DrawPlayer, type DrawRoomState } from "../../../../shared/draw";
 
 /** The server's draw deadline includes this much grace so late uploads still land; the clock ends before it. */
 export const DRAW_GRACE_MS = 4000;
@@ -49,4 +49,22 @@ export function ladderHistory(room: DrawRoomState): LadderEntry[] {
 
 export function secondsLeft(deadline: number, now: number, graceMs = 0): number {
   return deadline ? Math.max(0, Math.ceil((deadline - graceMs - now) / 1000)) : 0;
+}
+
+/** How long the server's timer runs for the phase it just started, so the clock runs on local time. */
+export function phaseMs(room: Pick<DrawRoomState, "phase" | "drawSeconds">): number {
+  if (room.phase === "draw") return room.drawSeconds * 1000 + DRAW_GRACE_MS;
+  if (room.phase === "reveal") return DRAW_DEFAULTS.revealSeconds * 1000;
+  if (room.phase === "between") return DRAW_DEFAULTS.betweenSeconds * 1000;
+  throw new Error(`the server set a deadline in phase ${room.phase}`);
+}
+
+/**
+ * A battle that lost a player can't be finished: the result is where it stopped, the remaining
+ * fighters ranked by `standings`, the missing ones last.
+ */
+export function abandonedResult(fighters: readonly { stocks: number; percent: number }[], gone: readonly number[]): { winner: number; standings: number[] } {
+  const order = standings(fighters, -1);
+  const ranked = [...order.filter((slot) => !gone.includes(slot)), ...order.filter((slot) => gone.includes(slot))];
+  return { winner: ranked[0], standings: ranked };
 }

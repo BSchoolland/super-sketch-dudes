@@ -1,12 +1,14 @@
 import "./style.css";
 import { VIEW_H, VIEW_W } from "./render/camera";
 import { connectedPads, endInputFrame, readMenu, type DeviceId } from "./input/devices";
+import { attachPointer, endPointerFrame, setPointerTransform } from "./input/pointer";
 import { roster } from "../../shared/fighters/index";
 import { rosterList } from "../../shared/fighters/index";
 import { TitleScreen, type Mode } from "./screens/title";
 import { SelectScreen, type SlotPick } from "./screens/select";
 import { StageScreen } from "./screens/stage";
 import { OnlineScreen } from "./screens/online";
+import { DrawScreen } from "./screens/draw/screen";
 import { SettingsScreen } from "./screens/settings";
 import { VersusScreen } from "./screens/versus";
 import { loadSettings, settings, type Screen } from "./screens/ui";
@@ -29,7 +31,9 @@ function resize(): void {
   scale = Math.min(w / VIEW_W, h / VIEW_H) * dpr;
   offX = (canvas.width - VIEW_W * scale) / 2;
   offY = (canvas.height - VIEW_H * scale) / 2;
+  setPointerTransform(scale / dpr, offX / dpr, offY / dpr);
 }
+attachPointer(canvas);
 window.addEventListener("resize", resize);
 resize();
 
@@ -54,6 +58,7 @@ function titleScreen(): Screen {
   return new TitleScreen((mode: Mode) => {
     if (mode === "settings") return new SettingsScreen(() => titleScreen());
     if (mode === "online") return new OnlineScreen(() => titleScreen());
+    if (mode === "draw") return new DrawScreen(() => titleScreen());
     const training = mode === "training";
     return new SelectScreen((picks) => new StageScreen((setup) => startMatch(picks, setup, training), () => titleScreen(), training), () => titleScreen(), training);
   });
@@ -97,6 +102,7 @@ function frame(now: number): void {
   const next = screen.update(dt, menu);
   if (next) { screen = next; screen.enter?.(); }
   endInputFrame();
+  endPointerFrame();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = "#f4efe4";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
