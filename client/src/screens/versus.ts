@@ -5,9 +5,9 @@ import { rumble } from "../input/devices";
 import { LocalMatch, type MatchDriver, type SlotSource } from "../match";
 import { Renderer } from "../render/render";
 import { drawBanner, SLOT_COLORS } from "../render/hud";
-import { Music, playEvents, sfx } from "../audio/audio";
+import { Music, StateSounds, playEvents, sfx } from "../audio/audio";
 import { card, label, title, button, goTo, type Screen, INK, settings } from "./ui";
-import { stageOf, type MatchConfig } from "../../../shared/sim";
+import type { MatchConfig } from "../../../shared/sim";
 import { B } from "../../../shared/input";
 import { roster } from "../../../shared/fighters/index";
 import { currentMove } from "../../../shared/fighter";
@@ -19,6 +19,7 @@ export class VersusScreen implements Screen {
   match: MatchDriver;
   renderer: Renderer;
   music = new Music();
+  stateSounds = new StateSounds();
   acc = 0;
   countdown = 3.2;
   bannerT = 0;
@@ -42,7 +43,7 @@ export class VersusScreen implements Screen {
     this.renderer.showHitboxes = training;
     if (training) { this.match.state.fighters.forEach((f) => (f.stocks = 99)); if (this.match.sources[1]) { this.match.sources[1].cpu = 0; this.match.state.fighters[1].cpu = 0; this.renderer.names[1] = "DUMMY"; } }
   }
-  enter(): void { this.music.start(stageOf(this.match.state).theme); }
+  enter(): void { this.music.start(); }
   update(dt: number, m: MenuInput): Screen | null {
     let st = this.match.state;
     if (this.countdown > 0) {
@@ -102,13 +103,13 @@ export class VersusScreen implements Screen {
     if (this.hookErr) { this.hookErr.t += dt; if (this.hookErr.t > 4) this.hookErr = null; }
     this.suddenT = Math.max(0, this.suddenT - dt);
     this.renderer.fx.consume(st, events, this.renderer.cam);
-    playEvents(events);
+    playEvents(st, events, this.music);
+    if (!this.match.paused) this.stateSounds.update(dt, st);
     if (settings.rumble) for (const e of events) {
       if (e.t === "hit") { const s = this.match.sources[e.victim]; if (s.device) rumble(s.device, Math.min(1, e.damage / 20), 0.5, 80 + e.damage * 8); const a = this.match.sources[e.attacker]; if (a.device) rumble(a.device, 0.2, 0.6, 60); }
       if (e.t === "ko") for (const s of this.match.sources) if (s.device) rumble(s.device, 1, 1, 400);
     }
-    const maxP = Math.max(0, ...st.fighters.map((f) => f.percent));
-    this.music.update(dt, Math.min(1, maxP / 150 + (st.fighters.some((f) => f.stocks === 1) ? 0.3 : 0)));
+    this.music.muffle(this.match.paused || st.ended);
     return null;
   }
   resetTraining(): void {

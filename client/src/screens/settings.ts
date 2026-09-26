@@ -1,6 +1,6 @@
 import { VIEW_W } from "../render/camera";
 import type { MenuInput } from "../input/devices";
-import { setVolume, sfx } from "../audio/audio";
+import { setMusicVolume, setVolume, sfx } from "../audio/audio";
 import { bg, card, hint, label, title, hover, clicked, arrows, backButton, goTo, type Screen, INK, settings, saveSettings } from "./ui";
 import { account } from "../account";
 
@@ -11,7 +11,7 @@ export class SettingsScreen implements Screen {
   sel = 0;
   rows: Row[] = [
     { name: "SOUND", get: () => `${Math.round(settings.volume * 100)}%`, adj: (d) => { settings.volume = Math.max(0, Math.min(1, settings.volume + d * 0.1)); setVolume(settings.volume); } },
-    { name: "MUSIC", get: () => `${Math.round(settings.music * 100)}%`, adj: (d) => { settings.music = Math.max(0, Math.min(1, settings.music + d * 0.1)); } },
+    { name: "MUSIC", get: () => `${Math.round(settings.music * 100)}%`, adj: (d) => { settings.music = Math.max(0, Math.min(1, settings.music + d * 0.1)); setMusicVolume(settings.music); } },
     { name: "SCREEN SHAKE", get: () => `${Math.round(settings.shake * 100)}%`, adj: (d) => { settings.shake = Math.max(0, Math.min(1.5, settings.shake + d * 0.25)); } },
     { name: "TAP JUMP (stick up)", get: () => (settings.tapJump ? "on" : "off"), adj: () => { settings.tapJump = !settings.tapJump; } },
     { name: "RUMBLE", get: () => (settings.rumble ? "on" : "off"), adj: () => { settings.rumble = !settings.rumble; } },

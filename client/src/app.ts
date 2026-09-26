@@ -9,7 +9,7 @@ import { SheetScreen } from "./screens/sheet";
 import { SignInScreen } from "./screens/signin";
 import { menus, signInScreen } from "./screens/flow";
 import { loadSettings, settings, takeHandoff, type Screen } from "./screens/ui";
-import { setVolume } from "./audio/audio";
+import { setMusicVolume, setVolume } from "./audio/audio";
 import { logClient } from "./telemetry";
 import { loadGeneratedFighter } from "./gen";
 import { devSignIn, finishSignIn, loadAccount, signedIn } from "./account";
@@ -45,6 +45,7 @@ export async function mount(opts: MountOptions): Promise<AppController> {
   if (opts.swap) swap.request = opts.swap;
   loadSettings();
   setVolume(settings.volume);
+  setMusicVolume(settings.music);
   logClient("start", { ua: navigator.userAgent, w: innerWidth, h: innerHeight, dpr: devicePixelRatio, pads: connectedPads().length, resumed: !!opts.resume });
 
   const canvas = opts.canvas;
