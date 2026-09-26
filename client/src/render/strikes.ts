@@ -1,4 +1,4 @@
-import type { Fighter, FighterDef, Hitbox, Move } from "../../../shared/types";
+import type { Fighter, FighterDef, Hitbox, Look, Move } from "../../../shared/types";
 import { hitboxWorld } from "../../../shared/hits";
 import { defOf, currentMove } from "../../../shared/fighter";
 import { inkArc, inkLine, inkPath, INK, PAPER, PENCIL } from "./paper";
@@ -42,13 +42,30 @@ export function drawStrikes(ctx: CanvasRenderingContext2D, f: Fighter, pos: { x:
     } else {
       const family = hb.fx ?? "hit";
       if (family === "fire") drawFlame(ctx, c, time);
-      else drawSwing(ctx, f, def, pos, c, family, t, since < active, marker);
+      else {
+        // the swoosh says "it moved"; the filled shape says "this is where it hits"
+        drawSwing(ctx, f, def, pos, c, family, t, since < active, marker);
+        drawFamily(ctx, f, def, c, family, since, marker);
+      }
     }
     ctx.restore();
   }
 }
 
 type Capsule = { x1: number; y1: number; x2: number; y2: number; r: number };
+
+/** The built-in families as bold capsule-filling looks in the character's own colours. */
+function drawFamily(ctx: CanvasRenderingContext2D, f: Fighter, def: FighterDef, c: Capsule, family: string, since: number, marker: string): void {
+  const ink = def.palette.outline || INK;
+  const look: Look = family === "slash" || family === "tip" ? { shape: "slash", color: marker, ink, texture: "solid" }
+    : family === "energy" ? { shape: "bolt", color: marker, ink, texture: "glow" }
+    : family === "heavy" ? { shape: "bar", color: marker, ink, texture: "hatch" }
+    : { shape: "bar", color: marker, ink, texture: "dots" };
+  const len = Math.hypot(c.x2 - c.x1, c.y2 - c.y1);
+  const angle = len > 0 ? Math.atan2(c.y2 - c.y1, c.x2 - c.x1) : f.moveFacing === 1 ? 0 : Math.PI;
+  // thin hitboxes (a rapier tip) still get a readable shape
+  drawLook(ctx, def, look, { x: c.x1, y: c.y1, angle, r: Math.max(c.r, 14), len, facing: f.moveFacing, frame: since, alpha: 0.92 });
+}
 
 function drawSwing(ctx: CanvasRenderingContext2D, f: Fighter, def: FighterDef, pos: { x: number; y: number }, c: Capsule, family: string, t: number, active: boolean, marker: string): void {
   const px = pos.x, py = pos.y - def.stats.height * 0.55;
@@ -62,7 +79,7 @@ function drawSwing(ctx: CanvasRenderingContext2D, f: Fighter, def: FighterDef, p
   const sweep = Math.min(1.25, 0.45 + c.r * 1.6 / R) * (0.55 + 0.45 * t);
   const sign = f.moveFacing;                                    // the swing comes from behind and above the fighter
   const a0 = dir - sweep * sign, a1 = dir;
-  const width = c.r * (heavy ? 0.9 : blade ? 0.75 : 0.55);
+  const width = c.r * (heavy ? 1.1 : blade ? 0.9 : 0.7);
   // tapered crescent: thin at the tail, full at the leading edge
   const n = 18, outer: [number, number][] = [], inner: [number, number][] = [];
   for (let i = 0; i <= n; i++) {
@@ -83,7 +100,7 @@ function drawSwing(ctx: CanvasRenderingContext2D, f: Fighter, def: FighterDef, p
   // speed lines trailing the swing
   for (let j = 0; j < 3; j++) {
     const rr = R * (0.5 + j * 0.2), b0 = a0 - 0.12 * sign * (j + 1), b1 = a0 + (a1 - a0) * (0.18 + j * 0.06);
-    inkArc(ctx, px, py, rr, Math.min(b0, b1), Math.max(b0, b1), marker, 1.6 + (heavy ? 1 : 0), 17 + j);
+    inkArc(ctx, px, py, rr, Math.min(b0, b1), Math.max(b0, b1), marker, 2.6 + (heavy ? 1.2 : 0), 17 + j);
   }
   if (family === "tip" && active) drawStar(ctx, ex + Math.cos(dir) * c.r * 0.4, ey + Math.sin(dir) * c.r * 0.4, 8 + c.r * 0.25, ink);
   if (heavy && active) {
