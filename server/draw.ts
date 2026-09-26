@@ -319,7 +319,7 @@ export function attachDraw(api: express.Router, opts: DrawOptions): void {
           c.name = String(msg.name ?? "").replace(/[^\w \-.!?]/g, "").slice(0, 14) || c.name;
           let target: Room;
           if (msg.t === "drawCreate") {
-            target = { code: makeCode(), members: [], started: false, host: c, seed: 0, config: null };
+            target = { code: makeCode(), members: [], started: false, host: c, seed: 0, config: null, game: null };
             const st: DrawState = { phase: "lobby", round: 0, rounds: DRAW_DEFAULTS.rounds, drawSeconds: DRAW_DEFAULTS.drawSeconds, deadline: 0, timer: null, players: new Map(), battles: [], battle: null, note: "", drawRoot: path.join(drawDir, target.code) };
             target.draw = st;
             rooms.set(target.code, target);

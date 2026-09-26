@@ -6,6 +6,7 @@ import http from "node:http";
 import { WebSocketServer } from "ws";
 import { attachLobby } from "./lobby";
 import { attachDraw } from "./draw";
+import { attachGames } from "./games";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
@@ -16,7 +17,7 @@ fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const app = express();
 // forge completions carry nine PNG cells + a sheet as base64
-app.use((req, res, next) => express.json({ limit: req.path.includes("/forge/") ? "12mb" : "8kb" })(req, res, next));
+app.use((req, res, next) => express.json({ limit: req.path.includes("/forge/") ? "12mb" : req.path.includes("/games") ? "40mb" : "8kb" })(req, res, next));
 const api = express.Router();
 // Apache proxies /sketch-battle/* to / here; when hit directly the prefix is still present, so mount both.
 app.use("/api", api);
@@ -29,6 +30,11 @@ const DRAW_PASSWORD = process.env.DRAW_PASSWORD ?? "";
 const FORGE_TOKEN = process.env.FORGE_TOKEN ?? "";
 if (!DRAW_PASSWORD || !FORGE_TOKEN) console.warn("DRAW_PASSWORD / FORGE_TOKEN unset: draw battle is disabled");
 attachDraw(api, { password: DRAW_PASSWORD, forgeToken: FORGE_TOKEN, dataDir: DATA_DIR, genBase: `${BASE}/gen` });
+// game bundles: whole builds of the game, one folder per hash; rooms switch between them live
+attachGames(api, { token: FORGE_TOKEN, dataDir: DATA_DIR });
+const gamesDir = path.join(DATA_DIR, "games");
+app.use(`${BASE}/games`, express.static(gamesDir, { maxAge: "1y", immutable: true }));
+app.use("/games", express.static(gamesDir, { maxAge: "1y", immutable: true }));
 const genDir = path.join(DATA_DIR, "gen");
 app.use(`${BASE}/gen`, express.static(genDir, { maxAge: "1y", immutable: true }));
 app.use("/gen", express.static(genDir, { maxAge: "1y", immutable: true }));

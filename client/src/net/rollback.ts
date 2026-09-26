@@ -18,6 +18,17 @@ export interface RollbackOptions {
   inputDelay?: number;
   maxRollback?: number;
   onDesync?: (info: DesyncInfo) => void;
+  /** Continue a match another bundle was running: its confirmed state and every real input after it. */
+  resume?: SessionHandoff;
+}
+
+/** Everything a session needs to carry on in another game bundle. Plain data apart from the state. */
+export interface SessionHandoff {
+  frame: number;
+  state: State;
+  /** Per slot: [frame, input] for every real input after `frame`; the local slot also carries the recent past, which resends draw on. */
+  realInputs: [number, InputFrame][][];
+  remoteNewest: [number, number][];
 }
 
 export class RollbackSession {
@@ -43,6 +54,8 @@ export class RollbackSession {
   private nextHashFrame = 30;
   private remoteNewest = new Map<number, number>();
   private slowTick = 0;
+  /** Snapshots from this frame on are kept whatever the rollback window, so a bundle swap can hand one over. */
+  keepFrom: number | null = null;
   private unsubscribers: Unsubscribe[];
   private onDesync?: (info: DesyncInfo) => void;
 
@@ -62,6 +75,7 @@ export class RollbackSession {
     }
     this.confirmedThrough = this.inputDelay;
     this.snapshots.set(0, cloneState(this.state));
+    if (options.resume) this.resume(options.resume);
     this.unsubscribers = [
       this.transport.onInputs((slot, frame, inputs) => this.receiveInputs(slot, frame, inputs)),
       this.transport.onHash((slot, frame, hash) => this.receiveHash(slot, frame, hash)),
@@ -99,6 +113,41 @@ export class RollbackSession {
     this.pruneHistory();
     this.sendConfirmedHashes();
     return true;
+  }
+
+  private resume(h: SessionHandoff): void {
+    this.state = cloneState(h.state);
+    if (this.state.frame !== h.frame) throw new Error(`handoff state is at frame ${this.state.frame}, not ${h.frame}`);
+    this.snapshots.clear();
+    this.snapshots.set(h.frame, cloneState(this.state));
+    this.realInputs.forEach((inputs) => inputs.clear());
+    h.realInputs.forEach((list, slot) => { for (const [frame, input] of list) this.realInputs[slot].set(frame, cloneInput(input)); });
+    this.remoteNewest = new Map(h.remoteNewest);
+    this.confirmedThrough = h.frame;
+    this.advanceConfirmation();
+    // both sides must hash the same frames after the swap
+    this.nextHashFrame = h.frame - (h.frame % 30) + 30;
+  }
+
+  /**
+   * The match as of `frame`, for another bundle to continue: requires every input through `frame`
+   * to be real and applied (call synchronize first). Null until that holds.
+   */
+  handoff(frame: number): SessionHandoff | null {
+    if (this.desync) return null;
+    if (this.confirmedThrough < frame || this.state.frame < frame) return null;
+    if (this.pendingRollback !== null && this.pendingRollback <= frame) return null;
+    const snapshot = this.snapshots.get(frame);
+    if (!snapshot) throw new Error(`no snapshot for handoff frame ${frame}; keepFrom was ${this.keepFrom}`);
+    return {
+      frame,
+      state: cloneState(snapshot),
+      realInputs: this.realInputs.map((inputs, slot) => {
+        const from = slot === this.localSlot ? frame - 150 : frame;
+        return [...inputs].filter(([f]) => f > from).sort((a, b) => a[0] - b[0]).map(([f, i]) => [f, cloneInput(i)] as [number, InputFrame]);
+      }),
+      remoteNewest: [...this.remoteNewest],
+    };
   }
 
   takeEvents(): GameEvent[] {
@@ -268,7 +317,7 @@ export class RollbackSession {
   }
 
   private pruneHistory(): void {
-    const oldest = this.state.frame - this.maxRollback;
+    const oldest = this.keepFrom === null ? this.state.frame - this.maxRollback : Math.min(this.keepFrom, this.state.frame - this.maxRollback);
     for (const frame of this.snapshots.keys()) if (frame < oldest) this.snapshots.delete(frame);
     for (const frame of this.usedInputs.keys()) if (frame < oldest + 1) this.usedInputs.delete(frame);
     this.realInputs.forEach((inputs, slot) => {

@@ -10,12 +10,16 @@ export default defineConfig({
   root: path.resolve(__dirname),
   base: process.env.SKETCHBATTLE_BASE ?? "/sketch-battle/",
   define: { __BUILD__: JSON.stringify(build) },
-  build: { outDir: path.resolve(__dirname, "../dist/client"), emptyOutDir: true, target: "es2022" },
+  build: {
+    outDir: path.resolve(__dirname, "../dist/client"), emptyOutDir: true, target: "es2022",
+    rollupOptions: { input: { main: path.resolve(__dirname, "index.html"), shell: path.resolve(__dirname, "shell.html") } },
+  },
   server: {
     port: 5175,
     proxy: {
       "/sketch-battle/api": { target: serverTarget, rewrite: (p) => p.replace(/^\/sketch-battle/, "") },
       "/sketch-battle/gen": { target: serverTarget },
+      "/sketch-battle/games": { target: serverTarget },
       "/sketch-battle/ws": { target: serverTarget, ws: true, rewrite: (p) => p.replace(/^\/sketch-battle/, "") },
     },
   },

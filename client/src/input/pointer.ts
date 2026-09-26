@@ -26,10 +26,12 @@ export function viewRectToCss(x: number, y: number, w: number, h: number): { lef
   return { left: cssOffX + x * cssScale, top: cssOffY + y * cssScale, width: w * cssScale, height: h * cssScale, scale: cssScale };
 }
 
-export function attachPointer(canvas: HTMLCanvasElement): void {
+export function attachPointer(canvas: HTMLCanvasElement): () => void {
+  const ac = new AbortController();
+  const on = <K extends keyof HTMLElementEventMap>(type: K, fn: (e: HTMLElementEventMap[K]) => void) => canvas.addEventListener(type, fn, { signal: ac.signal });
   const emit = (stroke: PointerStroke) => { for (const listener of listeners) listener(stroke); };
   const track = (p: ViewPoint) => { pointer.x = p.x; pointer.y = p.y; pointer.present = true; };
-  canvas.addEventListener("pointerdown", (e) => {
+  on("pointerdown", (e) => {
     canvas.setPointerCapture(e.pointerId);
     const p = toView(e.clientX, e.clientY);
     track(p);
@@ -37,7 +39,7 @@ export function attachPointer(canvas: HTMLCanvasElement): void {
     emit({ id: e.pointerId, phase: "down", points: [p] });
     e.preventDefault();
   });
-  canvas.addEventListener("pointermove", (e) => {
+  on("pointermove", (e) => {
     track(toView(e.clientX, e.clientY));
     if (!downs.has(e.pointerId)) return;
     const events = e.getCoalescedEvents?.() ?? [];
@@ -52,9 +54,10 @@ export function attachPointer(canvas: HTMLCanvasElement): void {
     emit({ id: e.pointerId, phase: "up", points: [p] });
     if (e.type === "pointerup" && Math.hypot(p.x - start.x, p.y - start.y) < 40) { taps.push(start); track(start); pointer.clicked = true; }
   };
-  canvas.addEventListener("pointerleave", () => { pointer.present = false; });
-  canvas.addEventListener("pointerup", end);
-  canvas.addEventListener("pointercancel", end);
+  on("pointerleave", () => { pointer.present = false; });
+  on("pointerup", end);
+  on("pointercancel", end);
+  return () => ac.abort();
 }
 
 export function onPointer(listener: StrokeListener): () => void {

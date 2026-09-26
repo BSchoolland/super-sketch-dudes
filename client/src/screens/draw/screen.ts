@@ -161,6 +161,10 @@ export class DrawScreen implements Screen, DrawHost {
       device: this.device,
       inputDelay: config.inputDelay,
       finished: () => !!s.room && s.room.phase !== "battle",
+      // draw rooms don't switch bundles mid-battle yet
+      isHost: () => false,
+      roomState: () => null,
+      localId: () => s.id,
       exit: (reason: NetExit) => {
         if ((reason === "left" || reason === "failure") && isReporter() && s.room?.phase === "battle") this.reportAbandoned(screen);
         return this;

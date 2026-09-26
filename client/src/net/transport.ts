@@ -1,4 +1,5 @@
 import { packInput, unpackInput, type InputFrame } from "../../../shared/input";
+import { site } from "../base";
 
 export type Unsubscribe = () => void;
 export type InputsCallback = (slot: number, frame: number, inputs: InputFrame[]) => void;
@@ -24,9 +25,13 @@ export interface RoomMember {
 
 export type RelayMessage =
   | { t: "hello"; id: number }
-  | { t: "room"; code: string; host: number; started: boolean; members: RoomMember[] }
+  | { t: "room"; code: string; host: number; started: boolean; members: RoomMember[]; game: string | null }
   | { t: "start"; seed: number; config: unknown; members: Pick<RoomMember, "id" | "name" | "slot">[] }
   | { t: "left"; id: number; slot: number; duringMatch: boolean }
+  /** The room's game bundle changed; the host answers with gameAt. */
+  | { t: "game"; hash: string }
+  /** Everyone swaps to the bundle at this sim frame (or now, outside a match). */
+  | { t: "gameAt"; hash: string; frame: number }
   | { t: "matched" }
   | { t: "queued" }
   | { t: "error"; error: string };
@@ -37,7 +42,7 @@ function removeListener<T>(listeners: Set<T>, listener: T): Unsubscribe {
 
 export function relayWebSocketUrl(): string {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${location.host}${import.meta.env.BASE_URL}ws`;
+  return `${protocol}//${location.host}${site.base}ws`;
 }
 
 export class WebSocketTransport implements Transport {

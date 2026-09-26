@@ -6,11 +6,17 @@
   <title>SKETCH BATTLE</title>
   <link rel="icon" href="./icon.svg" />
   <style>@font-face { font-family: "Patrick Hand"; src: url("./fonts/PatrickHand-Regular.ttf") format("truetype"); font-style: normal; font-weight: 100 900; font-display: swap; }</style>
-  <link rel="stylesheet" href="./src/style.css" />
+  <style>
+    html, body { margin: 0; height: 100%; background: #f4efe4; overflow: hidden; }
+    #game { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; touch-action: none; }
+    #overlay { position: fixed; inset: 0; pointer-events: none; }
+    #status { position: fixed; left: 12px; bottom: 10px; font: 14px "Patrick Hand", "Comic Sans MS", cursive; color: #29272299; }
+  </style>
 </head>
 <body>
   <canvas id="game"></canvas>
   <div id="overlay"></div>
-  <script type="module" src="./src/main.ts"></script>
+  <div id="status" hidden></div>
+  <script type="module" src="./src/shell.ts"></script>
 </body>
 </html>

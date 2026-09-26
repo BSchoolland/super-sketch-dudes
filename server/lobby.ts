@@ -20,7 +20,7 @@ export interface Client {
   /** Passed the DRAW BATTLE password on this connection. */
   drawAuthed: boolean;
 }
-export interface Room { code: string; members: Client[]; started: boolean; host: Client; seed: number; config: unknown; /** Set on DRAW BATTLE rooms; owned by server/draw.ts. */ draw?: unknown }
+export interface Room { code: string; members: Client[]; started: boolean; host: Client; seed: number; config: unknown; /** Set on DRAW BATTLE rooms; owned by server/draw.ts. */ draw?: unknown; /** Game bundle hash the room plays on; null = whatever the page loaded. */ game: string | null }
 
 /** Draw mode plugs in here: it owns every `draw*` message and hears about members leaving. */
 export interface RoomExtension {
@@ -52,6 +52,7 @@ function roomInfo(room: Room): unknown {
     code: room.code,
     host: room.host.id,
     started: room.started,
+    game: room.game,
     members: room.members.map((m) => ({ id: m.id, name: m.name, slot: m.slot, fighter: m.fighter, ready: m.ready })),
   };
 }
@@ -97,7 +98,7 @@ export function attachLobby(wss: WebSocketServer): void {
       switch (msg.t) {
         case "name": c.name = String(msg.name ?? "").replace(/[^\w \-.!?]/g, "").slice(0, 14) || c.name; if (c.room) broadcast(c.room, roomInfo(c.room)); break;
         case "ping": send(c, { t: "pong", at: msg.at }); break;
-        case "create": { const room: Room = { code: makeCode(), members: [], started: false, host: c, seed: 0, config: null }; rooms.set(room.code, room); joinRoom(c, room); break; }
+        case "create": { const room: Room = { code: makeCode(), members: [], started: false, host: c, seed: 0, config: null, game: null }; rooms.set(room.code, room); joinRoom(c, room); break; }
         case "join": {
           const room = rooms.get(String(msg.code ?? "").toUpperCase());
           if (!room) { send(c, { t: "error", error: "no such room" }); break; }
@@ -111,7 +112,7 @@ export function attachLobby(wss: WebSocketServer): void {
           if (!queue.includes(c)) queue.push(c);
           if (queue.length >= 2) {
             const a = queue.shift()!, b = queue.shift()!;
-            const room: Room = { code: makeCode(), members: [], started: false, host: a, seed: 0, config: null };
+            const room: Room = { code: makeCode(), members: [], started: false, host: a, seed: 0, config: null, game: null };
             rooms.set(room.code, room);
             joinRoom(a, room); joinRoom(b, room);
             send(a, { t: "matched" }); send(b, { t: "matched" });
@@ -143,6 +144,8 @@ export function attachLobby(wss: WebSocketServer): void {
         }
         case "inputs": if (c.room?.started && c.slot >= 0) broadcast(c.room, { t: "inputs", slot: c.slot, frame: msg.frame | 0, inputs: msg.inputs }, c); break;
         case "hash": if (c.room?.started && c.slot >= 0) broadcast(c.room, { t: "hash", slot: c.slot, frame: msg.frame | 0, hash: msg.hash >>> 0 }, c); break;
+        // the host picks the frame everyone swaps bundles at; relayed to the whole room, host included
+        case "gameAt": if (c.room && c.room.host === c && typeof msg.hash === "string") broadcast(c.room, { t: "gameAt", hash: msg.hash, frame: msg.frame | 0 }); break;
         case "end": if (c.room && c.room.host === c) { c.room.started = false; c.room.members.forEach((m) => (m.ready = false)); broadcast(c.room, roomInfo(c.room)); } break;
       }
     });

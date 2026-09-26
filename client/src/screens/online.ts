@@ -1,12 +1,15 @@
 import type { FighterId } from "../../../shared/types";
+import type { MatchConfig } from "../../../shared/sim";
+import type { SessionHandoff } from "../net/rollback";
 import { roster, rosterList } from "../../../shared/fighters/index";
 import { VIEW_H, VIEW_W } from "../render/camera";
 import { SLOT_COLORS } from "../render/hud";
 import { consumeTypedChars, type DeviceId, type MenuInput } from "../input/devices";
 import { sfx } from "../audio/audio";
-import { WebSocketTransport, type RelayMessage, type Unsubscribe } from "../net/transport";
+import { WebSocketTransport, type RelayMessage, type RoomMember, type Unsubscribe } from "../net/transport";
 import { drawFighterPortrait } from "./portrait";
 import { NetVersusScreen, startConfig } from "./netversus";
+import { swap, type Handoff } from "../handoff";
 import { bg, card, hint, label, settings, title, hover, clicked, arrows, button, backButton, goTo, type Screen, INK } from "./ui";
 
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -32,6 +35,37 @@ export class OnlineScreen implements Screen {
   private context: OnlineContext;
   private device: DeviceId = "kb1";
   private unsubscribers: Unsubscribe[] = [];
+
+  /** Pick up where another bundle left off: back in its room, and in its match if there was one. */
+  static resume(onExit: () => Screen, h: Handoff): Screen {
+    const context: OnlineContext = { transport: h.transport, id: h.id, room: h.room };
+    const screen = new OnlineScreen(onExit, context);
+    if (!h.match) return screen;
+    const m = h.match;
+    screen.dispose();
+    return OnlineScreen.matchScreen(onExit, context, { config: m.config, members: m.members, localSlot: m.localSlot, device: m.device, inputDelay: m.inputDelay, resume: m.session });
+  }
+
+  private static matchScreen(onExit: () => Screen, context: OnlineContext, m: { config: MatchConfig; members: Pick<RoomMember, "id" | "name" | "slot">[]; localSlot: number; device: DeviceId; inputDelay: number; resume?: SessionHandoff }): Screen {
+    return new NetVersusScreen({
+      transport: context.transport,
+      config: m.config,
+      members: m.members,
+      localSlot: m.localSlot,
+      device: m.device,
+      inputDelay: m.inputDelay,
+      resume: m.resume,
+      isHost: () => context.room?.host === context.id,
+      roomState: () => context.room,
+      localId: () => context.id,
+      onLobby: (lobby) => { if (lobby.t === "room") context.room = lobby; },
+      exit: (reason) => {
+        if (reason === "closed") return onExit();
+        if (context.room?.host === context.id) context.transport.sendLobby({ t: "end" });
+        return new OnlineScreen(onExit, context);
+      },
+    });
+  }
 
   constructor(private onExit: () => Screen, context?: OnlineContext) {
     this.context = context ?? { transport: new WebSocketTransport(), id: 0, room: null };
@@ -219,21 +253,13 @@ export class OnlineScreen implements Screen {
       const local = message.members.find((member) => member.id === this.context.id);
       if (!local) throw new Error("start message omitted local member");
       const config = startConfig(message.config, message.seed);
-      const context = this.context, onExit = this.onExit;
-      this.nextScreen = new NetVersusScreen({
-        transport: context.transport,
-        config: config.match,
-        members: message.members,
-        localSlot: local.slot,
-        device: this.device,
-        inputDelay: config.inputDelay,
-        onLobby: (lobby) => { if (lobby.t === "room") context.room = lobby; },
-        exit: (reason) => {
-          if (reason === "closed") return onExit();
-          if (context.room?.host === context.id) context.transport.sendLobby({ t: "end" });
-          return new OnlineScreen(onExit, context);
-        },
-      });
+      this.nextScreen = OnlineScreen.matchScreen(this.onExit, this.context, { config: config.match, members: message.members, localSlot: local.slot, device: this.device, inputDelay: config.inputDelay });
+    }
+    // bundle switches outside a match: the host answers at once, everyone swaps carrying the room
+    if (message.t === "game" && this.context.room?.host === this.context.id) this.context.transport.sendLobby({ t: "gameAt", hash: message.hash, frame: 0 });
+    if (message.t === "gameAt" && message.hash !== swap.hash) {
+      this.dispose();
+      swap.request(message.hash, { transport: this.context.transport, id: this.context.id, room: this.context.room });
     }
   }
 
