@@ -48,7 +48,7 @@ beforeAll(async () => {
   initLibrary(dataDir);
   attachAuth(router, { dataDir, devLogin: true });
   attachForge(router, { token: TOKEN, dataDir, genBase: "/gen" });
-  attachCharacters(router);
+  attachCharacters(router, TOKEN);
   attachDraw(router, { password: PASSWORD, dataDir });
   server = http.createServer(app);
   const wss = new WebSocketServer({ server, path: "/ws" });
@@ -217,8 +217,31 @@ describe("the forge queue survives a restart", () => {
     expect(again.fighterId).toBe("gen-restart-1");
     expect(again.attempts).toBe(2);
     fs.rmSync(dir3, { recursive: true, force: true });
+    init2(dataDir); // the library module is a singleton: point it back at the main data dir
     srv.close();
     fs.rmSync(dir, { recursive: true, force: true });
     void libraryOf;
+  });
+});
+
+describe("starter characters", () => {
+  it("show up in every library, can't be deleted, and the token sets the list", async () => {
+    const own = await (await api("/auth/dev", { method: "POST", body: JSON.stringify({ name: "Own" }) })).json();
+    const other = await (await api("/auth/dev", { method: "POST", body: JSON.stringify({ name: "Other" }) })).json();
+    const H = (s: { session: string }) => ({ "x-session": s.session });
+    const created = await (await api("/characters", { method: "POST", headers: H(own), body: JSON.stringify({ png: `data:image/png;base64,${png1x1}` }) })).json();
+    const job = await (await api("/forge/jobs/next")).json();
+    const cells = Object.fromEntries(SPRITE_CELLS.map((c) => [c, png1x1]));
+    expect((await api(`/forge/jobs/${job.id}/complete`, { method: "POST", body: JSON.stringify({ name: "REF", tagline: "t", description: "d", source, sprite: { px: 512, feetPx: 448, heightPx: 360, anims: {} }, cells }) })).status).toBe(204);
+    expect((await api("/starters", { method: "POST", body: JSON.stringify({ ids: ["nope"] }) })).status).toBe(404);
+    expect((await api("/starters", { method: "POST", headers: { "x-forge-token": "wrong" }, body: JSON.stringify({ ids: [created.character.id] }) })).status).toBe(401);
+    expect((await api("/starters", { method: "POST", body: JSON.stringify({ ids: [created.character.id] }) })).status).toBe(200);
+    const theirs = await (await api("/library", { headers: H(other) })).json();
+    const star = theirs.characters.find((c: { id: string }) => c.id === created.character.id);
+    expect(star.starter).toBe(true);
+    expect(star.name).toBe("REF");
+    expect((await api(`/library/${created.character.id}`, { method: "DELETE", headers: H(other) })).status).toBe(403);
+    const mine = await (await api("/library", { headers: H(own) })).json();
+    expect(mine.characters.filter((c: { id: string }) => c.id === created.character.id)).toHaveLength(1);
   });
 });

@@ -37,7 +37,7 @@ if (!DRAW_PASSWORD || !FORGE_TOKEN) console.warn("DRAW_PASSWORD / FORGE_TOKEN un
 initLibrary(DATA_DIR);
 attachAuth(api, { dataDir: DATA_DIR, devLogin: process.env.DEV_LOGIN === "1" });
 attachForge(api, { token: FORGE_TOKEN, dataDir: DATA_DIR, genBase: `${BASE}/gen` });
-attachCharacters(api);
+attachCharacters(api, FORGE_TOKEN);
 attachDraw(api, { password: DRAW_PASSWORD, dataDir: DATA_DIR });
 // game bundles: whole builds of the game, one folder per hash; rooms switch between them live
 attachGames(api, { token: FORGE_TOKEN, dataDir: DATA_DIR });

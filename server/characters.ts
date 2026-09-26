@@ -2,19 +2,30 @@ import type express from "express";
 import { DRAW_PNG_MAX_BYTES } from "../shared/draw";
 import { playerOf } from "./auth";
 import { enqueueJob, entryOf, jobOf, newFighterId } from "./forge";
-import { libraryOf, removeCharacter } from "./library";
+import { libraryOf, removeCharacter, setStarters, starterEntries, starterIds } from "./library";
 
 /** The character creator and the library, over HTTP, for signed-in players. */
-export function attachCharacters(api: express.Router): void {
+export function attachCharacters(api: express.Router, forgeToken = ""): void {
   api.get("/library", (req, res) => {
     const player = playerOf(req);
     if (!player) return res.status(401).json({ error: "not signed in" });
-    res.json({ player, characters: libraryOf(player.id) });
+    const own = libraryOf(player.id);
+    res.json({ player, characters: [...own, ...starterEntries().filter((s) => !own.some((c) => c.id === s.id))] });
+  });
+
+  // reference fighters every player starts with; the forge token sets the list
+  api.get("/starters", (_req, res) => res.json({ ids: starterIds(), characters: starterEntries() }));
+  api.post("/starters", (req, res) => {
+    if (!forgeToken || req.get("x-forge-token") !== forgeToken) return res.status(401).json({ error: "bad token" });
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(String) : null;
+    if (!ids) return res.status(400).json({ error: "ids required" });
+    try { res.json({ ids: setStarters(ids) }); } catch (e) { res.status(404).json({ error: (e as Error).message }); }
   });
 
   api.delete("/library/:id", (req, res) => {
     const player = playerOf(req);
     if (!player) return res.status(401).json({ error: "not signed in" });
+    if (starterIds().includes(req.params.id)) return res.status(403).json({ error: "that one is everyone's" });
     if (!removeCharacter(player.id, req.params.id)) return res.status(404).json({ error: "not in your library" });
     res.status(204).end();
   });
@@ -35,7 +46,7 @@ export function attachCharacters(api: express.Router): void {
   });
 
   api.get("/characters/:id", (req, res) => {
-    const entry = libraryOf(playerOf(req)?.id ?? "").find((c) => c.id === req.params.id);
+    const entry = [...libraryOf(playerOf(req)?.id ?? ""), ...starterEntries()].find((c) => c.id === req.params.id);
     if (!entry) return res.status(404).json({ error: "no such character" });
     res.json({ character: entry });
   });

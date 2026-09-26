@@ -56,7 +56,7 @@ export class LibraryScreen implements Screen {
     const armed = this.deleteArmed >= 0 && this.t - this.deleteArmed < 3;
     const b: Button[] = [];
     if (e.status === "ready") b.push({ id: "fight", x: VIEW_W / 2 - w * 1.5 - 30, y, w, h: 110, text: "FIGHT", size: 48 });
-    b.push({ id: "delete", x: VIEW_W / 2 - w / 2, y, w, h: 110, text: armed ? "SURE?" : "DELETE", size: 44 });
+    if (!e.starter) b.push({ id: "delete", x: VIEW_W / 2 - w / 2, y, w, h: 110, text: armed ? "SURE?" : "DELETE", size: 44 });
     b.push({ id: "back", x: VIEW_W / 2 + w / 2 + 30, y, w, h: 110, text: "BACK", size: 44 });
     return b;
   }

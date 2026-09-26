@@ -5,6 +5,9 @@ import type { LibraryEntry, Player } from "../shared/account";
 /** Every player's characters, one JSON file per player under <dataDir>/players/. */
 let dir = "";
 const cache = new Map<string, { player: Player | null; characters: LibraryEntry[] }>();
+/** Fighter ids every player sees in their library (reference fighters), kept in <dataDir>/starters.json. */
+let starters: string[] = [];
+let startersFile = "";
 
 function fileOf(owner: string): string {
   return path.join(dir, `${owner.replace(/[^\w-]/g, "_")}.json`);
@@ -25,6 +28,23 @@ function save(owner: string): void {
 export function initLibrary(dataDir: string): void {
   dir = path.join(dataDir, "players");
   fs.mkdirSync(dir, { recursive: true });
+  startersFile = path.join(dataDir, "starters.json");
+  starters = fs.existsSync(startersFile) ? JSON.parse(fs.readFileSync(startersFile, "utf8")) : [];
+}
+
+export function starterIds(): string[] {
+  return [...starters];
+}
+export function setStarters(ids: string[]): string[] {
+  const missing = ids.filter((id) => !findCharacter(id));
+  if (missing.length) throw new Error(`no such character: ${missing.join(", ")}`);
+  starters = [...ids];
+  fs.writeFileSync(startersFile, JSON.stringify(starters));
+  return starters;
+}
+/** The starters as library entries, marked so the client won't offer to delete them. */
+export function starterEntries(): LibraryEntry[] {
+  return starters.map((id) => findCharacter(id)).filter((e): e is LibraryEntry => !!e && e.status === "ready").map((e) => ({ ...e, starter: true }));
 }
 
 export function libraryOf(owner: string): LibraryEntry[] {

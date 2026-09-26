@@ -26,6 +26,8 @@ export interface LibraryEntry {
   createdAt: number;
   /** Drawn in the creator, or in a draw battle room. */
   origin: "creator" | { room: string; round: number };
+  /** In every player's library from the start (a reference fighter); can't be deleted. */
+  starter?: boolean;
 }
 
 /** Header the client sends its session token in. */
