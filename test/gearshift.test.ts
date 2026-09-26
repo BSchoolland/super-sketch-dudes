@@ -64,7 +64,7 @@ describe("GEARSHIFT, a two-form drawn fighter", () => {
     const inputsAt: InputFrame[][] = [];
     let hookErrors = 0, carMoves = 0;
     for (let i = 0; i < 3000; i++) {
-      // the bot doesn't reach for a move with no hitbox, so both GEARSHIFTs are folded into cars for it
+      // the bot only transforms now and then, so both GEARSHIFTs are folded into cars here
       if (i === 300) for (const slot of [0, 2]) if (a.fighters[slot].grounded) startMove(a, a.fighters[slot], "dspecial");
       const inputs = a.fighters.map((f) => cpuInput(a, f.slot, 9));
       inputsAt.push(inputs);

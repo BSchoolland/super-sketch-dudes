@@ -111,7 +111,7 @@ describe("defensive mechanics", () => {
     for (const id of Object.keys(roster)) {
       const s = createMatch({ stage: "proving", players: [{ fighter: id }, { fighter: "lampjack" }], seed: 2 });
       const f = s.fighters[0];
-      f.x = -700; f.y = 60; f.grounded = false; f.action = "air"; f.vy = 3; f.jumpsLeft = 1;
+      f.x = -700; f.y = 150; f.grounded = false; f.action = "air"; f.vy = 3; f.jumpsLeft = 1;
       let recovered = false;
       for (let i = 0; i < 400; i++) {
         step(s, [cpuInput(s, 0, 9), EMPTY_INPUT]);

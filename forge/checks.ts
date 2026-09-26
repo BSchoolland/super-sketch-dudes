@@ -162,9 +162,12 @@ export async function runChecks(input: CheckInput): Promise<CheckReport> {
         f.x = side * 535; f.y = 0; f.percent = 52; f.facing = (-side) as 1 | -1;
         thrower.x = f.x - side * 75; thrower.y = 0; thrower.facing = side as 1 | -1; thrower.moveFacing = thrower.facing;
         hitOf(s, thrower, f, { frames: [0, 0], x: 0, y: 0, r: 0, damage: 8, angle: 35, base: 50, growth: 55 }, f.x, f.y - 50, true);
+        const away = { ...EMPTY_INPUT, x: side * 85, y: -100 };
         let up = false, upY = 0, out = false;
         for (let i = 0; i < 900 && f.stocks > 0; i++) {
-          step(s, [cpuInput(s, 0, LEVEL), EMPTY_INPUT]);
+          // the worst case: DI and drift away from the stage until the launch is over, then recover
+          const launched = f.hitlag > 0 || f.action === "hitstun" || (f.action === "tumble" && f.frame < f.hitstun);
+          step(s, [launched ? away : cpuInput(s, 0, LEVEL), EMPTY_INPUT]);
           hooks.collect(s, (slot) => slot === 0);
           for (const e of s.events) if (e.t === "move" && e.slot === 0 && e.move === "uspecial") { up = true; upY = f.y; }
           s.events.length = 0;

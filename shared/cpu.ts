@@ -3,68 +3,15 @@ import { cosDeg, sign, sinDeg } from "./fixed";
 import { currentMove, defOf, isActionable } from "./fighter";
 import { knockback } from "./hits";
 import { B, type InputFrame } from "./input";
-import { roster, onRosterChange } from "./fighters/index";
+import { EMPTY_MOVE, SPECIALS, profileOf, type MoveInfo, type Profile, type SpecialId } from "./cpu-profile";
 import { stageOf } from "./sim";
-import type { Fighter, FighterDef, Hitbox, Move, Stage, State } from "./types";
+import type { Fighter, Hitbox, Move, Stage, State } from "./types";
 
-interface MoveInfo {
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
-  first: number;
-  last: number;
-  damage: number;
-  angle: number;
-  base: number;
-  growth: number;
-}
-
-type ReachTable = Record<string, Record<string, MoveInfo>>;
-
-const EMPTY_MOVE: MoveInfo = {
-  minX: 0, maxX: 0, minY: 0, maxY: 0,
-  first: 999, last: 0, damage: 0, angle: 0, base: 0, growth: 0,
-};
-
-// Reach tables are built per fighter on first use so fighters registered at runtime get one too.
-const REACH: ReachTable = {};
-onRosterChange((id) => { delete REACH[id]; });
-function reachOf(id: string): Record<string, MoveInfo> {
-  return REACH[id] ?? (REACH[id] = buildReachTable(id));
-}
 const REACTION = [30, 30, 26, 21, 15, 11, 8, 6, 4, 3];
 const THINK = [12, 12, 10, 8, 7, 6, 5, 4, 3, 2];
 
-function buildReachTable(id: string): Record<string, MoveInfo> {
-  const def = roster[id];
-  if (!def) throw new Error(`cpu: unknown fighter ${id}`);
-  {
-    const moves: Record<string, MoveInfo> = {};
-    for (const moveId in roster[id].moves) {
-      const move = roster[id].moves[moveId];
-      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-      let first = 999, last = 0, damage = 0, angle = 0, base = 0, growth = 0;
-      for (const hb of move.hitboxes) {
-        const x2 = hb.x2 ?? hb.x, y2 = hb.y2 ?? hb.y;
-        minX = Math.min(minX, hb.x - hb.r, x2 - hb.r);
-        maxX = Math.max(maxX, hb.x + hb.r, x2 + hb.r);
-        minY = Math.min(minY, hb.y - hb.r, y2 - hb.r);
-        maxY = Math.max(maxY, hb.y + hb.r, y2 + hb.r);
-        first = Math.min(first, hb.frames[0]);
-        last = Math.max(last, hb.frames[1]);
-        if (!hb.grab && hb.damage > damage) {
-          damage = hb.damage;
-          angle = hb.angle;
-          base = hb.base;
-          growth = hb.growth;
-        }
-      }
-      moves[moveId] = first === 999 ? { ...EMPTY_MOVE } : { minX, maxX, minY, maxY, first, last, damage, angle, base, growth };
-    }
-    return moves;
-  }
-}
+const profile = (f: Fighter): Profile => profileOf(defOf(f));
+const reachOf = (f: Fighter): Record<string, MoveInfo> => profile(f).reach;
 
 function blank(): InputFrame {
   return { x: 0, y: 0, cx: 0, cy: 0, b: 0 };
@@ -106,7 +53,7 @@ function offStage(state: State, f: Fighter, stage: Stage): boolean {
 }
 
 function moveCanReach(attacker: Fighter, victim: Fighter, moveId: string, facing: 1 | -1): boolean {
-  const info = reachOf(attacker.id)[moveId];
+  const info = reachOf(attacker)[moveId];
   if (!info || info.first === 999) return false;
   const vdef = defOf(victim);
   const localX = (victim.x - attacker.x) * facing;
@@ -119,7 +66,7 @@ function moveCanReach(attacker: Fighter, victim: Fighter, moveId: string, facing
 }
 
 function moveNearReach(attacker: Fighter, victim: Fighter, moveId: string, facing: 1 | -1, extra: number): boolean {
-  const info = reachOf(attacker.id)[moveId];
+  const info = reachOf(attacker)[moveId];
   if (!info || info.first === 999) return false;
   const vdef = defOf(victim);
   const localX = (victim.x - attacker.x) * facing;
@@ -131,7 +78,7 @@ function moveNearReach(attacker: Fighter, victim: Fighter, moveId: string, facin
 
 function attackThreatens(attacker: Fighter, victim: Fighter, level: number): boolean {
   if (attacker.action !== "attack" || !attacker.move || attacker.frame < REACTION[level]) return false;
-  const info = reachOf(attacker.id)[attacker.move];
+  const info = reachOf(attacker)[attacker.move];
   if (!info || attacker.frame > info.last + 1) return false;
   const startupLead = level >= 8 ? 5 : level >= 6 ? 3 : 1;
   if (attacker.frame + startupLead < info.first) return false;
@@ -169,7 +116,7 @@ function disadvantageInput(state: State, f: Fighter, target: Fighter | null, lev
   if (f.hitlag > 0 && f.pending) {
     const attacker = state.fighters[f.pending.attacker] ?? target;
     const main = mainBounds(state, stage);
-    const nearEdge = (f.id === "brick" || f.id === "sable") && (f.x < main.x1 + 170 || f.x > main.x2 - 170);
+    const nearEdge = profile(f).cautious && (f.x < main.x1 + 170 || f.x > main.x2 - 170);
     out.x = nearEdge ? sign((main.x1 + main.x2) * 0.5 - f.x) * 90 : attacker ? sign(f.x - attacker.x) * 85 : sign(-f.pending.vx) * 85;
     out.y = -100;
     return out;
@@ -184,7 +131,7 @@ function disadvantageInput(state: State, f: Fighter, target: Fighter | null, lev
   if (f.action === "tumble" || f.action === "hitstun") {
     const attacker = f.lastHitBy >= 0 ? state.fighters[f.lastHitBy] : target;
     const main = mainBounds(state, stage);
-    const nearEdge = (f.id === "brick" || f.id === "sable") && (f.x < main.x1 + 140 || f.x > main.x2 - 140);
+    const nearEdge = profile(f).cautious && (f.x < main.x1 + 140 || f.x > main.x2 - 140);
     out.x = nearEdge ? sign((main.x1 + main.x2) * 0.5 - f.x) * 90 : attacker ? sign(f.x - attacker.x) * 80 : sign(-f.vx) * 80;
     out.y = -70;
     if (level >= 4 && f.action === "tumble" && impendingCollision(state, f, stage)) {
@@ -229,18 +176,16 @@ function recoveryInput(state: State, f: Fighter, level: number, stage: Stage): I
   const toward = sign(dx) as 1 | -1 | 0;
   out.x = toward * (Math.abs(dx) > 45 ? 100 : 55);
 
+  const p = profile(f);
   if (f.action === "attack") {
-    if (f.move === "uspecial" && f.id === "pilot") {
-      const safeHeight = f.y < ledgeY - 150;
-      const horizontallySafe = side < 0 ? f.x > main.x1 + 30 : f.x < main.x2 - 30;
-      if (!safeHeight || !horizontallySafe) {
-        out.x = sign((ledgeX - side * 70) - f.x) * 70;
-        out.y = -100;
-        out.b = B.SPECIAL;
-      }
-      return out;
+    // a sustained special that carries the fighter (a flight, a jet) keeps going while special is held
+    const probe = p.specials[f.move as SpecialId];
+    const carries = probe?.held && (f.move === "uspecial" || probe.airDx > 0);
+    const home = f.y < ledgeY - 150 && (side < 0 ? f.x > main.x1 + 30 : f.x < main.x2 - 30);
+    if (carries && !home) {
+      out.b = B.SPECIAL;
+      if (f.move === "uspecial") out.y = -100;
     }
-    if (f.move === "nspecial" && (f.id === "brick" || f.id === "sable")) return out;
     return out;
   }
   if (f.action === "helpless") return out;
@@ -264,28 +209,25 @@ function recoveryInput(state: State, f: Fighter, level: number, stage: Stage): I
   }
 
   const horizontalGap = Math.abs(f.x - ledgeX);
-  if ((f.id === "wick" || f.id === "sable") && !f.usedUpSpecial && horizontalGap > 180 && f.y > ledgeY - 280) {
-    if (f.id !== "wick" || !f.special.flickerUsed) {
-      out.x = toward * 100;
-      out.y = f.y > ledgeY + 80 ? -45 : 0;
-      out.b = pulse(state, f.slot, B.SPECIAL);
-      if (out.b) return out;
-    }
+  const across = sidewaysRecovery(f, p);
+  if (across && !f.usedUpSpecial && horizontalGap > 180 && f.y > ledgeY - 280 && f.y < ledgeY + 120 && (across === "sspecial" || f.facing === toward)) {
+    const special = startSpecial(state, f, across, toward || f.facing);
+    if (special.b) return special;
   }
 
   const falling = f.vy > 0.5;
-  const jumpEarly = f.id === "brick" ? f.y > ledgeY - 230 : f.y > ledgeY - 110;
+  // a fighter whose air jump barely lifts it (or that falls fast) jumps as soon as it can
+  const sinker = p.airJumpHeight < 120 || def.stats.fallSpeed >= 8.5;
+  const jumpEarly = f.y > ledgeY - (sinker ? 230 : 110);
   if (f.jumpsLeft > 0 && (falling || jumpEarly) && (f.y > ledgeY - 260 || horizontalGap > 190)) {
     out.b = pulse(state, f.slot, B.JUMP);
     if (out.b) return out;
   }
 
   if (!f.usedUpSpecial) {
-    let useUp = f.y > ledgeY + 30 || (falling && f.y > ledgeY - 95);
-    if (f.id === "brick") useUp = f.y > ledgeY + 60;
-    if (f.id === "pilot") useUp = f.special.fuel > 5 && (horizontalGap > 120 || f.y > ledgeY - 180);
+    const useUp = f.y > ledgeY + 30 || (falling && f.y > ledgeY - 95);
     if (useUp) {
-      out.x = toward * (f.id === "pilot" ? 65 : 45);
+      out.x = toward * 45;
       out.y = -100;
       out.b = pulse(state, f.slot, B.SPECIAL);
       return out;
@@ -295,6 +237,20 @@ function recoveryInput(state: State, f: Fighter, level: number, stage: Stage): I
   if (above && horizontalGap < 90 && f.vy > 0) out.x = -side * 55;
   return out;
 }
+
+/** The special (other than uspecial) that carries the fighter farthest sideways through the air, holding its height, without leaving it helpless. */
+function sidewaysRecovery(f: Fighter, p: Profile): SpecialId | null {
+  const moves = defOf(f).moves;
+  let best: SpecialId | null = null, far = 120;
+  for (const s of SPECIALS) {
+    const probe = p.specials[s];
+    if (s === "uspecial" || !probe || moves[s].helpless || probe.airDrop > probe.airDx * 0.5 || probe.airDx <= far) continue;
+    best = s; far = probe.airDx;
+  }
+  return best;
+}
+
+const SMASHES = ["fsmash", "usmash", "dsmash"] as const;
 
 function startSmash(state: State, f: Fighter, move: "fsmash" | "usmash" | "dsmash", facing: 1 | -1): InputFrame {
   const out = blank();
@@ -325,7 +281,7 @@ function startAerial(state: State, f: Fighter, move: "nair" | "fair" | "bair" | 
   return out;
 }
 
-function startSpecial(state: State, f: Fighter, move: "nspecial" | "sspecial" | "uspecial" | "dspecial", facing: 1 | -1): InputFrame {
+function startSpecial(state: State, f: Fighter, move: SpecialId, facing: 1 | -1): InputFrame {
   const out = blank();
   if (move === "sspecial") out.x = facing * 100;
   else if (move === "uspecial") out.y = -100;
@@ -360,8 +316,6 @@ function likelyKills(state: State, f: Fighter, target: Fighter, moveId: string, 
 }
 
 function killMove(state: State, f: Fighter, target: Fighter, facing: 1 | -1): "fsmash" | "usmash" | "dsmash" | null {
-  const mirrorGrounded = f.id === target.id && target.grounded;
-  if (mirrorGrounded && moveCanReach(f, target, "fsmash", facing) && likelyKills(state, f, target, "fsmash", facing)) return "fsmash";
   if (moveCanReach(f, target, "usmash", facing) && likelyKills(state, f, target, "usmash", facing)) return "usmash";
   if (moveCanReach(f, target, "fsmash", facing) && likelyKills(state, f, target, "fsmash", facing)) return "fsmash";
   if (moveCanReach(f, target, "dsmash", facing) && likelyKills(state, f, target, "dsmash", facing)) return "dsmash";
@@ -380,7 +334,7 @@ function handleCommitted(state: State, f: Fighter, target: Fighter | null, level
     const out = blank();
     const danger = target && attackThreatens(target, f, level);
     if (danger && f.shield > 10) out.b = B.SHIELD;
-    else if (target && Math.abs(target.x - f.x) < 95 && target.action === "attack" && currentMove(target) && target.frame > (reachOf(target.id)[target.move!]?.last ?? 0)) out.b = pulse(state, f.slot, B.GRAB);
+    else if (target && Math.abs(target.x - f.x) < 95 && target.action === "attack" && currentMove(target) && target.frame > (reachOf(target)[target.move!]?.last ?? 0)) out.b = pulse(state, f.slot, B.GRAB);
     return out;
   }
   if (f.action === "grabHold") {
@@ -404,25 +358,18 @@ function handleCommitted(state: State, f: Fighter, target: Fighter | null, level
     if (offStage(state, f, stage)) return recoveryInput(state, f, level, stage);
     const move = currentMove(f);
     if (!move) return out;
-    if (f.id === "pilot" && f.move === "uspecial") {
-      out.b = B.SPECIAL; out.y = -100;
-      if (target) out.x = sign(target.x - f.x) * 45;
-      return out;
-    }
-    if ((f.id === "brick" || f.id === "sable") && f.move === "nspecial" && f.frame <= 24) {
-      const safe = target && (Math.abs(target.x - f.x) > 190 || target.action === "hitstun" || target.action === "tumble");
-      const charge = safe ? 12 + level * 4 : 2;
-      if ((f.special.charge ?? 0) < charge) out.b = B.SPECIAL;
-      return out;
-    }
-    if (f.id === "brick" && f.move === "dspecial" && f.frame > 12) {
-      if (!incomingProjectile(state, f, 360) || f.frame > 65) out.b = pulse(state, f.slot, B.ATTACK);
-      return out;
-    }
-    if (f.id === "sable" && f.move === "sspecial" && f.hitsThisMove > 0 && f.frame >= 12 && target) {
-      out.b = pulse(state, f.slot, B.ATTACK);
-      if (target.y < f.y - 50) out.y = -45;
-      else out.x = sign(target.x - f.x) * 45;
+    const probe = profile(f).specials[f.move as SpecialId];
+    if (probe?.held) {
+      if (f.move === "uspecial") { out.b = B.SPECIAL; out.y = -100; }
+      else if (Math.abs(probe.groundDx) > 100) {
+        // a flight: keep going while the target is still ahead
+        if (target && sign(target.x - f.x) === f.moveFacing && Math.abs(target.x - f.x) > 40) out.b = B.SPECIAL;
+      } else {
+        // a charge: build it while it's safe, let go at a random moment
+        const safe = target && (Math.abs(target.x - f.x) > 190 || target.action === "hitstun" || target.action === "tumble");
+        if (safe && hash(state, f, 0xc4a6) % 100 >= 6 - Math.floor(level / 3)) out.b = B.SPECIAL;
+      }
+      if (target && !f.grounded) out.x = sign(target.x - f.x) * 45;
       return out;
     }
     if (move.next && f.hitsThisMove > 0 && f.frame >= (move.nextFrom ?? 1)) out.b = pulse(state, f.slot, B.ATTACK);
@@ -433,23 +380,39 @@ function handleCommitted(state: State, f: Fighter, target: Fighter | null, level
   return null;
 }
 
-function specialChoice(state: State, f: Fighter, target: Fighter, level: number, facing: 1 | -1, distance: number): InputFrame | null {
+const NEUTRAL_SPECIALS = ["nspecial", "sspecial", "dspecial"] as const;
+
+/** True if the fighter would still be over the main stage after moving `dx` along its facing. */
+function landsOnStage(state: State, f: Fighter, stage: Stage, dx: number): boolean {
+  const main = mainBounds(state, stage), x = f.x + f.facing * dx;
+  return x > main.x1 + 50 && x < main.x2 - 50;
+}
+
+function ownsProjectile(state: State, f: Fighter): boolean {
+  for (const p of state.projectiles) if (p.owner === f.slot && !p.dead) return true;
+  return false;
+}
+
+function specialChoice(state: State, f: Fighter, target: Fighter, level: number, facing: 1 | -1, distance: number, stage: Stage): InputFrame | null {
+  const p = profile(f), moves = defOf(f).moves;
   const committing = target.action === "attack" && target.frame >= REACTION[level];
-  if (f.id === "pilot") {
-    if (distance > 270 && distance < 760 && f.special.rounds > 0 && f.facing === facing && hash(state, f, 0x5106, 35) % 100 < 48 + level * 4) return startSpecial(state, f, "nspecial", facing);
-    if (distance > 150 && distance < 330 && hash(state, f, 0x7a6e, 40) % 100 < 20 + level * 4) return startSpecial(state, f, "sspecial", facing);
-  } else if (f.id === "brick") {
-    if (incomingProjectile(state, f, 330) && level >= 4) return startSpecial(state, f, "dspecial", facing);
-    if ((target.shieldHeld || target.percent > 80 || distance < 135) && moveCanReach(f, target, "sspecial", facing) && hash(state, f, 0xc0de, 22) % 100 < 32 + level * 5) return startSpecial(state, f, "sspecial", facing);
-  } else if (f.id === "wick") {
-    if (f.special.heat >= 95 && distance < 135) return startSpecial(state, f, "nspecial", facing);
-    if (committing && f.special.heat >= 45 && attackThreatens(target, f, level) && hash(state, f, 0x5a11, 30) % 100 < level * 5) return startSpecial(state, f, "dspecial", facing);
-    if (distance > 160 && distance < 280 && hash(state, f, 0xf11c, 30) % 100 < 18 + level * 4) return startSpecial(state, f, "sspecial", facing);
-    if (distance < 110 && hash(state, f, 0xf1a2, 25) % 100 < 22 + level * 3) return startSpecial(state, f, "nspecial", facing);
-  } else if (f.id === "sable") {
-    if (committing && attackThreatens(target, f, level) && hash(state, f, 0x71f0, 30) % 100 < 18 + level * 2) return startSpecial(state, f, "dspecial", facing);
-    if (distance > 150 && distance < 285 && Math.abs(target.y - f.y) < 100 && hash(state, f, 0x1a6e, 35) % 100 < 8 + level * 2) return startSpecial(state, f, "sspecial", facing);
-    if (distance > 120 && distance < 230 && hash(state, f, 0x1a9e, 45) % 100 < 12 + level * 3) return startSpecial(state, f, "nspecial", facing);
+  const dy = target.y - f.y;
+  for (const [i, s] of NEUTRAL_SPECIALS.entries()) {
+    const mv = moves[s], probe = p.specials[s];
+    const aimed = s === "sspecial" || f.facing === facing;
+    const roll = (salt: number, period: number) => hash(state, f, salt + i * 0x101, period) % 100;
+    if (mv.counter) {
+      if (committing && attackThreatens(target, f, level) && roll(0x71f0, 30) < 10 + level * 3) return startSpecial(state, f, s, facing);
+      continue;
+    }
+    if (mv.helpless) continue;
+    if (moveCanReach(f, target, s, facing) && roll(0x5e11, 25) < 10 + level * 3) return startSpecial(state, f, s, facing);
+    if (!probe || !aimed || !landsOnStage(state, f, stage, probe.groundDx)) continue;
+    if (probe.shotRange > 0 && distance > 140 && distance < probe.shotRange * 0.9 && Math.abs(dy) < 90 && !ownsProjectile(state, f) && roll(0x5106, 35) < 14 + level * 4) return startSpecial(state, f, s, facing);
+    if (probe.groundDx > 150 && mv.hitboxes.length && distance > 150 && distance < probe.groundDx * 0.9 && Math.abs(dy) < 60 && roll(0x7a6e, 40) < 8 + level * 3) return startSpecial(state, f, s, facing);
+    // a special that shows no hit, shot or movement (a stance, a transformation): now and then, from far away
+    const inert = !mv.hitboxes.length && !probe.shotRange && Math.abs(probe.groundDx) < 40;
+    if (inert && distance > 380 && roll(0x1a9e, 60) < 2 + level) return startSpecial(state, f, s, facing);
   }
   return null;
 }
@@ -475,7 +438,7 @@ function edgeguardInput(state: State, f: Fighter, target: Fighter, level: number
   const edgeRange = stockLead ? 330 : 210;
   const edgeDepth = stockLead ? 210 : 100;
   const edgeChance = stockLead ? 72 : 35;
-  if (f.id !== "brick" && level >= 7 && targetDistance < edgeRange && target.y < main.y + edgeDepth && target.y > main.y - 190 && hash(state, f, 0xed6e, 45) % 100 < edgeChance) {
+  if (!profile(f).cautious && level >= 7 && targetDistance < edgeRange && target.y < main.y + edgeDepth && target.y > main.y - 190 && hash(state, f, 0xed6e, 45) % 100 < edgeChance) {
     const out = blank(); out.x = side * 80; out.b = pulse(state, f.slot, B.JUMP); return out;
   }
   return blank();
@@ -490,14 +453,8 @@ function aerialNeutral(state: State, f: Fighter, target: Fighter, level: number)
     if (dy < -35 && moveCanReach(f, target, "uair", f.facing)) return startAerial(state, f, "uair");
   }
   if (Math.abs(dx) < 90 && dy > 30 && moveCanReach(f, target, "dair", f.facing) && level >= 6) return startAerial(state, f, "dair");
-  if (f.id === "brick") {
-    if (moveCanReach(f, target, "nair", f.facing)) return startAerial(state, f, "nair");
-    if (!facingToTarget && moveCanReach(f, target, "bair", f.facing)) return startAerial(state, f, "bair");
-    if (facingToTarget && moveCanReach(f, target, "fair", f.facing)) return startAerial(state, f, "fair");
-  } else {
-    if (facingToTarget && moveCanReach(f, target, "fair", f.facing)) return startAerial(state, f, "fair");
-    if (!facingToTarget && moveCanReach(f, target, "bair", f.facing)) return startAerial(state, f, "bair");
-  }
+  if (facingToTarget && moveCanReach(f, target, "fair", f.facing)) return startAerial(state, f, "fair");
+  if (!facingToTarget && moveCanReach(f, target, "bair", f.facing)) return startAerial(state, f, "bair");
   if (moveCanReach(f, target, "nair", f.facing)) return startAerial(state, f, "nair");
   if (f.vy > 0 && f.y < target.y - 20 && level >= 4) out.y = 100;
   return out;
@@ -510,8 +467,10 @@ function groundNeutral(state: State, f: Fighter, target: Fighter, level: number,
   const mistake = hash(state, f, 0xb07, 24) % 100 >= 50 + level * 5;
 
   if (attackThreatens(target, f, level)) {
-    if (f.id === "brick" && level >= 6 && moveNearReach(f, target, "fsmash", facing, 35) && hash(state, f, 0xb41c, 16) % 100 < 68) {
-      return startSmash(state, f, "fsmash", facing);
+    // a smash with armour from its first frames trades through the attack instead of shielding it
+    const armoured = SMASHES.find((m) => { const a = defOf(f).moves[m].armour; return a && a.frames[0] <= 3 && a.threshold >= 8; });
+    if (armoured && level >= 6 && moveNearReach(f, target, armoured, facing, 35) && hash(state, f, 0xb41c, 16) % 100 < 68) {
+      return startSmash(state, f, armoured, facing);
     }
     const defendChance = level <= 3 ? 8 + level * 6 : 35 + level * 6;
     if (f.shield > 12 && hash(state, f, 0xdefe, 12) % 100 < defendChance) {
@@ -525,7 +484,7 @@ function groundNeutral(state: State, f: Fighter, target: Fighter, level: number,
   if (edgeguard) return edgeguard;
 
   const opponentMove = currentMove(target);
-  const opponentInfo = target.move ? reachOf(target.id)[target.move] : null;
+  const opponentInfo = target.move ? reachOf(target)[target.move] : null;
   const punishable = target.action === "attack" && opponentMove && opponentInfo && target.frame > opponentInfo.last && opponentMove.total - target.frame >= Math.max(4, REACTION[level] - 2);
   if (punishable && distance < 190 + level * 10) {
     if (distance < 90 && hash(state, f, 0x9a11, 20) % 100 < 30 + level * 5) { out.b = pulse(state, f.slot, B.GRAB); return out; }
@@ -540,22 +499,10 @@ function groundNeutral(state: State, f: Fighter, target: Fighter, level: number,
     if (smash && commits) return startSmash(state, f, smash, facing);
   }
 
-  const special = specialChoice(state, f, target, level, facing, distance);
+  const special = specialChoice(state, f, target, level, facing, distance, stage);
   if (special) return special;
 
-  if (f.id === "brick" && distance < 245 && distance > 105) {
-    if ((f.action === "dash" || f.action === "run") && distance < 225) {
-      out.x = facing * 100;
-      out.b = pulse(state, f.slot, B.ATTACK);
-      return out;
-    }
-    if (hash(state, f, 0xb125, 24) % 100 < 52) {
-      out.x = facing * 100;
-      return out;
-    }
-  }
-
-  if (target.shieldHeld && distance < (reachOf(f.id).grab?.maxX ?? 60) + defOf(target).stats.width * 0.5 + 12 && hash(state, f, 0x6ab, 18) % 100 < 35 + level * 5) {
+  if (target.shieldHeld && distance < (reachOf(f).grab?.maxX ?? 60) + defOf(target).stats.width * 0.5 + 12 && hash(state, f, 0x6ab, 18) % 100 < 35 + level * 5) {
     out.b = pulse(state, f.slot, B.GRAB);
     return out;
   }
@@ -576,7 +523,7 @@ function groundNeutral(state: State, f: Fighter, target: Fighter, level: number,
     return startTilt(state, f, moveCycle & 1 ? "jab1" : "ftilt", facing);
   }
 
-  const ftilt = reachOf(f.id).ftilt ?? EMPTY_MOVE;
+  const ftilt = reachOf(f).ftilt ?? EMPTY_MOVE;
   const desired = Math.max(55, ftilt.maxX + defOf(target).stats.width * 0.35 - (level <= 3 ? 25 : 5));
   if (distance > desired + 28) {
     out.x = facing * (distance > desired + 110 ? 100 : 45);
