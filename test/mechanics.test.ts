@@ -123,3 +123,20 @@ describe("defensive mechanics", () => {
     }
   });
 });
+
+describe("edges", () => {
+  it("a fighter coming down beside the edge is pushed clear of the wall instead of sinking into the stage's side", () => {
+    for (const action of ["attack", "hitstun", "air"] as const) {
+      const s = two();
+      const f = s.fighters[0];
+      const halfW = roster.lampjack.stats.width / 2;
+      f.grounded = false; f.platform = -1; f.action = action; f.move = action === "attack" ? "nair" : null; f.frame = 3; f.hitstun = action === "hitstun" ? 30 : 0;
+      f.x = 560 + halfW * 0.4; f.y = -3; f.vx = 0; f.vy = 6;
+      s.fighters[1].x = -300;
+      for (let i = 0; i < 12; i++) {
+        step(s, [EMPTY_INPUT, EMPTY_INPUT]); s.events.length = 0;
+        if (f.y > 1 && f.ledge < 0) expect(f.x - halfW, `${action} frame ${i}`).toBeGreaterThanOrEqual(560 - 0.01);
+      }
+    }
+  });
+});

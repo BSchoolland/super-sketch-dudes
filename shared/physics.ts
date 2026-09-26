@@ -73,9 +73,10 @@ export function stepPhysics(state: State, f: Fighter, input: InputFrame, stage: 
     if (!t.p.solid) continue;
     const bottom = t.p.bottom! + platformOffset(state, i).dy;
     const feetInside = f.y > t.y + 1 && f.y - s.height < bottom;
-    // left wall
-    if (feetInside && px + halfW <= t.x1 + 0.5 && f.x + halfW > t.x1) { f.x = t.x1 - halfW; hitWall(state, f, def, 1, input); }
-    else if (feetInside && px - halfW >= t.x2 - 0.5 && f.x - halfW < t.x2) { f.x = t.x2 + halfW; hitWall(state, f, def, -1, input); }
+    // walls: a body overlapping the side with its centre off the stage is pushed clear, whether it
+    // flew into the wall or came down beside it; only flying into it counts as a wall hit
+    if (feetInside && f.x < t.x1 && f.x + halfW > t.x1) { const flew = px + halfW <= t.x1 + 0.5; f.x = t.x1 - halfW; if (flew) hitWall(state, f, def, 1, input); }
+    else if (feetInside && f.x > t.x2 && f.x - halfW < t.x2) { const flew = px - halfW >= t.x2 - 0.5; f.x = t.x2 + halfW; if (flew) hitWall(state, f, def, -1, input); }
     // ceiling
     if (f.vy < 0 && f.x > t.x1 && f.x < t.x2 && py - s.height >= bottom && f.y - s.height < bottom) { f.y = bottom + s.height; f.vy = 0; }
   }
