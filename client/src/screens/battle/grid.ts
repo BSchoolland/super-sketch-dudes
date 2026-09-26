@@ -123,7 +123,7 @@ export class FighterGrid {
       }
       const tag = tags.get(choice.id);
       if (tag) title(ctx, tag, b.x + 10, b.y + 40, 34, "#c8402c", "left");
-      label(ctx, choice.name, b.x + b.w / 2, b.y + b.h + 36, choice.name.length > 11 ? 22 : 28, INK, "center", 800);
+      label(ctx, choice.name, b.x + b.w / 2, b.y + b.h + 36, 28, INK, "center", 800, b.w + 16);
     });
   }
 }

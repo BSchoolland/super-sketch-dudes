@@ -4,7 +4,7 @@ import type { DeviceId, MenuInput } from "../../input/devices";
 import { consumeTaps } from "../../input/pointer";
 import { sfx } from "../../audio/audio";
 import { choiceDef, type FighterChoice } from "../../fighters";
-import { bg, label, title, type Screen } from "../ui";
+import { bg, label, title, type Screen, INK } from "../ui";
 import { ButtonMenu, type Button } from "../draw/buttons";
 import { drawFighterPortrait } from "../portrait";
 
@@ -42,7 +42,7 @@ export class ModeScreen implements Screen {
     bg(ctx, this.t);
     const def = choiceDef(this.fighter).def;
     if (def) drawFighterPortrait(ctx, def, this.t, true, { x: 160, y: 140, w: 640, h: 640 });
-    title(ctx, this.fighter.name, 480, 860, 80);
+    title(ctx, this.fighter.name, 480, 860, 80, INK, "center", 700);
     if (def) label(ctx, def.tagline, 480, 910, 26, PENCIL, "center", 700);
     this.menu.draw(ctx, this.buttons);
   }

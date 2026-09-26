@@ -11,7 +11,7 @@ Player: {{PLAYER}}. This is their character {{ROUND}}. Their other characters so
 Write ONE JSON file to {{OUT}} with the Write tool and nothing else. Shape:
 
 {
-  "name": "ALL CAPS, 3-14 chars, what a friend would yell",
+  "name": "ALL CAPS, 3-28 chars, what a friend would yell",
   "tagline": "one short line, dry, under 90 chars",
   "description": "What is literally on the page, precisely enough that an artist could redraw it without seeing it. Count everything countable: legs, arms, eyes, wheels, dots, stripes, teeth. Say what is asymmetric. Say what is coloured and what colour. 60-150 words.",
   "counts": ["EXACTLY 3 legs, all different lengths", "EXACTLY 5 teal dots on the body", "..."],

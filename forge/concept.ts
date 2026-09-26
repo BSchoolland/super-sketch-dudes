@@ -25,7 +25,7 @@ export function readConcept(file: string): { concept: Concept | null; problems: 
   try { j = JSON.parse(fs.readFileSync(file, "utf8")); } catch (e) { return { concept: null, problems: [`${file} is not valid JSON: ${(e as Error).message}`] }; }
   const p: string[] = [];
   for (const k of ["name", "tagline", "description", "gimmick", "stats_note"]) if (typeof j[k] !== "string" || !j[k].trim()) p.push(`"${k}" must be a non-empty string`);
-  if (typeof j.name === "string" && !/^[A-Z0-9 .'!-]{3,14}$/.test(j.name)) p.push(`"name" must be ALL CAPS, 3-14 chars (got "${j.name}")`);
+  if (typeof j.name === "string" && !/^[A-Z0-9 .'!-]{3,28}$/.test(j.name)) p.push(`"name" must be ALL CAPS, 3-28 chars (got "${j.name}")`);
   if (!Array.isArray(j.counts) || !j.counts.length || j.counts.some((c: unknown) => typeof c !== "string")) p.push(`"counts" must be a non-empty array of strings`);
   if (!ARCHETYPES.includes(j.archetype)) p.push(`"archetype" must be one of ${ARCHETYPES.join(" | ")}`);
   if (!j.moves || typeof j.moves !== "object") p.push(`"moves" missing`);

@@ -16,7 +16,7 @@ const ART = { x: 120, y: 150, w: 720, h: 720 };
 const FORM_X = 960, FORM_W = 840;
 const NAME = { x: FORM_X, y: 240, w: FORM_W, h: 96 };
 const DESC = { x: FORM_X, y: 440, w: FORM_W, h: 220 };
-export const NAME_MAX = 14, DESCRIPTION_MAX = 240;
+export const NAME_MAX = 28, DESCRIPTION_MAX = 240;
 
 /**
  * Between the pad and creation: an optional name and a line or two about the character, so the

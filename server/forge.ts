@@ -126,7 +126,7 @@ export async function storeCharacter(fighterId: string, playerName: string, b: a
   fs.writeFileSync(path.join(dir, "bundle.json"), JSON.stringify(bundle));
   if (b.report !== undefined) fs.writeFileSync(path.join(dir, "report.json"), JSON.stringify(b.report));
   return {
-    name: b.name.slice(0, 24), tagline: b.tagline.slice(0, 120), description: b.description.slice(0, 600),
+    name: b.name.slice(0, 28), tagline: b.tagline.slice(0, 120), description: b.description.slice(0, 600),
     card: Array.isArray(b.card) ? b.card.slice(0, 4).map((c: unknown) => String(c).slice(0, 60)) : null,
     bundleUrl: `${base}/bundle.json`, sheetUrl: typeof b.sheet === "string" ? `${base}/sheet.png` : null,
   };

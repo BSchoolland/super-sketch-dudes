@@ -17,10 +17,18 @@ export function bg(ctx: CanvasRenderingContext2D, _t: number): void {
   drawPaper(ctx, VIEW_W, VIEW_H);
 }
 
-export function title(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, size: number, color = INK, align: CanvasTextAlign = "center"): void {
+/** Sets the font, shrunk so the text fits maxW when given. Returns the size used. */
+function fitFont(ctx: CanvasRenderingContext2D, text: string, weight: number, size: number, maxW?: number): number {
+  ctx.font = `${weight} ${size}px ${FONT}`;
+  const w = maxW ? ctx.measureText(text).width : 0;
+  if (maxW && w > maxW) { size *= maxW / w; ctx.font = `${weight} ${size}px ${FONT}`; }
+  return size;
+}
+
+export function title(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, size: number, color = INK, align: CanvasTextAlign = "center", maxW?: number): void {
   ctx.save();
   ctx.textAlign = align;
-  ctx.font = `900 ${size}px ${FONT}`;
+  size = fitFont(ctx, text, 900, size, maxW);
   ctx.lineJoin = "round";
   ctx.lineWidth = Math.max(0.5, size * 0.009);
   ctx.strokeStyle = INK;
@@ -30,10 +38,10 @@ export function title(ctx: CanvasRenderingContext2D, text: string, x: number, y:
   ctx.restore();
 }
 
-export function label(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, size: number, color = INK, align: CanvasTextAlign = "center", weight = 700): void {
+export function label(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, size: number, color = INK, align: CanvasTextAlign = "center", weight = 700, maxW?: number): void {
   ctx.save();
   ctx.textAlign = align;
-  ctx.font = `${weight} ${size}px ${FONT}`;
+  fitFont(ctx, text, weight, size, maxW);
   ctx.fillStyle = color;
   ctx.fillText(text, x, y);
   ctx.restore();

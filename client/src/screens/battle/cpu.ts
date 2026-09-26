@@ -3,7 +3,7 @@ import type { MenuInput } from "../../input/devices";
 import { consumeTaps } from "../../input/pointer";
 import { sfx } from "../../audio/audio";
 import { allChoices, type FighterChoice } from "../../fighters";
-import { bg, title, type Screen, settings, saveSettings } from "../ui";
+import { bg, title, type Screen, settings, saveSettings, INK } from "../ui";
 import { ButtonMenu, type Button } from "../draw/buttons";
 import { FighterGrid } from "./grid";
 
@@ -46,7 +46,7 @@ export class CpuSetupScreen implements Screen {
 
   draw(ctx: CanvasRenderingContext2D): void {
     bg(ctx, this.t);
-    title(ctx, `${this.you.name} VS ${this.opponent.name}`, VIEW_W / 2, 100, 64);
+    title(ctx, `${this.you.name} VS ${this.opponent.name}`, VIEW_W / 2, 100, 64, INK, "center", VIEW_W - 160);
     const buttons = this.buttons();
     const tags = new Map([[this.opponent.id, "CPU"]]);
     if (this.you.id !== this.opponent.id) tags.set(this.you.id, "YOU");

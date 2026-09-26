@@ -8,7 +8,7 @@ import { runCheck, printReport } from "./gate";
 
 const args = process.argv.slice(2);
 const opt = (k: string, d = ""): string => { const i = args.indexOf(`--${k}`); return i >= 0 ? args.splice(i, 2)[1] : d; };
-const name = opt("name").trim().slice(0, 24), tagline = opt("tagline").trim().slice(0, 120), description = opt("description").trim().slice(0, 600);
+const name = opt("name").trim().slice(0, 28), tagline = opt("tagline").trim().slice(0, 120), description = opt("description").trim().slice(0, 600);
 const card = opt("card").split("|").map((s) => s.trim()).filter(Boolean).slice(0, 4);
 let anims: Record<string, string> = {};
 try { anims = JSON.parse(opt("anims", "{}")); } catch { console.error("--anims must be JSON"); process.exit(2); }

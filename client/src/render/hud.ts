@@ -31,7 +31,7 @@ export function drawHud(ctx: CanvasRenderingContext2D, state: State, hud: HudSta
     ctx.fillText(names[i] ?? `P${i + 1}`, x + 20, y + 34);
     ctx.fillStyle = INK;
     ctx.font = `600 14px ${FONT}`;
-    ctx.fillText(def.name, x + 20, y + 54);
+    ctx.fillText(def.name, x + 20, y + 54, cardW - 40);
     // stocks: dots up to five, a number past that
     const dots = Math.min(5, f.stocks);
     for (let s = 0; s < dots; s++) {

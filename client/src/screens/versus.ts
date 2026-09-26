@@ -173,7 +173,7 @@ export class VersusScreen implements Screen {
           const x = VIEW_W / 2 - (st.fighters.length * 220) / 2 + i * 220;
           card(ctx, x, y, 200, 130, SLOT_COLORS[i], i === w);
           label(ctx, this.renderer.names[i], x + 100, y + 32, 22, INK, "center", 900);
-          label(ctx, roster[f.id].name, x + 100, y + 56, 16, INK, "center", 700);
+          label(ctx, roster[f.id].name, x + 100, y + 56, 16, INK, "center", 700, 184);
           label(ctx, `KOs ${f.kos}   falls ${f.falls}`, x + 100, y + 86, 18, INK);
           label(ctx, `dealt ${Math.round(f.dealt)}%`, x + 100, y + 112, 18, INK);
         });

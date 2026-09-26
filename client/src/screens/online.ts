@@ -356,7 +356,7 @@ export class OnlineScreen implements Screen {
       const fighter = load?.state === "ready" ? roster[member.fighter] : null;
       if (fighter) {
         drawFighterPortrait(ctx, fighter, this.t, member.ready, { x: x + 16, y: y + 68, w: w - 32, h: 390 });
-        title(ctx, fighter.name, x + w / 2, y + 525, 40);
+        title(ctx, fighter.name, x + w / 2, y + 525, 40, INK, "center", w - 32);
       } else label(ctx, load?.state === "failed" ? "didn't load" : member.fighter ? "loading …" : "choosing", x + w / 2, y + 280, 28, load?.state === "failed" ? "#c0392b" : PENCIL);
       const mine = member.id === this.context.id && this.phase === "lobby";
       if (mine && !member.ready) { const d = arrows(ctx, x + w / 2, y + 300, w / 2 - 34, 40); if (d) this.pickFighter(d); }

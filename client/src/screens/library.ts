@@ -139,7 +139,7 @@ export class LibraryScreen implements Screen {
       }
       const cx = b.x + ART / 2, ty = b.y + ART + 40;
       const status = characterStatus(e, this.t);
-      if (!status) title(ctx, e.name ?? "?", cx, ty, 34);
+      if (!status) title(ctx, e.name ?? "?", cx, ty, 34, INK, "center", ART + 20);
       else wrapped(ctx, e.status === "failed" ? "failed" : status.text, cx, ty, ART + 20, 24, status.color, 2);
     });
     this.menu.draw(ctx, buttons);

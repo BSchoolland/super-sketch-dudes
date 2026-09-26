@@ -115,7 +115,7 @@ export class LocalSetupScreen implements Screen {
       label(ctx, `P${i + 1} · ${s.device.startsWith("pad") ? `pad ${Number(s.device.slice(3)) + 1}` : s.device === "kb1" ? "keys WASD" : "keys arrows"}`, x + w / 2, y + 48, 28, SLOT_COLORS[i], "center", 900);
       if (def) drawFighterPortrait(ctx, def, this.t + i * 0.4, s.ready, { x: x + 40, y: y + 70, w: w - 80, h: 400 });
       else label(ctx, "…", x + w / 2, y + 280, 40, PENCIL);
-      title(ctx, choice.name, x + w / 2, y + 530, 52, INK);
+      title(ctx, choice.name, x + w / 2, y + 530, 52, INK, "center", w - 40);
       label(ctx, choice.house ? "house" : "yours", x + w / 2, y + 566, 22, PENCIL);
       if (!s.ready) { const d = arrows(ctx, x + w / 2, y + 300, w / 2 - 30, 44); if (d) this.step(s, d); }
       const bw = (w - 100) / 2;
