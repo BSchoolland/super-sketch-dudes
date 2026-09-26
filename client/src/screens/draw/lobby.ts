@@ -1,3 +1,4 @@
+import { account } from "../../account";
 import { VIEW_H, VIEW_W } from "../../render/camera";
 import { SLOT_COLORS } from "../../render/hud";
 import { PENCIL } from "../../render/paper";
@@ -123,7 +124,7 @@ export class EntryView implements DrawView {
   private choose(action: "create" | "join"): void {
     if (!settings.name) { this.openName(action); return; }
     if (action === "create") {
-      this.host.session.send({ t: "drawCreate", name: settings.name });
+      this.host.session.send({ t: "drawCreate", session: account.session ?? "" });
       this.wait();
     } else {
       this.mode = "code";
@@ -151,7 +152,7 @@ export class EntryView implements DrawView {
       return;
     }
     if (value.length !== 4) return;
-    this.host.session.send({ t: "drawJoin", code: value.toUpperCase(), name: settings.name });
+    this.host.session.send({ t: "drawJoin", code: value.toUpperCase(), session: account.session ?? "" });
     this.dispose();
     this.wait();
   }

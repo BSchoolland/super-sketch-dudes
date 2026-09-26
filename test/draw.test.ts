@@ -7,6 +7,10 @@ import os from "node:os";
 import path from "node:path";
 import { attachLobby } from "../server/lobby";
 import { attachDraw } from "../server/draw";
+import { attachAuth } from "../server/auth";
+import { attachForge } from "../server/forge";
+import { attachCharacters } from "../server/characters";
+import { initLibrary } from "../server/library";
 import { SPRITE_CELLS } from "../shared/gen/sprite";
 import type { DrawRoomState } from "../shared/draw";
 
@@ -41,13 +45,20 @@ beforeAll(async () => {
   app.use(express.json({ limit: "12mb" }));
   const router = express.Router();
   app.use("/api", router);
-  attachDraw(router, { password: PASSWORD, forgeToken: TOKEN, dataDir, genBase: "/gen" });
+  initLibrary(dataDir);
+  attachAuth(router, { dataDir, devLogin: true });
+  attachForge(router, { token: TOKEN, dataDir, genBase: "/gen" });
+  attachCharacters(router);
+  attachDraw(router, { password: PASSWORD, dataDir });
   server = http.createServer(app);
   const wss = new WebSocketServer({ server, path: "/ws" });
   attachLobby(wss);
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
   port = (server.address() as { port: number }).port;
+  for (const name of ["Ann", "Bob", "Cat"]) S[name] = (await (await api("/auth/dev", { method: "POST", body: JSON.stringify({ name }) })).json()).session;
 });
+/** dev sessions by name */
+const S: Record<string, string> = {};
 afterAll(() => { server.close(); fs.rmSync(dataDir, { recursive: true, force: true }); });
 
 describe("draw battle", () => {
@@ -55,16 +66,16 @@ describe("draw battle", () => {
     const a = new Peer(), b = new Peer();
     await a.open(); await b.open();
     await a.expect("hello"); await b.expect("hello");
-    a.send({ t: "drawCreate", name: "Ann" });
+    a.send({ t: "drawCreate", session: S.Ann });
     expect((await a.expect("error")).error).toBe("password first");
     a.send({ t: "drawAuth", password: "nope" });
     expect((await a.expect("drawAuth")).ok).toBe(false);
     a.send({ t: "drawAuth", password: PASSWORD }); b.send({ t: "drawAuth", password: PASSWORD });
     expect((await a.expect("drawAuth")).ok).toBe(true); await b.expect("drawAuth");
-    a.send({ t: "drawCreate", name: "Ann" });
+    a.send({ t: "drawCreate", session: S.Ann });
     const created = await a.expect("draw");
     const code = created.room.code;
-    b.send({ t: "drawJoin", code, name: "Bob" });
+    b.send({ t: "drawJoin", code, session: S.Bob });
     await b.expect("draw"); await a.expect("draw", (m) => m.room.players.length === 2);
     // only the host starts; one round keeps the test short
     b.send({ t: "drawStart" }); await new Promise((r) => setTimeout(r, 50));
@@ -106,8 +117,8 @@ describe("draw battle", () => {
     const peers = [new Peer(), new Peer(), new Peer()];
     for (const p of peers) { await p.open(); await p.expect("hello"); p.send({ t: "drawAuth", password: PASSWORD }); await p.expect("drawAuth"); }
     const [a, b, c] = peers;
-    a.send({ t: "drawCreate", name: "Ann" }); const code = (await a.expect("draw")).room.code;
-    b.send({ t: "drawJoin", code, name: "Bob" }); c.send({ t: "drawJoin", code, name: "Cat" });
+    a.send({ t: "drawCreate", session: S.Ann }); const code = (await a.expect("draw")).room.code;
+    b.send({ t: "drawJoin", code, session: S.Bob }); c.send({ t: "drawJoin", code, session: S.Cat });
     await a.expect("draw", (m) => m.room.players.length === 3);
     a.send({ t: "drawStart", rounds: 2, drawSeconds: 30 });
     for (let round = 1; round <= 2; round++) {
@@ -146,4 +157,32 @@ describe("draw battle", () => {
     expect(bob.characters[0].spent).toBe(false); expect(bob.current).toBe(0); expect(bob.wins).toBe(1);
     for (const p of peers) p.ws.close();
   }, 15000);
+
+  it("the creator: a signed-in player's drawing becomes a queued library entry, the forge completes it, the library shows it ready", async () => {
+    const dev = await (await api("/auth/dev", { method: "POST", body: JSON.stringify({ name: "Dee" }) })).json();
+    const H = { "x-session": dev.session };
+    const created = await (await api("/characters", { method: "POST", headers: H, body: JSON.stringify({ png: `data:image/png;base64,${png1x1}` }) })).json();
+    expect(created.character.status).toBe("queued");
+    expect(created.character.owner).toBe(dev.player.id);
+    expect(created.character.origin).toBe("creator");
+    let lib = await (await api("/library", { headers: H })).json();
+    expect(lib.characters.map((c: { id: string }) => c.id)).toContain(created.character.id);
+    const job = await (await api("/forge/jobs/next")).json();
+    expect(job.fighterId).toBe(created.character.id);
+    expect((await api(`/forge/jobs/${job.id}/progress`, { method: "POST", body: JSON.stringify({ stage: "drawing the sheet" }) })).status).toBe(204);
+    expect((await (await api(`/characters/${job.fighterId}`, { headers: H })).json()).character.stage).toBe("drawing the sheet");
+    const cells = Object.fromEntries(SPRITE_CELLS.map((c) => [c, png1x1]));
+    expect((await api(`/forge/jobs/${job.id}/complete`, { method: "POST", body: JSON.stringify({ name: "DEE", tagline: "t", description: "d", card: ["ATTACK  a", "SPECIAL  b", "UP+SPECIAL  c", "GRAB  d"], source, sprite: { px: 512, feetPx: 448, heightPx: 360, anims: {} }, cells }) })).status).toBe(204);
+    lib = await (await api("/library", { headers: H })).json();
+    const entry = lib.characters.find((c: { id: string }) => c.id === created.character.id);
+    expect(entry.status).toBe("ready");
+    expect(entry.name).toBe("DEE");
+    expect(entry.card).toHaveLength(4);
+    expect(entry.bundleUrl).toBe(`/gen/${entry.id}/bundle.json`);
+    // not signed in: no library
+    expect((await api("/library")).status).toBe(401);
+    expect((await api(`/library/${entry.id}`, { method: "DELETE", headers: H })).status).toBe(204);
+    lib = await (await api("/library", { headers: H })).json();
+    expect(lib.characters).toHaveLength(0);
+  });
 });

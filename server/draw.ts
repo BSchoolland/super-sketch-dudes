@@ -4,9 +4,10 @@ import crypto from "node:crypto";
 import type express from "express";
 import { broadcast, joinRoom, leaveRoom, makeCode, rooms, send, setRoomExtension, type Client, type Room } from "./lobby";
 import { DRAW_DEFAULTS, DRAW_PNG_MAX_BYTES, type CharStatus, type DrawBattle, type DrawCharacter, type DrawPhase, type DrawPlayer, type DrawRoomState } from "../shared/draw";
-import { buildGenerated } from "../shared/gen/load";
-import { SPRITE_CELLS } from "../shared/gen/sprite";
 import { stageList } from "../shared/stages/index";
+import { playerFromSession } from "./auth";
+import { decodePng } from "./characters";
+import { drawingUrlOf, enqueueJob, onJob, charStatusOf, type ForgeJob } from "./forge";
 
 /**
  * DRAW BATTLE: the room state machine and the forge job queue. The server is the clock and the
@@ -30,38 +31,13 @@ interface DrawState {
   note: string;
   drawRoot: string;
 }
-interface Job {
-  id: string;
-  room: string;
-  playerId: number;
-  playerName: string;
-  slot: number;
-  round: number;
-  fighterId: string;
-  drawingPath: string;
-  status: "queued" | "running" | "done" | "failed";
-  stage: string;
-  claimedAt: number;
-  attempts: number;
-  /** Names of the player's other characters so the agent avoids repeats. */
-  siblings: string[];
-}
-
-const jobs = new Map<string, Job>();
-const queue: string[] = [];
-
 export interface DrawOptions {
   password: string;
-  forgeToken: string;
   dataDir: string;
-  /** URL prefix the client uses for generated files, e.g. "/sketch-battle/gen". */
-  genBase: string;
 }
 
 export function attachDraw(api: express.Router, opts: DrawOptions): void {
-  const genDir = path.join(opts.dataDir, "gen");
   const drawDir = path.join(opts.dataDir, "draw");
-  fs.mkdirSync(genDir, { recursive: true });
   fs.mkdirSync(drawDir, { recursive: true });
 
   const stateOf = (room: Room): DrawState => room.draw as DrawState;
@@ -187,120 +163,19 @@ export function attachDraw(api: express.Router, opts: DrawOptions): void {
     push(room);
   }
 
-  // ---- forge queue ----
-  function enqueue(room: Room, p: DrawPlayer, round: number, drawingPath: string): void {
-    const d = stateOf(room);
-    const fighterId = `gen-${room.code.toLowerCase()}-${p.slot}-${round}`;
-    const id = crypto.randomBytes(6).toString("hex");
-    const siblings = p.characters.filter((ch) => ch.round !== round && ch.name).map((ch) => ch.name!);
-    jobs.set(id, { id, room: room.code, playerId: p.id, playerName: p.name, slot: p.slot, round, fighterId, drawingPath, status: "queued", stage: "waiting for the forge", claimedAt: 0, attempts: 0, siblings });
-    queue.push(id);
-    const ch = p.characters[round - 1];
-    ch.status = "queued"; ch.stage = "waiting for the forge"; ch.fighterId = fighterId;
-    ch.drawingUrl = `${opts.genBase}/drawings/${fighterId}.png`;
-    void d;
-  }
-  function jobRoom(job: Job): { room: Room; ch: DrawCharacter } | null {
-    const room = rooms.get(job.room);
-    if (!room || !room.draw) return null;
-    const ch = charOf(stateOf(room), job.playerId, job.round);
-    return ch ? { room, ch } : null;
-  }
-  const setStatus = (job: Job, status: CharStatus, stage: string, error: string | null = null): void => {
-    const r = jobRoom(job);
-    if (!r) return;
-    r.ch.status = status; r.ch.stage = stage; r.ch.error = error;
-    push(r.room);
-    if (status === "ready" || status === "failed") maybeAdvanceReveal(r.room);
-  };
-
-  // a job the forge claimed but never finished goes back on the queue once
-  setInterval(() => {
-    for (const job of jobs.values()) {
-      if (job.status === "running" && Date.now() - job.claimedAt > 15 * 60_000) {
-        if (job.attempts >= 2) { job.status = "failed"; setStatus(job, "failed", "", "the forge gave up on this one"); }
-        else { job.status = "queued"; queue.push(job.id); setStatus(job, "queued", "waiting for the forge again"); }
-      }
-    }
-  }, 15_000).unref();
-
-  const forgeAuth = (req: express.Request, res: express.Response): boolean => {
-    const t = req.get("x-forge-token") ?? String(req.query.token ?? "");
-    if (!opts.forgeToken || t !== opts.forgeToken) { res.status(401).json({ error: "bad forge token" }); return false; }
-    return true;
-  };
-  api.get("/forge/jobs/next", (req, res) => {
-    if (!forgeAuth(req, res)) return;
-    while (queue.length) {
-      const id = queue.shift()!;
-      const job = jobs.get(id);
-      if (!job || job.status !== "queued") continue;
-      job.status = "running"; job.claimedAt = Date.now(); job.attempts++;
-      setStatus(job, "generating", "reading the drawing");
-      return res.json({ id: job.id, fighterId: job.fighterId, playerName: job.playerName, round: job.round, siblings: job.siblings, attempts: job.attempts });
-    }
-    res.status(204).end();
+  // ---- forge jobs: a draw round's drawings are forge jobs owned by the players; the room mirrors their progress ----
+  const jobChars = new Map<string, { code: string; playerId: number; round: number }>(); // by fighterId
+  onJob((job: ForgeJob) => {
+    const at = jobChars.get(job.fighterId);
+    const room = at && rooms.get(at.code);
+    if (!at || !room || !room.draw) return;
+    const ch = charOf(stateOf(room), at.playerId, at.round);
+    if (!ch) return;
+    ch.status = charStatusOf(job); ch.stage = job.stage; ch.error = job.error;
+    if (job.result) { ch.name = job.result.name; ch.tagline = job.result.tagline; ch.description = job.result.description; ch.card = job.result.card; ch.bundleUrl = job.result.bundleUrl; ch.sheetUrl = job.result.sheetUrl; }
+    push(room);
+    if (ch.status === "ready" || ch.status === "failed") maybeAdvanceReveal(room);
   });
-  api.get("/forge/jobs/:id/drawing.png", (req, res) => {
-    if (!forgeAuth(req, res)) return;
-    const job = jobs.get(req.params.id);
-    if (!job) return res.status(404).end();
-    res.sendFile(job.drawingPath);
-  });
-  api.post("/forge/jobs/:id/progress", (req, res) => {
-    if (!forgeAuth(req, res)) return;
-    const job = jobs.get(req.params.id);
-    if (!job || job.status !== "running") return res.status(409).json({ error: "job not running" });
-    setStatus(job, "generating", String(req.body?.stage ?? "").slice(0, 80));
-    res.status(204).end();
-  });
-  api.post("/forge/jobs/:id/fail", (req, res) => {
-    if (!forgeAuth(req, res)) return;
-    const job = jobs.get(req.params.id);
-    if (!job || job.status !== "running") return res.status(409).json({ error: "job not running" });
-    job.status = "failed";
-    setStatus(job, "failed", "", String(req.body?.error ?? "the forge failed").slice(0, 300));
-    res.status(204).end();
-  });
-  api.post("/forge/jobs/:id/complete", async (req, res) => {
-    if (!forgeAuth(req, res)) return;
-    const job = jobs.get(req.params.id);
-    if (!job || job.status !== "running") return res.status(409).json({ error: "job not running" });
-    const b = req.body ?? {};
-    try {
-      for (const k of ["name", "tagline", "description", "source"]) if (typeof b[k] !== "string") throw new Error(`${k} must be a string`);
-      if (!b.sprite || typeof b.sprite !== "object") throw new Error("sprite missing");
-      if (!b.cells || typeof b.cells !== "object") throw new Error("cells missing");
-      for (const c of SPRITE_CELLS) if (typeof b.cells[c] !== "string") throw new Error(`cell ${c} missing`);
-      const dir = path.join(genDir, job.fighterId);
-      fs.mkdirSync(dir, { recursive: true });
-      const cells: Record<string, string> = {};
-      for (const c of SPRITE_CELLS) { fs.writeFileSync(path.join(dir, `${c}.png`), Buffer.from(b.cells[c], "base64")); cells[c] = `${opts.genBase}/${job.fighterId}/${c}.png`; }
-      if (typeof b.sheet === "string") fs.writeFileSync(path.join(dir, "sheet.png"), Buffer.from(b.sheet, "base64"));
-      const sprite = { px: Number(b.sprite.px), feetPx: Number(b.sprite.feetPx), heightPx: Number(b.sprite.heightPx), anims: b.sprite.anims && typeof b.sprite.anims === "object" ? b.sprite.anims : {}, cells };
-      const bundle = { id: job.fighterId, player: job.playerName, description: b.description, source: b.source, sprite };
-      await buildGenerated(bundle); // the forge already validated; this is the server refusing to serve a broken one
-      fs.writeFileSync(path.join(dir, "bundle.json"), JSON.stringify(bundle));
-      if (b.report !== undefined) fs.writeFileSync(path.join(dir, "report.json"), JSON.stringify(b.report));
-      job.status = "done";
-      const r = jobRoom(job);
-      if (r) {
-        r.ch.name = b.name.slice(0, 24); r.ch.tagline = b.tagline.slice(0, 120); r.ch.description = b.description.slice(0, 600);
-        r.ch.card = Array.isArray(b.card) ? b.card.slice(0, 4).map((c: unknown) => String(c).slice(0, 60)) : null;
-        r.ch.bundleUrl = `${opts.genBase}/${job.fighterId}/bundle.json`;
-        r.ch.sheetUrl = typeof b.sheet === "string" ? `${opts.genBase}/${job.fighterId}/sheet.png` : null;
-      }
-      setStatus(job, "ready", "");
-      res.status(204).end();
-    } catch (e) {
-      job.status = "failed";
-      const error = e instanceof Error ? e.message : String(e);
-      setStatus(job, "failed", "", error.slice(0, 300));
-      res.status(400).json({ error });
-    }
-  });
-  // generated fighters and the original drawings are public files (ids carry the room code, that's fine for friends)
-  api.get("/forge/health", (req, res) => { if (!forgeAuth(req, res)) return; res.json({ ok: true, queued: queue.length, jobs: jobs.size }); });
 
   // ---- websocket messages ----
   const drawRooms = (): Room[] => [...rooms.values()].filter((r) => r.draw);
@@ -317,7 +192,10 @@ export function attachDraw(api: express.Router, opts: DrawOptions): void {
         }
         case "drawCreate": case "drawJoin": {
           if (!c.drawAuthed) { send(c, { t: "error", error: "password first" }); return true; }
-          c.name = String(msg.name ?? "").replace(/[^\w \-.!?]/g, "").slice(0, 14) || c.name;
+          const player = playerFromSession(msg.session);
+          if (!player) { send(c, { t: "error", error: "sign in first" }); return true; }
+          c.player = player;
+          c.name = player.name;
           let target: Room;
           if (msg.t === "drawCreate") {
             target = { code: makeCode(), members: [], started: false, host: c, seed: 0, config: null, game: null };
@@ -359,11 +237,12 @@ export function attachDraw(api: express.Router, opts: DrawOptions): void {
           const png = typeof msg.png === "string" ? decodePng(msg.png) : null;
           if (!png) { send(c, { t: "error", error: "drawing must be a PNG data URL" }); return true; }
           if (png.length > DRAW_PNG_MAX_BYTES) { send(c, { t: "error", error: "drawing too large" }); return true; }
+          if (!c.player) { send(c, { t: "error", error: "sign in first" }); return true; }
           const fighterId = `gen-${room.code.toLowerCase()}-${p.slot}-${round}`;
-          const drawingPath = path.join(genDir, "drawings", `${fighterId}.png`);
-          fs.mkdirSync(path.dirname(drawingPath), { recursive: true });
-          fs.writeFileSync(drawingPath, png);
-          enqueue(room, p, round, drawingPath);
+          const siblings = p.characters.filter((q) => q.round !== round && q.name).map((q) => q.name!);
+          jobChars.set(fighterId, { code: room.code, playerId: p.id, round });
+          enqueueJob({ fighterId, player: c.player, siblings, png, origin: { room: room.code, round } });
+          ch.status = "queued"; ch.stage = "waiting for the forge"; ch.fighterId = fighterId; ch.drawingUrl = drawingUrlOf(fighterId);
           push(room);
           if ([...d.players.values()].every((q) => !q.connected || q.characters[round - 1].status !== "waiting")) endDrawRound(room);
           return true;
@@ -418,12 +297,6 @@ export function attachDraw(api: express.Router, opts: DrawOptions): void {
 function clampInt(v: unknown, lo: number, hi: number, dflt: number): number {
   const n = Number(v);
   return Number.isFinite(n) ? Math.max(lo, Math.min(hi, Math.round(n))) : dflt;
-}
-function decodePng(dataUrl: string): Buffer | null {
-  const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
-  if (!m) return null;
-  const buf = Buffer.from(m[1], "base64");
-  return buf.length > 8 && buf.readUInt32BE(0) === 0x89504e47 ? buf : null;
 }
 function safeEqual(a: string, b: string): boolean {
   const x = Buffer.from(a), y = Buffer.from(b);

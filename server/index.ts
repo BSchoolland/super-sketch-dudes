@@ -7,6 +7,10 @@ import { WebSocketServer } from "ws";
 import { attachLobby } from "./lobby";
 import { attachDraw } from "./draw";
 import { attachGames } from "./games";
+import { attachAuth } from "./auth";
+import { initLibrary } from "./library";
+import { attachForge } from "./forge";
+import { attachCharacters } from "./characters";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
@@ -29,7 +33,12 @@ api.get("/health", (_req, res) => res.json({ ok: true, build: process.env.BUILD 
 const DRAW_PASSWORD = process.env.DRAW_PASSWORD ?? "";
 const FORGE_TOKEN = process.env.FORGE_TOKEN ?? "";
 if (!DRAW_PASSWORD || !FORGE_TOKEN) console.warn("DRAW_PASSWORD / FORGE_TOKEN unset: draw battle is disabled");
-attachDraw(api, { password: DRAW_PASSWORD, forgeToken: FORGE_TOKEN, dataDir: DATA_DIR, genBase: `${BASE}/gen` });
+// sign-in, libraries, the forge queue, the creator, draw battles
+initLibrary(DATA_DIR);
+attachAuth(api, { dataDir: DATA_DIR, devLogin: process.env.DEV_LOGIN === "1" });
+attachForge(api, { token: FORGE_TOKEN, dataDir: DATA_DIR, genBase: `${BASE}/gen` });
+attachCharacters(api);
+attachDraw(api, { password: DRAW_PASSWORD, dataDir: DATA_DIR });
 // game bundles: whole builds of the game, one folder per hash; rooms switch between them live
 attachGames(api, { token: FORGE_TOKEN, dataDir: DATA_DIR });
 const gamesDir = path.join(DATA_DIR, "games");
@@ -54,7 +63,8 @@ const clientDir = fs.existsSync(path.join(root, "dist", "client")) ? path.join(r
 const staticOpts = { maxAge: "1h", setHeaders: (res: express.Response, p: string) => { if (p.endsWith(".html")) res.setHeader("Cache-Control", "no-cache"); } };
 app.use(BASE, express.static(clientDir, staticOpts));
 app.use("/", express.static(clientDir, staticOpts));
-app.get(["/", BASE, `${BASE}/`], (_req, res) => res.sendFile(path.join(clientDir, "index.html")));
+// Discord sends the signed-in browser back to /auth with the token in the URL fragment; the game page handles it
+app.get(["/", BASE, `${BASE}/`, "/auth", `${BASE}/auth`], (_req, res) => res.sendFile(path.join(clientDir, "index.html")));
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ noServer: true });

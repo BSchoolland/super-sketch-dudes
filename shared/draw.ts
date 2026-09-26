@@ -75,8 +75,9 @@ export interface DrawRoomState {
 
 export type DrawClientMessage =
   | { t: "drawAuth"; password: string }
-  | { t: "drawCreate"; name: string }
-  | { t: "drawJoin"; code: string; name: string }
+  /** `session` is the sign-in token: the room takes the player's name and owns their drawings under that account. */
+  | { t: "drawCreate"; session: string }
+  | { t: "drawJoin"; code: string; session: string }
   | { t: "drawStart"; rounds?: number; drawSeconds?: number }
   /** The player's drawing for the round as a PNG data URL. Sent when they press done or the clock runs out. */
   | { t: "drawSubmit"; round: number; png: string }

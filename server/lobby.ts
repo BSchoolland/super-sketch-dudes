@@ -1,6 +1,7 @@
 import type { WebSocketServer, WebSocket } from "ws";
 import { roster } from "../shared/fighters/index";
 import type { FighterId } from "../shared/types";
+import type { Player } from "../shared/account";
 
 /**
  * Lobby and input relay. The server never simulates: it pairs clients into rooms,
@@ -19,6 +20,8 @@ export interface Client {
   ready: boolean;
   /** Passed the DRAW BATTLE password on this connection. */
   drawAuthed: boolean;
+  /** Signed-in identity, once a message carried a session token. */
+  player: Player | null;
 }
 export interface Room { code: string; members: Client[]; started: boolean; host: Client; seed: number; config: unknown; /** Set on DRAW BATTLE rooms; owned by server/draw.ts. */ draw?: unknown; /** Game bundle hash the room plays on; null = whatever the page loaded. */ game: string | null }
 
@@ -87,7 +90,7 @@ export function joinRoom(c: Client, room: Room): void {
 export function attachLobby(wss: WebSocketServer): void {
   wss.on("connection", (ws) => {
     const id = nextId++;
-    const c: Client = { ws, id, name: `guest${id}`, room: null, slot: 0, lastPing: Date.now(), fighter: "sable", ready: false, drawAuthed: false };
+    const c: Client = { ws, id, name: `guest${id}`, room: null, slot: 0, lastPing: Date.now(), fighter: "sable", ready: false, drawAuthed: false, player: null };
     send(c, { t: "hello", id: c.id });
     ws.on("message", (raw) => {
       let msg: any;
