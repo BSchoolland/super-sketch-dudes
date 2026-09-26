@@ -2,7 +2,7 @@ import { drawPaper, INK } from "../render/paper";
 import { VIEW_H, VIEW_W } from "../render/camera";
 import type { MenuInput } from "../input/devices";
 import { roster } from "../../../shared/fighters/index";
-import { drawRig, poseAt, resolvePose } from "../render/rig";
+import { poseAt } from "../render/rig";
 import { hitboxWorld, hurtbox } from "../../../shared/hits";
 import { label, type Screen } from "./ui";
 import { drawStrikes } from "../render/strikes";
@@ -24,7 +24,8 @@ export class SheetScreen implements Screen {
   }
   draw(ctx: CanvasRenderingContext2D, dt: number): void {
     this.t += dt;
-    const def = roster[this.fighterId] ?? roster.sable;
+    const def = roster[this.fighterId];
+    if (!def) throw new Error(`?sheet=${this.fighterId}: no such fighter (load it with ?gen= or a house id)`);
     drawPaper(ctx, VIEW_W, VIEW_H);
     const entries: { name: string; keys: ReturnType<typeof poseAt> extends infer _ ? any : never; frame: number; loop?: number; move?: string }[] = [];
     for (const [name, keys] of Object.entries(def.rig.anims)) entries.push({ name, keys, frame: Math.floor(this.t * 60), loop: def.rig.loops[name] });
@@ -48,10 +49,8 @@ export class SheetScreen implements Screen {
       const scale = 1.1;
       ctx.scale(scale, scale);
       const pose = poseAt(e.keys, e.frame, e.loop);
-      if (def.sprite) {
-        const mvCell = e.move ? def.moves[e.move].cell ?? defaultCellForMove(e.move) : cellForAnim(def, e.name);
-        drawSprite(ctx, def, mvCell, pose, { flip: e.move ? !!def.moves[e.move].cellFlip : false });
-      } else drawRig(ctx, resolvePose(def, pose), def.palette.colors, def.palette.outline);
+      const mvCell = e.move ? def.moves[e.move].cell ?? defaultCellForMove(e.move) : cellForAnim(def, e.name);
+      drawSprite(ctx, def, mvCell, pose, { flip: e.move ? !!def.moves[e.move].cellFlip : false });
       if (e.move) {
         const mv = def.moves[e.move];
         const fake = { x: 0, y: 0, moveFacing: 1, facing: 1, frame: e.frame, action: "attack", id: def.id, move: e.move, hitlag: 0, slot: 0 } as unknown as Fighter;

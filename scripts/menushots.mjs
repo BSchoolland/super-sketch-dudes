@@ -1,5 +1,8 @@
+// Keyboard-only walk through the menus into a VS CPU match, and SETTINGS. Needs a DEV_LOGIN=1 server.
+//   node scripts/menushots.mjs [base] [outdir]
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
+import { signIn } from "./menu-nav.mjs";
 const base = process.argv[2] ?? "http://localhost:5175/sketch-battle/";
 const out = process.argv[3] ?? "shots";
 mkdirSync(out, { recursive: true });
@@ -8,24 +11,32 @@ const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
 const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
 page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
-await page.goto(base);
-await page.waitForTimeout(700);
-await page.screenshot({ path: `${out}/m0-title.png` });
-await page.keyboard.press("KeyJ"); await page.waitForTimeout(400);
-await page.screenshot({ path: `${out}/m1-select-empty.png` });
-await page.keyboard.press("KeyJ"); await page.waitForTimeout(300); // join slot 0
-await page.keyboard.press("KeyK"); await page.waitForTimeout(300); // add CPU to slot 1
-await page.screenshot({ path: `${out}/m2-select.png` });
-await page.keyboard.press("KeyJ"); await page.waitForTimeout(600); // ready
-await page.keyboard.press("KeyJ"); await page.waitForTimeout(500); // start
-await page.screenshot({ path: `${out}/m3-stage.png` });
-await page.keyboard.press("KeyJ"); await page.waitForTimeout(900);
-await page.screenshot({ path: `${out}/m4-countdown.png` });
+const press = async (key, n = 1) => { for (let i = 0; i < n; i++) { await page.keyboard.press(key); await page.waitForTimeout(150); } };
+const shot = async (name, ms = 400) => { await page.waitForTimeout(ms); await page.screenshot({ path: `${out}/${name}.png` }); };
+await signIn(page, base, "Menus");
+await shot("m0-title", 1200);
+await press("ArrowDown", 3); await press("Enter");
+await page.waitForFunction(() => !!window.sketchbattle.screen.grid);
+await shot("m1-pick", 1200);
+await press("ArrowRight"); await press("Enter");
+await shot("m2-mode");
+await press("Enter");
+await shot("m3-cpu-setup", 1000);
+await press("ArrowDown"); await press("ArrowRight", 2);
+await shot("m3b-cpu-level");
+await press("ArrowDown"); await press("Enter");
+await shot("m4-stage");
+await press("Enter");
+await page.waitForFunction(() => !!window.sketchbattle.screen.match, null, { timeout: 15000 });
+await shot("m5-countdown", 900);
 await page.waitForTimeout(3200);
 await page.keyboard.down("KeyD"); await page.waitForTimeout(400); await page.keyboard.up("KeyD");
-await page.keyboard.press("KeyJ"); await page.waitForTimeout(300);
-await page.screenshot({ path: `${out}/m5-fight.png` });
-await page.keyboard.press("Escape"); await page.waitForTimeout(300);
-await page.screenshot({ path: `${out}/m6-pause.png` });
+await page.keyboard.press("KeyJ");
+await shot("m6-fight", 300);
+await page.keyboard.press("Escape");
+await shot("m7-pause", 300);
+await signIn(page, base, "Menus");
+await press("ArrowDown", 4); await press("Enter");
+await shot("m8-settings");
 if (errors.length) { console.error("page errors:\n" + errors.join("\n")); process.exitCode = 1; }
 await browser.close();

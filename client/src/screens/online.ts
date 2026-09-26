@@ -1,7 +1,11 @@
-import type { FighterId } from "../../../shared/types";
 import type { MatchConfig } from "../../../shared/sim";
 import type { SessionHandoff } from "../net/rollback";
-import { roster, rosterList } from "../../../shared/fighters/index";
+import { roster } from "../../../shared/fighters/index";
+import { isBundlePath } from "../../../shared/account";
+import { account } from "../account";
+import { fighterLoad } from "../gen";
+import { allChoices, type FighterChoice } from "../fighters";
+import { PENCIL } from "../render/paper";
 import { VIEW_H, VIEW_W } from "../render/camera";
 import { SLOT_COLORS } from "../render/hud";
 import { consumeTypedChars, type DeviceId, type MenuInput } from "../input/devices";
@@ -24,7 +28,7 @@ interface OnlineContext {
 export class OnlineScreen implements Screen {
   t = 0;
   sel = 0;
-  phase: "menu" | "code" | "waiting" | "lobby" | "error";
+  phase: "menu" | "code" | "waiting" | "lobby" | "loading" | "error";
   code = ["A", "A", "A", "A"];
   codePos = 0;
   inputDelay = 2;
@@ -35,21 +39,26 @@ export class OnlineScreen implements Screen {
   private context: OnlineContext;
   private device: DeviceId = "kb1";
   private unsubscribers: Unsubscribe[] = [];
+  /** What this player can pick in a room: their library, then the house. */
+  private choices: FighterChoice[];
+  private mine: FighterChoice | null;
 
   /** Pick up where another bundle left off: back in its room, and in its match if there was one. */
   static resume(onExit: () => Screen, h: Handoff): Screen {
     const context: OnlineContext = { transport: h.transport, id: h.id, room: h.room };
-    const screen = new OnlineScreen(onExit, context);
+    const screen = new OnlineScreen(onExit, null, context);
     if (!h.match) return screen;
     const m = h.match;
     screen.dispose();
-    return OnlineScreen.matchScreen(onExit, context, { config: m.config, members: m.members, localSlot: m.localSlot, device: m.device, inputDelay: m.inputDelay, resume: m.session });
+    return OnlineScreen.matchScreen(onExit, context, { config: m.config, bundles: m.bundles, members: m.members, localSlot: m.localSlot, device: m.device, inputDelay: m.inputDelay, resume: m.session });
   }
 
-  private static matchScreen(onExit: () => Screen, context: OnlineContext, m: { config: MatchConfig; members: Pick<RoomMember, "id" | "name" | "slot">[]; localSlot: number; device: DeviceId; inputDelay: number; resume?: SessionHandoff }): Screen {
+  private static matchScreen(onExit: () => Screen, context: OnlineContext, m: { config: MatchConfig; bundles: string[]; members: Pick<RoomMember, "id" | "name" | "slot">[]; localSlot: number; device: DeviceId; inputDelay: number; resume?: SessionHandoff }): Screen {
+    for (const p of m.config.players) if (!roster[p.fighter]) throw new Error(`online match fighter ${p.fighter} isn't loaded`);
     return new NetVersusScreen({
       transport: context.transport,
       config: m.config,
+      bundles: m.bundles,
       members: m.members,
       localSlot: m.localSlot,
       device: m.device,
@@ -62,12 +71,17 @@ export class OnlineScreen implements Screen {
       exit: (reason) => {
         if (reason === "closed") return onExit();
         if (context.room?.host === context.id) context.transport.sendLobby({ t: "end" });
-        return new OnlineScreen(onExit, context);
+        return new OnlineScreen(onExit, null, context);
       },
     });
   }
 
-  constructor(private onExit: () => Screen, context?: OnlineContext) {
+  /** `fighter` is the one picked on the way in; a room that's resumed keeps whatever was picked there. */
+  constructor(private onExit: () => Screen, fighter: FighterChoice | null, context?: OnlineContext) {
+    const { mine, house } = allChoices();
+    this.choices = [...mine, ...house];
+    if (fighter && !this.choices.some((c) => c.id === fighter.id)) this.choices.unshift(fighter);
+    this.mine = fighter;
     this.context = context ?? { transport: new WebSocketTransport(), id: 0, room: null };
     this.phase = this.context.room ? "lobby" : "menu";
     this.unsubscribers.push(
@@ -79,7 +93,7 @@ export class OnlineScreen implements Screen {
       this.error = "COULD NOT CONNECT";
       this.phase = "error";
     });
-    if (settings.name) this.context.transport.sendLobby({ t: "name", name: settings.name });
+    if (account.player) this.context.transport.sendLobby({ t: "name", name: account.player.name });
   }
 
   update(dt: number, m: MenuInput): Screen | null {
@@ -98,6 +112,7 @@ export class OnlineScreen implements Screen {
       return null;
     }
     if (this.phase === "lobby") return this.updateLobby(m);
+    if (this.phase === "loading") return null;
     if (m.back || m.confirm) return this.exit();
     return null;
   }
@@ -108,7 +123,7 @@ export class OnlineScreen implements Screen {
     if (this.phase === "menu") this.drawMenu(ctx);
     else if (this.phase === "code") this.drawCode(ctx);
     else if (this.phase === "waiting") this.drawWaiting(ctx);
-    else if (this.phase === "lobby") this.drawLobby(ctx);
+    else if (this.phase === "lobby" || this.phase === "loading") this.drawLobby(ctx);
     else this.drawError(ctx);
   }
 
@@ -204,7 +219,8 @@ export class OnlineScreen implements Screen {
     const room = this.context.room;
     const member = room?.members.find((candidate) => candidate.id === this.context.id);
     if (!room || !member) return;
-    this.context.transport.sendLobby({ t: "pick", fighter: member.fighter, ready: !member.ready });
+    if (!member.fighter) return;
+    this.context.transport.sendLobby({ t: "pick", fighter: member.fighter, bundleUrl: member.bundleUrl, ready: !member.ready });
     member.ready ? sfx.menuBack() : sfx.menuConfirm();
   }
 
@@ -212,10 +228,14 @@ export class OnlineScreen implements Screen {
     const room = this.context.room;
     const member = room?.members.find((candidate) => candidate.id === this.context.id);
     if (!room || !member || member.ready) return;
-    const index = rosterList.findIndex((fighter) => fighter.id === member.fighter);
-    const fighter = rosterList[(index + dir + rosterList.length) % rosterList.length].id;
-    this.context.transport.sendLobby({ t: "pick", fighter, ready: false });
+    const index = this.choices.findIndex((c) => c.id === member.fighter);
+    this.pick(this.choices[(index + dir + this.choices.length) % this.choices.length]);
     sfx.menuMove();
+  }
+
+  private pick(choice: FighterChoice): void {
+    this.mine = choice;
+    this.context.transport.sendLobby({ t: "pick", fighter: choice.id, bundleUrl: choice.bundleUrl, ready: false });
   }
 
   startMatch(): void {
@@ -243,7 +263,10 @@ export class OnlineScreen implements Screen {
     if (message.t === "hello") this.context.id = message.id;
     if (message.t === "room") {
       this.context.room = message;
-      this.phase = "lobby";
+      if (this.phase !== "loading") this.phase = "lobby";
+      // arriving in a room: bring the fighter picked on the way in
+      const me = message.members.find((member) => member.id === this.context.id);
+      if (me && !me.fighter) this.pick(this.mine ?? this.choices[0]);
     }
     if (message.t === "error") {
       this.error = message.error.toUpperCase();
@@ -253,7 +276,18 @@ export class OnlineScreen implements Screen {
       const local = message.members.find((member) => member.id === this.context.id);
       if (!local) throw new Error("start message omitted local member");
       const config = startConfig(message.config, message.seed);
-      this.nextScreen = OnlineScreen.matchScreen(this.onExit, this.context, { config: config.match, members: message.members, localSlot: local.slot, device: this.device, inputDelay: config.inputDelay });
+      // every client loads every participant's fighter first; the netcode's input resend covers the skew
+      this.phase = "loading";
+      const loads = config.bundles.filter(Boolean).map((url) => fighterLoad(url));
+      void Promise.all(loads.map((l) => l.promise)).then(() => {
+        const failed = loads.find((l) => l.state === "failed");
+        if (failed) {
+          this.error = `A FIGHTER DIDN'T LOAD: ${failed.error}`;
+          this.phase = "error";
+          return;
+        }
+        this.nextScreen = OnlineScreen.matchScreen(this.onExit, this.context, { config: config.match, bundles: config.bundles, members: message.members, localSlot: local.slot, device: this.device, inputDelay: config.inputDelay });
+      });
     }
     // bundle switches outside a match: the host answers at once, everyone swaps carrying the room
     if (message.t === "game" && this.context.room?.host === this.context.id) this.context.transport.sendLobby({ t: "gameAt", hash: message.hash, frame: 0 });
@@ -317,16 +351,22 @@ export class OnlineScreen implements Screen {
         label(ctx, "WAITING", x + w / 2, y + h / 2, 28, "rgba(41,39,34,0.65)");
         continue;
       }
-      const fighter = roster[member.fighter as FighterId];
-      if (!fighter) throw new Error(`room has unknown fighter ${member.fighter}`);
       label(ctx, `${member.name}${member.id === room.host ? " · HOST" : ""}`, x + w / 2, y + 42, 23, INK, "center", 900);
-      drawFighterPortrait(ctx, fighter, slot, this.t, member.ready, { x: x + 16, y: y + 68, w: w - 32, h: 390 }, 2.2);
-      title(ctx, fighter.name, x + w / 2, y + 525, 40);
-      const mine = member.id === this.context.id;
+      const load = isBundlePath(member.bundleUrl, member.fighter) ? fighterLoad(member.bundleUrl) : null;
+      const fighter = load?.state === "ready" ? roster[member.fighter] : null;
+      if (fighter) {
+        drawFighterPortrait(ctx, fighter, this.t, member.ready, { x: x + 16, y: y + 68, w: w - 32, h: 390 });
+        title(ctx, fighter.name, x + w / 2, y + 525, 40);
+      } else label(ctx, load?.state === "failed" ? "didn't load" : member.fighter ? "loading …" : "choosing", x + w / 2, y + 280, 28, load?.state === "failed" ? "#c0392b" : PENCIL);
+      const mine = member.id === this.context.id && this.phase === "lobby";
       if (mine && !member.ready) { const d = arrows(ctx, x + w / 2, y + 300, w / 2 - 34, 40); if (d) this.pickFighter(d); }
       if (mine) {
         if (button(ctx, x + 40, y + 560, w - 80, 64, member.ready ? "UNREADY" : "READY", { key: "Enter", size: 26, focused: this.focus === 1 })) this.toggleReady();
       } else label(ctx, member.ready ? "READY" : "CHOOSING", x + w / 2, y + 600, 24);
+    }
+    if (this.phase === "loading") {
+      label(ctx, `loading ${".".repeat(1 + (Math.floor(this.t * 3) % 3))}`, VIEW_W / 2, 897, 36, PENCIL);
+      return;
     }
     const canStart = this.canStart();
     const isHost = room.host === this.context.id;
@@ -344,6 +384,11 @@ export class OnlineScreen implements Screen {
   private drawError(ctx: CanvasRenderingContext2D): void {
     title(ctx, this.error, VIEW_W / 2, VIEW_H / 2, 62, "#ff4d2e");
     if (button(ctx, VIEW_W / 2 - 120, VIEW_H / 2 + 60, 240, 70, "BACK", { key: "Esc", size: 26 })) goTo(this.exit());
+  }
+
+  abandon(): void {
+    this.dispose();
+    this.context.transport.close();
   }
 
   private exit(): Screen {

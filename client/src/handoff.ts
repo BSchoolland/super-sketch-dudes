@@ -13,6 +13,8 @@ export interface Handoff {
   room: Extract<RelayMessage, { t: "room" }> | null;
   match?: {
     config: MatchConfig;
+    /** Each slot's fighter bundle ("" for one every build has); the next build loads them before resuming. */
+    bundles: string[];
     members: Pick<RoomMember, "id" | "name" | "slot">[];
     localSlot: number;
     device: DeviceId;

@@ -8,9 +8,10 @@ const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
 const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
-const combos = [["brick", "wick", "rooftops"], ["pilot", "sable", "kessler"], ["wick", "pilot", "proving"], ["brick", "sable", "rooftops"]];
+const combos = [["tank", "woodstove", "rooftops"], ["gearshift", "lampjack", "kessler"], ["slugbert", "liftoff", "proving"], ["dizzy", "sirsticks", "rooftops"]];
 for (const [a, b, stage] of combos) {
   await page.goto(`${base}?quick=1&p2=cpu&cpu=9&f=${a},${b}&stage=${stage}&seed=11`);
+  await page.waitForFunction(() => window.sketchbattle?.screen, null, { timeout: 20000 });
   await page.waitForTimeout(600);
   await page.screenshot({ path: `${out}/${a}-${b}-${stage}-0.png` });
   await page.keyboard.down("KeyD"); await page.waitForTimeout(300); await page.keyboard.up("KeyD");

@@ -11,7 +11,7 @@ const page = await context.newPage();
 const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
 page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
-await page.goto(`${base}?quick=1&p2=cpu&cpu=1&f=gearshift,brick&stage=proving&seed=3&gen=/sketch-battle/gen/gearshift/bundle.json`);
+await page.goto(`${base}?quick=1&p2=cpu&cpu=1&f=gearshift,tank&stage=proving&seed=3`);
 await page.waitForFunction(() => window.sketchbattle?.screen);
 const k = page.keyboard;
 const wait = (ms) => page.waitForTimeout(ms);

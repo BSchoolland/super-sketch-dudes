@@ -36,6 +36,11 @@ export class DrawScreen implements Screen, DrawHost {
     this.exiting = true;
   }
 
+  abandon(): void {
+    this.view?.dispose?.();
+    this.session.close();
+  }
+
   update(dt: number, m: MenuInput): Screen | null {
     this.t += dt;
     if (m.from) this.device = m.from;

@@ -1,5 +1,5 @@
-// Plays a whole 1-round DRAW BATTLE in two browsers against a local server + scripts/fake-forge.mjs,
-// screenshotting every screen into shots/draw/.
+// Plays a whole 1-round DRAW BATTLE in two browsers against a local server (DEV_LOGIN=1) +
+// scripts/fake-forge.mjs, screenshotting every screen into shots/draw/.
 //   node scripts/drawshots.mjs [base=http://localhost:5177/sketch-battle/] [out=shots/draw]
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
@@ -16,13 +16,14 @@ const at = (x, y) => [offX + x * scale, offY + y * scale];
 const browser = await chromium.launch();
 const errors = [];
 async function player(label, init, hasTouch = false) {
+  const name = label[0].toUpperCase() + label.slice(1);
   const context = await browser.newContext({ viewport: { width: W, height: H }, hasTouch });
   await context.addInitScript(init);
   const page = await context.newPage();
   // the bad room code is on purpose
   page.on("console", (m) => { if (m.type() === "error" && !m.text().includes("no such room")) errors.push(`${label}: ${m.text()}`); });
   page.on("pageerror", (e) => errors.push(`${label}: ${e.message}`));
-  await page.goto(base);
+  await page.goto(`${base}?dev=${name}`);
   await page.waitForFunction(() => window.sketchbattle?.screen);
   return page;
 }
@@ -48,19 +49,17 @@ async function stroke(page, points) {
 }
 const circle = (cx, cy, r, n = 28) => Array.from({ length: n + 1 }, (_, i) => [cx + Math.cos((i / n) * Math.PI * 2) * r, cy + Math.sin((i / n) * Math.PI * 2) * r]);
 
-// Ann starts fresh; Bob has played before (name and password remembered)
+// Ann starts fresh; Bob has played before (password remembered)
 const a = await player("ann", () => localStorage.clear());
-const b = await player("bob", () => { localStorage.setItem("sketchbattle.settings", JSON.stringify({ name: "Bob" })); localStorage.setItem("sketchbattle.drawPassword", "sketch"); }, true);
+const b = await player("bob", () => localStorage.setItem("sketchbattle.drawPassword", "sketch"), true);
 await b.route("**/bundle.json", async (route) => { await new Promise((r) => setTimeout(r, 4000)); await route.continue(); });
 await shot(a, "00-title");
-for (const page of [a, b]) { await tap(page, 960, 682); await page.waitForFunction(() => window.sketchbattle.screen?.drawDebug); await page.evaluate(() => { window.__draw = window.sketchbattle.screen; }); }
+for (const page of [a, b]) { await tap(page, 440, 474); await page.waitForFunction(() => window.sketchbattle.screen?.drawDebug); await page.evaluate(() => { window.__draw = window.sketchbattle.screen; }); }
 
 await shot(a, "01-password");
 await a.keyboard.type("nope"); await a.keyboard.press("Enter"); await a.waitForTimeout(400);
 await shot(a, "02-wrong-password");
 await a.fill("#overlay input", "sketch"); await a.keyboard.press("Enter"); await a.waitForTimeout(400);
-await shot(a, "03-name");
-await a.keyboard.type("Ann"); await a.keyboard.press("Enter"); await a.waitForTimeout(200);
 await shot(a, "04-entry");
 await shot(b, "04b-entry-remembered");
 await tap(a, 960, 395);

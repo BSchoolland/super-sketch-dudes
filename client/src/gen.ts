@@ -14,3 +14,23 @@ export async function loadGeneratedFighter(url: string): Promise<FighterDef> {
   await preloadSprite(def);
   return def;
 }
+
+export interface FighterLoad { state: "loading" | "ready" | "failed"; error: string; promise: Promise<void> }
+const loads = new Map<string, FighterLoad>();
+
+/** Loads a generated fighter bundle once; the returned record says how it went (its promise settles either way). */
+export function fighterLoad(bundleUrl: string): FighterLoad {
+  let f = loads.get(bundleUrl);
+  if (f) return f;
+  const record: FighterLoad = { state: "loading", error: "", promise: Promise.resolve() };
+  record.promise = loadGeneratedFighter(bundleUrl).then(
+    () => { record.state = "ready"; },
+    (error: unknown) => {
+      console.error(`fighter bundle failed: ${bundleUrl}`, error);
+      record.state = "failed";
+      record.error = error instanceof Error ? error.message : String(error);
+    },
+  );
+  loads.set(bundleUrl, record);
+  return record;
+}

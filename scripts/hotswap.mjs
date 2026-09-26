@@ -4,6 +4,7 @@
 import { chromium } from "playwright";
 import { execSync } from "node:child_process";
 import { mkdirSync, readdirSync, renameSync } from "node:fs";
+import { openOnline } from "./menu-nav.mjs";
 const base = process.argv[2] ?? "http://localhost:5177/sketch-battle/";
 const site = process.argv[3] ?? "http://localhost:3010";
 const out = process.argv[4] ?? "/tmp/tf/hotswap";
@@ -12,13 +13,11 @@ const browser = await chromium.launch();
 const errors = [];
 async function player(name, record) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, ...(record ? { recordVideo: { dir: out, size: { width: 1280, height: 720 } } } : {}) });
-  await context.addInitScript((n) => localStorage.setItem("sketchbattle.settings", JSON.stringify({ name: n })), name);
   const page = await context.newPage();
   page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
   page.on("console", (m) => { if (m.type() === "error") errors.push(`${name}: ${m.text()}`); });
   page.on("response", (r) => { if (r.status() >= 400) errors.push(`${name}: HTTP ${r.status()} ${r.url()}`); });
-  await page.goto(`${base}shell.html`);
-  await page.waitForFunction(() => window.sketchbattle?.screen, null, { timeout: 15000 });
+  await openOnline(page, `${base}shell.html`, name);
   return page;
 }
 const info = (page) => page.evaluate(() => {
@@ -33,12 +32,12 @@ const a = await player("Ann", true);
 const b = await player("Bob", false);
 const A0 = (await info(a)).hash;
 console.log("both on bundle", A0);
-// Ann: ONLINE -> CREATE ROOM
-await key(a, "ArrowDown"); await key(a, "Enter"); await key(a, "ArrowDown"); await key(a, "Enter");
+// Ann: CREATE ROOM
+await key(a, "ArrowDown"); await key(a, "Enter");
 const { code } = await until(a, "a room", (i) => !!i.code);
 console.log("room", code);
-// Bob: ONLINE -> JOIN, type the code
-await key(b, "ArrowDown"); await key(b, "Enter"); await key(b, "ArrowDown", 2); await key(b, "Enter");
+// Bob: JOIN, type the code
+await key(b, "ArrowDown", 2); await key(b, "Enter");
 for (const ch of code) await b.keyboard.press(`Key${ch.toUpperCase()}`).catch(() => b.keyboard.press(`Digit${ch}`));
 await b.waitForTimeout(150); await key(b, "Enter");
 await until(b, "bob in the room", (i) => i.code === code);

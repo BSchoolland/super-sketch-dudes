@@ -6,7 +6,7 @@ import type { MenuInput } from "../../input/devices";
 import type { ViewPoint } from "../../input/pointer";
 import { sfx } from "../../audio/audio";
 import { DRAW_DEFAULTS } from "../../../../shared/draw";
-import { card, label, saveSettings, settings, title, INK } from "../ui";
+import { card, label, title, INK } from "../ui";
 import { ButtonMenu, type Button } from "./buttons";
 import { TextField } from "./textfield";
 import type { DrawHost, DrawView } from "./view";
@@ -56,25 +56,21 @@ export class AuthView implements DrawView {
   }
 }
 
-/** Create or join, under the name you'll be drawing as. */
+/** Create or join, as the signed-in player. */
 export class EntryView implements DrawView {
-  private mode: "menu" | "name" | "code" | "waiting" = "menu";
+  private mode: "menu" | "code" | "waiting" = "menu";
   private field: TextField | null = null;
-  private afterName: "create" | "join" | null = null;
   private waitingSince = 0;
   private menu = new ButtonMenu();
 
-  constructor(private host: DrawHost) {
-    if (!settings.name) this.openName(null);
-  }
+  constructor(private host: DrawHost) {}
 
   private buttons(): Button[] {
     if (this.mode === "menu") return [
       { id: "create", x: VIEW_W / 2 - 360, y: 330, w: 720, h: 130, text: "CREATE ROOM" },
       { id: "join", x: VIEW_W / 2 - 360, y: 500, w: 720, h: 130, text: "JOIN ROOM" },
-      { id: "name", x: VIEW_W / 2 - 360, y: 680, w: 720, h: 80, text: "", custom: true },
     ];
-    if (this.mode === "name" || this.mode === "code") return [{ id: "ok", x: VIEW_W / 2 - 170, y: 620, w: 340, h: 96, text: this.mode === "code" ? "JOIN" : "OK" }];
+    if (this.mode === "code") return [{ id: "ok", x: VIEW_W / 2 - 170, y: 620, w: 340, h: 96, text: "JOIN" }];
     return [];
   }
 
@@ -87,14 +83,20 @@ export class EntryView implements DrawView {
     }
     const pressed = this.menu.update(this.buttons(), m, taps);
     if (this.mode === "menu") {
-      if (pressed === "create" || pressed === "join") this.choose(pressed);
-      if (pressed === "name") this.openName(null);
+      if (pressed === "create") {
+        this.host.session.send({ t: "drawCreate", session: account.session ?? "" });
+        this.wait();
+      }
+      if (pressed === "join") {
+        this.mode = "code";
+        this.field = new TextField({ maxLength: 4, upper: true, onSubmit: () => this.submitCode(), onCancel: () => this.cancelCode() });
+      }
       if (m.back) this.host.exit();
       return;
     }
-    if (this.mode === "code" && this.field) this.padCode(m);
-    if (pressed === "ok") this.submitField();
-    if (m.back) this.cancelField();
+    if (this.field) this.padCode(m);
+    if (pressed === "ok") this.submitCode();
+    if (m.back) this.cancelCode();
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
@@ -102,16 +104,13 @@ export class EntryView implements DrawView {
     const buttons = this.buttons();
     if (this.mode === "menu") {
       this.menu.draw(ctx, buttons);
-      const nameButton = buttons[2];
-      const focused = this.menu.focused(buttons) === nameButton;
-      label(ctx, `drawing as ${settings.name}`, VIEW_W / 2, nameButton.y + 50, 32, focused ? INK : PENCIL, "center", focused ? 900 : 700);
+      label(ctx, `drawing as ${account.player?.name ?? "?"}`, VIEW_W / 2, 730, 32, PENCIL);
     } else if (this.mode === "waiting") {
       label(ctx, "…", VIEW_W / 2, 480, 60, PENCIL);
     } else {
-      const code = this.mode === "code";
       card(ctx, VIEW_W / 2 - 330, 400, 660, 150, INK, true);
-      if (!this.field?.value) label(ctx, code ? "room code" : "your name", VIEW_W / 2, 494, 44, "rgba(41,39,34,0.3)");
-      this.field?.place(VIEW_W / 2 - 310, 410, 620, 130, code ? 96 : 64);
+      if (!this.field?.value) label(ctx, "room code", VIEW_W / 2, 494, 44, "rgba(41,39,34,0.3)");
+      this.field?.place(VIEW_W / 2 - 310, 410, 620, 130, 96);
       this.menu.draw(ctx, buttons);
     }
   }
@@ -121,45 +120,16 @@ export class EntryView implements DrawView {
     this.field = null;
   }
 
-  private choose(action: "create" | "join"): void {
-    if (!settings.name) { this.openName(action); return; }
-    if (action === "create") {
-      this.host.session.send({ t: "drawCreate", session: account.session ?? "" });
-      this.wait();
-    } else {
-      this.mode = "code";
-      this.field = new TextField({ maxLength: 4, upper: true, onSubmit: () => this.submitField(), onCancel: () => this.cancelField() });
-    }
-  }
-
-  private openName(then: "create" | "join" | null): void {
-    this.afterName = then;
-    this.mode = "name";
-    this.field?.remove();
-    this.field = new TextField({ maxLength: 14, value: settings.name, onSubmit: () => this.submitField(), onCancel: () => this.cancelField() });
-  }
-
-  private submitField(): void {
+  private submitCode(): void {
     const value = this.field?.value.trim() ?? "";
-    if (!value) return;
-    if (this.mode === "name") {
-      settings.name = value.replace(/[^\w \-.!?]/g, "").slice(0, 14);
-      if (!settings.name) return;
-      saveSettings();
-      this.dispose();
-      this.mode = "menu";
-      if (this.afterName) this.choose(this.afterName);
-      return;
-    }
     if (value.length !== 4) return;
     this.host.session.send({ t: "drawJoin", code: value.toUpperCase(), session: account.session ?? "" });
     this.dispose();
     this.wait();
   }
 
-  private cancelField(): void {
+  private cancelCode(): void {
     this.dispose();
-    if (this.mode === "name" && !settings.name) { this.host.exit(); return; }
     this.mode = "menu";
     sfx.menuBack();
   }

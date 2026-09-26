@@ -10,6 +10,7 @@ const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
 page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
 await page.goto(url);
+await page.waitForFunction(() => window.sketchbattle?.screen, null, { timeout: 20000 });
 await page.waitForTimeout(800);
 await page.screenshot({ path: `${out}/00-start.png` });
 // let the CPU fight P1 (idle) for a bit, then drive P1 with keys

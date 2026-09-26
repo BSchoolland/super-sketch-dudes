@@ -7,7 +7,7 @@ import type { DrawPlayer } from "../../../../shared/draw";
 import { label, title, INK } from "../ui";
 import { ButtonMenu, type Button } from "./buttons";
 import { characterStatus, drawCharacterArt } from "./character";
-import { fighterLoad } from "./images";
+import { fighterLoad } from "../../gen";
 import { secondsLeft } from "./logic";
 import { clock, wrapped } from "./text";
 import type { DrawHost, DrawView } from "./view";

@@ -13,22 +13,33 @@ import type { RelayMessage, RoomMember, Unsubscribe, WebSocketTransport } from "
 import { VersusScreen } from "./versus";
 import { label, type Screen, INK } from "./ui";
 import { site } from "../base";
+import { isBundlePath } from "../../../shared/account";
 
-export function startConfig(value: unknown, seed: number): { match: MatchConfig; inputDelay: number } {
+/**
+ * The match a `start` message describes, and the bundle each player's fighter loads from ("" for
+ * a fighter this client already has, as in DRAW BATTLE). Fighters with a bundle may not be
+ * registered yet: load them before building the match.
+ */
+export function startConfig(value: unknown, seed: number): { match: MatchConfig; inputDelay: number; bundles: string[] } {
   if (!value || typeof value !== "object") throw new Error("online start missing config");
   const raw = value as Record<string, unknown>;
   const stage = String(raw.stage ?? "") as StageId;
   if (!stages[stage]) throw new Error(`online start has unknown stage ${stage}`);
   if (!Array.isArray(raw.players) || raw.players.length < 2 || raw.players.length > 4) throw new Error("online start has invalid players");
+  const bundles: string[] = [];
   const players = raw.players.map((player) => {
-    const fighter = String((player as Record<string, unknown>).fighter ?? "") as FighterId;
-    if (!roster[fighter]) throw new Error(`online start has unknown fighter ${fighter}`);
+    const p = player as Record<string, unknown>;
+    const fighter = String(p.fighter ?? "") as FighterId;
+    const bundleUrl = typeof p.bundleUrl === "string" ? p.bundleUrl : "";
+    if (bundleUrl && !isBundlePath(bundleUrl, fighter)) throw new Error(`online start has a bad bundle for ${fighter}: ${bundleUrl}`);
+    if (!bundleUrl && !roster[fighter]) throw new Error(`online start has unknown fighter ${fighter}`);
+    bundles.push(bundleUrl);
     return { fighter };
   });
   if (!raw.rules || typeof raw.rules !== "object") throw new Error("online start has invalid rules");
   const rules = raw.rules as MatchConfig["rules"];
   const inputDelay = Math.max(1, Math.min(6, Number(raw.inputDelay ?? 2) | 0));
-  return { match: { stage, players, rules, seed }, inputDelay };
+  return { match: { stage, players, rules, seed }, inputDelay, bundles };
 }
 
 /**
@@ -44,6 +55,8 @@ export interface NetVersusOptions {
   localSlot: number;
   device: DeviceId;
   inputDelay: number;
+  /** Each slot's fighter bundle, carried across a bundle swap so the next build can load them. */
+  bundles?: string[];
   exit: (reason: NetExit) => Screen;
   onLobby?: (message: RelayMessage) => void;
   /** Polled every frame; true hands control back with "done" without waiting for a button. */
@@ -155,7 +168,7 @@ export class NetVersusScreen extends VersusScreen {
         this.cleanupMatch();
         swap.request(hash, {
           transport: this.opts.transport, id: this.opts.localId(), room: this.opts.roomState(),
-          match: { config: this.opts.config, members: this.opts.members, localSlot: this.opts.localSlot, device: this.opts.device, inputDelay: this.opts.inputDelay, session: handoff },
+          match: { config: this.opts.config, bundles: this.opts.bundles ?? [], members: this.opts.members, localSlot: this.opts.localSlot, device: this.opts.device, inputDelay: this.opts.inputDelay, session: handoff },
         });
         return null;
       }

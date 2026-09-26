@@ -1,39 +1,21 @@
 import type { FighterDef } from "../../../shared/types";
-import { drawRig, poseAt, resolvePose, tintColors } from "../render/rig";
-import { SLOT_COLORS } from "../render/hud";
 import { drawSprite } from "../render/sprite";
 import { cellForAnim } from "../../../shared/gen/sprite";
 
-export interface PortraitBounds {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
+export interface PortraitBounds { x: number; y: number; w: number; h: number }
 
-export function drawFighterPortrait(
-  ctx: CanvasRenderingContext2D,
-  def: FighterDef,
-  slot: number,
-  t: number,
-  ready: boolean,
-  bounds: PortraitBounds,
-  scale = 2.4,
-): void {
-  const animName = ready && def.rig.anims.taunt ? "taunt" : "idle";
-  const anim = def.rig.anims[animName] ?? [];
-  const loop = ready ? 60 : def.rig.loops.idle;
-  const raw = poseAt(anim, Math.floor(t * 60), loop);
-  const pose = resolvePose(def, raw);
+/** The fighter's idle cell fitted into the box, feet on its bottom edge, breathing. */
+export function drawFighterPortrait(ctx: CanvasRenderingContext2D, def: FighterDef, t: number, ready: boolean, b: PortraitBounds): void {
+  const sp = def.sprite;
+  if (!sp) throw new Error(`${def.id} has no sprite`);
+  const u = def.stats.height / sp.heightPx;
+  const side = sp.px * u;
+  const k = Math.min(b.w, b.h) / side;
+  const breath = 0.5 - 0.5 * Math.cos(t * Math.PI * 2 * (ready ? 2 : 0.8));
   ctx.save();
-  ctx.beginPath();
-  ctx.roundRect(bounds.x, bounds.y, bounds.w, bounds.h, 12);
-  ctx.clip();
-  ctx.fillStyle = "rgba(119,114,103,0.04)";
-  ctx.fillRect(bounds.x, bounds.y, bounds.w, bounds.h);
-  ctx.translate(bounds.x + bounds.w / 2, bounds.y + bounds.h - 30);
-  ctx.scale(scale, scale);
-  if (def.sprite) drawSprite(ctx, def, cellForAnim(def, animName), raw);
-  else drawRig(ctx, pose, tintColors(def, slot, SLOT_COLORS), def.palette.outline);
+  ctx.beginPath(); ctx.rect(b.x, b.y, b.w, b.h); ctx.clip();
+  ctx.translate(b.x + b.w / 2, b.y + (b.h - Math.min(b.w, b.h)) / 2 + sp.feetPx * u * k);
+  ctx.scale(k, k);
+  drawSprite(ctx, def, cellForAnim(def, "idle"), { sy: 1 - breath * (ready ? 0.06 : 0.03), sx: 1 + breath * (ready ? 0.03 : 0.01) });
   ctx.restore();
 }

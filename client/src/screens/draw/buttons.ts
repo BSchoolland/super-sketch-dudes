@@ -59,6 +59,22 @@ export class ButtonMenu {
     });
   }
 
+  /**
+   * The first `count` buttons are a grid `cols` wide: up/down move a row there (and off its
+   * edges onto the buttons around it). Returns the input with up/down spent, for update().
+   */
+  grid(m: MenuInput, cols: number, count: number, total: number): MenuInput {
+    if (!(m.up || m.down) || !count) return m;
+    const f = this.focus;
+    const lastRow = Math.floor((count - 1) / cols);
+    if (f >= count) this.focus = m.up ? count - 1 : (f + 1) % total;
+    else if (m.up) this.focus = Math.max(f % cols, f - cols);
+    else if (f + cols < count) this.focus = f + cols;
+    else this.focus = Math.floor(f / cols) < lastRow ? count - 1 : count < total ? count : f;
+    sfx.menuMove();
+    return { ...m, up: false, down: false };
+  }
+
   focused(buttons: Button[]): Button | null {
     return buttons[this.focus] ?? null;
   }

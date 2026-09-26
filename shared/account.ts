@@ -30,3 +30,12 @@ export interface LibraryEntry {
 
 /** Header the client sends its session token in. */
 export const SESSION_HEADER = "x-session";
+
+/**
+ * A fighter bundle a room member may name: a same-site path to a forged fighter or a house one,
+ * whose folder is the fighter id. Bundles carry code every client runs, so nothing else is allowed.
+ */
+export function isBundlePath(url: string, fighter: string): boolean {
+  const m = /^\/(?:[\w-]+\/)*(?:gen|house)\/([\w-]+)\/bundle\.json$/.exec(url);
+  return !!m && m[1] === fighter;
+}
