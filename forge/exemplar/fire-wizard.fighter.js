@@ -45,15 +45,15 @@ export default function make(api) {
     boom: { shape: "star", color: ORANGE, ink: RED, texture: "flame", size: 130, spin: 10, aim: false },
     // flamethrower puffs: little rising blobs of flame
     flame: { shape: "blob", color: ORANGE, ink: RED, texture: "flame", size: 38, spin: 14, aim: false, trail: "none" },
-    // the creeper: the fireball again, rolling along the floor
-    creeper: { shape: "fireball", color: RED, ink: "#8a1a0e", size: 56, trail: "flames" },
+    // the creeper: the fireball again, burning upward as it rolls along the floor
+    creeper: { shape: "fireball", color: RED, ink: "#8a1a0e", size: 56, heading: 270, trail: "flames" },
     // tilts and light aerials: a lick of flame
     lick: { shape: "slash", color: YELLOW, ink: RED, texture: "flame" },
     spark: { shape: "star", color: YELLOW, ink: RED, texture: "glow", size: 40, spin: 20, aim: false },
     puff: { shape: "cloud", color: ORANGE, ink: RED, texture: "flame", size: 90, spin: 8, aim: false },
     jet: { shape: "bolt", color: ORANGE, ink: RED, texture: "flame", size: 90 },
     ring: { shape: "ring", color: ORANGE, ink: RED, texture: "flame", size: 150, spin: 24, aim: false },
-    meteor: { shape: "fireball", color: RED, ink: "#7a1a10", size: 100 },
+    meteor: { shape: "fireball", color: RED, ink: "#7a1a10", size: 100, heading: 270 },
     // the book: plain paper and ink, nothing like the fire
     tome: { shape: "bar", color: "#f4efe4", ink: "#24221e", texture: "hatch", size: 60 },
     // smashes: big fire
@@ -162,7 +162,7 @@ export default function make(api) {
 
   const FIREBALLS_MAX = 3, FEED_MAX = 48, GREAT_AT = 30;
   const HEAT_MAX = 100, HEAT_PER_FRAME = 1.4, HEAT_BACK = 0.5, HEAT_COOL = 40, SPRAY_FROM = 10, SPRAY_LOOP = 24;
-  const CREEP_LIFE = 300, CREEP_PULL = 0.07, CREEP_TOP = 7;
+  const CREEP_LIFE = 300, CREEP_PULL = 0.07, CREEP_TOP = 7, CREEP_EASE = 0.025;
   const ownLive = (state, f, kinds) => {
     let n = 0;
     for (const p of state.projectiles) if (!p.dead && p.from === f.slot && kinds.includes(p.kind)) n++;
@@ -273,7 +273,8 @@ export default function make(api) {
       } else if (f.special.meteor && f.move !== "dair") f.special.meteor = 0;
       if (f.special.cool > 0) f.special.cool--;
       else f.bars.heat += HEAT_BACK;
-      // the creeper: a dropped one settles where it lands; on the floor it rolls after the nearest enemy, faster and faster
+      // the creeper: a dropped one settles where it lands; on the floor it rolls after the nearest enemy, picking up
+      // speed from afar and easing off as it closes in
       for (const p of state.projectiles) {
         if (p.dead || p.kind !== "creeper" || p.from !== f.slot) continue;
         if (!p.data.landed) {
@@ -286,7 +287,9 @@ export default function make(api) {
           const d = Math.abs(o.x - p.x);
           if (d < best) { best = d; near = o; }
         }
-        if (near) p.vx = Math.max(-CREEP_TOP, Math.min(CREEP_TOP, p.vx + Math.sign(near.x - p.x) * CREEP_PULL));
+        if (!near) continue;
+        const want = Math.sign(near.x - p.x) * Math.min(CREEP_TOP, 0.6 + best * CREEP_EASE);
+        p.vx += Math.max(-CREEP_PULL * 2, Math.min(CREEP_PULL, (want - p.vx) * Math.sign(want || 1))) * Math.sign(want || 1);
       }
     },
     // feeding the fireball: he glows, braces and shakes harder the bigger it gets

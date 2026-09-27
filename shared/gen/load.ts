@@ -125,6 +125,7 @@ function checkLooks(looks: unknown, cells: Set<string>, px: number, p: string[])
     for (const k of ["size", "spin"] as const) if (l[k] !== undefined && (typeof l[k] !== "number" || !isFinite(l[k]))) p.push(`${at}.${k} must be a finite number`);
     if (l.size !== undefined && (l.size < 4 || l.size > 800)) p.push(`${at}.size outside 4..800`);
     for (const k of ["aim", "flip"] as const) if (l[k] !== undefined && typeof l[k] !== "boolean") p.push(`${at}.${k} must be a boolean`);
+    if (l.heading !== undefined && (typeof l.heading !== "number" || !isFinite(l.heading))) p.push(`${at}.heading must be a number of degrees`);
   }
 }
 

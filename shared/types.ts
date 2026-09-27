@@ -215,6 +215,8 @@ export interface Look {
   spin?: number;
   /** Rotate to face the direction of travel (projectiles) or along the capsule (strikes). Default true for shapes, false for cells. */
   aim?: boolean;
+  /** Point this way whatever the travel, in degrees (90 up, 270 down); overrides `aim`. */
+  heading?: number;
   /** Motion trail for projectiles. Default "none" for cells, "streak" for shapes. */
   trail?: (typeof LOOK_TRAILS)[number];
   /** Mirror the cell horizontally (a bair crop that should face the other way). */

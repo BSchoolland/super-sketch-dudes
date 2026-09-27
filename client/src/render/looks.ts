@@ -65,7 +65,8 @@ function drawShapeLook(ctx: CanvasRenderingContext2D, look: Look, at: LookAt): v
   const texture = at.ghost ? "solid" : look.texture ?? "solid";
   const r = look.size !== undefined ? look.size / 2 : at.r;
   const aim = look.aim ?? true;
-  if (aim) { ctx.rotate(at.angle); ctx.scale(1, at.facing); } else ctx.scale(at.facing, 1);
+  if (look.heading !== undefined) ctx.rotate(-look.heading * Math.PI / 180);
+  else if (aim) { ctx.rotate(at.angle); ctx.scale(1, at.facing); } else ctx.scale(at.facing, 1);
   if (look.spin) ctx.rotate(look.spin * at.frame * Math.PI / 180);
   const seed = at.frame * 7;
   if (texture === "glow") {
