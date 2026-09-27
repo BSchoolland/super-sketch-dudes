@@ -93,11 +93,15 @@ export async function runChecks(input: CheckInput): Promise<CheckReport> {
     });
   });
 
+  // what every bar did over the ladder and the move sweep: a bar that never moves is a mechanic that never ran
+  const seen: Record<string, { lo: number; hi: number; tripped: boolean }> = {};
+  for (const k in def.bars) seen[k] = { lo: Infinity, hi: -Infinity, tripped: false };
+  const watch = (f: { bars: Record<string, number>; tripped: Record<string, number> }) => {
+    for (const k in seen) { const v = f.bars[k], b = seen[k]; b.lo = Math.min(b.lo, v); b.hi = Math.max(b.hi, v); if (f.tripped[k]) b.tripped = true; }
+  };
+
   await timed("ladder", async () => {
     let dealt = 0;
-    // what every bar did over the matches: a bar that never moves is a mechanic that never ran
-    const seen: Record<string, { lo: number; hi: number; tripped: boolean }> = {};
-    for (const k in def.bars) seen[k] = { lo: Infinity, hi: -Infinity, tripped: false };
     for (const opp of LADDER) {
       const row = { wins: 0, losses: 0, avgSeconds: 0, dealtPerMatch: 0 };
       let frames = 0;
@@ -111,7 +115,7 @@ export async function runChecks(input: CheckInput): Promise<CheckReport> {
           while (!s.ended && n < CAP_FRAMES) {
             step(s, [cpuInput(s, 0, LEVEL), cpuInput(s, 1, LEVEL)]);
             hooks.collect(s, (slot) => slot === me);
-            for (const k in seen) { const v = s.fighters[me].bars[k], b = seen[k]; b.lo = Math.min(b.lo, v); b.hi = Math.max(b.hi, v); if (s.fighters[me].tripped[k]) b.tripped = true; }
+            watch(s.fighters[me]);
             for (const e of s.events) if (e.t === "move" && e.slot === me) used.add(e.move);
             s.events.length = 0; n++;
           }
@@ -124,12 +128,6 @@ export async function runChecks(input: CheckInput): Promise<CheckReport> {
       row.avgSeconds = Math.round(frames / LADDER_MATCHES / 60);
       row.dealtPerMatch = Math.round(row.dealtPerMatch / LADDER_MATCHES);
       r.ladder[opp] = row;
-    }
-    for (const [k, b] of Object.entries(seen)) {
-      const bar = def.bars![k];
-      if (b.hi === b.lo) hard(`bars.${k} (${bar.label}) never changed in ${LADDER.length * LADDER_MATCHES} CPU matches: nothing reads or writes f.bars.${k}, or the moves that do never run`);
-      else if (bar.trip !== undefined && !b.tripped) r.soft.push(`bars.${k} (${bar.label}) never tripped its latch (trip ${bar.trip}): it ranged ${Math.round(b.lo)}..${Math.round(b.hi)} of ${bar.max}`);
-      else if (b.hi < bar.max * 0.9 && (bar.start ?? 0) < bar.max * 0.9) r.soft.push(`bars.${k} (${bar.label}) never got near full: it peaked at ${Math.round(b.hi)} of ${bar.max}`);
     }
     if (dealt === 0) hard(`ladder: dealt 0% in ${LADDER.length * LADDER_MATCHES} UNFAIR CPU matches. The CPU can't land anything: check hitbox positions (x forward, y negative is UP), active frames inside total, and that jab1/ftilt/fsmash have hitboxes near the body (x 20-120, y -20..-${height})`);
     const all = Object.values(r.ladder);
@@ -154,9 +152,16 @@ export async function runChecks(input: CheckInput): Promise<CheckReport> {
         for (let i = 0; i < mv.total + 30; i++) {
           step(s, [i < 20 ? input : EMPTY_INPUT, EMPTY_INPUT]);
           hooks.collect(s, (slot) => slot === 0);
+          watch(f);
           s.events.length = 0;
         }
       });
+    }
+    for (const [k, b] of Object.entries(seen)) {
+      const bar = def.bars![k];
+      if (b.hi === b.lo) hard(`bars.${k} (${bar.label}) never changed in ${LADDER.length * LADDER_MATCHES} CPU matches nor when every move was run with special held: nothing reads or writes f.bars.${k}`);
+      else if (bar.trip !== undefined && !b.tripped) r.soft.push(`bars.${k} (${bar.label}) never tripped its latch (trip ${bar.trip}): it ranged ${Math.round(b.lo)}..${Math.round(b.hi)} of ${bar.max}`);
+      else if (b.hi < bar.max * 0.9 && (bar.start ?? 0) < bar.max * 0.9) r.soft.push(`bars.${k} (${bar.label}) never got near full: it peaked at ${Math.round(b.hi)} of ${bar.max}`);
     }
   });
 

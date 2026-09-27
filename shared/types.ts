@@ -268,6 +268,8 @@ export interface Bar {
   rearm?: number;
   /** Drawn only while this holds (default: always). */
   show?: (f: Fighter) => boolean;
+  /** Drawn above the fighter as well as on its card: a charge, anything to watch mid-fight. */
+  over?: boolean;
 }
 
 export interface HookCtx {

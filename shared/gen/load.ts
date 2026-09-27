@@ -60,6 +60,7 @@ function checkBars(bars: unknown, p: string[]): void {
     if ((b.trip === undefined) !== (b.rearm === undefined)) p.push(`${at}: trip and rearm go together`);
     else if (b.trip !== undefined && b.trip === b.rearm) p.push(`${at}: trip and rearm must differ (the gap between them is what makes it a latch)`);
     if (b.show !== undefined && typeof b.show !== "function") p.push(`${at}.show must be a function`);
+    if (b.over !== undefined && typeof b.over !== "boolean") p.push(`${at}.over must be true or false`);
   }
 }
 

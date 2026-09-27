@@ -36,7 +36,8 @@
 //   the start, numbers only: the rollback hash walks it. A number the player should see is a bar
 //   instead: declared in `bars`, read and written as f.bars.x, clamped to 0..max after each frame and
 //   drawn under the percent. `trip`/`rearm` give it a latch (heat that locks at 100 and frees at 75,
-//   ammo that runs dry at 0 and is back at 9), read with `tripped(f, "x")`.
+//   ammo that runs dry at 0 and is back at 9), read with `tripped(f, "x")`; `show` draws it only
+//   while a condition holds and `over` draws it above the fighter too (the DRIVE charge below).
 export default function make(api) {
   const { hb, cap, key, mv, throwMove, spawnProjectile, spriteAnims, spriteLoops, clamp, sign, B } = api;
 
@@ -191,8 +192,11 @@ export default function make(api) {
     rig: { anims: spriteAnims(), loops: spriteLoops },
     palette: { colors: { marker: "#3f6fb5" }, outline: "#24221e" },
     looks,
-    special: () => ({ charge: 0, drop: 0 }),
-    bars: { sword: { label: "SWORD", color: "#3f6fb5", max: 1, start: 1 } },
+    special: () => ({ drop: 0 }),
+    bars: {
+      sword: { label: "SWORD", color: "#3f6fb5", max: 1, start: 1 },
+      drive: { label: "DRIVE", color: "#3f6fb5", max: DRIVE_CHARGE_MAX, show: (f) => f.move === "sspecial", over: true },
+    },
     hooks: {
       fling: ({ f, state }) => {
         if (f.frame !== 14 || !f.bars.sword) return;
@@ -202,13 +206,13 @@ export default function make(api) {
       },
       drive: ({ f, input }) => {
         // frames 1..14 wind up; holding special on frame 14 keeps him there, charging, up to DRIVE_CHARGE_MAX
-        if (f.frame === 1) f.special.charge = 0;
-        if (f.frame === 14 && (input.b & B.SPECIAL) && f.special.charge < DRIVE_CHARGE_MAX) {
-          f.special.charge++;
+        if (f.frame === 1) f.bars.drive = 0;
+        if (f.frame === 14 && (input.b & B.SPECIAL) && f.bars.drive < DRIVE_CHARGE_MAX) {
+          f.bars.drive++;
           f.frame = 13;
           return;
         }
-        const c = f.special.charge / DRIVE_CHARGE_MAX;
+        const c = f.bars.drive / DRIVE_CHARGE_MAX;
         if (f.frame === 15) f.chargeMul = 1 + c * 0.7;
         // the lunge: flat and fast, further the longer it was held; in the air it flies level
         if (f.frame >= 15 && f.frame < 15 + DRIVE_FRAMES) {

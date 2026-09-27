@@ -1,4 +1,4 @@
-import { FONT, INK, PENCIL, inkArc, inkLine } from "./paper";
+import { FONT, INK, PAPER, PENCIL, inkArc, inkLine } from "./paper";
 import type { Fighter, State } from "../../../shared/types";
 import { defOf, currentMove } from "../../../shared/fighter";
 import { hitboxWorld, hurtbox, shieldCircle } from "../../../shared/hits";
@@ -201,11 +201,16 @@ export class Renderer {
       ctx.stroke();
       ctx.restore();
     }
-    // charge bar for specials with a charge
-    if (f.special.charge > 0 && f.action === "attack") {
+    // bars marked `over`, stacked above the head; a tripped one fills in paper like on the card
+    let row = 0;
+    for (const k in def.bars) {
+      const b = def.bars[k];
+      if (!b.over || (b.show && !b.show(f))) continue;
+      const y = pos.y - def.stats.height - 30 - row++ * 10;
       ctx.save();
-      ctx.fillStyle = "#12101a"; ctx.fillRect(pos.x - 32, pos.y - def.stats.height - 30, 64, 8);
-      ctx.fillStyle = "#fff"; ctx.fillRect(pos.x - 30, pos.y - def.stats.height - 28, 60 * Math.min(1, f.special.charge / 60), 4);
+      ctx.fillStyle = INK; ctx.fillRect(pos.x - 32, y, 64, 8);
+      ctx.fillStyle = f.tripped[k] ? PAPER : SLOT_COLORS[f.slot] ?? "#fff";
+      ctx.fillRect(pos.x - 30, y + 2, 60 * Math.max(0, Math.min(1, f.bars[k] / b.max)), 4);
       ctx.restore();
     }
     if (!this.chrome) return;
