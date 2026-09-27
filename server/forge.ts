@@ -172,6 +172,26 @@ export async function storeCharacter(fighterId: string, playerName: string, b: a
   };
 }
 
+/** A new version of a stored character with only its module changed: the cells, sprite and sheet come along, under a new URL. */
+export async function restoreSource(entry: LibraryEntry, source: string): Promise<{ bundleUrl: string; sheetUrl: string | null }> {
+  if (!entry.bundleUrl) throw new Error(`${entry.id} has no bundle`);
+  const oldVer = path.basename(path.dirname(entry.bundleUrl));
+  const oldDir = path.join(genDir, entry.id, oldVer);
+  const old = JSON.parse(fs.readFileSync(path.join(oldDir, "bundle.json"), "utf8"));
+  const ver = crypto.createHash("sha1").update(source).update(oldVer).digest("hex").slice(0, 8);
+  const dir = path.join(genDir, entry.id, ver);
+  const base = `${genBase}/${entry.id}/${ver}`;
+  fs.mkdirSync(dir, { recursive: true });
+  const cells: Record<string, string> = {};
+  for (const c of Object.keys(old.sprite.cells)) { fs.copyFileSync(path.join(oldDir, `${c}.png`), path.join(dir, `${c}.png`)); cells[c] = `${base}/${c}.png`; }
+  const sheet = fs.existsSync(path.join(oldDir, "sheet.png"));
+  if (sheet) fs.copyFileSync(path.join(oldDir, "sheet.png"), path.join(dir, "sheet.png"));
+  const bundle = { ...old, source, sprite: { ...old.sprite, cells } };
+  await buildGenerated(bundle);
+  fs.writeFileSync(path.join(dir, "bundle.json"), JSON.stringify(bundle));
+  return { bundleUrl: `${base}/bundle.json`, sheetUrl: sheet ? `${base}/sheet.png` : null };
+}
+
 export function newFighterId(prefix: string): string {
   return `gen-${prefix}-${crypto.randomBytes(3).toString("hex")}`;
 }

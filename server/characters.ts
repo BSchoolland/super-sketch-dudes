@@ -4,9 +4,9 @@ import type express from "express";
 import { DRAW_PNG_MAX_BYTES } from "../shared/account";
 import { playerOf } from "./auth";
 import type { WideEvent } from "../shared/wide";
-import { drawingUrlOf, enqueueJob, entryOf, jobOf, newFighterId, storeCharacter } from "./forge";
+import { drawingUrlOf, enqueueJob, entryOf, jobOf, newFighterId, restoreSource, storeCharacter } from "./forge";
 import { upsertCharacter } from "./library";
-import { dummyEntry, everyCharacter, libraryOf, removeCharacter, setDummy, setStarters, starterEntries, starterIds } from "./library";
+import { dummyEntry, everyCharacter, findCharacter, libraryOf, removeCharacter, setDummy, setStarters, starterEntries, starterIds } from "./library";
 
 /** The character creator and the library, over HTTP, for signed-in players. */
 export function attachCharacters(api: express.Router, forgeToken = "", dataDir = ""): void {
@@ -69,6 +69,17 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
       const entry = upsertCharacter({ id, owner, status: "ready", stage: "", error: null, ...result, drawingUrl: drawingUrlOf(id), createdAt: Date.now(), origin: "creator" });
       res.json({ character: entry });
     } catch (e) { res.status(400).json({ error: (e as Error).message }); }
+  });
+
+  // a new module for a character that already exists (an engine migration, a fix), keeping everything else
+  api.post("/characters/:id/source", async (req, res) => {
+    if (!forgeToken || req.get("x-forge-token") !== forgeToken) return res.status(401).json({ error: "bad token" });
+    const entry = findCharacter(req.params.id);
+    if (!entry || entry.status !== "ready") return res.status(404).json({ error: "no such finished character" });
+    const source = typeof req.body?.source === "string" ? req.body.source : "";
+    if (!source) return res.status(400).json({ error: "source required" });
+    try { res.json({ character: upsertCharacter({ ...entry, ...(await restoreSource(entry, source)) }) }); }
+    catch (e) { res.status(400).json({ error: (e as Error).message }); }
   });
 
   // everyone's finished characters, for the title screen's brawl: just enough to load and name them
