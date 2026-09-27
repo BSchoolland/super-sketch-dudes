@@ -1,27 +1,26 @@
 import { VIEW_H, VIEW_W } from "../render/camera";
 import { PENCIL } from "../render/paper";
-import { cardLines, type LibraryEntry } from "../../../shared/account";
+import type { LibraryEntry } from "../../../shared/account";
 import { practiceDummy } from "../fighters";
 import { fighterLoad } from "../gen";
 import { card, label, title, INK } from "./ui";
 import { drawImageIn } from "./images";
 import { inkRect } from "../render/paper";
 import { wrapped } from "./text";
-import { MoveDemo, cardText, demoMoves, type DemoMove } from "./movedemo";
+import { MoveDemo, demoMoves, type DemoMove } from "./movedemo";
 import { roster } from "../../../shared/fighters/index";
 
 const DEMO = { x: 90, y: 100, w: 1060 };
-const COL_X = 1210, COL_W = 620, ROW_H = 76, ROW_GAP = 10;
+const COL_X = 1210, COL_W = 620, ROW_H = 56, ROW_GAP = 10;
 
-/** One of the fighter's moves as a button in the right-hand column, with what the card says about it. */
-export interface MoveRow { i: number; head: string; rest: string; move: DemoMove; x: number; y: number; w: number; h: number }
+/** One of the fighter's moves as a button in the right-hand column. */
+export interface MoveRow { i: number; head: string; move: DemoMove; x: number; y: number; w: number; h: number }
 
 /** The fighter's moves (none until its bundle has loaded). */
 export function moveRows(e: LibraryEntry, top: number): MoveRow[] {
   const def = roster[e.id];
   if (!def) return [];
-  const card = cardLines(e.card);
-  return demoMoves(def).map((move, i) => ({ i, head: move.name, rest: cardText(card, move.name), move, x: COL_X, y: top + i * (ROW_H + ROW_GAP), w: COL_W, h: ROW_H }));
+  return demoMoves(def).map((move, i) => ({ i, head: move.name, move, x: COL_X, y: top + i * (ROW_H + ROW_GAP), w: COL_W, h: ROW_H }));
 }
 
 /**
@@ -79,8 +78,7 @@ export class CharacterDetail {
     for (const r of rows) {
       const on = r === active;
       card(ctx, r.x, r.y, r.w, r.h, INK, on);
-      title(ctx, r.head, r.x + 20, r.y + 33, 24, INK, "left");
-      wrapped(ctx, r.rest, r.x + 20, r.y + 60, r.w - 40, 20, on ? INK : PENCIL, 1, "left", 700);
+      title(ctx, r.head, r.x + 20, r.y + r.h / 2 + 9, 24, INK, "left");
     }
     if (!practiceDummy.choice) label(ctx, "no practice dummy yet", DEMO.x + DEMO.w / 2, DEMO.y + h + 34, 22, PENCIL);
   }

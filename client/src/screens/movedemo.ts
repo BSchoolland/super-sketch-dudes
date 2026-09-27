@@ -60,20 +60,6 @@ export function demoMoves(def: FighterDef): DemoMove[] {
 }
 
 /**
- * What the forge's card says about a move, if any line covers it. Card heads come as "ATTACK",
- * "SIDE+SPECIAL", and run together as "DOWN/UP+SPECIAL" or "SIDE/DOWN".
- */
-export function cardText(card: string[], name: string): string {
-  for (const line of card) {
-    const [head, ...rest] = line.trim().split(/\s+/);
-    const h = head.toUpperCase();
-    const names = h === "ATTACK" || h === "AIR" || h === "SPECIAL" ? [h] : h.replace(/\+SPECIAL$/, "").split("/").map((p) => `${p}+SPECIAL`);
-    if (names.includes(name)) return rest.join(" ");
-  }
-  return "";
-}
-
-/**
  * A little match playing in a box: the fighter against the practice dummy (who never moves), the
  * real sim and renderer, no HUD. Given a move it does it over and over, each rep from a fresh
  * start, stepping through the move's directions.

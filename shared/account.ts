@@ -19,7 +19,6 @@ export interface LibraryEntry {
   name: string | null;
   tagline: string | null;
   description: string | null;
-  card: string[] | null;
   drawingUrl: string;
   bundleUrl: string | null;
   sheetUrl: string | null;
@@ -48,5 +47,3 @@ export function isBundlePath(url: string, fighter: string): boolean {
   return !!m && m[1] === fighter;
 }
 
-/** The card lines to show. Cards made before grab left the game carry a GRAB line. */
-export const cardLines = (card: string[] | null | undefined): string[] => (card ?? []).filter((l) => !/^GRAB\b/i.test(l));

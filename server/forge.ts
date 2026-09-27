@@ -32,7 +32,7 @@ export interface ForgeJob {
   hint: { name: string; description: string } | null;
   createdAt: number;
   /** Filled in on completion. */
-  result: { name: string; tagline: string; description: string; card: string[] | null; bundleUrl: string; sheetUrl: string | null } | null;
+  result: { name: string; tagline: string; description: string; bundleUrl: string; sheetUrl: string | null } | null;
 }
 
 const jobs = new Map<string, ForgeJob>();
@@ -70,7 +70,7 @@ export function charStatusOf(job: ForgeJob): CharStatus {
 export function entryOf(job: ForgeJob): LibraryEntry {
   return {
     id: job.fighterId, owner: job.owner, status: charStatusOf(job), stage: job.stage, error: job.error,
-    name: job.result?.name ?? null, tagline: job.result?.tagline ?? null, description: job.result?.description ?? null, card: job.result?.card ?? null,
+    name: job.result?.name ?? null, tagline: job.result?.tagline ?? null, description: job.result?.description ?? null,
     drawingUrl: drawingUrlOf(job.fighterId), bundleUrl: job.result?.bundleUrl ?? null, sheetUrl: job.result?.sheetUrl ?? null,
     createdAt: job.createdAt, origin: job.origin,
   };
@@ -167,7 +167,6 @@ export async function storeCharacter(fighterId: string, playerName: string, b: a
   if (b.report !== undefined) fs.writeFileSync(path.join(dir, "report.json"), JSON.stringify(b.report));
   return {
     name: b.name.slice(0, 28), tagline: b.tagline.slice(0, 120), description: b.description.slice(0, 600),
-    card: Array.isArray(b.card) ? b.card.slice(0, 4).map((c: unknown) => String(c).slice(0, 60)) : null,
     bundleUrl: `${base}/bundle.json`, sheetUrl: typeof b.sheet === "string" ? `${base}/sheet.png` : null,
   };
 }

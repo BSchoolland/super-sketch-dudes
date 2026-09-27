@@ -26,8 +26,8 @@ forge/
    - `sheet.ts <drawing> <cells>` draws the 3x3 sheet and cuts it into cells (`--mirror` flips a left-facing one)
    - reads the exemplar and its cells, writes `<fighterId>.fighter.js`
    - `check.ts` runs the gate; `preview.ts` renders contact sheets of every move with the real renderer
-   - `deploy.ts --name --tagline --card` re-runs the gate and writes `payload.json`, the only thing that leaves the worktree
-4. **Complete** `POST /api/forge/jobs/:id/complete` with the payload: `{ name, tagline, description, card, source,
+   - `deploy.ts --name --tagline` re-runs the gate and writes `payload.json`, the only thing that leaves the worktree
+4. **Complete** `POST /api/forge/jobs/:id/complete` with the payload: `{ name, tagline, description, source,
    sprite: { px, feetPx, heightPx, anims }, cells: { <cell>: base64 png }, sheet, report }`.
    The server rebuilds and validates the bundle before it serves it. No payload after 15 minutes, or the agent
    stops without deploying → `POST /api/forge/jobs/:id/fail { error }`.

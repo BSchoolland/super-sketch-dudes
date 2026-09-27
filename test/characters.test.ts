@@ -63,12 +63,11 @@ describe("the creator", () => {
     expect((await api(`/forge/jobs/${job.id}/progress`, { method: "POST", body: JSON.stringify({ stage: "drawing the sheet" }) })).status).toBe(204);
     expect((await (await api(`/characters/${job.fighterId}`, { headers: H })).json()).character.stage).toBe("drawing the sheet");
     const cells = Object.fromEntries(SPRITE_CELLS.map((c) => [c, png1x1]));
-    expect((await api(`/forge/jobs/${job.id}/complete`, { method: "POST", body: JSON.stringify({ name: "DEE", tagline: "t", description: "d", card: ["ATTACK  a", "SPECIAL  b", "UP+SPECIAL  c", "GRAB  d"], source, sprite: { px: 512, feetPx: 448, heightPx: 360, anims: {} }, cells }) })).status).toBe(204);
+    expect((await api(`/forge/jobs/${job.id}/complete`, { method: "POST", body: JSON.stringify({ name: "DEE", tagline: "t", description: "d", source, sprite: { px: 512, feetPx: 448, heightPx: 360, anims: {} }, cells }) })).status).toBe(204);
     lib = await (await api("/library", { headers: H })).json();
     const entry = lib.characters.find((c: { id: string }) => c.id === created.character.id);
     expect(entry.status).toBe("ready");
     expect(entry.name).toBe("DEE");
-    expect(entry.card).toHaveLength(4);
     expect(entry.bundleUrl).toMatch(new RegExp(`^/gen/${entry.id}/[0-9a-f]{8}/bundle\\.json$`));
     // not signed in: no library
     expect((await api("/library")).status).toBe(401);

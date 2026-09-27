@@ -31,7 +31,6 @@ export interface CompletePayload {
   tagline: string;
   description: string;
   /** Lines the players read while the fight loads: attack, special, up+special. */
-  card: string[] | null;
   source: string;
   sprite: { px: number; feetPx: number; heightPx: number; anims: Record<string, string> };
   cells: Record<string, string>;
@@ -129,5 +128,5 @@ export async function runForge(job: JobSpec, drawingSrc: string, dir: string, io
     checks: p.report?.checks, soft: p.report?.soft ?? [], notes: result.text.slice(0, 2000),
   };
   fs.writeFileSync(path.join(dir, "report.json"), JSON.stringify(report, null, 1));
-  return { name: p.name, tagline: p.tagline, description: p.description ?? "", card: p.card, source: p.source, sprite: p.sprite, cells: p.cells, sheet: p.sheet, report };
+  return { name: p.name, tagline: p.tagline, description: p.description ?? "", source: p.source, sprite: p.sprite, cells: p.cells, sheet: p.sheet, report };
 }
