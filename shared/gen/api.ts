@@ -1,5 +1,6 @@
 import { cap, hb, key, mv, throwMove } from "./helpers";
 import { fill, take, tripped } from "../bars";
+import { fx } from "../fx";
 import { setAction, startMove, releaseGrab, throwVictim } from "../fighter";
 import { spawnProjectile, knockback } from "../hits";
 import { approach, clamp, lerp, sign, sinDeg, cosDeg, atan2Deg } from "../fixed";
@@ -15,7 +16,7 @@ import { spriteAnims, spriteLoops, SPRITE_CELLS } from "./sprite";
 export const generatedApi = Object.freeze({
   hb, cap, key, mv, throwMove,
   setAction, startMove, releaseGrab, throwVictim, spawnProjectile, knockback,
-  fill, take, tripped,
+  fill, take, tripped, fx,
   approach, clamp, lerp, sign, sinDeg, cosDeg, atan2Deg,
   B, STICK_DEAD, STICK_RUN, STICK_WALK, C,
   spriteAnims, spriteLoops, SPRITE_CELLS,

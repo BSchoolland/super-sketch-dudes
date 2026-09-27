@@ -19,7 +19,7 @@ describe("forge checks", () => {
   it("fails a fighter whose uspecial doesn't rise, a throwing hook and the wrong height, each with a specific message", async () => {
     const broken = source
       .replace("f.vy = -11 + (f.frame - 5) * 0.3;", "f.vy = 2;").replace("jumps: 2", "jumps: 1")
-      .replace("drive: ({ f, input }) => {", "drive: ({ f, input }) => {\n        if (f.frame === 3) throw new Error(\"kaboom\");");
+      .replace("drive: ({ f, input, state }) => {", "drive: ({ f, input, state }) => {\n        if (f.frame === 3) throw new Error(\"kaboom\");");
     expect(broken).not.toBe(source);
     const r = await runChecks({ bundle: bundle("gen-forge-bad", broken), height: 100 });
     const msgs = r.failures.map((f) => f.msg).join("\n");

@@ -245,8 +245,8 @@ export interface FighterDef {
   onFrame?: (ctx: HookCtx) => void;
   /** Numbers the fighter owns and the HUD draws: fighter.bars[key], clamped to [0, max] after every frame. See Bar. */
   bars?: Record<string, Bar>;
-  /** Renderer-only per-frame look: overall scale and glow strength 0..1 (e.g. a heat meter). */
-  visual?: (f: Fighter) => { scale?: number; glow?: number };
+  /** Renderer-only per-frame look: overall scale, glow strength 0..1, and a shake in pixels. */
+  visual?: (f: Fighter) => { scale?: number; glow?: number; shake?: number };
   /** Named looks for projectiles (by `kind`) and hitboxes (by `fx`). See Look. */
   looks?: Record<string, Look>;
 }
@@ -462,6 +462,8 @@ export type GameEvent =
   | { t: "respawn"; frame: number; slot: number; x: number; y: number }
   | { t: "projectile"; frame: number; slot: number; kind: string; x: number; y: number }
   | { t: "sfx"; frame: number; slot: number; name: string; x: number; y: number }
+  /** A character's own particle burst (shared/fx.ts); `color` defaults to the slot's. */
+  | { t: "fx"; frame: number; slot: number; kind: "sparks" | "smoke" | "ring"; x: number; y: number; n: number; color?: string }
   | { t: "hookError"; frame: number; slot: number; move: string; error: string }
   | { t: "end"; frame: number; winner: number }
   | { t: "suddenDeath"; frame: number };

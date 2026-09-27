@@ -48,7 +48,7 @@ describe("generated fighters", () => {
   });
 
   it("a hook that throws disables the move, drops the fighter to idle and reports it", async () => {
-    const bad = source.replace("drive: ({ f, input }) => {", "drive: ({ f, input }) => {\n        if (f.frame === 3) throw new Error(\"kaboom\");");
+    const bad = source.replace("drive: ({ f, input, state }) => {", "drive: ({ f, input, state }) => {\n        if (f.frame === 3) throw new Error(\"kaboom\");");
     expect(bad).not.toBe(source);
     const def = await buildGenerated({ id: "gen-bad", source: bad, sprite, player: "test", description: "" });
     registerFighter(def);

@@ -38,8 +38,11 @@
 //   drawn under the percent. `trip`/`rearm` give it a latch (heat that locks at 100 and frees at 75,
 //   ammo that runs dry at 0 and is back at 9), read with `tripped(f, "x")`; `show` draws it only
 //   while a condition holds and `over` draws it above the fighter too (the DRIVE charge below).
+//   Looks that touch nothing: `visual(f)` returns render-only tweaks ({ glow, scale, shake }) and
+//   `fx(state, f, kind, x, y, n, color)` bursts particles (sparks, smoke, ring). The DRIVE charge
+//   below is built from both.
 export default function make(api) {
-  const { hb, cap, key, mv, throwMove, spawnProjectile, spriteAnims, spriteLoops, clamp, sign, B } = api;
+  const { hb, cap, key, mv, throwMove, spawnProjectile, spriteAnims, spriteLoops, clamp, sign, fx, B } = api;
 
   const stats = {
     weight: 92, walk: 3.4, run: 6.2, dashInit: 7, airSpeed: 4.4, airAccel: 0.22,
@@ -204,11 +207,15 @@ export default function make(api) {
         spawnProjectile(state, f, "blade", f.x + f.moveFacing * 40, f.y - 58, f.moveFacing * BLADE_OUT, 0, 90,
           { frames: [0, 999], x: 0, y: 0, r: 22, damage: 7, angle: 45, base: 34, growth: 62, rehit: 20 }, { back: BLADE_BACK });
       },
-      drive: ({ f, input }) => {
+      drive: ({ f, input, state }) => {
         // frames 1..14 wind up; holding special on frame 14 keeps him there, charging, up to DRIVE_CHARGE_MAX
         if (f.frame === 1) f.bars.drive = 0;
         if (f.frame === 14 && (input.b & B.SPECIAL) && f.bars.drive < DRIVE_CHARGE_MAX) {
           f.bars.drive++;
+          // sparks off the blade, more and faster as it fills; a ring the moment it's full
+          const c = f.bars.drive / DRIVE_CHARGE_MAX;
+          if (f.bars.drive % (c > 0.66 ? 2 : 4) === 0) fx(state, f, "sparks", f.x + f.moveFacing * 36, f.y - 70, 1 + Math.round(c * 4), "#ff8a2a");
+          if (f.bars.drive === DRIVE_CHARGE_MAX) fx(state, f, "ring", f.x, f.y - 60, 2, "#ff8a2a");
           f.frame = 13;
           return;
         }
@@ -259,6 +266,12 @@ export default function make(api) {
         }
       }
       if (!live) f.bars.sword = 1;
+    },
+    // the drive winding up: glow, coil and shake grow with the charge
+    visual: (f) => {
+      if (f.move !== "sspecial" || f.frame > 14) return {};
+      const c = f.bars.drive / DRIVE_CHARGE_MAX;
+      return { glow: c, scale: 1 - 0.05 * c, shake: 5 * c };
     },
   };
 }

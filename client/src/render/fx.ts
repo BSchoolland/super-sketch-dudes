@@ -127,6 +127,13 @@ export class Fx {
         case "projectile":
           this.spark(e.x, e.y, 6, 200, this.colors[e.slot] ?? "#fff", 3, 0.2);
           break;
+        case "fx": {
+          const c = e.color ?? this.colors[e.slot] ?? "#fff";
+          if (e.kind === "sparks") this.spark(e.x, e.y, e.n, 260, c, 3, 0.3);
+          else if (e.kind === "smoke") this.dust(e.x, e.y, e.n, 0);
+          else this.ring(e.x, e.y, 30 + e.n * 10, c, 0.3);
+          break;
+        }
         default: break;
       }
     }

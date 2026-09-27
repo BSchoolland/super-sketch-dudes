@@ -164,6 +164,7 @@ export class Renderer {
       ctx.restore();
     }
     if (vis?.scale) ctx.scale(vis.scale, vis.scale);
+    if (vis?.shake) ctx.translate((Math.random() - 0.5) * vis.shake, (Math.random() - 0.5) * vis.shake * 0.5);
     const mvNow = f.action === "attack" ? currentMove(f) : null;
     if (mvNow && !mvNow.throwFrame) {
       if (inWindup(f, mvNow)) {
