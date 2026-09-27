@@ -1,6 +1,6 @@
-import { createMatch, step } from "../../../shared/sim";
+import { cloneState, createMatch, step } from "../../../shared/sim";
 import { B, EMPTY_INPUT, cloneInput, type InputFrame } from "../../../shared/input";
-import type { FighterDef, State } from "../../../shared/types";
+import type { Fighter, FighterDef, State } from "../../../shared/types";
 import { roster } from "../../../shared/fighters/index";
 import { profileOf, type ShotPath } from "../../../shared/cpu-profile";
 import { stages } from "../../../shared/stages/index";
@@ -201,6 +201,35 @@ export class MoveDemo {
     return m.button === B.SPECIAL && !!profileOf(roster[this.fighter]).specials[id as keyof ReturnType<typeof profileOf>["specials"]]?.held;
   }
 
+  /** Drifts the fighter until it's right above the dummy, allowing for where the move's hitboxes sit. */
+  private driftOver(you: Fighter, input: InputFrame): void {
+    const r = this.moveId ? profileOf(roster[this.fighter]).reach[this.moveId] : undefined;
+    const overX = DUMMY_X - (r && r.first !== 999 ? (r.minX + r.maxX) / 2 : 0);
+    if (you.x < overX - 6) { input.x = 100; input.b |= B.DIGITAL; }
+    else if (you.x > overX + 6) { input.x = -100; input.b |= B.DIGITAL; }
+  }
+
+  /**
+   * Presses the move in a copy of the match, this frame, with the rest of this frame's input, and
+   * plays it on: does it hit the dummy?
+   */
+  private wouldHit(frameInput: InputFrame): boolean {
+    const m = this.move;
+    if (!m || this.state.fighters.length < 2) return false;
+    const copy = cloneState(this.state);
+    const [sx, sy] = STICK[this.dir];
+    const pressed: InputFrame = { ...frameInput, x: sx, y: sy, b: frameInput.b | B.DIGITAL | m.button };
+    const held = this.holdsFor(m) ? HOLD_FRAMES : 1;
+    const inputs = copy.fighters.map(() => cloneInput(EMPTY_INPUT));
+    for (let f = 0; f < 90; f++) {
+      inputs[0] = f < held ? pressed : cloneInput(EMPTY_INPUT);
+      copy.events.length = 0;
+      step(copy, inputs);
+      if (copy.events.some((e) => e.t === "hit" && e.attacker === 0 && e.victim === 1)) return true;
+    }
+    return false;
+  }
+
   private get dir(): Dir {
     return this.move ? this.move.dirs[this.rep % this.move.dirs.length] : "n";
   }
@@ -226,13 +255,14 @@ export class MoveDemo {
     if (m && !this.pressed) {
       const jumpAt = PRESS_AT - 8;
       if (this.approach === "ground" && this.frame === PRESS_AT) press();
-      if (this.approach === "shortHop") { if (this.frame === jumpAt) input.b = B.JUMP; if (this.frame === PRESS_AT) press(); }
-      if (this.approach === "fullHop" || this.approach === "overhead") {
-        // hold jump through the squat for the full hop; attack at the top
-        if (this.frame >= jumpAt && this.frame < jumpAt + 8) input.b = B.JUMP;
-        // over the dummy: drift forward until above it
-        if (this.approach === "overhead" && this.frame >= jumpAt && you.x < DUMMY_X - 10) { input.x = 100; input.b |= B.DIGITAL; }
-        if (this.frame > jumpAt + 8 && !you.grounded && you.vy >= -1) press();
+      if (this.approach !== "ground") {
+        // a one-frame jump is a short hop; holding it through the squat, a full one
+        if (this.frame === jumpAt || (this.approach !== "shortHop" && this.frame > jumpAt && this.frame < jumpAt + 8)) input.b = B.JUMP;
+        // over the dummy: drift until right above it
+        if (this.approach === "overhead" && this.frame >= jumpAt) this.driftOver(you, input);
+        // attack on the first frame it would land on the dummy, or at the last moment before touching down
+        const landing = you.vy > 0 && you.y + you.vy * 2 >= 0;
+        if (this.frame > jumpAt + 3 && !you.grounded && (landing || this.wouldHit(input))) press();
       }
     }
     this.inputs[0] = input;
