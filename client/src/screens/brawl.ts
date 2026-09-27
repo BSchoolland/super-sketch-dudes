@@ -35,7 +35,6 @@ export class MenuBrawl {
   private spawnT = SPAWN_EVERY;
   private pool: Contender[] = houseChoices().map((c: FighterChoice) => ({ id: c.id, bundleUrl: c.bundleUrl }));
   private loads = new Map<string, FighterLoad>();
-  private next = 0;
   private rng = (Math.random() * 0x7fffffff) | 0;
 
   constructor() {
@@ -77,7 +76,13 @@ export class MenuBrawl {
     this.renderer.cam.fixed = true;
   }
 
-  /** Drops a fighter in from the top: a dead fighter's slot first, then a new slot while there's room, else the slot that has been here longest. */
+  /** Whether a spawn has somewhere to go: nobody alive is ever pushed out, so a full arena waits for a KO. */
+  private full(): boolean {
+    const st = this.state!;
+    return st.fighters.length >= MAX_FIGHTERS && st.fighters.every((f) => f.stocks > 0);
+  }
+
+  /** Drops a fighter in from the top: a dead fighter's slot first, else a new slot. */
   private spawn(id: string): void {
     const st = this.state!;
     const stage = stageOf(st);
@@ -89,18 +94,12 @@ export class MenuBrawl {
       vacate(st, slot);
       st.fighters[slot] = createFighter(slot, id, stage, st.rules, slot, cpu);
       this.cpus[slot] = cpu;
-    } else if (st.fighters.length < MAX_FIGHTERS) {
+    } else {
       slot = st.fighters.length;
       st.fighters.push(createFighter(slot, id, stage, st.rules, slot, cpu));
       st.inputs.push(cloneInput(EMPTY_INPUT));
       this.inputs.push(cloneInput(EMPTY_INPUT));
       this.cpus.push(cpu);
-    } else {
-      slot = this.next;
-      this.next = (this.next + 1) % MAX_FIGHTERS;
-      vacate(st, slot);
-      st.fighters[slot] = createFighter(slot, id, stage, st.rules, slot, cpu);
-      this.cpus[slot] = cpu;
     }
     this.born[slot] = st.frame;
     const f = st.fighters[slot];
@@ -120,7 +119,7 @@ export class MenuBrawl {
     }
     this.spawnT -= dt;
     if (this.spawnT <= 0) {
-      const id = this.pick();
+      const id = this.full() ? null : this.pick();
       if (id) { this.spawn(id); this.spawnT = SPAWN_EVERY; this.warm(); }
       else this.spawnT = 1;
     }
