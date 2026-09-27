@@ -33,7 +33,8 @@ function inkBounds(img: HTMLImageElement): [number, number, number, number] {
   const d = g.getImageData(0, 0, c.width, c.height).data;
   let x0 = c.width, y0 = c.height, x1 = -1, y1 = -1;
   for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) {
-    if (d[(y * c.width + x) * 4 + 3] < 24) continue;
+    // background removal leaves a faint halo around some drawings: only solid ink counts
+    if (d[(y * c.width + x) * 4 + 3] < 96) continue;
     if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
   }
   return x1 < 0 ? [0, 0, c.width, c.height] : [x0, y0, x1 + 1, y1 + 1];
