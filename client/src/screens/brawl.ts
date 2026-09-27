@@ -28,6 +28,8 @@ export class MenuBrawl {
   private state: State | null = null;
   private renderer: Renderer | null = null;
   private cpus: number[] = [];
+  /** Sim frame each slot's fighter dropped in on. */
+  private born: number[] = [];
   private inputs: InputFrame[] = [];
   private acc = 0;
   private spawnT = SPAWN_EVERY;
@@ -67,6 +69,7 @@ export class MenuBrawl {
     const cfg: MatchConfig = { stage: "menu", players: [a, b].map((fighter) => ({ fighter, cpu: CPU_TIERS[this.rand(CPU_TIERS.length)] })), rules: { stocks: 1, time: 0 }, seed: this.rng };
     this.state = createMatch(cfg);
     this.cpus = this.state.fighters.map((f) => f.cpu);
+    this.born = this.state.fighters.map(() => 0);
     this.inputs = this.state.fighters.map(() => cloneInput(EMPTY_INPUT));
     for (const f of this.state.fighters) profileOf(defOf(f));
     this.renderer = new Renderer(this.state, []);
@@ -99,6 +102,7 @@ export class MenuBrawl {
       st.fighters[slot] = createFighter(slot, id, stage, st.rules, slot, cpu);
       this.cpus[slot] = cpu;
     }
+    this.born[slot] = st.frame;
     const f = st.fighters[slot];
     f.x = stage.respawn.x + (this.rand(600) - 300); f.y = stage.respawn.y;
     f.grounded = false; f.platform = -1; f.facing = f.x < 960 ? 1 : -1;
@@ -128,7 +132,7 @@ export class MenuBrawl {
       stepSilently(st, this.inputs);
       this.renderer!.snapshot(st);
       this.renderer!.fx.consume(st, st.events, this.renderer!.cam);
-      for (const e of st.events) if (e.t === "ko") tallyKo(st.fighters[e.slot].id, e.by >= 0 ? st.fighters[e.by].id : null);
+      for (const e of st.events) if (e.t === "ko") tallyKo(st.fighters[e.slot].id, e.by >= 0 ? st.fighters[e.by].id : null, (st.frame - this.born[e.slot]) / C.FPS);
       st.events.length = 0;
       this.acc -= STEP;
       n++;
