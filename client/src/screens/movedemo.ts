@@ -112,7 +112,13 @@ export class MoveDemo {
     this.renderer = new Renderer(this.state, []);
     this.renderer.chrome = false;
     // centred on the pair (and the platform, when there is one), wide and tall enough for all of it
-    const top = Math.min(-330, (setup.platY ?? 0) - (roster[this.dummy ?? this.fighter].stats.height + 120));
+    let top = Math.min(-330, (setup.platY ?? 0) - (roster[this.dummy ?? this.fighter].stats.height + 120));
+    // a recovery from a jump climbs a long way: keep the top of it in frame (within reason)
+    if (this.jumps && this.dir === "u") {
+      const def = roster[this.fighter];
+      const climb = (def.stats.fullHop * def.stats.fullHop) / (2 * def.stats.gravity) + (profileOf(def).specials.uspecial?.airRise ?? 0);
+      top = Math.max(-820, Math.min(top, -climb - def.stats.height - 40));
+    }
     const zoom = Math.min(VIEW_W / Math.max(760, setup.span + 520), VIEW_H / (80 - top));
     this.renderer.cam.pinned = { x: (setup.youX + DUMMY_X) / 2, y: (top + 80) / 2, zoom };
     this.frame = 0;
@@ -131,22 +137,22 @@ export class MoveDemo {
     const fullHopRise = (def.stats.fullHop * def.stats.fullHop) / (2 * def.stats.gravity);
     // a move that fires something: put the dummy where the shot goes, up on a platform if that's in the air
     const target = this.shotTarget(profile.shots[id], m);
-    if (target && !(m.air && this.dir === "d")) {
-      const rise = m.air ? fullHopRise : 0;
+    if (target && !(this.jumps && this.dir === "d")) {
+      const rise = this.jumps ? fullHopRise : 0;
       const feet = -rise + target.y + dummyH / 2;
       const platY = feet < -50 ? Math.max(-560, feet) : null;
-      return { youX: DUMMY_X - target.x, platY, approach: m.air ? "fullHop" : "ground", span: Math.abs(target.x) };
+      return { youX: DUMMY_X - target.x, platY, approach: this.jumps ? "fullHop" : "ground", span: Math.abs(target.x) };
     }
     const midX = r.first === 999 ? 0 : Math.max(-40, Math.min(200, (r.minX + r.maxX) / 2));
     const midY = r.first === 999 ? -def.stats.height : (r.minY + r.maxY) / 2;
     if (this.dir === "u") {
       // the dummy up where the hitboxes are: its middle at theirs, standing on a platform
-      const rise = m.air ? fullHopRise : 0;
+      const rise = this.jumps ? fullHopRise : 0;
       const platY = Math.max(-520, Math.min(-60, -rise + midY + dummyH / 2));
-      return { youX: DUMMY_X - midX, platY, approach: m.air ? "fullHop" : "ground", span: Math.abs(midX) };
+      return { youX: DUMMY_X - midX, platY, approach: this.jumps ? "fullHop" : "ground", span: Math.abs(midX) };
     }
-    if (m.air && this.dir === "d") return { youX: DUMMY_X - 110, platY: null, approach: "overhead", span: 110 };
-    return { youX: DUMMY_X - gap, platY: null, approach: m.air ? "shortHop" : "ground", span: gap };
+    if (this.jumps && this.dir === "d") return { youX: DUMMY_X - 110, platY: null, approach: "overhead", span: 110 };
+    return { youX: DUMMY_X - gap, platY: null, approach: this.jumps ? "shortHop" : "ground", span: gap };
   }
 
   /** Show `move` (null: just the two of them standing there). */
@@ -187,7 +193,7 @@ export class MoveDemo {
   private shotTarget(paths: ShotPath[] | undefined, m: DemoMove): { x: number; y: number } | null {
     if (!paths?.length) return null;
     const held = this.holdsFor(m);
-    const path = paths.find((p) => p.air === m.air && (held ? p.hold === Infinity : p.hold === 0)) ?? paths.find((p) => p.air === m.air) ?? paths[0];
+    const path = paths.find((p) => p.air === this.jumps && (held ? p.hold === Infinity : p.hold === 0)) ?? paths.find((p) => p.air === this.jumps) ?? paths[0];
     const near = path.pts.filter((q) => Math.hypot(q.x, q.y) <= 460);
     // a shot that runs along the floor (a skipped shell) is met by a dummy standing on it
     const floor = this.dir === "u" ? [] : near.filter((q) => q.y > -30);
@@ -230,6 +236,11 @@ export class MoveDemo {
     return false;
   }
 
+  /** Started from a jump: aerials, and up specials (a recovery shows best from the air). */
+  private get jumps(): boolean {
+    return !!this.move && (this.move.air || (this.move.button === B.SPECIAL && this.dir === "u"));
+  }
+
   private get dir(): Dir {
     return this.move ? this.move.dirs[this.rep % this.move.dirs.length] : "n";
   }
@@ -261,8 +272,9 @@ export class MoveDemo {
         // over the dummy: drift until right above it
         if (this.approach === "overhead" && this.frame >= jumpAt) this.driftOver(you, input);
         // attack on the first frame it would land on the dummy, or at the last moment before touching down
-        const landing = you.vy > 0 && you.y + you.vy * 2 >= 0;
-        if (this.frame > jumpAt + 3 && !you.grounded && (landing || this.wouldHit(input))) press();
+        // (a special, a recovery, goes at the top of the jump rather than the bottom)
+        const late = m.button === B.SPECIAL ? you.vy >= 0 : you.vy > 0 && you.y + you.vy * 2 >= 0;
+        if (this.frame > jumpAt + 3 && !you.grounded && (late || this.wouldHit(input))) press();
       }
     }
     this.inputs[0] = input;
@@ -300,7 +312,7 @@ export class MoveDemo {
     inkRect(ctx, x, y, w, h, INK, 1.6);
     if (this.move) {
       const button = this.move.button === B.ATTACK ? "ATTACK" : "SPECIAL";
-      label(ctx, `${ARROW[this.dir]}  ${this.move.air ? "JUMP, " : ""}${WORD[this.dir]}${button}`, x + 24, y + 44, 28, INK, "left", 900);
+      label(ctx, `${ARROW[this.dir]}  ${this.jumps ? "JUMP, " : ""}${WORD[this.dir]}${button}`, x + 24, y + 44, 28, INK, "left", 900);
       if (this.move.dirs.length > 1) this.move.dirs.forEach((d, i) => label(ctx, ARROW[d], x + 36 + i * 34, y + 84, 22, d === this.dir ? INK : "rgba(41,39,34,0.3)", "center", 900));
     }
   }
