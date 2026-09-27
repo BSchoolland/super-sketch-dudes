@@ -163,6 +163,11 @@ export class MoveDemo {
     this.reset();
   }
 
+  /** Whether every direction of the current move has been shown at least once. */
+  get shownAll(): boolean {
+    return !!this.move && this.rep >= this.move.dirs.length;
+  }
+
   private get moveId(): string | null {
     return this.move ? MOVE_ID[kindOf(this.move)][this.dir] : null;
   }

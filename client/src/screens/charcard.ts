@@ -26,10 +26,13 @@ export function moveRows(e: LibraryEntry, top: number): MoveRow[] {
 
 /**
  * A ready library character big: a live preview of it (against the practice dummy) on the left,
- * name, tagline and its moves on the right. Hover or focus a move and the preview does it.
+ * name, tagline and its moves on the right. Hover or focus a move and the preview does it; otherwise
+ * it cycles through them all.
  */
 export class CharacterDetail {
   private demo: MoveDemo | null = null;
+  /** The row the preview is on while nothing is hovered or focused. */
+  private cycle = 0;
   /** Where the move buttons start, below however many lines the tagline took. */
   movesTop = 330;
 
@@ -48,6 +51,10 @@ export class CharacterDetail {
     const e = this.entry;
     const h = (DEMO.w * VIEW_H) / VIEW_W;
     const demo = this.demoReady();
+    if (!active && rows.length) {
+      if (demo?.shownAll) this.cycle++;
+      active = rows[this.cycle % rows.length];
+    }
     if (demo) {
       demo.play(active?.move ?? null);
       demo.update(dt);
