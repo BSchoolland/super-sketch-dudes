@@ -1,5 +1,5 @@
-import { PAPER, PENCIL } from "../../render/paper";
-import { label } from "../ui";
+import { PAPER, PENCIL } from "../render/paper";
+import { label } from "./ui";
 
 interface Entry { img: HTMLImageElement; ok: boolean; error: string }
 const images = new Map<string, Entry>();

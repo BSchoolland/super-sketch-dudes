@@ -5,7 +5,7 @@ import { consumeTaps } from "../../input/pointer";
 import { sfx } from "../../audio/audio";
 import { choiceDef, type FighterChoice } from "../../fighters";
 import { bg, label, title, type Screen, INK } from "../ui";
-import { ButtonMenu, type Button } from "../draw/buttons";
+import { ButtonMenu, type Button } from "../buttons";
 import { drawFighterPortrait } from "../portrait";
 
 export type BattleMode = "cpu" | "local" | "online";

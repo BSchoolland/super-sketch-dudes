@@ -1,6 +1,6 @@
 import type { WebSocketServer, WebSocket } from "ws";
 import type { IncomingMessage } from "node:http";
-import { isBundlePath, type Player } from "../shared/account";
+import { isBundlePath } from "../shared/account";
 import { matchTrace, TRACE_RE, type WideEvent } from "../shared/wide";
 import { finish, newTrace, openEvent } from "./events";
 
@@ -21,16 +21,11 @@ export interface Client {
   fighter: string;
   bundleUrl: string;
   ready: boolean;
-  /** Passed the DRAW BATTLE password on this connection. */
-  drawAuthed: boolean;
-  /** Signed-in identity, once a message carried a session token. */
-  player: Player | null;
   /** This connection's wide event, traced by the page session that opened it. */
   event: WideEvent;
 }
 export interface Room {
   code: string; trace: string; members: Client[]; started: boolean; host: Client; seed: number; config: unknown;
-  /** Set on DRAW BATTLE rooms; owned by server/draw.ts. */ draw?: unknown;
   /** Game bundle hash the room plays on; null = whatever the page loaded. */ game: string | null;
   event: WideEvent;
   match: RelayMatch | null;
@@ -38,14 +33,6 @@ export interface Room {
 /** What the relay sees of one match: per slot, how inputs and hashes flowed. */
 interface SlotRelay { inputs: number; newest: number; hashes: number; lastHashFrame: number; maxGapMs: number; stalls: number; lastAt: number }
 export interface RelayMatch { event: WideEvent; slots: SlotRelay[]; hashes: Map<number, { hash: number; slot: number }> }
-
-/** Draw mode plugs in here: it owns every `draw*` message and hears about members leaving. */
-export interface RoomExtension {
-  handle(c: Client, msg: { t: string } & Record<string, unknown>): boolean;
-  onLeave(c: Client, room: Room, duringMatch: boolean): void;
-}
-let extension: RoomExtension | null = null;
-export function setRoomExtension(ext: RoomExtension): void { extension = ext; }
 
 let nextId = 1;
 export const rooms = new Map<string, Room>();
@@ -67,12 +54,11 @@ function pushCapped(business: Record<string, unknown>, key: string, value: unkno
 }
 const since = (e: WideEvent): number => Date.now() - e.t0;
 
-/** `draw` makes a DRAW BATTLE room: it builds the draw state for the room's code. */
-export function newRoom(host: Client, draw?: (code: string) => unknown): Room {
+export function newRoom(host: Client): Room {
   const code = makeCode();
   const trace = `r-${code}-${Date.now().toString(36)}`;
-  const room: Room = { code, trace, members: [], started: false, host, seed: 0, config: null, draw: draw?.(code), game: null, match: null, event: openEvent("room", trace, host.event.trace) };
-  room.event.set("room", { code, draw: !!draw, host: host.name });
+  const room: Room = { code, trace, members: [], started: false, host, seed: 0, config: null, game: null, match: null, event: openEvent("room", trace, host.event.trace) };
+  room.event.set("room", { code, host: host.name });
   rooms.set(code, room);
   return room;
 }
@@ -83,8 +69,8 @@ export function startRelayMatch(room: Room, seed: number, config: unknown, membe
   const trace = matchTrace(room.code, seed);
   const slots: SlotRelay[] = members.map(() => ({ inputs: 0, newest: 0, hashes: 0, lastHashFrame: 0, maxGapMs: 0, stalls: 0, lastAt: 0 }));
   const event = openEvent("match", trace, room.trace)
-    .set("match", { room: room.code, seed, draw: !!room.draw, config })
-    .set("members", members.map((m) => ({ id: m.id, name: m.name, player: m.player?.id ?? null, slot: m.slot, session: m.event.trace, fighter: m.fighter, bundleUrl: m.bundleUrl })))
+    .set("match", { room: room.code, seed, config })
+    .set("members", members.map((m) => ({ id: m.id, name: m.name, slot: m.slot, session: m.event.trace, fighter: m.fighter, bundleUrl: m.bundleUrl })))
     .set("relay", slots);
   room.match = { event, slots, hashes: new Map() };
   pushCapped(room.event.business, "matches", trace, 200);
@@ -147,16 +133,14 @@ export function leaveRoom(c: Client): void {
   }
   if (!room.members.length) {
     rooms.delete(room.code);
-    if (room.draw) extension?.onLeave(c, room, duringMatch);
     endRelayMatch(room, "everyone left");
     const joins = (room.event.business.joins as unknown[] | undefined)?.length ?? 0;
     const matches = (room.event.business.matches as unknown[] | undefined)?.length ?? 0;
-    room.event.set("summary", { message: `${room.draw ? "draw room" : "room"} ${room.code} · ${joins} joined · ${matches} matches` });
+    room.event.set("summary", { message: `room ${room.code} · ${joins} joined · ${matches} matches` });
     finish(room.event.set("exit", "empty"));
     return;
   }
   if (room.host === c) room.host = room.members[0];
-  if (room.draw) { extension?.onLeave(c, room, duringMatch); return; }
   // mid-match the relay keeps everyone's slot: the clients carry on without an eliminated player, and the host's "end" reopens the room
   if (!duringMatch) room.members.forEach((m, i) => (m.slot = i));
   broadcast(room, { t: "left", id: c.id, slot, duringMatch });
@@ -168,7 +152,7 @@ export function joinRoom(c: Client, room: Room): void {
   c.slot = room.members.length;
   c.ready = false;
   room.members.push(c);
-  pushCapped(room.event.business, "joins", { id: c.id, name: c.name, player: c.player?.id ?? null, session: c.event.trace, at: since(room.event) });
+  pushCapped(room.event.business, "joins", { id: c.id, name: c.name, session: c.event.trace, at: since(room.event) });
   pushCapped(c.event.business, "rooms", room.code);
   broadcast(room, roomInfo(room));
 }
@@ -181,7 +165,7 @@ export function attachLobby(wss: WebSocketServer): void {
     const event = openEvent("connection", session && TRACE_RE.test(session) ? session : newTrace("c"));
     const msgs: Record<string, number> = {};
     event.set("connection", { id, ua: String(req.headers["user-agent"] ?? "").slice(0, 200) }).set("msgs", msgs);
-    const c: Client = { ws, id, name: `guest${id}`, room: null, slot: 0, lastPing: Date.now(), fighter: "", bundleUrl: "", ready: false, drawAuthed: false, player: null, event };
+    const c: Client = { ws, id, name: `guest${id}`, room: null, slot: 0, lastPing: Date.now(), fighter: "", bundleUrl: "", ready: false, event };
     send(c, { t: "hello", id: c.id });
     ws.on("message", (raw) => {
       let msg: any;
@@ -189,8 +173,6 @@ export function attachLobby(wss: WebSocketServer): void {
       if (!msg || typeof msg.t !== "string") { event.issue("warn", "protocol", "a message without a type"); return; }
       const t = msg.t.slice(0, 24);
       if (t in msgs || Object.keys(msgs).length < 40) msgs[t] = (msgs[t] ?? 0) + 1;
-      if (msg.t.startsWith("draw")) { if (!extension?.handle(c, msg)) send(c, { t: "error", error: `unknown message ${msg.t}` }); return; }
-      if (c.room?.draw && (msg.t === "join" || msg.t === "pick" || msg.t === "start" || msg.t === "end" || msg.t === "queue")) { send(c, { t: "error", error: "not in a draw room" }); return; }
       switch (msg.t) {
         case "name": c.name = String(msg.name ?? "").replace(/[^\w \-.!?]/g, "").slice(0, 14) || c.name; event.set("name", c.name); if (c.room) broadcast(c.room, roomInfo(c.room)); break;
         case "ping": send(c, { t: "pong", at: msg.at }); break;
@@ -264,7 +246,6 @@ export function attachLobby(wss: WebSocketServer): void {
       if (i >= 0) queue.splice(i, 1);
       leaveRoom(c);
       event.set("exit", { code, reason: String(reason).slice(0, 120) });
-      if (c.player) event.set("player", { id: c.player.id, name: c.player.name });
       event.set("summary", { message: `${c.name} · rooms ${((event.business.rooms as string[] | undefined) ?? []).join(" ") || "none"} · closed ${code}` });
       finish(event);
     });

@@ -3,7 +3,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import type express from "express";
 import type { LibraryEntry, Player } from "../shared/account";
-import type { CharStatus } from "../shared/draw";
+import type { CharStatus } from "../shared/account";
 import { buildGenerated } from "../shared/gen/load";
 import { SPRITE_CELLS } from "../shared/gen/sprite";
 import { upsertCharacter } from "./library";
@@ -12,7 +12,7 @@ import type { WideEvent } from "../shared/wide";
 
 /**
  * The forge job queue. A job is one drawing becoming one fighter; it belongs to a player and
- * lands in their library whatever started it (the creator, or a draw battle round). The forge
+ * lands in their library whatever started it. The forge
  * worker on Ben's machine polls /forge/jobs/next with FORGE_TOKEN; nothing here calls out to it.
  */
 export interface ForgeJob {
@@ -37,7 +37,6 @@ export interface ForgeJob {
 
 const jobs = new Map<string, ForgeJob>();
 const queue: string[] = [];
-const listeners = new Set<(job: ForgeJob) => void>();
 /** Each job's wide event, from queued to done or failed. A restart starts a new one on the same trace. */
 const events = new Map<string, WideEvent>();
 let genDir = "", genBase = "", jobsFile = "";
@@ -61,11 +60,6 @@ function restore(): void {
   for (const id of queue) { const job = jobs.get(id)!; openJobEvent(job, null).set("restored", true); upsertCharacter(entryOf(job)); }
 }
 
-/** Runs whenever a job changes (status, stage, completion). Draw rooms mirror it into their state. */
-export function onJob(cb: (job: ForgeJob) => void): () => void {
-  listeners.add(cb);
-  return () => listeners.delete(cb);
-}
 export const jobOf = (id: string): ForgeJob | undefined => jobs.get(id);
 export const drawingUrlOf = (fighterId: string): string => `${genBase}/drawings/${fighterId}.png`;
 
@@ -111,11 +105,10 @@ function changed(job: ForgeJob, player?: Player): void {
   upsertCharacter(entryOf(job), player);
   persist();
   record(job);
-  for (const cb of listeners) cb(job);
 }
 
 /** Stores the drawing and queues the job; the library gets the entry at once, as "queued". */
-/** `parent` is the trace the job came from: the creator's request or the draw room. */
+/** `parent` is the trace the job came from: the creator's request. */
 export function enqueueJob(spec: { fighterId: string; player: Player; png: Buffer; origin: LibraryEntry["origin"]; hint?: { name: string; description: string } | null; parent: string | null }): ForgeJob {
   const drawingPath = path.join(genDir, "drawings", `${spec.fighterId}.png`);
   fs.mkdirSync(path.dirname(drawingPath), { recursive: true });

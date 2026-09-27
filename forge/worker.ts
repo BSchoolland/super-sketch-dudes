@@ -1,4 +1,4 @@
-// The forge worker: polls the site for draw-battle jobs, runs the forge, posts the fighter back.
+// The forge worker: polls the site for forge jobs, runs the forge, posts the fighter back.
 // Usage: npx tsx forge/worker.ts   (SITE, FORGE_TOKEN, OPENAI_API_KEY from the env, forge/.env or ~/.config/sketch-forge/env)
 import fs from "node:fs";
 import path from "node:path";

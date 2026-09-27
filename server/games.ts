@@ -72,6 +72,6 @@ export function attachGames(api: express.Router, opts: GamesOptions): void {
 
   api.get("/rooms", (req, res) => {
     if (!authed(req, res)) return;
-    res.json({ rooms: [...rooms.values()].map((r) => ({ code: r.code, members: r.members.map((m) => m.name), started: r.started, game: r.game, draw: !!r.draw })) });
+    res.json({ rooms: [...rooms.values()].map((r) => ({ code: r.code, members: r.members.map((m) => m.name), started: r.started, game: r.game })) });
   });
 }

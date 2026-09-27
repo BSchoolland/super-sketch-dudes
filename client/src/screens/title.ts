@@ -5,13 +5,13 @@ import { sfx } from "../audio/audio";
 import { account } from "../account";
 import { refreshLibrary } from "../fighters";
 import { bg, card, hint, label, title, hover, clicked, goTo, type Screen, INK } from "./ui";
-import { image } from "./draw/images";
+import { image } from "./images";
 import { MenuBrawl } from "./brawl";
 import { MENU_CARD } from "../../../shared/stages/menu";
 
 const MENU_Y = MENU_CARD.y0, MENU_STEP = MENU_CARD.step;
 
-export type Mode = "draw" | "create" | "library" | "quick" | "couch" | "settings";
+export type Mode = "battle" | "library" | "create" | "settings";
 
 export function drawLogo(ctx: CanvasRenderingContext2D, y: number): void {
   ctx.save();
@@ -48,11 +48,9 @@ export class TitleScreen implements Screen {
   t = 0;
   sel = 0;
   items: { id: Mode; name: string; desc: string }[] = [
-    { id: "draw", name: "DRAW BATTLE", desc: "Draw a sketch on a time limit, then fight" },
-    { id: "create", name: "NEW CHARACTER", desc: "Draw a new character" },
+    { id: "battle", name: "BATTLE", desc: "Fight the CPU, a friend here, or someone online" },
     { id: "library", name: "MY CHARACTERS", desc: "View characters you've drawn" },
-    { id: "quick", name: "QUICK BATTLE", desc: "Online battle with an existing character" },
-    { id: "couch", name: "COUCH CO-OP", desc: "Play with friends on the same device or against bots" },
+    { id: "create", name: "NEW CHARACTER", desc: "Draw a new character" },
     { id: "settings", name: "SETTINGS", desc: "Change settings" },
   ];
   brawl: MenuBrawl | null = null;

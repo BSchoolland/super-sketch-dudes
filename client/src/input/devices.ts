@@ -21,7 +21,7 @@ const typedThisFrame: string[] = [];
 let anyPress = false;
 window.addEventListener("keydown", (e) => {
   if (e.repeat) return;
-  // text fields (DRAW BATTLE's password/name/code) own their keystrokes
+  // text fields own their keystrokes
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
   keys.add(e.code);
   pressedThisFrame.add(e.code);

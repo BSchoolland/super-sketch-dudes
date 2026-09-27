@@ -5,11 +5,11 @@ import { consumeTaps } from "../input/pointer";
 import { sfx } from "../audio/audio";
 import { library } from "../account";
 import { bg, card, label, title, type Screen, INK } from "./ui";
-import { ButtonMenu, type Button } from "./draw/buttons";
-import { RED } from "./draw/character";
-import type { DrawPad } from "./draw/pad";
-import { padPng } from "./draw/tools";
-import { TextField } from "./draw/textfield";
+import { ButtonMenu, type Button } from "./buttons";
+import { RED } from "./character";
+import type { DrawPad } from "./pad";
+import { padPng } from "./padtools";
+import { TextField } from "./textfield";
 import type { CharacterHint, Nav } from "./nav";
 
 const ART = { x: 120, y: 150, w: 720, h: 720 };

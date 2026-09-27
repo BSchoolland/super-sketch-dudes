@@ -5,7 +5,7 @@ import { consumeTaps } from "../../input/pointer";
 import { sfx } from "../../audio/audio";
 import { allChoices, choiceDef, myLibrary, refreshLibrary, type FighterChoice } from "../../fighters";
 import { bg, label, title, type Screen } from "../ui";
-import { ButtonMenu, type Button } from "../draw/buttons";
+import { ButtonMenu, type Button } from "../buttons";
 import { FighterGrid } from "./grid";
 
 /** BATTLE, step 1: which of yours you fight with (or one of the house). */

@@ -2,12 +2,11 @@ import type { DeviceId } from "../input/devices";
 import type { SlotSource } from "../match";
 import { signOut } from "../account";
 import { forgetLibrary, type FighterChoice } from "../fighters";
-import type { BattleKind, Nav } from "./nav";
+import type { Nav } from "./nav";
 import type { Screen } from "./ui";
 import { TitleScreen } from "./title";
 import { SignInScreen } from "./signin";
 import { SettingsScreen } from "./settings";
-import { DrawScreen } from "./draw/screen";
 import { CreateScreen } from "./create";
 import { DescribeScreen } from "./describe";
 import { ForgeScreen } from "./forging";
@@ -40,25 +39,21 @@ export function signInScreen(nav: Nav, error = ""): Screen {
 export function menus(): Nav {
   const nav: Nav = {
     title: () => new TitleScreen((mode) => {
-      if (mode === "draw") return new DrawScreen(() => nav.title());
+      if (mode === "battle") return nav.battle();
       if (mode === "create") return nav.create();
       if (mode === "library") return nav.library();
-      if (mode === "quick") return nav.battle("online");
-      if (mode === "couch") return nav.battle("couch");
       return new SettingsScreen(() => nav.title(), () => { signOut(); forgetLibrary(); return signInScreen(nav); });
     }),
     create: (pad, hint) => new CreateScreen(nav, pad, hint),
     describe: (pad, hint) => new DescribeScreen(nav, pad, hint),
     forge: (entry, pad) => new ForgeScreen(nav, entry, pad),
     library: () => new LibraryScreen(nav),
-    battle: (kind, fighter) => fighter ? modes(kind, fighter, null) : new PickFighterScreen((f, from) => modes(kind, f, from), () => nav.title()),
+    battle: (fighter) => fighter ? modes(fighter, null) : new PickFighterScreen((f, from) => modes(f, from), () => nav.title()),
   };
 
-  function modes(kind: BattleKind, you: FighterChoice, from: DeviceId | null): Screen {
-    if (kind === "online") return new OnlineScreen(() => nav.title(), you);
-    const back = () => nav.battle(kind);
-    return new ModeScreen(you, from, kind === "couch" ? ["cpu", "local"] : ["cpu", "local", "online"], (mode, device) => {
-      const again = () => modes(kind, you, device);
+  function modes(you: FighterChoice, from: DeviceId | null): Screen {
+    return new ModeScreen(you, from, ["cpu", "local", "online"], (mode, device) => {
+      const again = () => modes(you, device);
       if (mode === "online") return new OnlineScreen(() => nav.title(), you);
       if (mode === "cpu") {
         const setup = (): Screen => new CpuSetupScreen(you, (opponent, level) => new StageScreen(
@@ -72,7 +67,7 @@ export function menus(): Nav {
         setup,
       ), again);
       return setup();
-    }, back);
+    }, () => nav.battle());
   }
 
   return nav;

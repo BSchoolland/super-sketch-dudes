@@ -1,4 +1,4 @@
-import type { CharStatus } from "./draw";
+export type CharStatus = "queued" | "generating" | "ready" | "failed";
 
 /** A signed-in player: a Discord identity or an email account. The id is the account. */
 export interface Player {
@@ -24,11 +24,14 @@ export interface LibraryEntry {
   bundleUrl: string | null;
   sheetUrl: string | null;
   createdAt: number;
-  /** Drawn in the creator, or in a draw battle room. */
+  /** Old entries may name the draw battle room they were drawn in. */
   origin: "creator" | { room: string; round: number };
   /** In every player's library from the start (a reference fighter); can't be deleted. */
   starter?: boolean;
 }
+
+/** Longest side of the drawing the client uploads; the server rejects bigger. */
+export const DRAW_PNG_MAX_BYTES = 900_000;
 
 /** Header the client sends its session token in. */
 export const SESSION_HEADER = "x-session";

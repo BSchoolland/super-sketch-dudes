@@ -1,5 +1,5 @@
-import { viewRectToCss } from "../../input/pointer";
-import { FONT, INK } from "../ui";
+import { viewRectToCss } from "../input/pointer";
+import { FONT, INK } from "./ui";
 
 export interface TextFieldOptions {
   type?: "text" | "password" | "email";

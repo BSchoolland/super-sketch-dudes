@@ -1,8 +1,8 @@
 import { PENCIL } from "../render/paper";
 import { cardLines, type LibraryEntry } from "../../../shared/account";
 import { title, INK } from "./ui";
-import { drawCharacterArt } from "./draw/character";
-import { wrapped } from "./draw/text";
+import { drawCharacterArt } from "./character";
+import { wrapped } from "./text";
 
 /** A library character big: the sheet (with the drawing pinned on) left, name, tagline and the 4-line card right. */
 export function drawCharacterDetail(ctx: CanvasRenderingContext2D, e: LibraryEntry, x: number, y: number, size: number, textW: number, t: number): void {

@@ -3,7 +3,7 @@ import type { MenuInput } from "../../input/devices";
 import { sfx } from "../../audio/audio";
 import { choiceDef, type FighterChoice } from "../../fighters";
 import { label, title, INK } from "../ui";
-import type { Button, ButtonMenu } from "../draw/buttons";
+import type { Button, ButtonMenu } from "../buttons";
 import { drawFighterPortrait } from "../portrait";
 
 const PER = 7, CELL = 200, GAP = 30, ROW_H = 300, X0 = 250;

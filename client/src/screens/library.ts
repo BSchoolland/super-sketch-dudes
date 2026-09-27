@@ -7,11 +7,11 @@ import { library } from "../account";
 import { libraryChoices, myLibrary, refreshLibrary } from "../fighters";
 import type { LibraryEntry } from "../../../shared/account";
 import { bg, label, title, type Screen, INK } from "./ui";
-import { ButtonMenu, type Button } from "./draw/buttons";
-import { characterStatus, drawCharacterArt, RED } from "./draw/character";
-import { wrapped } from "./draw/text";
+import { ButtonMenu, type Button } from "./buttons";
+import { characterStatus, drawCharacterArt, RED } from "./character";
+import { wrapped } from "./text";
 import { drawCharacterDetail } from "./charcard";
-import { DrawPad } from "./draw/pad";
+import { DrawPad } from "./pad";
 import { PAD } from "./create";
 import type { Nav } from "./nav";
 
@@ -104,7 +104,7 @@ export class LibraryScreen implements Screen {
 
   private updateDetail(e: LibraryEntry, m: MenuInput, taps: ReturnType<typeof consumeTaps>): Screen | null {
     const pressed = this.detailMenu.update(this.detailButtons(e), m, taps);
-    if (pressed === "fight") return this.nav.battle("any", libraryChoices([e])[0]);
+    if (pressed === "fight") return this.nav.battle(libraryChoices([e])[0]);
     if (pressed === "copy") { sfx.menuConfirm(); this.copyDrawing(e); }
     if (pressed === "delete") {
       if (this.deleteArmed >= 0 && this.t - this.deleteArmed < 3) this.remove(e);

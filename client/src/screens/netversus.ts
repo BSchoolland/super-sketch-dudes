@@ -17,7 +17,7 @@ import { isBundlePath } from "../../../shared/account";
 
 /**
  * The match a `start` message describes, and the bundle each player's fighter loads from ("" for
- * a fighter this client already has, as in DRAW BATTLE). Fighters with a bundle may not be
+ * a fighter this client already has). Fighters with a bundle may not be
  * registered yet: load them before building the match.
  */
 export function startConfig(value: unknown, seed: number): { match: MatchConfig; inputDelay: number; bundles: string[] } {
@@ -72,7 +72,7 @@ export interface NetVersusOptions {
   telemetry: MatchTelemetry;
 }
 
-/** A rollback match over the relay, shared by classic online rooms and DRAW BATTLE. */
+/** A rollback match over the relay. */
 export class NetVersusScreen extends VersusScreen {
   readonly session: RollbackSession;
   protected failure: { title: string; detail: string; automatic: boolean } | null = null;

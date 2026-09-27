@@ -50,7 +50,7 @@ scripts/deploy.sh    # build, ship to personal-server, restart pm2 "sketch-battl
 ## Wide events
 
 Every unit of work leaves one structured record, built up over its life: a page session, each
-client's view of an online match, a DRAW BATTLE room, a forge job, an API write, a relay connection,
+client's view of an online match, a forge job, an API write, a relay connection,
 a room, the relay's view of a match, the server process. They land in `server-data/events.jsonl`,
 one snapshot per line; long-lived events are rewritten while they run, so a crash still leaves a
 partial record. The same match is on one trace for every participant and the relay:

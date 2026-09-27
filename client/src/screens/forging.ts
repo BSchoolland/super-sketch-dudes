@@ -6,10 +6,10 @@ import { library } from "../account";
 import { libraryChoices, refreshLibrary } from "../fighters";
 import type { LibraryEntry } from "../../../shared/account";
 import { bg, label, type Screen } from "./ui";
-import { ButtonMenu, type Button } from "./draw/buttons";
-import { characterStatus, drawCharacterArt, RED } from "./draw/character";
-import type { DrawPad } from "./draw/pad";
-import { wrapped } from "./draw/text";
+import { ButtonMenu, type Button } from "./buttons";
+import { characterStatus, drawCharacterArt, RED } from "./character";
+import type { DrawPad } from "./pad";
+import { wrapped } from "./text";
 import { drawCharacterDetail } from "./charcard";
 import type { Nav } from "./nav";
 
@@ -52,7 +52,7 @@ export class ForgeScreen implements Screen {
     if (pressed === "battle") {
       const choice = libraryChoices([this.entry])[0];
       if (!choice) throw new Error(`ready character ${this.entry.id} has no bundle`);
-      return this.nav.battle("any", choice);
+      return this.nav.battle(choice);
     }
     if (pressed === "retry" && this.pad) return this.nav.create(this.pad);
     if (pressed === "back" || m.back) { sfx.menuBack(); return this.nav.library(); }

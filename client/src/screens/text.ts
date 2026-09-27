@@ -1,4 +1,4 @@
-import { FONT } from "../ui";
+import { FONT } from "./ui";
 
 /** Word-wraps `text` into at most `maxLines` lines no wider than `maxW`; the last kept line ends in "…" if cut. */
 export function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxW: number, size: number, maxLines: number, weight = 700): string[] {

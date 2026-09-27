@@ -3,10 +3,10 @@ import type { MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
 import { sfx } from "../audio/audio";
 import { bg, card, label, type Screen, INK } from "./ui";
-import { ButtonMenu, type Button } from "./draw/buttons";
-import { RED } from "./draw/character";
-import { DrawPad } from "./draw/pad";
-import { PadTools } from "./draw/tools";
+import { ButtonMenu, type Button } from "./buttons";
+import { RED } from "./character";
+import { DrawPad } from "./pad";
+import { PadTools } from "./padtools";
 import type { CharacterHint, Nav } from "./nav";
 
 export const PAD = { x: 510, y: 90, w: 900, h: 900 };

@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 import http from "node:http";
 import { WebSocketServer } from "ws";
 import { attachLobby } from "./lobby";
-import { attachDraw } from "./draw";
 import { attachGames } from "./games";
 import { attachAuth } from "./auth";
 import { initLibrary } from "./library";
@@ -33,16 +32,13 @@ api.use(requestEvents());
 
 api.get("/health", (_req, res) => res.json({ ok: true, build: process.env.BUILD ?? "dev" }));
 
-// DRAW BATTLE: password-gated rooms, forge job queue, generated fighters served as static files
-const DRAW_PASSWORD = process.env.DRAW_PASSWORD ?? "";
 const FORGE_TOKEN = process.env.FORGE_TOKEN ?? "";
-if (!DRAW_PASSWORD || !FORGE_TOKEN) console.warn("DRAW_PASSWORD / FORGE_TOKEN unset: draw battle is disabled");
-// sign-in, libraries, the forge queue, the creator, draw battles
+if (!FORGE_TOKEN) console.warn("FORGE_TOKEN unset: the forge and game bundle uploads are disabled");
+// sign-in, libraries, the forge queue, the creator
 initLibrary(DATA_DIR);
 attachAuth(api, { dataDir: DATA_DIR, devLogin: process.env.DEV_LOGIN === "1" });
 attachForge(api, { token: FORGE_TOKEN, dataDir: DATA_DIR, genBase: `${BASE}/gen` });
 attachCharacters(api, FORGE_TOKEN, DATA_DIR);
-attachDraw(api, { password: DRAW_PASSWORD, dataDir: DATA_DIR });
 // game bundles: whole builds of the game, one folder per hash; rooms switch between them live
 attachGames(api, { token: FORGE_TOKEN, dataDir: DATA_DIR });
 const gamesDir = path.join(DATA_DIR, "games");

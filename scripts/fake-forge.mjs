@@ -1,4 +1,4 @@
-// A stand-in forge for local DRAW BATTLE testing: claims every job and completes it with the
+// A stand-in forge for local testing: claims every job and completes it with the
 // LAMPJACK exemplar after a few seconds and a couple of progress posts.
 //   node scripts/fake-forge.mjs [server=http://localhost:3010] [token=devtoken]
 // The 3x3 sheet is composed from the exemplar's cells with a tiny PNG codec (no image deps).

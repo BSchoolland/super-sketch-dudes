@@ -1,5 +1,5 @@
-import { onPointer, type PointerStroke } from "../../input/pointer";
-import { PAPER, INK } from "../../render/paper";
+import { onPointer, type PointerStroke } from "../input/pointer";
+import { PAPER, INK } from "../render/paper";
 
 export const PAD_PX = 768;
 /** Pen colours, black first. Lines are solid: the sheet model reads clean ink best. */

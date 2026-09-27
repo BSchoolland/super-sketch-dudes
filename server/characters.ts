@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type express from "express";
-import { DRAW_PNG_MAX_BYTES } from "../shared/draw";
+import { DRAW_PNG_MAX_BYTES } from "../shared/account";
 import { playerOf } from "./auth";
 import type { WideEvent } from "../shared/wide";
 import { drawingUrlOf, enqueueJob, entryOf, jobOf, newFighterId, storeCharacter } from "./forge";

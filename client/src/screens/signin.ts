@@ -5,9 +5,9 @@ import { consumeTaps } from "../input/pointer";
 import { sfx } from "../audio/audio";
 import { discordSignInUrl, emailSignIn, emailSignUp } from "../account";
 import { bg, card, label, type Screen, INK } from "./ui";
-import { RED } from "./draw/character";
-import { ButtonMenu, type Button } from "./draw/buttons";
-import { TextField } from "./draw/textfield";
+import { RED } from "./character";
+import { ButtonMenu, type Button } from "./buttons";
+import { TextField } from "./textfield";
 import { drawLogo } from "./title";
 
 const DOOR: Button[] = [

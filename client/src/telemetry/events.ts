@@ -4,7 +4,7 @@ import { account } from "../account";
 
 /**
  * The page's wide events: the session (mount to page hide or bundle swap) and whatever is open
- * inside it (a match, a draw room). Open events are sent every 10 s while they change and with
+ * inside it (a match). Open events are sent every 10 s while they change and with
  * sendBeacon when the page hides, so a crash or a closed tab still leaves a partial record.
  * Uncaught errors and console.error land on every open event.
  */

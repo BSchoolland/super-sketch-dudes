@@ -1,6 +1,6 @@
-import { DRAW_PNG_MAX_BYTES } from "../../../../shared/draw";
-import { card, label, title, INK } from "../ui";
-import { PENCIL } from "../../render/paper";
+import { DRAW_PNG_MAX_BYTES } from "../../../shared/account";
+import { card, label, title, INK } from "./ui";
+import { PENCIL } from "../render/paper";
 import type { Button } from "./buttons";
 import { DrawPad, COLORS, SIZES } from "./pad";
 

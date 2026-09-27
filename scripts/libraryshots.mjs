@@ -2,7 +2,7 @@
 // sign-in, NEW CHARACTER (draw, DONE, forged), MY CHARACTERS, BATTLE vs CPU, LOCAL 2P, and ONLINE
 // with two signed-in players on library fighters. Screenshots into shots/library/.
 //   node scripts/libraryshots.mjs [base=http://localhost:5178/sketch-battle/] [out=shots/library]
-// Server: PORT=3012 DEV_LOGIN=1 DRAW_PASSWORD=sketch FORGE_TOKEN=devtoken npx tsx server/index.ts
+// Server: PORT=3012 DEV_LOGIN=1 FORGE_TOKEN=devtoken npx tsx server/index.ts
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 import { down as btnDown, up as btnUp, press as btnPress } from "./lib/keys.mjs";

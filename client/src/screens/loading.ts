@@ -4,8 +4,8 @@ import type { MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
 import { fighterLoad } from "../gen";
 import { bg, label, title, type Screen } from "./ui";
-import { ButtonMenu, type Button } from "./draw/buttons";
-import { RED } from "./draw/character";
+import { ButtonMenu, type Button } from "./buttons";
+import { RED } from "./character";
 
 const BACK: Button = { id: "back", x: VIEW_W / 2 - 170, y: VIEW_H / 2 + 120, w: 340, h: 96, text: "BACK", size: 40 };
 

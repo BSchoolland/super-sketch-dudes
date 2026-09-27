@@ -1,7 +1,7 @@
-import type { MenuInput } from "../../input/devices";
-import type { ViewPoint } from "../../input/pointer";
-import { sfx } from "../../audio/audio";
-import { card, label, title, INK } from "../ui";
+import type { MenuInput } from "../input/devices";
+import type { ViewPoint } from "../input/pointer";
+import { sfx } from "../audio/audio";
+import { card, label, title, INK } from "./ui";
 
 export interface Button {
   id: string;

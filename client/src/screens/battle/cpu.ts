@@ -4,7 +4,7 @@ import { consumeTaps } from "../../input/pointer";
 import { sfx } from "../../audio/audio";
 import { allChoices, type FighterChoice } from "../../fighters";
 import { bg, title, type Screen, settings, saveSettings, INK } from "../ui";
-import { ButtonMenu, type Button } from "../draw/buttons";
+import { ButtonMenu, type Button } from "../buttons";
 import { FighterGrid } from "./grid";
 import { CPU_TIERS, tierName } from "../../../../shared/cpu-skill";
 
