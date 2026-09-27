@@ -347,6 +347,8 @@ export interface Fighter {
   grabTimer: number;
   mash: number;
   respawnTimer: number;
+  /** Frame this fighter last spawned a projectile (-999: never). */
+  lastShot: number;
   charge: number;
   chargeMax: number;
   wallJumped: boolean;

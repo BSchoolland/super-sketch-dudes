@@ -321,6 +321,7 @@ export function spawnProjectile(state: State, owner: Fighter, kind: string, x: n
   // a projectile's hits carry its kind as the fx so the renderer can use the same look for the impact
   const p: Projectile = { id: state.nextProjectile++, owner: owner.slot, from: owner.slot, kind, x, y, vx, vy, life, age: 0, hb: hb.fx === undefined ? { ...hb, fx: kind } : hb, hitLog: {}, facing: owner.moveFacing, data, reflected: 0, dead: false };
   state.projectiles.push(p);
+  owner.lastShot = state.frame;
   // decoration (a hitbox that is never active, like a slime patch) launches silently
   if (hb.frames[0] <= life) state.events.push({ t: "projectile", frame: state.frame, slot: owner.slot, kind, x, y });
   return p;

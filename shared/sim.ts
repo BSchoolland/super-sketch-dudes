@@ -38,7 +38,7 @@ export function createFighter(slot: number, id: FighterId, stage: Stage, rules: 
     invuln: 0, ledge: -1, ledgeCooldown: 0, ledgeTime: 0,
     hitLog: {}, hitsThisMove: 0,
     grabbing: -1, grabbedBy: -1, grabTimer: 0, mash: 0,
-    respawnTimer: 0, charge: 0, chargeMax: C.SMASH_CHARGE_MAX,
+    respawnTimer: 0, lastShot: -999, charge: 0, chargeMax: C.SMASH_CHARGE_MAX,
     wallJumped: false, techWindow: 0, lastHitBy: -1, lastHitFrame: -1000,
     special: def.special(), cpu, kos: 0, falls: 0, dealt: 0,
     idleFrames: 0, lastDamage: 0, tauntCooldown: 0, landed: false,
