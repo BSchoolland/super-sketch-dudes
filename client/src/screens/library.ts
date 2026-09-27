@@ -1,16 +1,16 @@
 import { VIEW_H, VIEW_W } from "../render/camera";
 import { PENCIL } from "../render/paper";
-import type { MenuInput } from "../input/devices";
+import type { DeviceId, MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
 import { sfx } from "../audio/audio";
 import { library } from "../account";
-import { libraryChoices, myLibrary, refreshLibrary } from "../fighters";
+import { libraryChoices, myLibrary, practiceDummy, refreshDummy, refreshLibrary } from "../fighters";
 import type { LibraryEntry } from "../../../shared/account";
-import { bg, label, title, type Screen, INK } from "./ui";
+import { bg, hover, label, title, type Screen } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
 import { drawCharacterArt, drawCharacterCell, RED } from "./character";
 import { wrapped } from "./text";
-import { drawCharacterDetail } from "./charcard";
+import { CharacterDetail, moveRows, type MoveRow } from "./charcard";
 import { DrawPad } from "./pad";
 import { PAD } from "./create";
 import type { Nav } from "./nav";
@@ -24,6 +24,8 @@ export class LibraryScreen implements Screen {
   private menu = new ButtonMenu();
   private detailMenu = new ButtonMenu();
   private selected: LibraryEntry | null = null;
+  private detail: CharacterDetail | null = null;
+  private device: DeviceId = "kb1";
   private scroll = 0;
   private deleteArmed = -1;
   private problem = "";
@@ -33,6 +35,7 @@ export class LibraryScreen implements Screen {
 
   enter(): void {
     void refreshLibrary();
+    void refreshDummy();
   }
 
   private get entries(): LibraryEntry[] {
@@ -58,13 +61,19 @@ export class LibraryScreen implements Screen {
     const y = VIEW_H - 150, w = 320, gap = 24;
     const armed = this.deleteArmed >= 0 && this.t - this.deleteArmed < 3;
     const b: Button[] = [];
-    if (e.status === "ready") b.push({ id: "fight", x: 0, y, w, h: 110, text: "FIGHT", size: 48 });
+    if (e.status === "ready") b.push({ id: "practice", x: 0, y, w, h: 110, text: "PRACTICE", size: 44, disabled: !practiceDummy.choice });
     b.push({ id: "copy", x: 0, y, w, h: 110, text: "COPY DRAWING", size: 34 });
     if (!e.starter) b.push({ id: "delete", x: 0, y, w, h: 110, text: armed ? "SURE?" : "DELETE", size: 44 });
     b.push({ id: "back", x: 0, y, w, h: 110, text: "BACK", size: 44 });
     const x0 = (VIEW_W - (b.length * w + (b.length - 1) * gap)) / 2;
     b.forEach((btn, i) => { btn.x = x0 + i * (w + gap); });
+    // the moves come after the row, so focus starts on it and the preview starts out standing still
+    for (const r of this.rows(e)) b.push({ id: `m${r.i}`, x: r.x, y: r.y, w: r.w, h: r.h, text: "", custom: true });
     return b;
+  }
+
+  private rows(e: LibraryEntry): MoveRow[] {
+    return this.detail?.entry === e ? moveRows(e, this.detail.movesTop) : [];
   }
 
   /** Opens the creator with this character's drawing already on the pad. */
@@ -81,6 +90,7 @@ export class LibraryScreen implements Screen {
 
   update(dt: number, m: MenuInput): Screen | null {
     this.t += dt;
+    if (m.from) this.device = m.from;
     if (this.next) { const n = this.next; this.next = null; this.selected = null; return n; }
     const taps = consumeTaps();
     if (this.selected) return this.updateDetail(this.selected, m, taps);
@@ -96,6 +106,7 @@ export class LibraryScreen implements Screen {
       const e = this.entries[Number(pressed.slice(1))];
       if (e.status === "queued" || e.status === "generating") return this.nav.forge(e, null);
       this.selected = e;
+      this.detail = e.status === "ready" ? new CharacterDetail(e) : null;
       this.deleteArmed = -1;
       this.detailMenu.focus = 0;
     }
@@ -104,7 +115,7 @@ export class LibraryScreen implements Screen {
 
   private updateDetail(e: LibraryEntry, m: MenuInput, taps: ReturnType<typeof consumeTaps>): Screen | null {
     const pressed = this.detailMenu.update(this.detailButtons(e), m, taps);
-    if (pressed === "fight") return this.nav.battle(libraryChoices([e])[0]);
+    if (pressed === "practice") return this.nav.practice(libraryChoices([e])[0], this.device);
     if (pressed === "copy") { sfx.menuConfirm(); this.copyDrawing(e); }
     if (pressed === "delete") {
       if (this.deleteArmed >= 0 && this.t - this.deleteArmed < 3) this.remove(e);
@@ -134,9 +145,9 @@ export class LibraryScreen implements Screen {
     );
   }
 
-  draw(ctx: CanvasRenderingContext2D): void {
+  draw(ctx: CanvasRenderingContext2D, dt: number): void {
     bg(ctx, this.t);
-    if (this.selected) this.drawDetail(ctx, this.selected);
+    if (this.selected) this.drawDetail(ctx, this.selected, dt);
     else this.drawGrid(ctx);
     const error = this.problem || myLibrary.error;
     if (error) label(ctx, error, VIEW_W / 2, VIEW_H - 170, 24, RED);
@@ -156,9 +167,13 @@ export class LibraryScreen implements Screen {
     this.menu.draw(ctx, buttons);
   }
 
-  private drawDetail(ctx: CanvasRenderingContext2D, e: LibraryEntry): void {
-    if (e.status === "ready") drawCharacterDetail(ctx, e, 160, 110, 640, 820, this.t);
-    else {
+  private drawDetail(ctx: CanvasRenderingContext2D, e: LibraryEntry, dt: number): void {
+    if (this.detail) {
+      const rows = this.rows(e);
+      const focused = this.detailMenu.focused(this.detailButtons(e));
+      const active = rows.find((r) => hover(r.x, r.y, r.w, r.h)) ?? rows.find((r) => focused?.id === `m${r.i}`) ?? null;
+      this.detail.draw(ctx, rows, active, dt);
+    } else {
       drawCharacterArt(ctx, e, 160, 110, 640, this.t);
       title(ctx, "FAILED", 870, 200, 96, RED, "left");
       wrapped(ctx, e.error ?? "couldn't be made", 870, 280, 860, 32, RED, 8, "left");

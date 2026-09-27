@@ -41,7 +41,11 @@ export class VersusScreen implements Screen {
     const names = sources.map((s, i) => (s.cpu ? "CPU" : `P${i + 1}`));
     this.renderer = new Renderer(this.match.state, names);
     this.renderer.showHitboxes = training;
-    if (training) { this.match.state.fighters.forEach((f) => (f.stocks = 99)); if (this.match.sources[1]) { this.match.sources[1].cpu = 0; this.match.state.fighters[1].cpu = 0; this.renderer.names[1] = "DUMMY"; } }
+    if (training) {
+      this.match.state.fighters.forEach((f) => (f.stocks = 99));
+      if (this.match.sources[1]) { this.match.sources[1].cpu = 0; this.match.state.fighters[1].cpu = 0; this.renderer.names[1] = "DUMMY"; }
+      this.resetTraining();
+    }
   }
   update(dt: number, m: MenuInput): Screen | null {
     let st = this.match.state;
@@ -113,7 +117,7 @@ export class VersusScreen implements Screen {
   }
   resetTraining(): void {
     const st = this.match.state;
-    st.fighters.forEach((f, i) => { f.percent = 0; f.x = i === 0 ? -200 : 200; f.y = 0; f.vx = 0; f.vy = 0; f.action = "idle"; f.frame = 0; f.grounded = true; f.platform = 0; f.hitlag = 0; f.pending = null; f.hitstun = 0; f.move = null; f.ledge = -1; f.grabbing = -1; f.grabbedBy = -1; f.facing = i === 0 ? 1 : -1; });
+    st.fighters.forEach((f, i) => { f.percent = 0; f.x = i === 0 ? -250 : 0; f.y = 0; f.vx = 0; f.vy = 0; f.action = "idle"; f.frame = 0; f.grounded = true; f.platform = 0; f.hitlag = 0; f.pending = null; f.hitstun = 0; f.move = null; f.ledge = -1; f.grabbing = -1; f.grabbedBy = -1; f.facing = i === 0 ? 1 : -1; });
     st.projectiles = [];
   }
   private drawTrainingOverlay(ctx: CanvasRenderingContext2D): void {
@@ -157,8 +161,8 @@ export class VersusScreen implements Screen {
       ctx.scale(s, s);
       title(ctx, text, 0, 40, 140, INK);
       ctx.restore();
-      if (this.training) label(ctx, "TRAINING: taunt+shield resets · taunt+up/down sets dummy % · taunt+special toggles dummy CPU · F2 hitboxes", VIEW_W / 2, VIEW_H / 2 + 80, 22, INK);
-    } else if (this.training) {
+      if (this.training) label(ctx, "PRACTICE: taunt+shield resets · taunt+up/down sets dummy % · taunt+special toggles dummy CPU · F2 hitboxes + frame data", VIEW_W / 2, VIEW_H / 2 + 80, 22, INK);
+    } else if (this.training && this.renderer.showHitboxes) {
       this.drawTrainingOverlay(ctx);
     }
     if (this.suddenT > 0 && !st.ended) drawBanner(ctx, "SUDDEN DEATH", "300% · one stock · first hit wins", "#ff3b3b", Math.min(1, (2.5 - this.suddenT) * 2 + 0.2));

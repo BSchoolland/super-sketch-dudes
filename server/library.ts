@@ -8,6 +8,9 @@ const cache = new Map<string, { player: Player | null; characters: LibraryEntry[
 /** Fighter ids every player sees in their library (reference fighters), kept in <dataDir>/starters.json. */
 let starters: string[] = [];
 let startersFile = "";
+/** The fighter PRACTICE and the move previews put in front of you, kept in <dataDir>/dummy.json. */
+let dummy: string | null = null;
+let dummyFile = "";
 
 function fileOf(owner: string): string {
   return path.join(dir, `${owner.replace(/[^\w-]/g, "_")}.json`);
@@ -30,6 +33,19 @@ export function initLibrary(dataDir: string): void {
   fs.mkdirSync(dir, { recursive: true });
   startersFile = path.join(dataDir, "starters.json");
   starters = fs.existsSync(startersFile) ? JSON.parse(fs.readFileSync(startersFile, "utf8")) : [];
+  dummyFile = path.join(dataDir, "dummy.json");
+  dummy = fs.existsSync(dummyFile) ? JSON.parse(fs.readFileSync(dummyFile, "utf8")) : null;
+}
+
+export function setDummy(id: string): void {
+  if (!findCharacter(id)) throw new Error(`no such character: ${id}`);
+  dummy = id;
+  fs.writeFileSync(dummyFile, JSON.stringify(dummy));
+}
+/** The practice dummy, once it's set and forged. */
+export function dummyEntry(): LibraryEntry | null {
+  const e = dummy ? findCharacter(dummy) : null;
+  return e?.status === "ready" ? e : null;
 }
 
 export function starterIds(): string[] {

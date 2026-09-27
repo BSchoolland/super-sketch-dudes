@@ -5,12 +5,12 @@ import { sfx } from "../audio/audio";
 import { library } from "../account";
 import { libraryChoices, refreshLibrary } from "../fighters";
 import type { LibraryEntry } from "../../../shared/account";
-import { bg, label, type Screen } from "./ui";
+import { bg, hover, label, type Screen } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
 import { characterStatus, drawCharacterArt, RED } from "./character";
 import type { DrawPad } from "./pad";
 import { wrapped } from "./text";
-import { drawCharacterDetail } from "./charcard";
+import { CharacterDetail, moveRows } from "./charcard";
 import type { Nav } from "./nav";
 
 const POLL_S = 2;
@@ -19,6 +19,7 @@ const ART = 640;
 /** The forge at work on one character: its stage while it runs, the fighter once it's done. */
 export class ForgeScreen implements Screen {
   t = 0;
+  private detail: CharacterDetail | null = null;
   private menu = new ButtonMenu();
   private sincepoll = 0;
   private polling = false;
@@ -59,11 +60,14 @@ export class ForgeScreen implements Screen {
     return null;
   }
 
-  draw(ctx: CanvasRenderingContext2D): void {
+  draw(ctx: CanvasRenderingContext2D, dt: number): void {
     bg(ctx, this.t);
     const e = this.entry;
-    if (e.status === "ready") drawCharacterDetail(ctx, e, 160, 110, ART, 820, this.t);
-    else {
+    if (e.status === "ready") {
+      if (this.detail?.entry !== e) this.detail = new CharacterDetail(e);
+      const rows = moveRows(e, this.detail.movesTop);
+      this.detail.draw(ctx, rows, rows.find((r) => hover(r.x, r.y, r.w, r.h)) ?? null, dt);
+    } else {
       const x = (VIEW_W - ART) / 2, y = 70;
       drawCharacterArt(ctx, e, x, y, ART, this.t);
       const status = characterStatus(e, this.t);

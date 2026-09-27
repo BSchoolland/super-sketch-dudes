@@ -2,6 +2,7 @@ import type { LibraryEntry } from "../../../shared/account";
 import type { FighterChoice } from "../fighters";
 import type { DrawPad } from "./pad";
 import type { Screen } from "./ui";
+import type { DeviceId } from "../input/devices";
 
 export interface CharacterHint { name: string; description: string }
 
@@ -17,4 +18,6 @@ export interface Nav {
   library(): Screen;
   /** BATTLE: quick match, a lobby, or bots; `fighter` starts out picked there (a character's FIGHT button). */
   battle(fighter?: FighterChoice): Screen;
+  /** PRACTICE: Proving Ground against the practice dummy, which never fights back. */
+  practice(fighter: FighterChoice, device: DeviceId): Screen;
 }

@@ -10,10 +10,13 @@ export class Camera {
   shakeX = 0; shakeY = 0;
   /** World units are view pixels and nothing moves the camera (the title screen's brawl). */
   fixed = false;
+  /** Hold this spot and zoom whatever the fighters do (a move preview's close-up). */
+  pinned: { x: number; y: number; zoom: number } | null = null;
   private seed = 1;
 
   solve(state: State, stage: Stage, interp: { x: number; y: number }[]): void {
     if (this.fixed) { this.x = this.tx = VIEW_W / 2; this.y = this.ty = VIEW_H / 2; this.zoom = this.tz = 1; return; }
+    if (this.pinned) { this.x = this.tx = this.pinned.x; this.y = this.ty = this.pinned.y; this.zoom = this.tz = this.pinned.zoom; return; }
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, n = 0;
     state.fighters.forEach((f, i) => {
       if (f.action === "dead" || f.stocks <= 0) return;

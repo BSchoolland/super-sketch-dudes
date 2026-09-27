@@ -6,7 +6,7 @@ import { playerOf } from "./auth";
 import type { WideEvent } from "../shared/wide";
 import { drawingUrlOf, enqueueJob, entryOf, jobOf, newFighterId, storeCharacter } from "./forge";
 import { upsertCharacter } from "./library";
-import { everyCharacter, libraryOf, removeCharacter, setStarters, starterEntries, starterIds } from "./library";
+import { dummyEntry, everyCharacter, libraryOf, removeCharacter, setDummy, setStarters, starterEntries, starterIds } from "./library";
 
 /** The character creator and the library, over HTTP, for signed-in players. */
 export function attachCharacters(api: express.Router, forgeToken = "", dataDir = ""): void {
@@ -24,6 +24,14 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
     const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(String) : null;
     if (!ids) return res.status(400).json({ error: "ids required" });
     try { res.json({ ids: setStarters(ids) }); } catch (e) { res.status(404).json({ error: (e as Error).message }); }
+  });
+
+  // the practice dummy; the forge token picks which character it is
+  api.get("/dummy", (_req, res) => res.json({ character: dummyEntry() }));
+  api.post("/dummy", (req, res) => {
+    if (!forgeToken || req.get("x-forge-token") !== forgeToken) return res.status(401).json({ error: "bad token" });
+    if (typeof req.body?.id !== "string") return res.status(400).json({ error: "id required" });
+    try { setDummy(req.body.id); res.json({ character: dummyEntry() }); } catch (e) { res.status(404).json({ error: (e as Error).message }); }
   });
 
   api.delete("/library/:id", (req, res) => {

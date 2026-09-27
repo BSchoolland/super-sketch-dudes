@@ -50,6 +50,20 @@ export async function refreshLibrary(): Promise<void> {
   }
 }
 
+/** The fighter PRACTICE and the move previews stand you in front of; null until the server has one. */
+export const practiceDummy: { choice: FighterChoice | null; error: string } = { choice: null, error: "" };
+
+export async function refreshDummy(): Promise<void> {
+  try {
+    const { character } = await library.dummy();
+    practiceDummy.choice = character ? libraryChoices([character])[0] ?? null : null;
+    practiceDummy.error = "";
+  } catch (error) {
+    console.error("dummy fetch failed", error);
+    practiceDummy.error = error instanceof Error ? error.message : String(error);
+  }
+}
+
 export function forgetLibrary(): void {
   myLibrary.entries = null;
   myLibrary.error = "";
