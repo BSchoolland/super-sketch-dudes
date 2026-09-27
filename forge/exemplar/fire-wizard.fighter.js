@@ -52,6 +52,8 @@ export default function make(api) {
     spark: { shape: "star", color: YELLOW, ink: RED, texture: "glow", size: 40, spin: 20, aim: false },
     puff: { shape: "cloud", color: ORANGE, ink: RED, texture: "flame", size: 90, spin: 8, aim: false },
     jet: { shape: "bolt", color: ORANGE, ink: RED, texture: "flame", size: 90 },
+    // the flame jet's exhaust, pointing back along the jet
+    exhaust: { shape: "bolt", color: ORANGE, ink: RED, texture: "flame", size: 70, trail: "none" },
     ring: { shape: "ring", color: ORANGE, ink: RED, texture: "flame", size: 150, spin: 24, aim: false },
     meteor: { shape: "fireball", color: RED, ink: "#7a1a10", size: 100, heading: 270 },
     // the book: plain paper and ink, nothing like the fire
@@ -147,11 +149,10 @@ export default function make(api) {
     dspecial: mv("dspecial", 40, [], [
       key(0, { sy: 1.06, dy: -4 }), key(12, { sy: 0.84, sx: 1.12, dy: 6 }, true), key(22, { sy: 0.92 }), key(40, rest),
     ], { hook: "creeper", cells: [[0, "atk-up"], [12, "atk-down"]] }),
-    // FLAME JET: fire pours out beneath him and he rides it the way the stick points; at the end eight embers fly out
-    uspecial: mv("uspecial", 64, [
-      cap([8, 38], 0, 0, 0, 60, 26, 2, 80, 20, 10, { fx: "jet", rehit: 5 }),
-    ], [key(0, { sy: 0.84, sx: 1.12, dy: 4 }), key(8, { sy: 1.16, sx: 0.9 }, true), key(23, { sy: 1.1, rot: 4 }), key(38, { sy: 1.12, rot: -4 }), key(39, { sx: 1.16, sy: 1.1 }, true), key(50, { sy: 1.04 }), key(64, { rot: 0 })],
-      { hook: "jet", helpless: true, ledgeOk: true, cells: [[0, "atk-down"], [8, "jump"], [39, "atk-up"]] }),
+    // FLAME JET: fire pours out behind him and he rides it the way the stick points; at the end eight embers fly out
+    uspecial: mv("uspecial", 80, [],
+      [key(0, { sy: 0.84, sx: 1.12, dy: 4 }), key(8, { sy: 1.16, sx: 0.9 }, true), key(30, { sy: 1.1, rot: 4 }), key(53, { sy: 1.12, rot: -4 }), key(54, { sx: 1.16, sy: 1.1 }, true), key(66, { sy: 1.04 }), key(80, { rot: 0 })],
+      { hook: "jet", helpless: true, ledgeOk: true, cells: [[0, "atk-down"], [8, "jump"], [54, "atk-up"]] }),
     ledgeAttack: mv("ledgeAttack", 40, [cap([12, 15], 30, -40, 110, -36, 18, 9, 40, 38, 70, { fx: "lick" })], [key(0, { rot: -8 }), key(12, { rot: 12, sx: 1.1 }, true), key(40, rest)], { cell: "atk-fwd" }),
     getupAttack: mv("getupAttack", 44, [
       cap([12, 15], 10, -14, 100, -12, 18, 7, 45, 40, 60, { fx: "wave", group: 0 }),
@@ -246,17 +247,24 @@ export default function make(api) {
       // the jet points where the stick does (straight up when it's let go), turning toward it rather than snapping
       jet: ({ f, input, state }) => {
         if (f.frame === 8) { f.grounded = false; f.platform = -1; f.usedUpSpecial = true; f.special.jx = 0; f.special.jy = -1; }
-        if (f.frame < 8 || f.frame > 38) return;
+        if (f.frame < 8 || f.frame > 53) return;
         const len = Math.sqrt(input.x * input.x + input.y * input.y);
         if (len > 30) {
           const tx = f.special.jx + (input.x / len - f.special.jx) * 0.2, ty = f.special.jy + (input.y / len - f.special.jy) * 0.2;
           const n = Math.sqrt(tx * tx + ty * ty) || 1;
           f.special.jx = tx / n; f.special.jy = ty / n;
         }
-        const speed = 12.5 - (f.frame - 8) * 0.19;
+        const speed = 10.5 - (f.frame - 8) * 0.03;
         f.vx = f.special.jx * speed;
         f.vy = f.special.jy * speed;
-        if (f.frame === 38) for (let i = 0; i < 8; i++) {
+        // the exhaust, streaming out behind him along the jet: it's what burns (every 5 frames, like the old jet),
+        // with flames licking off it and a low rumble
+        const bx = f.x - f.special.jx * 40, by = f.y - 50 - f.special.jy * 40;
+        if (f.frame % 5 === 3) spawnProjectile(state, f, "exhaust", bx, by, -f.special.jx * 7, -f.special.jy * 7, 7,
+          { frames: [0, 999], x: 0, y: 0, r: 26, damage: 2, angle: 80, base: 20, growth: 10 });
+        fx(state, f, "flame", bx, by, 2, ORANGE, 1.4);
+        if (f.frame % 4 === 0) fx(state, f, "shake", f.x, f.y, 0, undefined, 0.3);
+        if (f.frame === 53) for (let i = 0; i < 8; i++) {
           const cx = api.cosDeg(i * 45), sy = api.sinDeg(i * 45);
           spawnProjectile(state, f, "ember", f.x + cx * 30, f.y - 60 - sy * 30, cx * 9, -sy * 9, 18,
             { frames: [0, 999], x: 0, y: 0, r: 14, damage: 4, angle: 45, base: 36, growth: 60, radial: true });

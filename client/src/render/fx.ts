@@ -138,6 +138,7 @@ export class Fx {
           if (e.kind === "sparks") this.spark(e.x, e.y, e.n, 260, c, 3, 0.3);
           else if (e.kind === "flame") this.flame(e.x, e.y, e.n, e.color ?? "#ff8a2a", e.size ?? 1);
           else if (e.kind === "smoke") this.dust(e.x, e.y, e.n, 0);
+          else if (e.kind === "shake") cam.holdTrauma(e.size ?? 0.3);
           else this.ring(e.x, e.y, 30 + e.n * 10, c, 0.3);
           break;
         }

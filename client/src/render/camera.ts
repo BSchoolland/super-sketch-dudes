@@ -67,6 +67,8 @@ export class Camera {
   }
 
   addTrauma(t: number): void { this.trauma = Math.min(1, this.trauma + t); }
+  /** At least this much shake right now; a steady stream of these holds it there. */
+  holdTrauma(t: number): void { this.trauma = Math.max(this.trauma, Math.min(1, t)); }
 
   apply(ctx: CanvasRenderingContext2D): void {
     ctx.translate(VIEW_W / 2, VIEW_H / 2);
