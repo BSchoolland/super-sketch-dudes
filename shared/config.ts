@@ -48,7 +48,7 @@ export const C = {
   TECH_ROLL: 26,
   /** Tumbling into the floor faster than this, still in hitstun and not teched, bounces back up at GROUND_BOUNCE of the speed. */
   GROUND_BOUNCE_SPEED: 11,
-  GROUND_BOUNCE: 0.6,
+  GROUND_BOUNCE: 1,
   /** How fast a spike's downward speed bleeds back to fall speed, per frame. */
   SPIKE_DECAY: 1,
   RESPAWN_FRAMES: 90,
