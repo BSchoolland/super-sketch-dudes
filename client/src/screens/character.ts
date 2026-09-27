@@ -54,15 +54,15 @@ export function drawCharacterArt(ctx: CanvasRenderingContext2D, ch: ArtSource | 
  * are drawn by ~45 s, the moves written by ~145 s, testing runs until ~260 s).
  */
 const FORGE_STEPS: { stage: RegExp; label: string; start: number }[] = [
-  { stage: /line/, label: "waiting for a free spot in the forge", start: 0 },
-  { stage: /reading the drawing/, label: "looking at your drawing", start: 0.005 },
-  { stage: /agent is making it/, label: "working out who they are", start: 0.01 },
-  { stage: /designing the moves/, label: "working out their moves", start: 0.17 },
-  { stage: /drawing the (sheet|animation)|designing the moveset/, label: "drawing their poses", start: 0.02 },
-  { stage: /cutting out/, label: "cutting out the poses", start: 0.1 },
-  { stage: /writing the fighter/, label: "putting the fighter together", start: 0.52 },
-  { stage: /balance testing/, label: "test fights, to keep it fair", start: 0.55 },
-  { stage: /final checks|upload/, label: "finishing touches", start: 0.93 },
+  { stage: /line/, label: "Waiting in line", start: 0 },
+  { stage: /reading the drawing/, label: "Looking at your drawing", start: 0.005 },
+  { stage: /agent is making it/, label: "Looking at your drawing", start: 0.01 },
+  { stage: /designing the moves/, label: "Adding moves", start: 0.17 },
+  { stage: /drawing the (sheet|animation)|designing the moveset/, label: "Animating your character", start: 0.02 },
+  { stage: /cutting out/, label: "Animating your character", start: 0.1 },
+  { stage: /writing the fighter/, label: "Finalizing attacks", start: 0.52 },
+  { stage: /balance testing/, label: "Testing character", start: 0.55 },
+  { stage: /final checks|upload/, label: "Finishing touches", start: 0.93 },
 ];
 
 /** Where a forge stage sits: its words, and the progress-bar span it covers. */
