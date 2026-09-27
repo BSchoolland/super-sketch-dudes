@@ -66,7 +66,7 @@ const FORGE_STEPS: { stage: RegExp; label: string; start: number }[] = [
 ];
 
 /** A typical forge from claim to done, in seconds: progress and ETAs pace each step against it. */
-export const FORGE_S = 280;
+export const FORGE_S = 420;
 
 /** When each forging character moved onto the step it's on, as this page saw it. */
 const stepSince = new Map<string, { stage: string; at: number }>();
