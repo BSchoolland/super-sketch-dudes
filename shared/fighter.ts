@@ -660,7 +660,9 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
       break;
     }
     case "tumble": {
-      applyGravity(f, def, input, false);
+      // a downward launch outruns the fall-speed cap and slows to it instead of being clipped
+      if (f.vy > def.stats.fallSpeed) f.vy = Math.max(def.stats.fallSpeed, f.vy + def.stats.gravity - C.SPIKE_DECAY);
+      else applyGravity(f, def, input, false);
       f.vx = approach(f.vx, 0, C.LAUNCH_DECAY);
       if (f.frame >= f.hitstun) {
         // out of hitstun: can act, still tumbling until then

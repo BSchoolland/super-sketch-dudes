@@ -1,6 +1,7 @@
 import { C } from "./config";
 import { cosDeg, sinDeg } from "./fixed";
 import { defOf, grabLedge, hitWall, land, setAction } from "./fighter";
+import { fx } from "./fx";
 import type { InputFrame } from "./input";
 import { STICK_RUN } from "./input";
 import type { Fighter, Platform, Stage, State } from "./types";
@@ -99,6 +100,13 @@ export function stepPhysics(state: State, f: Fighter, input: InputFrame, stage: 
       f.y = bestY;
       f.x = Math.max(platTop(state, stage, best).x1, Math.min(platTop(state, stage, best).x2, f.x));
       if (f.action === "hitstun" && f.pending === null && f.hitstun > 0 && f.vy > 3) { f.vy = 0; }
+      if (f.action === "tumble" && f.frame < f.hitstun && f.techWindow === 0 && f.vy > C.GROUND_BOUNCE_SPEED) {
+        state.events.push({ t: "land", frame: state.frame, slot: f.slot, x: f.x, y: f.y, hard: true });
+        fx(state, f, "shake", f.x, f.y, 0, undefined, Math.min(1, f.vy / 30));
+        f.vy = -f.vy * C.GROUND_BOUNCE;
+        f.vx *= 0.8;
+        return;
+      }
       land(state, f, best);
       return;
     }
