@@ -7,14 +7,17 @@ import { libraryChoices, refreshLibrary } from "../fighters";
 import type { LibraryEntry } from "../../../shared/account";
 import { bg, hover, label, type Screen } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
-import { characterStatus, drawCharacterArt, RED } from "./character";
+import { characterStatus, drawCharacterArt, forgeStep, RED } from "./character";
+import { INK, PENCIL, inkRect } from "../render/paper";
 import type { DrawPad } from "./pad";
 import { wrapped } from "./text";
 import { CharacterDetail, moveRows } from "./charcard";
 import type { Nav } from "./nav";
 
 const POLL_S = 2;
-const ART = 640;
+const ART = 560;
+/** A typical forge from claim to done, in seconds: the bar paces each step against it. */
+const FORGE_S = 280;
 
 /** The forge at work on one character: its stage while it runs, the fighter once it's done. */
 export class ForgeScreen implements Screen {
@@ -24,6 +27,10 @@ export class ForgeScreen implements Screen {
   private sincepoll = 0;
   private polling = false;
   private pollError = "";
+  /** The bar: where it's drawn up to, and when the forge moved onto the step it's on. */
+  private shown = 0;
+  private stage = "";
+  private stageAt = 0;
 
   constructor(private nav: Nav, private entry: LibraryEntry, private pad: DrawPad | null) {}
 
@@ -70,11 +77,34 @@ export class ForgeScreen implements Screen {
     } else {
       const x = (VIEW_W - ART) / 2, y = 70;
       drawCharacterArt(ctx, e, x, y, ART, this.t);
-      const status = characterStatus(e, this.t);
-      if (status) wrapped(ctx, status.text, VIEW_W / 2, y + ART + 60, 1200, 38, status.color, 2);
+      if (e.status === "failed") {
+        const status = characterStatus(e, this.t);
+        if (status) wrapped(ctx, status.text, VIEW_W / 2, y + ART + 60, 1200, 38, status.color, 2);
+      } else this.drawProgress(ctx, e, y + ART + 50, dt);
     }
     if (this.pollError) label(ctx, this.pollError, VIEW_W / 2, VIEW_H - 190, 24, RED);
     this.menu.draw(ctx, this.buttons());
+  }
+
+  /**
+   * How far along the forge is: each step starts where it typically does and creeps toward the next
+   * step's start, slowing as it goes, so a long step never looks finished. The bar never goes back.
+   */
+  private drawProgress(ctx: CanvasRenderingContext2D, e: LibraryEntry, y: number, dt: number): void {
+    const stage = e.stage || (e.status === "queued" ? "waiting in line" : "reading the drawing");
+    if (stage !== this.stage) { this.stage = stage; this.stageAt = this.t; }
+    const step = forgeStep(stage);
+    const span = step.end - step.start;
+    const target = step.start + span * (1 - Math.exp(-(this.t - this.stageAt) / Math.max(4, span * FORGE_S * 0.7)));
+    this.shown = Math.max(this.shown, this.shown + (target - this.shown) * Math.min(1, dt * 3));
+    const w = 760, h = 34, x = (VIEW_W - w) / 2;
+    ctx.save();
+    ctx.fillStyle = "rgba(119,114,103,0.12)"; ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = INK; ctx.fillRect(x, y, w * this.shown, h);
+    ctx.restore();
+    inkRect(ctx, x, y, w, h, INK, 2);
+    const dots = ".".repeat(1 + (Math.floor(this.t * 2) % 3));
+    label(ctx, `${step.label}${dots}`, VIEW_W / 2, y + h + 50, 34, e.status === "queued" ? PENCIL : INK);
   }
 
   private poll(): void {

@@ -47,13 +47,37 @@ export function drawCharacterArt(ctx: CanvasRenderingContext2D, ch: ArtSource | 
   }
 }
 
+/**
+ * The forge's steps as the player sees them: what's happening in plain words, and where on the
+ * progress bar the step starts. Starts are the median share of the whole forge each step begins
+ * at, from the server's job timelines (a forge takes about five minutes).
+ */
+const FORGE_STEPS: { stage: RegExp; label: string; start: number }[] = [
+  { stage: /line/, label: "waiting for a free spot in the forge", start: 0 },
+  { stage: /reading the drawing/, label: "looking at your drawing", start: 0.01 },
+  { stage: /agent is making it/, label: "working out who they are", start: 0.02 },
+  { stage: /designing|drawing the (sheet|animation)/, label: "drawing their poses", start: 0.03 },
+  { stage: /cutting out/, label: "cutting out the poses", start: 0.25 },
+  { stage: /writing the fighter/, label: "teaching them to fight", start: 0.57 },
+  { stage: /balance testing/, label: "test fights, to keep it fair", start: 0.6 },
+  { stage: /final checks|upload/, label: "finishing touches", start: 0.95 },
+];
+
+/** Where a forge stage sits: its words, and the progress-bar span it covers. */
+export function forgeStep(stage: string): { label: string; start: number; end: number } {
+  const i = FORGE_STEPS.findIndex((s) => s.stage.test(stage));
+  if (i < 0) return { label: stage, start: 0, end: 0.05 };
+  const next = FORGE_STEPS.slice(i + 1).find((s) => s.start > FORGE_STEPS[i].start);
+  return { label: FORGE_STEPS[i].label, start: FORGE_STEPS[i].start, end: next?.start ?? 1 };
+}
+
 /** What the forge is doing with it, in words; null once it's a fighter. */
 export function characterStatus(ch: Pick<LibraryEntry, "status" | "stage" | "error">, t: number): { text: string; color: string } | null {
   const dots = ".".repeat(1 + (Math.floor(t * 2) % 3));
   if (ch.status === "ready") return null;
   if (ch.status === "failed") return { text: ch.error ?? "couldn't be made", color: RED };
-  if (ch.status === "queued") return { text: `${ch.stage || "waiting in line"}${dots}`, color: PENCIL };
-  return { text: `${ch.stage || "forging"}${dots}`, color: INK };
+  if (ch.status === "queued") return { text: `${forgeStep(ch.stage || "waiting in line").label}${dots}`, color: PENCIL };
+  return { text: `${forgeStep(ch.stage || "reading the drawing").label}${dots}`, color: INK };
 }
 
 /** One character as MY CHARACTERS shows it: the art, its name (or what the forge is doing) under it, a box when focused. */
