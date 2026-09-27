@@ -2,7 +2,9 @@ import { viewRectToCss } from "../../input/pointer";
 import { FONT, INK } from "../ui";
 
 export interface TextFieldOptions {
-  type?: "text" | "password";
+  type?: "text" | "password" | "email";
+  /** What password managers should fill; defaults to off (current-password for passwords). */
+  autocomplete?: AutoFill;
   maxLength: number;
   value?: string;
   upper?: boolean;
@@ -30,7 +32,7 @@ export class TextField {
     else { el.rows = 4; el.style.resize = "none"; el.style.lineHeight = "1.25"; }
     el.maxLength = opts.maxLength;
     el.value = opts.value ?? "";
-    el.autocomplete = opts.type === "password" ? "current-password" : "off";
+    el.autocomplete = opts.autocomplete ?? (opts.type === "password" ? "current-password" : "off");
     el.spellcheck = false;
     el.autocapitalize = opts.upper ? "characters" : "off";
     Object.assign(el.style, {

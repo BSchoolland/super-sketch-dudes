@@ -32,8 +32,8 @@ export function localMatch(players: LocalPlayer[], setup: MatchSetup, exit: () =
   return new LoadingScreen(players.map((p) => p.fighter.bundleUrl), make, exit);
 }
 
-export function signInScreen(error = ""): Screen {
-  return new SignInScreen(error);
+export function signInScreen(nav: Nav, error = ""): Screen {
+  return new SignInScreen(() => nav.title(), error);
 }
 
 /** Every menu path of the signed-in game, from the title down. */
@@ -45,7 +45,7 @@ export function menus(): Nav {
       if (mode === "library") return nav.library();
       if (mode === "quick") return nav.battle("online");
       if (mode === "couch") return nav.battle("couch");
-      return new SettingsScreen(() => nav.title(), () => { signOut(); forgetLibrary(); return signInScreen(); });
+      return new SettingsScreen(() => nav.title(), () => { signOut(); forgetLibrary(); return signInScreen(nav); });
     }),
     create: (pad, hint) => new CreateScreen(nav, pad, hint),
     describe: (pad, hint) => new DescribeScreen(nav, pad, hint),

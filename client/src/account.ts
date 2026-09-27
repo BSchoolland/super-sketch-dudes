@@ -5,7 +5,7 @@ import { sessionTrace } from "./telemetry/events";
 /**
  * Who's signed in, remembered in localStorage. Sign-in is Discord's implicit OAuth grant: the
  * browser goes to Discord, comes back to /auth with an access token in the URL fragment, and
- * `finishSignIn` trades it for a session token with the server.
+ * `finishSignIn` trades it for a session token with the server. Or an email and password.
  */
 export const account: { session: string | null; player: Player | null } = { session: null, player: null };
 const KEY = "sketchbattle.account";
@@ -31,28 +31,33 @@ export function discordSignInUrl(): string {
   return `https://discord.com/oauth2/authorize?client_id=${DISCORD_APP_ID}&response_type=token&redirect_uri=${encodeURIComponent(redirect)}&scope=identify`;
 }
 
+/** Posts credentials to an /auth endpoint and keeps the session it hands back. Throws the server's reason on failure. */
+async function authenticate(path: string, body: object): Promise<void> {
+  const res = await fetch(`${site.base}api/auth/${path}`, { method: "POST", headers: { "content-type": "application/json", "x-trace-id": sessionTrace() }, body: JSON.stringify(body) });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text.startsWith("{") ? (JSON.parse(text) as { error: string }).error : `sign-in failed: HTTP ${res.status}`);
+  }
+  const { session, player } = (await res.json()) as { session: string; player: Player };
+  account.session = session; account.player = player;
+  save();
+}
+
 /** Back from Discord: the access token is in the URL fragment. Resolves true when a session was made. */
 export async function finishSignIn(): Promise<boolean> {
   const hash = new URLSearchParams(location.hash.replace(/^#/, ""));
   const accessToken = hash.get("access_token");
   if (!accessToken) return false;
   history.replaceState(null, "", `${site.base}${location.search}`);
-  const res = await fetch(`${site.base}api/auth/discord`, { method: "POST", headers: { "content-type": "application/json", "x-trace-id": sessionTrace() }, body: JSON.stringify({ accessToken }) });
-  if (!res.ok) throw new Error(`sign-in failed: HTTP ${res.status}`);
-  const { session, player } = (await res.json()) as { session: string; player: Player };
-  account.session = session; account.player = player;
-  save();
+  await authenticate("discord", { accessToken });
   return true;
 }
 
+export const emailSignIn = (email: string, password: string): Promise<void> => authenticate("login", { email, password });
+export const emailSignUp = (email: string, password: string, name: string): Promise<void> => authenticate("signup", { email, password, name });
+
 /** Local testing only: the server accepts a name when it runs with DEV_LOGIN=1. */
-export async function devSignIn(name: string): Promise<void> {
-  const res = await fetch(`${site.base}api/auth/dev`, { method: "POST", headers: { "content-type": "application/json", "x-trace-id": sessionTrace() }, body: JSON.stringify({ name }) });
-  if (!res.ok) throw new Error(`dev sign-in failed: HTTP ${res.status}`);
-  const { session, player } = (await res.json()) as { session: string; player: Player };
-  account.session = session; account.player = player;
-  save();
-}
+export const devSignIn = (name: string): Promise<void> => authenticate("dev", { name });
 
 export function signOut(): void {
   if (account.session) void fetch(`${site.base}api/auth/logout`, { method: "POST", headers: { [SESSION_HEADER]: account.session, "x-trace-id": sessionTrace() } }).catch((error: unknown) => console.error("sign-out request failed", error));

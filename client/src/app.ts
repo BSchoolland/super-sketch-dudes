@@ -79,7 +79,7 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     try { await finishSignIn(); } catch (error) { console.error(error); signInError = error instanceof Error ? error.message : String(error); }
   }
   if (!signedIn() && params.get("dev")) await devSignIn(params.get("dev")!);
-  const home = (): Screen => (signedIn() ? nav.title() : signInScreen(signInError));
+  const home = (): Screen => (signedIn() ? nav.title() : signInScreen(nav, signInError));
 
   // ?gen=<bundle url>[,<bundle url>] loads drawn fighters before the quick start / sheet below.
   for (const u of (params.get("gen") ?? "").split(",").filter(Boolean)) await loadGeneratedFighter(u);
@@ -117,7 +117,7 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     if (!signedIn() && !(current instanceof SignInScreen || current instanceof VersusScreen || current instanceof SheetScreen)) {
       current.abandon?.();
       forgetLibrary();
-      next = signInScreen();
+      next = signInScreen(nav);
     }
     if (next) { screen = next; screen.enter?.(); noteScreen(screen.constructor.name); }
     music.follow(screen instanceof VersusScreen ? screen : null);

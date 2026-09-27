@@ -1,10 +1,10 @@
 import type { CharStatus } from "./draw";
 
-/** A signed-in player: their Discord identity. The id is the account. */
+/** A signed-in player: a Discord identity or an email account. The id is the account. */
 export interface Player {
   id: string;
   name: string;
-  /** Avatar image URL, if Discord has one. */
+  /** Avatar image URL, if Discord has one; email accounts never do. */
   avatar: string | null;
 }
 
