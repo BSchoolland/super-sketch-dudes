@@ -20,7 +20,7 @@ export function drawSlotCard(ctx: CanvasRenderingContext2D, i: number, who: stri
   card(ctx, x, y, w, SETUP.slotH, SLOT_COLORS[i], !!opts.focused || !!opts.ready);
   label(ctx, who, x + w / 2, y + 42, 24, SLOT_COLORS[i], "center", 900);
   if (!fighter) return x;
-  if (fighter.def) drawFighterPortrait(ctx, fighter.def, `slot${i}`, { x: x + 16, y: y + 64, w: w - 32, h: 240 }, { ready: opts.ready, cheerOnArrival: true });
+  if (fighter.def) drawFighterPortrait(ctx, fighter.def, `slot${i}`, { x: x + 16, y: y + 64, w: w - 32, h: 240 }, { ready: opts.ready, cheerOnArrival: true, fidget: true });
   else label(ctx, fighter.pending ?? "…", x + w / 2, y + 190, 28, fighter.pending === "didn't load" ? "#c0392b" : PENCIL);
   title(ctx, fighter.name, x + w / 2, y + 348, 38, INK, "center", w - 32);
   return x;

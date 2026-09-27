@@ -14,6 +14,8 @@ export interface PortraitMood {
   ready?: boolean;
   /** Cheer the first time it's drawn here, e.g. a slot card that just got a new fighter. */
   cheerOnArrival?: boolean;
+  /** Hop, step or crouch now and then: only fighters in the match being set up, not every cell on a shelf. */
+  fidget?: boolean;
 }
 
 type Act = { cell: string; at: number; len: number; kind: "swing" | "cheer" | "hop" | "step" | "crouch" };
@@ -66,7 +68,7 @@ export function drawFighterPortrait(ctx: CanvasRenderingContext2D, def: FighterD
   if (mood.picked && !p.picked) p.act = { cell: "atk-up", at: t, len: 0.7, kind: "cheer" };
   p.picked = !!mood.picked;
   if (p.act && t - p.act.at > p.act.len) p.act = null;
-  if (!p.act && t >= p.nextFidget) {
+  if (!p.act && mood.fidget && t >= p.nextFidget) {
     const f = mood.ready ? FIDGETS[0] : FIDGETS[Math.floor(hash(`${key}${Math.floor(t)}`) * FIDGETS.length)];
     p.act = { ...f, at: t };
     p.nextFidget = t + (mood.ready ? 1.2 : 8 + hash(`${key}:${Math.floor(t * 7)}`) * 12);
