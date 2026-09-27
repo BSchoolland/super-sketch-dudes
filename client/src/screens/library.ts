@@ -26,6 +26,8 @@ export class LibraryScreen implements Screen {
   private selected: LibraryEntry | null = null;
   private detail: CharacterDetail | null = null;
   private device: DeviceId = "kb1";
+  /** Seconds since the library was last fetched: while anything is forging it's refetched every few. */
+  private sinceFetch = 0;
   private scroll = 0;
   private deleteArmed = -1;
   private problem = "";
@@ -91,6 +93,11 @@ export class LibraryScreen implements Screen {
   update(dt: number, m: MenuInput): Screen | null {
     this.t += dt;
     if (m.from) this.device = m.from;
+    this.sinceFetch += dt;
+    if (this.sinceFetch >= 3 && !myLibrary.loading && this.entries.some((e) => e.status === "queued" || e.status === "generating")) {
+      this.sinceFetch = 0;
+      void refreshLibrary();
+    }
     if (this.next) { const n = this.next; this.next = null; this.selected = null; return n; }
     const taps = consumeTaps();
     if (this.selected) return this.updateDetail(this.selected, m, taps);

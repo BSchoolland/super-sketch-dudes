@@ -95,7 +95,7 @@ export class DescribeScreen implements Screen {
     this.sending = true;
     this.problem = "";
     library.create(out.png, { name: this.name.value.trim(), description: this.description.value.trim() }).then(
-      ({ character }) => { sfx.menuConfirm(); this.next = this.nav.forge(character, this.pad); },
+      () => { sfx.menuConfirm(); this.next = this.nav.library(); },
       (error: unknown) => {
         console.error("character upload failed", error);
         this.problem = error instanceof Error ? error.message : String(error);

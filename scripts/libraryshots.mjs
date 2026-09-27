@@ -63,9 +63,10 @@ async function createCharacter(page, prefix) {
   await page.fill("#overlay textarea", "a stick guy with a red hat. he kicks and his hat is a boomerang.");
   if (prefix) await shot(page, `${prefix}-describe`);
   await tap(page, 960 + 200, 760 + 55);
-  await onScreen(page, "ForgeScreen");
-  if (prefix) { await page.waitForTimeout(1200); await shot(page, `${prefix}-forging`); }
-  await until(page, "forged", () => window.sketchbattle.screen.entry?.status === "ready", null, Number(process.env.FORGE_MS ?? 40000));
+  // CREATE lands in MY CHARACTERS, the new character forging in the grid
+  await onScreen(page, "LibraryScreen");
+  if (prefix) { await page.waitForTimeout(700); await shot(page, `${prefix}-forging`); }
+  await until(page, "forged", () => (window.sketchbattle.screen.entries ?? []).length > 0 && window.sketchbattle.screen.entries.every((e) => e.status === "ready"), null, Number(process.env.FORGE_MS ?? 40000));
   if (prefix) await shot(page, `${prefix}-forged`);
 }
 
@@ -90,9 +91,7 @@ await a.waitForTimeout(1500);
 await shot(a, "01-title-house-parade");
 await createCharacter(a, "02");
 
-// BACK -> MY CHARACTERS, the character big, DELETE armed, FIGHT
-await tap(a, 960 + 20 + 220, 930 + 55);
-await onScreen(a, "LibraryScreen");
+// MY CHARACTERS (where CREATE left us), the character big, DELETE armed, FIGHT
 await a.waitForTimeout(800);
 await shot(a, "03-library");
 await tap(a, 145 + 125, 160 + 125);

@@ -65,6 +65,32 @@ const FORGE_STEPS: { stage: RegExp; label: string; start: number }[] = [
   { stage: /final checks|upload/, label: "Finishing touches", start: 0.93 },
 ];
 
+/** A typical forge from claim to done, in seconds: progress and ETAs pace each step against it. */
+export const FORGE_S = 280;
+
+/** When each forging character moved onto the step it's on, as this page saw it. */
+const stepSince = new Map<string, { stage: string; at: number }>();
+
+/**
+ * Seconds until a forging character is likely done: what's left after the step it's on, plus
+ * what's left of that step going by how long the page has watched it. Null once it isn't forging.
+ */
+export function forgeEta(e: Pick<LibraryEntry, "id" | "status" | "stage">): number | null {
+  if (e.status !== "queued" && e.status !== "generating") return null;
+  const stage = e.stage || (e.status === "queued" ? "waiting in line" : "reading the drawing");
+  const now = performance.now() / 1000;
+  let seen = stepSince.get(e.id);
+  if (!seen || seen.stage !== stage) { seen = { stage, at: now }; stepSince.set(e.id, seen); }
+  const step = forgeStep(stage);
+  const inStep = (step.end - step.start) * FORGE_S - (now - seen.at);
+  return (1 - step.end) * FORGE_S + Math.max(inStep, 5);
+}
+
+/** An ETA in words: "about 3 min left", "under a minute left". */
+export function etaWords(s: number): string {
+  return s < 60 ? "under a minute left" : `about ${Math.round(s / 60)} min left`;
+}
+
 /** Where a forge stage sits: its words, and the progress-bar span it covers. */
 export function forgeStep(stage: string): { label: string; start: number; end: number } {
   const i = FORGE_STEPS.findIndex((s) => s.stage.test(stage));
@@ -93,6 +119,8 @@ export function drawCharacterCell(ctx: CanvasRenderingContext2D, e: LibraryEntry
   }
   const cx = x + size / 2, ty = y + size + Math.round(size * 0.16);
   const status = characterStatus(e, t);
-  if (!status) title(ctx, e.name ?? "?", cx, ty, Math.round(size * 0.136), INK, "center", size + 20);
-  else wrapped(ctx, e.status === "failed" ? "failed" : status.text, cx, ty, size + 20, Math.round(size * 0.096), status.color, 2);
+  if (!status) { title(ctx, e.name ?? "?", cx, ty, Math.round(size * 0.136), INK, "center", size + 20); return; }
+  const eta = forgeEta(e);
+  const lines = wrapped(ctx, e.status === "failed" ? "failed" : status.text, cx, ty, size + 20, Math.round(size * 0.096), status.color, eta === null ? 2 : 1);
+  if (eta !== null) wrapped(ctx, etaWords(eta), cx, ty + lines + Math.round(size * 0.02), size + 20, Math.round(size * 0.08), PENCIL, 1);
 }

@@ -7,7 +7,7 @@ import { libraryChoices, refreshLibrary } from "../fighters";
 import type { LibraryEntry } from "../../../shared/account";
 import { bg, hover, label, type Screen } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
-import { characterStatus, drawCharacterArt, forgeStep, RED } from "./character";
+import { characterStatus, drawCharacterArt, etaWords, forgeEta, forgeStep, FORGE_S, RED } from "./character";
 import { INK, PENCIL, inkRect } from "../render/paper";
 import type { DrawPad } from "./pad";
 import { wrapped } from "./text";
@@ -16,8 +16,6 @@ import type { Nav } from "./nav";
 
 const POLL_S = 2;
 const ART = 560;
-/** A typical forge from claim to done, in seconds: the bar paces each step against it. */
-const FORGE_S = 280;
 
 /** The forge at work on one character: its stage while it runs, the fighter once it's done. */
 export class ForgeScreen implements Screen {
@@ -105,6 +103,8 @@ export class ForgeScreen implements Screen {
     inkRect(ctx, x, y, w, h, INK, 2);
     const dots = ".".repeat(1 + (Math.floor(this.t * 2) % 3));
     label(ctx, `${step.label}${dots}`, VIEW_W / 2, y + h + 50, 34, e.status === "queued" ? PENCIL : INK);
+    const eta = forgeEta(e);
+    if (eta !== null) label(ctx, etaWords(eta), VIEW_W / 2, y + h + 92, 26, PENCIL);
   }
 
   private poll(): void {
