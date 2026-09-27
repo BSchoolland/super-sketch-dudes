@@ -315,7 +315,7 @@ export class MoveDemo {
       const icons: KeyIcon[] = [];
       if (this.jumps) icons.push({ space: true });
       if (this.dir !== "n") icons.push({ key: ({ f: "D", u: "W", d: "S" } as const)[this.dir] });
-      icons.push({ mouse: this.move.button === B.ATTACK ? "left" : "right" });
+      icons.push(this.move.button === B.ATTACK ? { mouse: "left" } : { key: "E" });
       drawKeyIcons(ctx, icons, x + 20, y + 16, 48);
       if (this.move.dirs.length > 1) this.move.dirs.forEach((d, i) => label(ctx, ARROW[d], x + 34 + i * 34, y + 96, 22, d === this.dir ? INK : "rgba(41,39,34,0.3)", "center", 900));
     }
