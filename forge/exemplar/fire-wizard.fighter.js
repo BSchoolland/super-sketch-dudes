@@ -163,7 +163,7 @@ export default function make(api) {
 
   const FIREBALLS_MAX = 3, FEED_MAX = 48, GREAT_AT = 30;
   const HEAT_MAX = 100, HEAT_PER_FRAME = 1.4, HEAT_BACK = 0.5, HEAT_COOL = 40, SPRAY_FROM = 10, SPRAY_LOOP = 24;
-  const CREEP_LIFE = 300, CREEP_PULL = 0.07, CREEP_TOP = 7, CREEP_EASE = 0.025;
+  const CREEP_LIFE = 300, CREEP_PULL = 0.028, CREEP_TOP = 7, CREEP_EASE = 0.025;
   const ownLive = (state, f, kinds) => {
     let n = 0;
     for (const p of state.projectiles) if (!p.dead && p.from === f.slot && kinds.includes(p.kind)) n++;
