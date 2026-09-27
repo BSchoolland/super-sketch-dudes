@@ -67,7 +67,7 @@ describe("the creator", () => {
 });
 
 describe("the forge queue survives a restart", () => {
-  it("requeues a running job from forge-jobs.json", async () => {
+  it("keeps a running job running across a restart, so the worker still on it can finish it", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sb-forge-"));
     const { attachForge: attach2 } = await import("../server/forge");
     const { initLibrary: init2, libraryOf } = await import("../server/library");
@@ -85,15 +85,17 @@ describe("the forge queue survives a restart", () => {
     expect((await call("/forge/jobs/next")).status).toBe(204);
     const saved = JSON.parse(fs.readFileSync(path.join(dir, "forge-jobs.json"), "utf8")) as { fighterId: string; status: string }[];
     expect(saved.find((j) => j.fighterId === "gen-restart-1")?.status).toBe("running");
-    // "restart": a data dir whose jobs file says the job was running; attaching again requeues it
+    // "restart": a data dir whose jobs file says the job was running; attaching again keeps it running
     const dir3 = fs.mkdtempSync(path.join(os.tmpdir(), "sb-forge3-"));
     fs.writeFileSync(path.join(dir3, "forge-jobs.json"), JSON.stringify(saved.filter((j) => j.fighterId === "gen-restart-1")));
     init2(dir3);
     const r3 = express2.Router(); app2.use("/api3", r3);
     attach2(r3, { token: "t2", dataDir: dir3, genBase: "/gen" });
-    const again = await (await fetch(`http://127.0.0.1:${p2}/api3/forge/jobs/next`, { headers: { "x-forge-token": "t2" } })).json();
-    expect(again.fighterId).toBe("gen-restart-1");
-    expect(again.attempts).toBe(2);
+    const api3 = (p: string, init?: RequestInit) => fetch(`http://127.0.0.1:${p2}/api3${p}`, { ...init, headers: { "x-forge-token": "t2", "content-type": "application/json", ...(init?.headers ?? {}) } });
+    // not handed out again: that's how one character got forged twice and failed on the second
+    expect((await api3("/forge/jobs/next")).status).toBe(204);
+    // and the worker's progress still lands
+    expect((await api3(`/forge/jobs/${job.id}/progress`, { method: "POST", body: JSON.stringify({ stage: "balance testing" }) })).status).toBe(204);
     fs.rmSync(dir3, { recursive: true, force: true });
     init2(dataDir); // the library module is a singleton: point it back at the main data dir
     srv.close();

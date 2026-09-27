@@ -41,23 +41,23 @@ const queue: string[] = [];
 const events = new Map<string, WideEvent>();
 let genDir = "", genBase = "", jobsFile = "";
 
-/** Every job change is written out, so a restart mid-character requeues it instead of stranding it. */
+/** Every job change is written out, so a restart mid-character picks it back up instead of stranding it. */
 function persist(): void {
   if (jobsFile) fs.writeFileSync(jobsFile, JSON.stringify([...jobs.values()]));
 }
 function restore(): void {
   if (!fs.existsSync(jobsFile)) return;
   const saved = JSON.parse(fs.readFileSync(jobsFile, "utf8")) as ForgeJob[];
+  const restored: ForgeJob[] = [];
   for (const job of saved) {
     jobs.set(job.id, job);
-    if (job.status === "queued" || job.status === "running") {
-      job.status = "queued"; job.stage = "back in line after a restart"; job.claimedAt = 0;
-      queue.push(job.id);
-    }
+    if (job.status === "queued") { queue.push(job.id); restored.push(job); }
+    // the worker outlives a server restart and is still on it: keep it running; the stale-claim
+    // timeout below requeues it if the worker really is gone
+    if (job.status === "running") { job.claimedAt = Date.now(); restored.push(job); }
   }
-  const requeued = queue.length;
-  if (requeued) console.log(`forge: requeued ${requeued} job(s) from before the restart`);
-  for (const id of queue) { const job = jobs.get(id)!; openJobEvent(job, null).set("restored", true); upsertCharacter(entryOf(job)); }
+  if (restored.length) console.log(`forge: picked up ${restored.length} job(s) from before the restart`);
+  for (const job of restored) { openJobEvent(job, null).set("restored", true); upsertCharacter(entryOf(job)); }
 }
 
 export const jobOf = (id: string): ForgeJob | undefined => jobs.get(id);

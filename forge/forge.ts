@@ -54,6 +54,8 @@ export async function runForge(job: JobSpec, drawingSrc: string, dir: string, io
   const wt = path.join(root, "..", "forge-worktrees", job.id);
   fs.mkdirSync(path.dirname(wt), { recursive: true });
   const git = (...a: string[]) => { const r = spawnSync("git", a, { cwd: root, encoding: "utf8" }); if (r.status !== 0) throw new Error(`git ${a[0]}: ${r.stderr.trim()}`); return r.stdout; };
+  // left behind by a worker that died mid-job: this attempt starts clean
+  if (fs.existsSync(wt)) { spawnSync("git", ["worktree", "remove", "--force", wt], { cwd: root }); fs.rmSync(wt, { recursive: true, force: true }); }
   git("worktree", "add", "--detach", "--force", wt, "HEAD");
   fs.symlinkSync(path.join(root, "node_modules"), path.join(wt, "node_modules"));
   const work = path.join(wt, "forge", "work", job.fighterId);
@@ -72,7 +74,7 @@ export async function runForge(job: JobSpec, drawingSrc: string, dir: string, io
   const log = fs.createWriteStream(path.join(dir, "session.jsonl"));
   const result = await new Promise<{ costUsd: number; text: string; sessionId: string }>((resolve, reject) => {
     const child = spawn("claude", ["-p", "--model", AGENT_MODEL, "--dangerously-skip-permissions", "--output-format", "stream-json", "--verbose"], { cwd: wt, stdio: ["pipe", "pipe", "pipe"], env: { ...process.env } });
-    let buf = "", err = "", timedOut = false, costUsd = 0, text = "", sessionId = "";
+    let buf = "", err = "", timedOut = false, costUsd = 0, text = "", sessionId = "", lost = "";
     const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, TIMEOUT_MS);
     const onLine = (line: string) => {
       log.write(line + "\n");
@@ -81,7 +83,8 @@ export async function runForge(job: JobSpec, drawingSrc: string, dir: string, io
         if (b.type === "tool_use") {
           const cmd = String(b.input?.command ?? b.input?.file_path ?? "");
           const stage = /tools\/sheet/.test(cmd) ? "drawing the animation" : /tools\/check/.test(cmd) ? "balance testing" : /tools\/deploy/.test(cmd) ? "final checks and upload" : /\.fighter\.js/.test(cmd) && b.name === "Write" ? "writing the fighter" : null;
-          if (stage) void io.progress(stage);
+          // the server no longer has this job running (it gave it to someone else): stop working on it
+          if (stage) io.progress(stage).catch((e: Error) => { lost = e.message; io.log(`progress rejected, stopping: ${e.message}`); child.kill("SIGKILL"); });
           io.log(`${b.name} ${cmd.slice(0, 120)}`);
         } else if (b.type === "text" && b.text) text = b.text;
       }
@@ -93,6 +96,7 @@ export async function runForge(job: JobSpec, drawingSrc: string, dir: string, io
     child.on("close", (code) => {
       clearTimeout(timer); log.end();
       if (timedOut) return reject(new ForgeError(`the agent ran out of time (${TIMEOUT_MS / 60000} minutes)`));
+      if (lost) return reject(new Error(`the site stopped this job: ${lost}`));
       if (code !== 0 && !fs.existsSync(path.join(work, "payload.json"))) return reject(new Error(`agent exited ${code}: ${(err || text).trim().slice(-400)}`));
       resolve({ costUsd, text, sessionId });
     });

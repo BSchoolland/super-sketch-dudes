@@ -26,8 +26,13 @@ async function post(p: string, body: unknown): Promise<void> {
   if (!res.ok) throw new Error(`POST ${p}: HTTP ${res.status} ${(await res.text()).slice(0, 300)}`);
 }
 
+/** Jobs this worker is on right now, so a job handed out twice (a server that lost track) isn't run twice. */
+const active = new Set<string>();
+
 async function handle(job: JobSpec & { attempts: number }): Promise<void> {
   const tag = job.fighterId;
+  if (active.has(job.id)) { log(tag, `claimed job ${job.id} again (attempt ${job.attempts}) while still running it: carrying on with the one in progress`); return; }
+  active.add(job.id);
   const dir = path.join(RUNS, job.id);
   fs.mkdirSync(dir, { recursive: true });
   const t0 = Date.now();
@@ -48,6 +53,8 @@ async function handle(job: JobSpec & { attempts: number }): Promise<void> {
     fs.writeFileSync(path.join(dir, "error.txt"), e instanceof Error ? e.stack ?? e.message : String(e));
     log(tag, `FAILED after ${((Date.now() - t0) / 1000).toFixed(0)}s: ${msg}`);
     await post(`/jobs/${job.id}/fail`, { error: msg }).catch((err) => log(tag, `could not report the failure: ${err.message}`));
+  } finally {
+    active.delete(job.id);
   }
 }
 
