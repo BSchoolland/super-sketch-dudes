@@ -96,7 +96,7 @@ export class Renderer {
     this.ghosts = this.ghosts.filter((g) => g.age < 0.22);
 
     ctx.save();
-    if (this.chrome) drawBackdrop(ctx, stage, this.cam, this.time);
+    if (this.chrome) drawBackdrop(ctx, stage, this.cam);
     ctx.save();
     this.cam.apply(ctx);
     drawStage(ctx, state, stage);

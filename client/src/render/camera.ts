@@ -30,8 +30,10 @@ export class Camera {
     maxY = Math.max(maxY, main.y + 60);
     const padX = 280, padY = 200;
     minX -= padX; maxX += padX; minY -= padY; maxY += padY;
-    let w = Math.max(maxX - minX, stage.camera.minWidth);
-    let h = Math.max(maxY - minY, stage.camera.minWidth * (VIEW_H / VIEW_W));
+    // more fighters spread wider, so start wider: the frame breathes less as they scatter and regroup
+    const minWidth = stage.camera.minWidth * (1 + 0.18 * Math.max(0, n - 2));
+    let w = Math.max(maxX - minX, minWidth);
+    let h = Math.max(maxY - minY, minWidth * (VIEW_H / VIEW_W));
     let zoom = Math.min(VIEW_W / w, VIEW_H / h);
     zoom = Math.max(0.42, Math.min(1.25, zoom));
     const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
@@ -47,9 +49,10 @@ export class Camera {
 
   update(dt: number): void {
     const k = 1 - Math.pow(0.001, dt); // frame-rate independent ease
-    this.x += (this.tx - this.x) * k * 0.9;
-    this.y += (this.ty - this.y) * k * 0.9;
-    this.zoom += (this.tz - this.zoom) * k * 0.6;
+    this.x += (this.tx - this.x) * k * 0.55;
+    this.y += (this.ty - this.y) * k * 0.45;
+    // pull out quickly so nobody leaves the frame, push back in slowly
+    this.zoom += (this.tz - this.zoom) * k * (this.tz < this.zoom ? 0.5 : 0.18);
     this.trauma = this.fixed ? 0 : Math.max(0, this.trauma - dt * 1.6);
     const s = this.trauma * this.trauma;
     this.seed = (this.seed * 16807) % 2147483647;

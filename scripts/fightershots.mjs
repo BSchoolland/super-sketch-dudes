@@ -9,7 +9,7 @@ const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
 const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
-const combos = [["slugbert", "woodstove", "rooftops"], ["rocket", "slugbert", "kessler"], ["woodstove", "rocket", "proving"]];
+const combos = [["slugbert", "woodstove", "rooftops"], ["rocket", "slugbert", "rooftops"], ["woodstove", "rocket", "proving"]];
 for (const [a, b, stage] of combos) {
   await page.goto(`${base}?quick=1&p2=cpu&cpu=9&f=${a},${b}&stage=${stage}&seed=11`);
   await page.waitForFunction(() => window.sketchbattle?.screen, null, { timeout: 20000 });

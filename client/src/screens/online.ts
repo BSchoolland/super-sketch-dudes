@@ -1,6 +1,7 @@
 import type { MatchConfig } from "../../../shared/sim";
 import type { SessionHandoff } from "../net/rollback";
 import { roster } from "../../../shared/fighters/index";
+import { stageList } from "../../../shared/stages/index";
 import { isBundlePath } from "../../../shared/account";
 import { account } from "../account";
 import { fighterLoad } from "../gen";
@@ -42,6 +43,8 @@ export class OnlineScreen implements Screen {
   code = ["A", "A", "A", "A"];
   codePos = 0;
   inputDelay = 2;
+  /** The host's stage pick, an index into stageList. */
+  stage = 0;
   error = "";
   /** keyboard focus in the lobby: 0 fighter, 1 ready, 2 start (host, when everyone is ready), 3 leave */
   focus = 1;
@@ -263,7 +266,7 @@ export class OnlineScreen implements Screen {
     this.context.transport.sendLobby({
       t: "start",
       config: {
-        stage: "proving",
+        stage: stageList[this.stage].id,
         rules: { stocks: settings.stocks, time: settings.time * 60 * 60 },
         inputDelay: this.inputDelay,
       },
@@ -407,6 +410,9 @@ export class OnlineScreen implements Screen {
     const by = SLOT_Y + SLOT_H + 24;
     if (isHost) {
       if (button(ctx, VIEW_W / 2 - 170, by, 340, 84, "START", { key: "Enter", size: 36, focused: this.focus === 2, disabled: !canStart })) this.startMatch();
+      label(ctx, stageList[this.stage].name, VIEW_W / 2 - 350, by + 52, 26, INK, "center", 900);
+      const s = arrows(ctx, VIEW_W / 2 - 350, by + 52, 130, 26);
+      if (s) { this.stage = (this.stage + s + stageList.length) % stageList.length; sfx.menuMove(); }
       label(ctx, `input delay ${this.inputDelay}f`, VIEW_W / 2 + 330, by + 52, 20, "rgba(41,39,34,0.85)");
       const d = arrows(ctx, VIEW_W / 2 + 330, by + 52, 90, 22);
       if (d) { this.inputDelay = Math.max(1, Math.min(6, this.inputDelay + d)); sfx.menuMove(); }

@@ -4,7 +4,7 @@ import type { Camera } from "./camera";
 import { VIEW_H, VIEW_W } from "./camera";
 import { drawPaper, hatch, inkArc, inkLine, inkRect, INK, PAPER, PENCIL, noise } from "./paper";
 
-export function drawBackdrop(ctx: CanvasRenderingContext2D, stage: Stage, cam: Camera, time: number): void {
+export function drawBackdrop(ctx: CanvasRenderingContext2D, stage: Stage, cam: Camera): void {
   drawPaper(ctx, VIEW_W, VIEW_H);
   for (const depth of [0.08, 0.22, 0.35]) {
     ctx.save();
@@ -20,21 +20,6 @@ export function drawBackdrop(ctx: CanvasRenderingContext2D, stage: Stage, cam: C
           inkLine(ctx, x + 12 + j * 8, 280 - h, x + 12 + j * 8, 380 - h, PENCIL, 0.7);
         }
         inkLine(ctx, x + 65, 210 - h, x + 63, 180 - h, PENCIL, 1);
-      }
-    } else if (stage.theme === "kessler") {
-      if (depth === 0.08) {
-        inkArc(ctx, -430, -180, 140, 0, Math.PI * 2, PENCIL, 2);
-        inkArc(ctx, -450, -195, 105, 1.6, 3.8, PENCIL, 1);
-        ctx.save(); ctx.translate(-430, -180); ctx.rotate(-0.3); ctx.scale(1, 0.25);
-        inkArc(ctx, 0, 0, 230, 0, Math.PI * 2, PENCIL, 4); ctx.restore();
-      } else {
-        ctx.setLineDash([12, 16]); ctx.strokeStyle = PENCIL; ctx.lineWidth = 1.2;
-        ctx.beginPath(); ctx.ellipse(0, 50, depth * 3100, depth * 850, -0.12, 0, Math.PI * 2); ctx.stroke();
-        ctx.setLineDash([]);
-        for (let i = 0; i < 8; i++) {
-          const a = i * 0.8 + time * 0.03;
-          inkRect(ctx, Math.cos(a) * depth * 3100, 50 + Math.sin(a) * depth * 850, 10, 6, PENCIL, 1);
-        }
       }
     } else {
       ctx.setLineDash([9, 12]);
