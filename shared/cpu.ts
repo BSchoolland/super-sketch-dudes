@@ -675,6 +675,13 @@ export function cpuInput(state: State, slot: number, tier: number): InputFrame {
   }
   if (f.ledge >= 0) return ledgeInput(state, f, target, sk, stage);
   if (offStage(state, f, stage)) return recoveryInput(state, f, sk, stage);
+  if (f.action === "shieldBreak") {
+    // mash out of the stun: every stick reversal and button press counts
+    const out = blank();
+    out.x = state.frame & 1 ? 100 : -100;
+    out.b = pulse(state, f.slot, B.JUMP);
+    return out;
+  }
 
   const committed = handleCommitted(state, f, target, sk, stage);
   if (committed) return committed;

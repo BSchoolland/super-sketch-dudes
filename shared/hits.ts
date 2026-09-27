@@ -300,14 +300,16 @@ export function resolveHits(state: State): void {
       if (v.hitlag > 0 && v.pending) continue;
       const key = `p${p.id}:${p.hb.group ?? 0}`;
       const saveFacing = owner.moveFacing;
-      const saveX = owner.x, saveY = owner.y;
+      const saveX = owner.x, saveY = owner.y, saveLag = owner.hitlag;
       // hits come from the projectile's position and direction, not the owner's
       owner.moveFacing = p.facing;
       owner.x = p.x; owner.y = p.y;
       const hit = tryHit(state, owner, v, p.hb, cap, key, p.hitLog, p.hb.rehit, state.frame);
       owner.moveFacing = saveFacing; owner.x = saveX; owner.y = saveY;
       if (hit) {
-        owner.hitlag = 0; // projectiles don't freeze their owner
+        // projectiles don't freeze their owner, but hitlag the owner is already in (with a knockback
+        // waiting on it) must run out on its own, or that knockback is never applied
+        owner.hitlag = saveLag;
         if (!p.hb.rehit) p.dead = true;
         break;
       }
