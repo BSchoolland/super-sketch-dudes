@@ -57,13 +57,14 @@ export class MoveDemo {
     const players = [{ fighter: this.fighter, cpu: 0 }, ...(this.dummy ? [{ fighter: this.dummy, cpu: 0 }] : [])];
     this.state = createMatch({ stage: "proving", players, rules: { stocks: 99, time: 0 }, seed: 1 });
     const [you, dummy] = this.state.fighters;
-    you.x = DUMMY_X - this.spacing(); you.facing = 1;
+    const gap = this.spacing();
+    you.x = DUMMY_X - gap; you.facing = 1;
     if (dummy) { dummy.x = DUMMY_X; dummy.facing = -1; dummy.percent = 40; }
     this.inputs = this.state.fighters.map(() => cloneInput(EMPTY_INPUT));
     this.renderer = new Renderer(this.state, []);
     this.renderer.chrome = false;
-    // the dummy a little right of centre, room behind it to fly and above for an up special
-    this.renderer.cam.pinned = { x: 60, y: -190, zoom: VIEW_W / 860 };
+    // centred on the pair, wide enough for both and some room either side, however far apart the move puts them
+    this.renderer.cam.pinned = { x: DUMMY_X - gap / 2, y: -190, zoom: VIEW_W / Math.max(760, gap + 520) };
     this.frame = 0;
   }
 
@@ -94,7 +95,7 @@ export class MoveDemo {
     let d = r && r.first !== 999 && r.maxX > 0 ? (Math.max(0, r.minX) + r.maxX) / 2 : bodies + 30;
     if (probe?.shotRange) d = Math.max(d, Math.min(probe.shotRange * 0.5, 380));
     if (probe?.groundDx) d = Math.max(d, probe.groundDx * 0.6);
-    return Math.max(bodies * 0.8, Math.min(d, 360));
+    return Math.max(bodies * 0.8, Math.min(d, 480));
   }
 
   private get dir(): Dir {
