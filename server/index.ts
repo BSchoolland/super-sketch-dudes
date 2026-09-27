@@ -10,6 +10,7 @@ import { attachAuth } from "./auth";
 import { initLibrary } from "./library";
 import { attachForge } from "./forge";
 import { attachCharacters } from "./characters";
+import { attachBrawlStats } from "./brawl-stats";
 import { attachEvents, initEvents, requestErrors, requestEvents, watchProcess } from "./events";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -49,6 +50,7 @@ app.use(`${BASE}/gen`, express.static(genDir, { maxAge: "1y", immutable: true })
 app.use("/gen", express.static(genDir, { maxAge: "1y", immutable: true }));
 
 attachEvents(api);
+attachBrawlStats(api, DATA_DIR);
 // the one-line log that builds from before wide events still post to
 const LOG = path.join(DATA_DIR, "client-log.jsonl");
 const LOG_MAX = 8 * 1024 * 1024;

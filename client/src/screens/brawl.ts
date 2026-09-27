@@ -10,6 +10,7 @@ import { Renderer } from "../render/render";
 import { library } from "../account";
 import { fighterLoad, type FighterLoad } from "../gen";
 import { houseChoices, type FighterChoice } from "../fighters";
+import { tallyKo } from "./brawl-tally";
 
 const STEP = 1000 / 60;
 const SPAWN_EVERY = 20;
@@ -82,6 +83,7 @@ export class MenuBrawl {
     const dead = st.fighters.findIndex((f) => f.stocks <= 0);
     if (dead >= 0) {
       slot = dead;
+      vacate(st, slot);
       st.fighters[slot] = createFighter(slot, id, stage, st.rules, slot, cpu);
       this.cpus[slot] = cpu;
     } else if (st.fighters.length < MAX_FIGHTERS) {
@@ -93,12 +95,7 @@ export class MenuBrawl {
     } else {
       slot = this.next;
       this.next = (this.next + 1) % MAX_FIGHTERS;
-      st.projectiles = st.projectiles.filter((p) => p.owner !== slot && p.from !== slot);
-      for (const o of st.fighters) {
-        if (o.grabbing === slot) { o.grabbing = -1; setAction(o, "idle"); }
-        if (o.grabbedBy === slot) { o.grabbedBy = -1; setAction(o, o.grounded ? "idle" : "air"); }
-        if (o.lastHitBy === slot) o.lastHitBy = -1;
-      }
+      vacate(st, slot);
       st.fighters[slot] = createFighter(slot, id, stage, st.rules, slot, cpu);
       this.cpus[slot] = cpu;
     }
@@ -131,6 +128,7 @@ export class MenuBrawl {
       stepSilently(st, this.inputs);
       this.renderer!.snapshot(st);
       this.renderer!.fx.consume(st, st.events, this.renderer!.cam);
+      for (const e of st.events) if (e.t === "ko") tallyKo(st.fighters[e.slot].id, e.by >= 0 ? st.fighters[e.by].id : null);
       st.events.length = 0;
       this.acc -= STEP;
       n++;
@@ -141,6 +139,16 @@ export class MenuBrawl {
   draw(ctx: CanvasRenderingContext2D, dt: number): void {
     if (!this.state || !this.renderer) return;
     this.renderer.draw(ctx, this.state, this.acc / STEP, dt);
+  }
+}
+
+/** Clears everything the rest of the fight holds on a slot about to change hands: its shots, its grabs, credit for its hits. */
+function vacate(st: State, slot: number): void {
+  st.projectiles = st.projectiles.filter((p) => p.owner !== slot && p.from !== slot);
+  for (const o of st.fighters) {
+    if (o.grabbing === slot) { o.grabbing = -1; setAction(o, "idle"); }
+    if (o.grabbedBy === slot) { o.grabbedBy = -1; setAction(o, o.grounded ? "idle" : "air"); }
+    if (o.lastHitBy === slot) o.lastHitBy = -1;
   }
 }
 

@@ -39,10 +39,11 @@ export function stepRules(state: State, stage: Stage): void {
 function ko(state: State, f: Fighter, side: "left" | "right" | "top" | "bottom"): void {
   f.stocks--;
   f.falls++;
-  if (f.lastHitBy >= 0 && state.frame - f.lastHitFrame < 600) state.fighters[f.lastHitBy].kos++;
+  const by = f.lastHitBy >= 0 && state.frame - f.lastHitFrame < 600 ? f.lastHitBy : -1;
+  if (by >= 0) state.fighters[by].kos++;
   if (f.grabbing >= 0) { const v = state.fighters[f.grabbing]; if (v) { v.grabbedBy = -1; setAction(v, v.grounded ? "idle" : "air"); } f.grabbing = -1; }
   if (f.grabbedBy >= 0) { const g = state.fighters[f.grabbedBy]; if (g) { g.grabbing = -1; setAction(g, "idle"); } f.grabbedBy = -1; }
-  state.events.push({ t: "ko", frame: state.frame, slot: f.slot, x: f.x, y: f.y, side, by: f.lastHitBy });
+  state.events.push({ t: "ko", frame: state.frame, slot: f.slot, x: f.x, y: f.y, side, by });
   setAction(f, "dead");
   f.percent = 0;
   f.vx = 0; f.vy = 0;

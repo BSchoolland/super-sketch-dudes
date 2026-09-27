@@ -424,6 +424,7 @@ export type GameEvent =
   | { t: "hit"; frame: number; attacker: number; victim: number; damage: number; kb: number; x: number; y: number; fx: string; angle: number; facing: number }
   | { t: "shieldHit"; frame: number; victim: number; x: number; y: number; damage: number }
   | { t: "parry"; frame: number; slot: number; x: number; y: number }
+  /** `by` is the slot credited with the KO, -1 for a self-destruct. */
   | { t: "ko"; frame: number; slot: number; x: number; y: number; side: "left" | "right" | "top" | "bottom"; by: number }
   | { t: "land"; frame: number; slot: number; x: number; y: number; hard: boolean }
   | { t: "jump"; frame: number; slot: number; x: number; y: number; double: boolean }
