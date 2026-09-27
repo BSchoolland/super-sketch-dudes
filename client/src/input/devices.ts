@@ -8,7 +8,7 @@ export interface KeyBindings {
 }
 export const KB1: KeyBindings = {
   left: ["KeyA"], right: ["KeyD"], up: ["KeyW"], down: ["KeyS"],
-  jump: ["Space"], attack: ["Mouse0"], special: ["Mouse2"], shield: ["ShiftLeft"], smash: ["KeyE"], taunt: ["KeyT"], pause: ["Escape"],
+  jump: ["Space"], attack: ["Mouse0"], special: ["KeyE", "Mouse2"], shield: ["ShiftLeft"], smash: ["KeyR"], taunt: ["KeyT"], pause: ["Escape"],
 };
 export const KB2: KeyBindings = {
   left: ["ArrowLeft"], right: ["ArrowRight"], up: ["ArrowUp"], down: ["ArrowDown"],
