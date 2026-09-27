@@ -163,7 +163,7 @@ export default function make(api) {
 
   const FIREBALLS_MAX = 3, FEED_MAX = 48, GREAT_AT = 30;
   const HEAT_MAX = 100, HEAT_PER_FRAME = 1.4, HEAT_BACK = 0.5, HEAT_COOL = 40, SPRAY_FROM = 10, SPRAY_LOOP = 24;
-  const CREEP_LIFE = 300, CREEP_PULL = 0.028, CREEP_TOP = 7, CREEP_EASE = 0.025;
+  const CREEP_LIFE = 300, CREEP_PULL = 0.028, CREEP_TOP = 3, CREEP_FALL = 2, CREEP_EASE = 0.025;
   const ownLive = (state, f, kinds) => {
     let n = 0;
     for (const p of state.projectiles) if (!p.dead && p.from === f.slot && kinds.includes(p.kind)) n++;
@@ -242,7 +242,7 @@ export default function make(api) {
         if (f.frame !== 12 || ownLive(state, f, ["creeper"])) return;
         const hit = { frames: [0, 999], x: 0, y: 0, r: 28, damage: 3, angle: 80, base: 40, growth: 28, rehit: 30 };
         if (f.grounded) spawnProjectile(state, f, "creeper", f.x + f.moveFacing * 70, f.y - 28, 0, 0, CREEP_LIFE, hit, { landed: 1 });
-        else spawnProjectile(state, f, "creeper", f.x + f.moveFacing * 40, f.y - 10, f.moveFacing * 1.5, 3, CREEP_LIFE, hit, { g: 0.5, bounce: 1, landed: 0 });
+        else spawnProjectile(state, f, "creeper", f.x + f.moveFacing * 40, f.y - 10, f.moveFacing * 0.8, 0.5, CREEP_LIFE, hit, { g: 0.1, bounce: 1, landed: 0 });
       },
       // the jet points where the stick does (straight up when it's let go), turning toward it rather than snapping
       jet: ({ f, input, state }) => {
@@ -286,7 +286,8 @@ export default function make(api) {
       for (const p of state.projectiles) {
         if (p.dead || p.kind !== "creeper" || p.from !== f.slot) continue;
         if (!p.data.landed) {
-          if (!p.data.bounces) continue;
+          // dropped from the air it drifts down slowly
+          if (!p.data.bounces) { p.vy = Math.min(p.vy, CREEP_FALL); continue; }
           p.data.landed = 1; p.data.g = 0; p.vx = 0; p.vy = 0; p.y -= 28;
         }
         let near = null, best = Infinity;
