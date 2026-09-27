@@ -14,7 +14,7 @@ type Dir = "n" | "f" | "u" | "d";
 export interface DemoMove { name: string; button: number; air: boolean; dirs: Dir[] }
 
 const STEP = 1000 / 60;
-const PRESS_AT = 12, AFTER = 50, MAX_FRAMES = 360;
+const PRESS_AT = 27, AFTER = 80, MAX_FRAMES = 420;
 /** How long a demo holds a special that charges or keeps going while held. */
 const HOLD_FRAMES = 100;
 /** Where the dummy stands; the fighter lines up to its left at the move's range. */
