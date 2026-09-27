@@ -47,6 +47,11 @@ function mainBounds(state: State, stage: Stage): { x1: number; x2: number; y: nu
   return { x1: p.x1 + (o?.dx ?? 0), x2: p.x2 + (o?.dx ?? 0), y: p.y + (o?.dy ?? 0) };
 }
 
+function nearEdge(state: State, f: Fighter, stage: Stage, margin: number): boolean {
+  const main = mainBounds(state, stage);
+  return f.x < main.x1 + margin || f.x > main.x2 - margin;
+}
+
 function offStage(state: State, f: Fighter, stage: Stage): boolean {
   const main = mainBounds(state, stage);
   return !f.grounded && (f.x < main.x1 - 8 || f.x > main.x2 + 8 || f.y > main.y + 35);
@@ -643,13 +648,16 @@ function groundNeutral(state: State, f: Fighter, target: Fighter, sk: Skill, sta
 
 /** How many frames a dithering low-tier CPU waits between looks at the fight. */
 function thinkEvery(sk: Skill): number {
-  return Math.round(at(sk, 12, 2));
+  return Math.max(1, Math.round(at(sk, 12, 2)));
 }
 
-/** The target as the CPU sees it: where it was and what it was doing `sk.delay` frames ago. */
+/** The target as the CPU sees it: what it was doing `sk.delay` frames ago, and where it has probably drifted since. */
 function perceived(state: State, target: Fighter, sk: Skill): Fighter {
-  const past = state.seen[Math.min(sk.delay, state.seen.length - 1)]?.[target.slot];
-  return past ? { ...target, ...past } : target;
+  const ago = Math.min(sk.delay, state.seen.length - 1);
+  const past = state.seen[ago]?.[target.slot];
+  if (!past) return target;
+  const lead = ago * sk.predict;
+  return { ...target, ...past, x: past.x + past.vx * lead, y: past.grounded ? past.y : past.y + past.vy * lead };
 }
 
 /** `tier` is 1 (PATHETIC) to 5 (UNFAIR); see cpu-skill.ts. */
@@ -673,10 +681,11 @@ export function cpuInput(state: State, slot: number, tier: number): InputFrame {
   if (!target) return blank();
   if (!f.grounded) return aerialNeutral(state, f, target, sk, stage);
 
-  const think = thinkEvery(sk);
-  if (sk.c < 0.3 && state.frame % think !== 0 && hash(state, f, 0x5107, think) % 100 < 45) {
+  if (hash(state, f, 0x5107, 40) % 100 < sk.idle) {
+    // dawdling: stand around, or wander off in whatever direction it picked
     const out = blank();
-    if (Math.abs(target.x - f.x) > 170) out.x = sign(target.x - f.x) * 45;
+    const wander = hash(state, f, 0x3a1d, 40) % 3;
+    if (wander < 2 && !nearEdge(state, f, stage, 120)) out.x = (wander ? 1 : -1) * 40;
     return out;
   }
   return groundNeutral(state, f, target, sk, stage);

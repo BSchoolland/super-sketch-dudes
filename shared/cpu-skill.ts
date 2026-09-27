@@ -6,18 +6,23 @@ export const DEFAULT_TIER = 3;
 export interface Skill {
   /** Frames between something happening to the opponent and the CPU seeing it. */
   delay: number;
+  /** How much of that delay it makes up by leading the opponent's movement, 0 to 1. */
+  predict: number;
   /** How much farther than its real reach it believes its attacks go. */
   slack: number;
-  /** 0 to 1: how often it does the right thing once it has seen it. */
+  /** Percent of the time it dawdles in neutral instead of playing. */
+  idle: number;
+  /** How often it does the right thing once it has seen it: 0 at the bottom of each odds range, 1 at the top. */
   c: number;
 }
 
 const SKILLS: Skill[] = [
-  { delay: 28, slack: 40, c: 0 },
-  { delay: 21, slack: 26, c: 0.3 },
-  { delay: 15, slack: 14, c: 0.55 },
-  { delay: 10, slack: 6, c: 0.8 },
-  { delay: 5, slack: 0, c: 1 },
+  { delay: 26, predict: 0, slack: 40, idle: 50, c: 0 },
+  { delay: 17, predict: 0.5, slack: 22, idle: 25, c: 0.35 },
+  { delay: 8, predict: 1, slack: 6, idle: 6, c: 0.7 },
+  { delay: 5, predict: 1, slack: 2, idle: 2, c: 0.9 },
+  // past the top of every odds range: it shields, punishes and confirms more often than any person could
+  { delay: 0, predict: 1, slack: 0, idle: 0, c: 1.2 },
 ];
 
 export function skillOf(tier: number): Skill {
