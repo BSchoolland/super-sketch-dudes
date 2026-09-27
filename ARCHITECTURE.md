@@ -173,7 +173,7 @@ sqlite dependency to lean on; `server/eventlog.ts` reads it back, newest snapsho
 
 - `npm run dev`: Vite on 5175 + server on 3008 with the /sketch-battle/api and /sketch-battle/ws proxies.
 - `npm run build`, `npm start`: same as Kessler.
-- `npm run ladder`: every fighter vs every fighter, CPU level 9, N matches each, prints a
+- `npm run ladder`: every fighter vs every fighter, CPU tier 5 (UNFAIR), N matches each, prints a
   win-rate matrix and average stock length; fails if any matchup is outside 40/60 (warn only
   until the roster settles).
 - `npm run frames <fighter>`: prints the move table from data so it can be diffed against

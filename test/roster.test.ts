@@ -14,12 +14,12 @@ describe("house roster", () => {
     // four slots from the roster per stage, rotating so every house fighter plays somewhere
     const four = [0, 1, 2, 3].map((i) => HOUSE_ROSTER[(n * 4 + i) % HOUSE_ROSTER.length].id);
     it(`4-player CPU match on ${stage.id} (${four.join(", ")}) resimulates from a mid-match snapshot to the same hash`, () => {
-      const cfg = { stage: stage.id, players: four.map((id) => ({ fighter: id, cpu: 9 })), seed: 42 };
+      const cfg = { stage: stage.id, players: four.map((id) => ({ fighter: id, cpu: 5 })), seed: 42 };
       const a = createMatch(cfg);
       let snap: ReturnType<typeof cloneState> | null = null;
       const inputsAt: ReturnType<typeof cpuInput>[][] = [];
       for (let i = 0; i < 1800; i++) {
-        const inputs = a.fighters.map((f) => cpuInput(a, f.slot, 9));
+        const inputs = a.fighters.map((f) => cpuInput(a, f.slot, 5));
         inputsAt.push(inputs);
         step(a, inputs);
         expect(a.events.filter((e) => e.t === "hookError")).toEqual([]);
@@ -32,7 +32,7 @@ describe("house roster", () => {
       expect(hashState(b)).toBe(hashState(a));
       // and the cpu is a pure function of state
       const c = createMatch(cfg);
-      for (let i = 0; i < 1800; i++) { const inputs = c.fighters.map((f) => cpuInput(c, f.slot, 9)); expect(inputs).toEqual(inputsAt[i]); step(c, inputs); c.events.length = 0; }
+      for (let i = 0; i < 1800; i++) { const inputs = c.fighters.map((f) => cpuInput(c, f.slot, 5)); expect(inputs).toEqual(inputsAt[i]); step(c, inputs); c.events.length = 0; }
       expect(hashState(c)).toBe(hashState(a));
     });
   });

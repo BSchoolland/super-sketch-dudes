@@ -114,7 +114,7 @@ describe("defensive mechanics", () => {
       f.x = -700; f.y = 150; f.grounded = false; f.action = "air"; f.vy = 3; f.jumpsLeft = 1;
       let recovered = false;
       for (let i = 0; i < 400; i++) {
-        step(s, [cpuInput(s, 0, 9), EMPTY_INPUT]);
+        step(s, [cpuInput(s, 0, 5), EMPTY_INPUT]);
         s.events.length = 0;
         if (f.ledge >= 0 || (f.grounded && f.x > -600)) { recovered = true; break; }
         if (f.stocks < 3) break;

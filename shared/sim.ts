@@ -7,7 +7,7 @@ import { EMPTY_INPUT, cloneInput, type InputFrame } from "./input";
 import { stepPhysics, stepProjectiles, updatePlatforms } from "./physics";
 import { stepRules } from "./rules";
 import { stages } from "./stages/index";
-import type { Fighter, FighterId, Rules, Stage, StageId, State } from "./types";
+import type { Fighter, FighterId, Glimpse, Rules, Stage, StageId, State } from "./types";
 
 export interface MatchConfig {
   stage: StageId;
@@ -59,6 +59,7 @@ export function createMatch(cfg: MatchConfig): State {
     ended: false, winner: -1, suddenDeath: false, slowmo: 0, paused: false,
     platOffsets: stage.platforms.map(() => ({ dx: 0, dy: 0 })),
     inputs: cfg.players.map(() => cloneInput(EMPTY_INPUT)),
+    seen: [],
   };
   // start on the ground where possible
   for (const f of state.fighters) {
@@ -85,7 +86,19 @@ export function step(state: State, inputs: InputFrame[]): State {
   resolveHits(state);
   stepRules(state, stage);
   for (let i = 0; i < state.inputs.length; i++) state.inputs[i] = cloneInput(inputs[i] ?? EMPTY_INPUT);
+  state.seen.unshift(state.fighters.map(glimpse));
+  if (state.seen.length > SEEN_FRAMES) state.seen.pop();
   return state;
+}
+
+/** Longest a CPU can lag behind what's happening. */
+export const SEEN_FRAMES = 32;
+
+function glimpse(f: Fighter): Glimpse {
+  return {
+    x: f.x, y: f.y, vx: f.vx, vy: f.vy, facing: f.facing, grounded: f.grounded, action: f.action, frame: f.frame,
+    move: f.move, moveFacing: f.moveFacing, percent: f.percent, shieldHeld: f.shieldHeld, ledge: f.ledge, invuln: f.invuln, hitstun: f.hitstun,
+  };
 }
 
 function cloneRecord(r: Record<string, number>): Record<string, number> {
@@ -103,6 +116,7 @@ export function cloneState(s: State): State {
     events: [], // events are per-frame output, never carried in a snapshot
     platOffsets: s.platOffsets.map((o) => ({ ...o })),
     inputs: s.inputs.map(cloneInput),
+    seen: [...s.seen],
   };
 }
 

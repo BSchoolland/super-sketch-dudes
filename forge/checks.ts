@@ -29,7 +29,7 @@ export interface CheckReport {
 export const LADDER: readonly HouseId[] = ["woodstove", "slugbert", "rocket", "wizard"];
 /** The punching bag for the move, recovery and KO checks. */
 const DUMMY: HouseId = "woodstove";
-const LADDER_MATCHES = 2, LEVEL = 9, CAP_FRAMES = 60 * 180, SOFT_SECONDS = 25;
+const LADDER_MATCHES = 2, LEVEL = 5, CAP_FRAMES = 60 * 180, SOFT_SECONDS = 25;
 const KO_MOVES = ["ftilt", "fsmash", "usmash", "dsmash", "fair", "bair", "uair", "dair", "nair", "nspecial", "sspecial", "dspecial"];
 
 class HookLog {
@@ -123,7 +123,7 @@ export async function runChecks(input: CheckInput): Promise<CheckReport> {
       row.dealtPerMatch = Math.round(row.dealtPerMatch / LADDER_MATCHES);
       r.ladder[opp] = row;
     }
-    if (dealt === 0) hard(`ladder: dealt 0% in ${LADDER.length * LADDER_MATCHES} CPU level-9 matches. The CPU can't land anything: check hitbox positions (x forward, y negative is UP), active frames inside total, and that jab1/ftilt/fsmash have hitboxes near the body (x 20-120, y -20..-${height})`);
+    if (dealt === 0) hard(`ladder: dealt 0% in ${LADDER.length * LADDER_MATCHES} UNFAIR CPU matches. The CPU can't land anything: check hitbox positions (x forward, y negative is UP), active frames inside total, and that jab1/ftilt/fsmash have hitboxes near the body (x 20-120, y -20..-${height})`);
     const all = Object.values(r.ladder);
     const w = all.reduce((a, x) => a + x.wins, 0), total = LADDER.length * LADDER_MATCHES;
     const secs = all.reduce((a, x) => a + x.avgSeconds, 0) / all.length;

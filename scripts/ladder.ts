@@ -1,5 +1,5 @@
 // CPU-vs-CPU ladder: every fighter against every fighter, prints a win-rate matrix and match stats.
-// Usage: tsx scripts/ladder.ts [matches per pair=4] [level=9] [stage=proving]   (the house roster)
+// Usage: tsx scripts/ladder.ts [matches per pair=4] [tier=5] [stage=proving]   (the house roster)
 import { createMatch, step } from "../shared/sim";
 import { cpuInput } from "../shared/cpu";
 import { rosterList } from "../shared/fighters/index";
@@ -7,7 +7,7 @@ import { loadAllHouse } from "../test/house";
 
 await loadAllHouse();
 
-const N = Number(process.argv[2] ?? 4), LEVEL = Number(process.argv[3] ?? 9), STAGE = process.argv[4] ?? "proving";
+const N = Number(process.argv[2] ?? 4), LEVEL = Number(process.argv[3] ?? 5), STAGE = process.argv[4] ?? "proving";
 const ids = rosterList.map((d) => d.id);
 const wins: Record<string, Record<string, number>> = {};
 let totalFrames = 0, matches = 0, warn = 0;

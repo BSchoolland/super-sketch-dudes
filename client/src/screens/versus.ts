@@ -12,6 +12,7 @@ import { B } from "../../../shared/input";
 import { roster } from "../../../shared/fighters/index";
 import { currentMove } from "../../../shared/fighter";
 import { knockback } from "../../../shared/hits";
+import { DEFAULT_TIER } from "../../../shared/cpu-skill";
 
 const STEP = 1000 / 60;
 
@@ -89,7 +90,7 @@ export class VersusScreen implements Screen {
         if (inp.y <= -60) d.percent = Math.min(999, d.percent + 1);
         if (inp.y >= 60) d.percent = Math.max(0, d.percent - 1);
       }
-      if (d && (inp.b & B.TAUNT) && (inp.b & B.SPECIAL) && !this.dummyToggled) { const on = !this.match.sources[1].cpu; this.match.sources[1].cpu = on ? 5 : 0; d.cpu = on ? 5 : 0; this.renderer.names[1] = on ? "CPU" : "DUMMY"; this.dummyToggled = true; }
+      if (d && (inp.b & B.TAUNT) && (inp.b & B.SPECIAL) && !this.dummyToggled) { const on = !this.match.sources[1].cpu; this.match.sources[1].cpu = on ? DEFAULT_TIER : 0; d.cpu = on ? DEFAULT_TIER : 0; this.renderer.names[1] = on ? "CPU" : "DUMMY"; this.dummyToggled = true; }
       if (!((inp.b & B.TAUNT) && (inp.b & B.SPECIAL))) this.dummyToggled = false;
     }
     const events = this.match.takeEvents();

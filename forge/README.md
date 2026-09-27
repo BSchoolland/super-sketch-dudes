@@ -36,7 +36,7 @@ forge/
    - `lintGeneratedSource`, `buildGenerated`, `validateGenerated` (shared/gen/load.ts)
    - determinism: 4-player CPU match (fighter + three stock), 2400 frames, resim from a snapshot at
      1200 must hash equal; zero `hookError` events
-   - ladder: fighter vs each stock fighter, level 9, 2 matches each, 3-minute cap. Hard fails:
+   - ladder: fighter vs each stock fighter, CPU tier 5 (UNFAIR), 2 matches each, 3-minute cap. Hard fails:
      never deals damage; any `hookError`; a match that throws. Soft (reported, not failed): 100% win
      rate with average match under 25s, or 0% with under 25s
    - recovery: scripts/botcheck.ts's recovery check, must recover 6/10

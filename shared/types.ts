@@ -435,6 +435,9 @@ export type GameEvent =
   | { t: "end"; frame: number; winner: number }
   | { t: "suddenDeath"; frame: number };
 
+/** What a fighter looked like on one frame, as far as someone watching it could tell. */
+export type Glimpse = Pick<Fighter, "x" | "y" | "vx" | "vy" | "facing" | "grounded" | "action" | "frame" | "move" | "moveFacing" | "percent" | "shieldHeld" | "ledge" | "invuln" | "hitstun">;
+
 export interface State {
   frame: number;
   rng: number;
@@ -456,4 +459,6 @@ export interface State {
   platOffsets: { dx: number; dy: number }[];
   /** Previous frame's inputs, for edge detection. */
   inputs: InputFrame[];
+  /** Every fighter at the end of each recent frame, newest first, so a CPU can react late. Entries are never mutated. */
+  seen: Glimpse[][];
 }

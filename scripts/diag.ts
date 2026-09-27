@@ -8,7 +8,7 @@ const s = createMatch({ stage: "proving", players: [{ fighter: id }, { fighter: 
 const actions: Record<string, number> = {};
 let hits = 0, kos = 0;
 for (let i = 0; i < 60 * 120; i++) {
-  step(s, [cpuInput(s, 0, 9), cpuInput(s, 1, 9)]);
+  step(s, [cpuInput(s, 0, 5), cpuInput(s, 1, 5)]);
   for (const e of s.events) { if (e.t === "hit") hits++; if (e.t === "ko") kos++; }
   s.events.length = 0;
   for (const f of s.fighters) actions[f.action] = (actions[f.action] ?? 0) + 1;

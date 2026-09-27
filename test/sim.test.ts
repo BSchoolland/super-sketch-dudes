@@ -16,8 +16,8 @@ describe("determinism", () => {
     const a = two(), b = two();
     let snap = null as ReturnType<typeof cloneState> | null;
     for (let i = 0; i < 1200; i++) {
-      const ia = [cpuInput(a, 0, 9), cpuInput(a, 1, 6)];
-      const ib = [cpuInput(b, 0, 9), cpuInput(b, 1, 6)];
+      const ia = [cpuInput(a, 0, 5), cpuInput(a, 1, 3)];
+      const ib = [cpuInput(b, 0, 5), cpuInput(b, 1, 3)];
       expect(ia).toEqual(ib);
       step(a, ia); step(b, ib);
       if (i === 600) snap = cloneState(a);
@@ -27,7 +27,7 @@ describe("determinism", () => {
     // resimulate from the snapshot with the same CPU inputs
     const c = snap!;
     const d = two();
-    for (let i = 0; i < 601; i++) step(d, [cpuInput(d, 0, 9), cpuInput(d, 1, 6)]);
+    for (let i = 0; i < 601; i++) step(d, [cpuInput(d, 0, 5), cpuInput(d, 1, 3)]);
     expect(hashState(c)).toBe(hashState(d));
   });
 });
@@ -120,7 +120,7 @@ describe("a full CPU match ends", () => {
   it("two level-9 bots finish a 3-stock match in under 4 minutes", () => {
     const s = two(3);
     let frames = 0;
-    while (!s.ended && frames < 60 * 240) { step(s, [cpuInput(s, 0, 9), cpuInput(s, 1, 9)]); s.events.length = 0; frames++; }
+    while (!s.ended && frames < 60 * 240) { step(s, [cpuInput(s, 0, 5), cpuInput(s, 1, 5)]); s.events.length = 0; frames++; }
     expect(s.ended).toBe(true);
   });
 });
@@ -129,7 +129,7 @@ describe("menu brawl stage", () => {
   it("runs six CPUs for a minute on the title screen's stage, fighters dropping in mid-match, and never ends", async () => {
     await loadAllHouse();
     const ids = ["woodstove", "slugbert", "rocket", "wizard", "lampjack", "woodstove"];
-    const s = createMatch({ stage: "menu", players: ids.slice(0, 2).map((fighter) => ({ fighter, cpu: 9 })), rules: { stocks: 99, time: 0 }, seed: 11 });
+    const s = createMatch({ stage: "menu", players: ids.slice(0, 2).map((fighter) => ({ fighter, cpu: 5 })), rules: { stocks: 99, time: 0 }, seed: 11 });
     const stage = stages.menu;
     for (let frame = 0; frame < 3600; frame++) {
       if (frame % 600 === 599 && s.fighters.length < 6) {
@@ -138,7 +138,7 @@ describe("menu brawl stage", () => {
         s.inputs.push({ ...EMPTY_INPUT });
         s.fighters[slot].x = stage.respawn.x; s.fighters[slot].y = stage.respawn.y; s.fighters[slot].grounded = false;
       }
-      step(s, s.fighters.map((_, i) => cpuInput(s, i, 9)));
+      step(s, s.fighters.map((_, i) => cpuInput(s, i, 5)));
       s.ended = false;
       s.events.length = 0;
     }
@@ -150,13 +150,13 @@ describe("menu brawl stage", () => {
 describe("CPU pathing", () => {
   it("climbs from the menu floor to a target standing on top of the menu cards, by way of the circling platform and a shelf", async () => {
     await loadAllHouse();
-    const s = createMatch({ stage: "menu", players: [{ fighter: "lampjack", cpu: 9 }, { fighter: "woodstove", cpu: 0 }], rules: { stocks: 99, time: 0 }, seed: 3 });
+    const s = createMatch({ stage: "menu", players: [{ fighter: "lampjack", cpu: 5 }, { fighter: "woodstove", cpu: 0 }], rules: { stocks: 99, time: 0 }, seed: 3 });
     const [cpu, dummy] = s.fighters;
     cpu.x = 300; cpu.y = 1000; cpu.platform = 0;
     dummy.x = 960; dummy.y = 350; dummy.platform = 1; dummy.grounded = true;
     let closest = Infinity, reachedAt = -1;
     for (let frame = 0; frame < 3600; frame++) {
-      step(s, [cpuInput(s, 0, 9), EMPTY_INPUT]);
+      step(s, [cpuInput(s, 0, 5), EMPTY_INPUT]);
       s.ended = false; s.events.length = 0;
       dummy.x = 960; dummy.y = 350; dummy.platform = 1; dummy.grounded = true; dummy.percent = 0; dummy.action = "idle"; dummy.stocks = 99;
       const d = Math.hypot(cpu.x - dummy.x, cpu.y - dummy.y);

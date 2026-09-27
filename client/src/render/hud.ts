@@ -1,6 +1,7 @@
 import { FONT, INK, PAPER, inkArc, paperCard } from "./paper";
 import type { State } from "../../../shared/types";
 import { roster } from "../../../shared/fighters/index";
+import { tierName } from "../../../shared/cpu-skill";
 import { VIEW_H, VIEW_W } from "./camera";
 
 export const SLOT_COLORS = ["#e4483f", "#287ad4", "#ddb51d", "#329854"];
@@ -66,7 +67,7 @@ export function drawHud(ctx: CanvasRenderingContext2D, state: State, hud: HudSta
       ctx.fillStyle = SLOT_COLORS[i]; ctx.font = `700 9px ${FONT}`; ctx.textAlign = "left";
       ctx.fillText(m.label, mx + 124, my + 6);
     });
-    if (f.cpu) { ctx.fillStyle = INK; ctx.font = `600 12px ${FONT}`; ctx.textAlign = "left"; ctx.fillText(`CPU ${f.cpu}`, x + 120, y + 34); }
+    if (f.cpu) { ctx.fillStyle = INK; ctx.font = `600 12px ${FONT}`; ctx.textAlign = "left"; ctx.fillText(tierName(f.cpu), x + 120, y + 34); }
   });
   ctx.globalAlpha = 1;
   // timer

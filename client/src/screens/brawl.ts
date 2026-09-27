@@ -14,7 +14,7 @@ import { houseChoices, type FighterChoice } from "../fighters";
 const STEP = 1000 / 60;
 const SPAWN_EVERY = 20;
 const MAX_FIGHTERS = 6;
-const CPU_LEVELS = [4, 5, 6, 7, 8, 9];
+const CPU_TIERS = [3, 4, 5];
 
 interface Contender { id: string; bundleUrl: string }
 
@@ -63,7 +63,7 @@ export class MenuBrawl {
   }
 
   private begin(a: string, b: string): void {
-    const cfg: MatchConfig = { stage: "menu", players: [a, b].map((fighter) => ({ fighter, cpu: CPU_LEVELS[this.rand(CPU_LEVELS.length)] })), rules: { stocks: 1, time: 0 }, seed: this.rng };
+    const cfg: MatchConfig = { stage: "menu", players: [a, b].map((fighter) => ({ fighter, cpu: CPU_TIERS[this.rand(CPU_TIERS.length)] })), rules: { stocks: 1, time: 0 }, seed: this.rng };
     this.state = createMatch(cfg);
     this.cpus = this.state.fighters.map((f) => f.cpu);
     this.inputs = this.state.fighters.map(() => cloneInput(EMPTY_INPUT));
@@ -77,7 +77,7 @@ export class MenuBrawl {
   private spawn(id: string): void {
     const st = this.state!;
     const stage = stageOf(st);
-    const cpu = CPU_LEVELS[this.rand(CPU_LEVELS.length)];
+    const cpu = CPU_TIERS[this.rand(CPU_TIERS.length)];
     let slot: number;
     const dead = st.fighters.findIndex((f) => f.stocks <= 0);
     if (dead >= 0) {

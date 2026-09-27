@@ -27,13 +27,13 @@ describe("generated fighters", () => {
   it("a 4-player CPU match with a generated fighter resimulates from a snapshot to the same hash", async () => {
     const def = await buildGenerated({ id: "gen-lamp", source, sprite, player: "test", description: "a lamp" });
     registerFighter(def);
-    const cfg = { stage: "proving", players: [{ fighter: "gen-lamp", cpu: 9 }, { fighter: "woodstove", cpu: 9 }, { fighter: "slugbert", cpu: 9 }, { fighter: "gen-lamp", cpu: 9 }], seed: 7 };
+    const cfg = { stage: "proving", players: [{ fighter: "gen-lamp", cpu: 5 }, { fighter: "woodstove", cpu: 5 }, { fighter: "slugbert", cpu: 5 }, { fighter: "gen-lamp", cpu: 5 }], seed: 7 };
     const a = createMatch(cfg);
     let snap: ReturnType<typeof cloneState> | null = null;
     const inputsAt: ReturnType<typeof cpuInput>[][] = [];
     let hookErrors = 0, moves = new Set<string>();
     for (let i = 0; i < 2400; i++) {
-      const inputs = a.fighters.map((f) => cpuInput(a, f.slot, 9));
+      const inputs = a.fighters.map((f) => cpuInput(a, f.slot, 5));
       inputsAt.push(inputs);
       step(a, inputs);
       for (const e of a.events) { if (e.t === "hookError") hookErrors++; if (e.t === "move" && a.fighters[e.slot].id === "gen-lamp") moves.add(e.move); }

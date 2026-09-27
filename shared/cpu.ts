@@ -4,12 +4,11 @@ import { currentMove, defOf, isActionable } from "./fighter";
 import { knockback } from "./hits";
 import { B, type InputFrame } from "./input";
 import { EMPTY_MOVE, SPECIALS, profileOf, type MoveInfo, type Profile, type SpecialId } from "./cpu-profile";
+import { at, skillOf, type Skill } from "./cpu-skill";
 import { stageOf } from "./sim";
 import { canCross, legs, route, surfaces, surfaceUnder, type Surface } from "./nav";
-import type { Fighter, Hitbox, Move, Stage, State } from "./types";
+import type { Fighter, Hitbox, Move, Projectile, Stage, State } from "./types";
 
-const REACTION = [30, 30, 26, 21, 15, 11, 8, 6, 4, 3];
-const THINK = [12, 12, 10, 8, 7, 6, 5, 4, 3, 2];
 
 const profile = (f: Fighter): Profile => profileOf(defOf(f));
 const reachOf = (f: Fighter): Record<string, MoveInfo> => profile(f).reach;
@@ -53,7 +52,8 @@ function offStage(state: State, f: Fighter, stage: Stage): boolean {
   return !f.grounded && (f.x < main.x1 - 8 || f.x > main.x2 + 8 || f.y > main.y + 35);
 }
 
-function moveCanReach(attacker: Fighter, victim: Fighter, moveId: string, facing: 1 | -1): boolean {
+/** `slack` is how much farther than the truth the attacker believes the move reaches. */
+function moveCanReach(attacker: Fighter, victim: Fighter, moveId: string, facing: 1 | -1, slack = 0): boolean {
   const info = reachOf(attacker)[moveId];
   if (!info || info.first === 999) return false;
   const vdef = defOf(victim);
@@ -63,7 +63,7 @@ function moveCanReach(attacker: Fighter, victim: Fighter, moveId: string, facing
   const relY = victim.y - attacker.y;
   const hurtTop = relY - vdef.stats.height;
   const hurtBottom = relY;
-  return info.maxX >= hurtLeft && info.minX <= hurtRight && info.maxY >= hurtTop && info.minY <= hurtBottom;
+  return info.maxX + slack >= hurtLeft && info.minX <= hurtRight && info.maxY >= hurtTop && info.minY <= hurtBottom;
 }
 
 function moveNearReach(attacker: Fighter, victim: Fighter, moveId: string, facing: 1 | -1, extra: number): boolean {
@@ -77,23 +77,61 @@ function moveNearReach(attacker: Fighter, victim: Fighter, moveId: string, facin
     info.maxY + extra >= relY - vdef.stats.height && info.minY - extra <= relY;
 }
 
-function attackThreatens(attacker: Fighter, victim: Fighter, level: number): boolean {
-  if (attacker.action !== "attack" || !attacker.move || attacker.frame < REACTION[level]) return false;
+/** `attacker` is as the CPU perceives it, so the attack is already `sk.delay` frames further along than it looks. */
+function attackThreatens(attacker: Fighter, victim: Fighter, sk: Skill): boolean {
+  if (attacker.action !== "attack" || !attacker.move) return false;
   const info = reachOf(attacker)[attacker.move];
   if (!info || attacker.frame > info.last + 1) return false;
-  const startupLead = level >= 8 ? 5 : level >= 6 ? 3 : 1;
+  const startupLead = sk.c >= 0.8 ? 5 : sk.c >= 0.5 ? 3 : 1;
   if (attacker.frame + startupLead < info.first) return false;
-  return moveNearReach(attacker, victim, attacker.move, attacker.moveFacing, 18 + level * 3);
+  return moveNearReach(attacker, victim, attacker.move, attacker.moveFacing, at(sk, 21, 45));
 }
 
-function incomingProjectile(state: State, f: Fighter, range: number): boolean {
+/** The soonest shot the CPU has been around long enough to notice that will cross its body, and the frames until it does. */
+function incomingShot(state: State, f: Fighter, sk: Skill): { p: Projectile; t: number } | null {
+  const def = defOf(f);
+  let best: { p: Projectile; t: number } | null = null;
   for (const p of state.projectiles) {
-    if (p.owner === f.slot || p.dead) continue;
-    const dx = f.x - p.x, dy = f.y - defOf(f).stats.height * 0.5 - p.y;
-    if (dx * dx + dy * dy > range * range) continue;
-    if (p.vx * dx + p.vy * dy > 0) return true;
+    if (p.dead || p.owner === f.slot || p.age < sk.delay) continue;
+    if (state.rules.teams && state.fighters[p.owner].team === f.team) continue;
+    const dx = f.x - p.x;
+    const gap = Math.max(0, Math.abs(dx) - def.stats.width * 0.5 - p.hb.r);
+    if (gap > 0 && (p.vx * dx <= 0 || Math.abs(p.vx) < 0.5)) continue;
+    const t = gap > 0 ? gap / Math.abs(p.vx) : 0;
+    if (t > 45) continue;
+    const y = p.y + p.vy * t;
+    if (y < f.y - def.stats.height - p.hb.r || y > f.y + p.hb.r) continue;
+    if (!best || t < best.t) best = { p, t };
   }
-  return false;
+  return best;
+}
+
+/** A shot it has seen coming, if it reads it right: turned back with a counter or reflector, jumped, air dodged or shielded. */
+function shotAnswer(state: State, f: Fighter, sk: Skill): InputFrame | null {
+  const shot = incomingShot(state, f, sk);
+  if (!shot || hash(state, f, 0x5407 + shot.p.id * 0x9e37, 1 << 20) % 100 >= at(sk, 10, 95)) return null;
+  const { p, t } = shot;
+  const toward = sign(p.x - f.x) as 1 | -1;
+  const moves = defOf(f).moves;
+  for (const s of NEUTRAL_SPECIALS) {
+    const mv = moves[s];
+    const opens = mv.counter ? mv.counter.frames[0] : mv.reflect ? reachOf(f)[s].first : -1;
+    if (opens >= 0 && t >= opens && t <= opens + 4 && (mv.counter || s === "sspecial" || f.facing === toward)) return startSpecial(state, f, s, toward);
+  }
+  const out = blank();
+  const low = p.y > f.y - defOf(f).stats.height * 0.6;
+  if (f.grounded) {
+    if (t <= 9) {
+      if (f.shield <= 15) return null;
+      out.b = B.SHIELD;
+      return out;
+    }
+    if (t <= 20 && low) { out.x = toward * 60; out.b = pulse(state, f.slot, B.JUMP); return out; }
+    return null;
+  }
+  if (t <= 16 && t > 6 && low && f.jumpsLeft > 0) { out.x = toward * 60; out.b = pulse(state, f.slot, B.JUMP); return out; }
+  if (t <= 6 && !f.airDodged) { out.b = pulse(state, f.slot, B.SHIELD); return out; }
+  return null;
 }
 
 function impendingCollision(state: State, f: Fighter, stage: Stage): boolean {
@@ -112,7 +150,7 @@ function impendingCollision(state: State, f: Fighter, stage: Stage): boolean {
   return false;
 }
 
-function disadvantageInput(state: State, f: Fighter, target: Fighter | null, level: number, stage: Stage): InputFrame {
+function disadvantageInput(state: State, f: Fighter, target: Fighter | null, sk: Skill, stage: Stage): InputFrame {
   const out = blank();
   if (f.hitlag > 0 && f.pending) {
     const attacker = state.fighters[f.pending.attacker] ?? target;
@@ -120,6 +158,7 @@ function disadvantageInput(state: State, f: Fighter, target: Fighter | null, lev
     const nearEdge = profile(f).cautious && (f.x < main.x1 + 170 || f.x > main.x2 - 170);
     out.x = nearEdge ? sign((main.x1 + main.x2) * 0.5 - f.x) * 90 : attacker ? sign(f.x - attacker.x) * 85 : sign(-f.pending.vx) * 85;
     out.y = -100;
+    if (hash(state, f, 0xd1d1, 30) % 100 >= at(sk, 25, 100)) { out.x = 0; out.y = 0; }
     return out;
   }
   if (f.action === "grabbed" || f.action === "thrown") {
@@ -135,11 +174,11 @@ function disadvantageInput(state: State, f: Fighter, target: Fighter | null, lev
     const nearEdge = profile(f).cautious && (f.x < main.x1 + 140 || f.x > main.x2 - 140);
     out.x = nearEdge ? sign((main.x1 + main.x2) * 0.5 - f.x) * 90 : attacker ? sign(f.x - attacker.x) * 80 : sign(-f.vx) * 80;
     out.y = -70;
-    if (level >= 4 && f.action === "tumble" && impendingCollision(state, f, stage)) {
-      const chance = level >= 7 ? 92 : 28 + level * 8;
-      if (hash(state, f, 0x51ed, 7) % 100 < chance) out.b = pulse(state, f.slot, B.SHIELD);
+    if (hash(state, f, 0xd1d1, 30) % 100 >= at(sk, 25, 100)) { out.x = 0; out.y = 0; }
+    if (sk.c >= 0.3 && f.action === "tumble" && impendingCollision(state, f, stage)) {
+      if (hash(state, f, 0x51ed, 7) % 100 < at(sk, 30, 95)) out.b = pulse(state, f.slot, B.SHIELD);
     }
-    if (f.action === "tumble" && f.frame >= f.hitstun && level >= 6 && !f.airDodged && hash(state, f, 0xada, 45) % 100 < level * 5) {
+    if (f.action === "tumble" && f.frame >= f.hitstun && sk.c >= 0.55 && !f.airDodged && hash(state, f, 0xada, 45) % 100 < at(sk, 5, 45)) {
       out.b = pulse(state, f.slot, B.SHIELD);
       out.x = -sign(f.vx) * 70;
     }
@@ -148,15 +187,15 @@ function disadvantageInput(state: State, f: Fighter, target: Fighter | null, lev
   return out;
 }
 
-function ledgeInput(state: State, f: Fighter, target: Fighter | null, level: number, stage: Stage): InputFrame {
+function ledgeInput(state: State, f: Fighter, target: Fighter | null, sk: Skill, stage: Stage): InputFrame {
   const out = blank();
   if (f.action === "ledgeGrab") return out;
-  const wait = level >= 7 ? 8 + hash(state, f, 0x1ed9, 60) % 16 : 18 + hash(state, f, 0x1ed9, 90) % 35;
+  const wait = sk.c >= 0.8 ? 8 + hash(state, f, 0x1ed9, 60) % 16 : 18 + hash(state, f, 0x1ed9, 90) % 35;
   if (f.ledgeTime < wait) return out;
   const ledge = stage.ledges[f.ledge];
   const close = target && Math.abs(target.x - f.x) < 145;
   const option = hash(state, f, 0x1ed6, 90) % 100;
-  if (close && option < 28 + level * 3) out.b = pulse(state, f.slot, B.ATTACK);
+  if (close && option < at(sk, 31, 55)) out.b = pulse(state, f.slot, B.ATTACK);
   else if (option < 45) out.b = pulse(state, f.slot, B.SHIELD);
   else if (option < 70) out.b = pulse(state, f.slot, B.JUMP);
   else if (option < 92) out.x = -ledge.side * 55;
@@ -164,7 +203,7 @@ function ledgeInput(state: State, f: Fighter, target: Fighter | null, level: num
   return out;
 }
 
-function recoveryInput(state: State, f: Fighter, level: number, stage: Stage): InputFrame {
+function recoveryInput(state: State, f: Fighter, sk: Skill, stage: Stage): InputFrame {
   const out = blank();
   const def = defOf(f), main = mainBounds(state, stage);
   const side: 1 | -1 = f.x < (main.x1 + main.x2) * 0.5 ? -1 : 1;
@@ -195,7 +234,7 @@ function recoveryInput(state: State, f: Fighter, level: number, stage: Stage): I
   if (!f.airDodged && (f.usedUpSpecial || f.jumpsLeft === 0)) {
     const pursuer = targetOf(state, f);
     const pursued = pursuer && Math.abs(pursuer.x - f.x) < 270 && Math.abs(pursuer.y - f.y) < 220;
-    if ((pursued || incomingProjectile(state, f, 260) || f.y > ledgeY + 280) && hash(state, f, 0xa1d0, 24) % 100 < 38 + level * 6) {
+    if ((pursued || (incomingShot(state, f, sk)?.t ?? 99) < 30 || f.y > ledgeY + 280) && hash(state, f, 0xa1d0, 24) % 100 < at(sk, 44, 92)) {
       out.x = toward * 100;
       out.y = f.y > ledgeY + 80 ? -55 : 0;
       out.b = pulse(state, f.slot, B.SHIELD);
@@ -251,7 +290,7 @@ function sidewaysRecovery(f: Fighter, p: Profile): SpecialId | null {
   return best;
 }
 
-const SMASHES = ["fsmash", "usmash", "dsmash"] as const;
+const SMASHES = ["usmash", "fsmash", "dsmash"] as const;
 
 function startSmash(state: State, f: Fighter, move: "fsmash" | "usmash" | "dsmash", facing: 1 | -1): InputFrame {
   const out = blank();
@@ -316,24 +355,22 @@ function likelyKills(state: State, f: Fighter, target: Fighter, moveId: string, 
     (angleY > 0.45 && travel * angleY > verticalDistance * 0.82);
 }
 
-function killMove(state: State, f: Fighter, target: Fighter, facing: 1 | -1): "fsmash" | "usmash" | "dsmash" | null {
-  if (moveCanReach(f, target, "usmash", facing) && likelyKills(state, f, target, "usmash", facing)) return "usmash";
-  if (moveCanReach(f, target, "fsmash", facing) && likelyKills(state, f, target, "fsmash", facing)) return "fsmash";
-  if (moveCanReach(f, target, "dsmash", facing) && likelyKills(state, f, target, "dsmash", facing)) return "dsmash";
+function killMove(state: State, f: Fighter, target: Fighter, facing: 1 | -1, sk: Skill): "fsmash" | "usmash" | "dsmash" | null {
+  for (const m of SMASHES) if (moveCanReach(f, target, m, facing, sk.slack) && likelyKills(state, f, target, m, facing)) return m;
   return null;
 }
 
-function handleCommitted(state: State, f: Fighter, target: Fighter | null, level: number, stage: Stage): InputFrame | null {
+function handleCommitted(state: State, f: Fighter, target: Fighter | null, sk: Skill, stage: Stage): InputFrame | null {
   if (f.action === "smashCharge") {
     const out = blank();
     const targetUnsafe = target && (target.action === "hitstun" || target.action === "tumble" || target.action === "knockdown" || target.action === "shieldBreak");
-    const desired = targetUnsafe ? 12 + level * 3 : level >= 7 ? 8 : 2;
+    const desired = targetUnsafe ? at(sk, 15, 39) : sk.c >= 0.8 ? 8 : 2;
     if (f.charge < desired && (!target || Math.abs(target.x - f.x) > 95 || targetUnsafe)) out.b = B.ATTACK;
     return out;
   }
   if (f.action === "shield") {
     const out = blank();
-    const danger = target && attackThreatens(target, f, level);
+    const danger = (target && attackThreatens(target, f, sk)) || (incomingShot(state, f, sk)?.t ?? 99) < 14;
     if (danger && f.shield > 10) out.b = B.SHIELD;
     return out;
   }
@@ -355,7 +392,7 @@ function handleCommitted(state: State, f: Fighter, target: Fighter | null, level
   }
   if (f.action === "attack") {
     const out = blank();
-    if (offStage(state, f, stage)) return recoveryInput(state, f, level, stage);
+    if (offStage(state, f, stage)) return recoveryInput(state, f, sk, stage);
     const move = currentMove(f);
     if (!move) return out;
     const probe = profile(f).specials[f.move as SpecialId];
@@ -367,7 +404,7 @@ function handleCommitted(state: State, f: Fighter, target: Fighter | null, level
       } else {
         // a charge: build it while it's safe, let go at a random moment
         const safe = target && (Math.abs(target.x - f.x) > 190 || target.action === "hitstun" || target.action === "tumble");
-        if (safe && hash(state, f, 0xc4a6) % 100 >= 6 - Math.floor(level / 3)) out.b = B.SPECIAL;
+        if (safe && hash(state, f, 0xc4a6) % 100 >= Math.round(at(sk, 6, 3))) out.b = B.SPECIAL;
       }
       if (target && !f.grounded) out.x = sign(target.x - f.x) * 45;
       return out;
@@ -388,37 +425,37 @@ function landsOnStage(state: State, f: Fighter, stage: Stage, dx: number): boole
   return x > main.x1 + 50 && x < main.x2 - 50;
 }
 
-function ownsProjectile(state: State, f: Fighter): boolean {
-  for (const p of state.projectiles) if (p.owner === f.slot && !p.dead) return true;
+/** Whether `f` has a shot out that has been out for at least `age` frames. */
+function ownsProjectile(state: State, f: Fighter, age = 0): boolean {
+  for (const p of state.projectiles) if (p.owner === f.slot && !p.dead && p.age >= age) return true;
   return false;
 }
 
-function specialChoice(state: State, f: Fighter, target: Fighter, level: number, facing: 1 | -1, distance: number, stage: Stage): InputFrame | null {
+function specialChoice(state: State, f: Fighter, target: Fighter, sk: Skill, facing: 1 | -1, distance: number, stage: Stage): InputFrame | null {
   const p = profile(f), moves = defOf(f).moves;
-  const committing = target.action === "attack" && target.frame >= REACTION[level];
   const dy = target.y - f.y;
   for (const [i, s] of NEUTRAL_SPECIALS.entries()) {
     const mv = moves[s], probe = p.specials[s];
     const aimed = s === "sspecial" || f.facing === facing;
     const roll = (salt: number, period: number) => hash(state, f, salt + i * 0x101, period) % 100;
     if (mv.counter) {
-      if (committing && attackThreatens(target, f, level) && roll(0x71f0, 30) < 10 + level * 3) return startSpecial(state, f, s, facing);
+      if (attackThreatens(target, f, sk) && roll(0x71f0, 30) < at(sk, 13, 37)) return startSpecial(state, f, s, facing);
       continue;
     }
     if (mv.helpless) continue;
-    if (moveCanReach(f, target, s, facing) && roll(0x5e11, 25) < 10 + level * 3) return startSpecial(state, f, s, facing);
+    if (moveCanReach(f, target, s, facing, sk.slack) && roll(0x5e11, 25) < at(sk, 13, 37)) return startSpecial(state, f, s, facing);
     if (!probe || !aimed || !landsOnStage(state, f, stage, probe.groundDx)) continue;
-    if (probe.shotRange > 0 && distance > 140 && distance < probe.shotRange * 0.9 && Math.abs(dy) < 90 && !ownsProjectile(state, f) && roll(0x5106, 35) < 14 + level * 4) return startSpecial(state, f, s, facing);
-    if (probe.groundDx > 150 && mv.hitboxes.length && distance > 150 && distance < probe.groundDx * 0.9 && Math.abs(dy) < 60 && roll(0x7a6e, 40) < 8 + level * 3) return startSpecial(state, f, s, facing);
+    if (probe.shotRange > 0 && distance > 140 && distance < probe.shotRange * 0.9 && Math.abs(dy) < 90 && !ownsProjectile(state, f) && roll(0x5106, 35) < at(sk, 18, 50)) return startSpecial(state, f, s, facing);
+    if (probe.groundDx > 150 && mv.hitboxes.length && distance > 150 && distance < probe.groundDx * 0.9 && Math.abs(dy) < 60 && roll(0x7a6e, 40) < at(sk, 11, 35)) return startSpecial(state, f, s, facing);
     // a special that shows no hit, shot or movement (a stance, a transformation): now and then, from far away
     const inert = !mv.hitboxes.length && !probe.shotRange && Math.abs(probe.groundDx) < 40;
-    if (inert && distance > 380 && roll(0x1a9e, 60) < 2 + level) return startSpecial(state, f, s, facing);
+    if (inert && distance > 380 && roll(0x1a9e, 60) < at(sk, 3, 11)) return startSpecial(state, f, s, facing);
   }
   return null;
 }
 
-function edgeguardInput(state: State, f: Fighter, target: Fighter, level: number, stage: Stage): InputFrame | null {
-  if (level < 5 || !offStage(state, target, stage) || !f.grounded) return null;
+function edgeguardInput(state: State, f: Fighter, target: Fighter, sk: Skill, stage: Stage): InputFrame | null {
+  if (sk.c < 0.5 || !offStage(state, target, stage) || !f.grounded) return null;
   const main = mainBounds(state, stage);
   const side: 1 | -1 = target.x < (main.x1 + main.x2) * 0.5 ? -1 : 1;
   const ledgeX = side < 0 ? main.x1 : main.x2;
@@ -430,7 +467,7 @@ function edgeguardInput(state: State, f: Fighter, target: Fighter, level: number
   const targetDistance = Math.abs(target.x - f.x);
   if (target.ledge >= 0 && target.invuln < 8 && targetDistance < 180) {
     const facing = sign(target.x - f.x) as 1 | -1;
-    const smash = killMove(state, f, target, facing);
+    const smash = killMove(state, f, target, facing, sk);
     if (smash) return startSmash(state, f, smash, facing);
     return startTilt(state, f, "ftilt", facing);
   }
@@ -438,7 +475,7 @@ function edgeguardInput(state: State, f: Fighter, target: Fighter, level: number
   const edgeRange = stockLead ? 330 : 210;
   const edgeDepth = stockLead ? 210 : 100;
   const edgeChance = stockLead ? 72 : 35;
-  if (!profile(f).cautious && level >= 7 && targetDistance < edgeRange && target.y < main.y + edgeDepth && target.y > main.y - 190 && hash(state, f, 0xed6e, 45) % 100 < edgeChance) {
+  if (!profile(f).cautious && sk.c >= 0.8 && targetDistance < edgeRange && target.y < main.y + edgeDepth && target.y > main.y - 190 && hash(state, f, 0xed6e, 45) % 100 < edgeChance) {
     const out = blank(); out.x = side * 80; out.b = pulse(state, f.slot, B.JUMP); return out;
   }
   return blank();
@@ -489,7 +526,7 @@ function navInput(state: State, f: Fighter, target: Fighter, stage: Stage): Inpu
   return out;
 }
 
-function aerialNeutral(state: State, f: Fighter, target: Fighter, level: number, stage: Stage): InputFrame {
+function aerialNeutral(state: State, f: Fighter, target: Fighter, sk: Skill, stage: Stage): InputFrame {
   const out = blank();
   const dx = target.x - f.x, dy = target.y - f.y;
   out.x = sign(dx) * (Math.abs(dx) > 45 ? 80 : 35);
@@ -503,118 +540,144 @@ function aerialNeutral(state: State, f: Fighter, target: Fighter, level: number,
     if (f.vy > 0 && r.next.y > f.y + 60 && Math.abs(ax) <= 8) out.y = 100;
     return out;
   }
-  const facingToTarget = sign(dx) === f.facing;
+  const dodge = shotAnswer(state, f, sk);
+  if (dodge) return dodge;
+  const facingToTarget = sign(dx) === f.facing, slack = sk.slack;
   if (target.action === "tumble" || target.action === "hitstun") {
-    if (dy < -35 && moveCanReach(f, target, "uair", f.facing)) return startAerial(state, f, "uair");
+    if (dy < -35 && moveCanReach(f, target, "uair", f.facing, slack)) return startAerial(state, f, "uair");
   }
-  if (Math.abs(dx) < 90 && dy > 30 && moveCanReach(f, target, "dair", f.facing) && level >= 6) return startAerial(state, f, "dair");
-  if (facingToTarget && moveCanReach(f, target, "fair", f.facing)) return startAerial(state, f, "fair");
-  if (!facingToTarget && moveCanReach(f, target, "bair", f.facing)) return startAerial(state, f, "bair");
-  if (moveCanReach(f, target, "nair", f.facing)) return startAerial(state, f, "nair");
-  if (f.vy > 0 && f.y < target.y - 20 && level >= 4) out.y = 100;
+  if (Math.abs(dx) < 90 && dy > 30 && moveCanReach(f, target, "dair", f.facing, slack) && sk.c >= 0.55) return startAerial(state, f, "dair");
+  if (facingToTarget && moveCanReach(f, target, "fair", f.facing, slack)) return startAerial(state, f, "fair");
+  if (!facingToTarget && moveCanReach(f, target, "bair", f.facing, slack)) return startAerial(state, f, "bair");
+  if (moveCanReach(f, target, "nair", f.facing, slack)) return startAerial(state, f, "nair");
+  if (f.vy > 0 && f.y < target.y - 20 && sk.c >= 0.3) out.y = 100;
   return out;
 }
 
-function groundNeutral(state: State, f: Fighter, target: Fighter, level: number, stage: Stage): InputFrame {
+function groundNeutral(state: State, f: Fighter, target: Fighter, sk: Skill, stage: Stage): InputFrame {
   const out = blank();
   const dx = target.x - f.x, dy = target.y - f.y;
   const distance = Math.abs(dx), facing = (dx >= 0 ? 1 : -1) as 1 | -1;
-  const mistake = hash(state, f, 0xb07, 24) % 100 >= 50 + level * 5;
+  const mistake = hash(state, f, 0xb07, 24) % 100 >= at(sk, 55, 95);
 
-  if (attackThreatens(target, f, level)) {
+  if (attackThreatens(target, f, sk)) {
     // a smash with armour from its first frames trades through the attack instead of shielding it
     const armoured = SMASHES.find((m) => { const a = defOf(f).moves[m].armour; return a && a.frames[0] <= 3 && a.threshold >= 8; });
-    if (armoured && level >= 6 && moveNearReach(f, target, armoured, facing, 35) && hash(state, f, 0xb41c, 16) % 100 < 68) {
+    if (armoured && sk.c >= 0.55 && moveNearReach(f, target, armoured, facing, 35) && hash(state, f, 0xb41c, 16) % 100 < 68) {
       return startSmash(state, f, armoured, facing);
     }
-    const defendChance = level <= 3 ? 8 + level * 6 : 35 + level * 6;
-    if (f.shield > 12 && hash(state, f, 0xdefe, 12) % 100 < defendChance) {
+    if (f.shield > 12 && hash(state, f, 0xdefe, 12) % 100 < at(sk, 12, 90)) {
       out.b = B.SHIELD;
-      if (level >= 7 && hash(state, f, 0xd0d6, 20) % 100 < 35) out.y = 100;
+      if (sk.c >= 0.8 && hash(state, f, 0xd0d6, 20) % 100 < 35) out.y = 100;
       return out;
     }
   }
 
-  const edgeguard = edgeguardInput(state, f, target, level, stage);
+  const dodge = shotAnswer(state, f, sk);
+  if (dodge) return dodge;
+
+  const edgeguard = edgeguardInput(state, f, target, sk, stage);
   if (edgeguard) return edgeguard;
 
+  // what it sees is `delay` frames old, so the move has that much less left than it looks
   const opponentMove = currentMove(target);
   const opponentInfo = target.move ? reachOf(target)[target.move] : null;
-  const punishable = target.action === "attack" && opponentMove && opponentInfo && target.frame > opponentInfo.last && opponentMove.total - target.frame >= Math.max(4, REACTION[level] - 2);
-  if (punishable && distance < 190 + level * 10) {
-    if (distance < 90 && hash(state, f, 0x9a11, 20) % 100 < 30 + level * 5) return startTilt(state, f, "jab1", facing);
-    if (moveCanReach(f, target, "ftilt", facing)) return startTilt(state, f, "ftilt", facing);
+  const punishable = target.action === "attack" && opponentMove && opponentInfo && target.frame > opponentInfo.last && opponentMove.total - target.frame - sk.delay >= 4;
+  if (punishable && distance < at(sk, 200, 280)) {
+    if (distance < 90 && hash(state, f, 0x9a11, 20) % 100 < at(sk, 35, 75)) return startTilt(state, f, "jab1", facing);
+    if (moveCanReach(f, target, "ftilt", facing, sk.slack)) return startTilt(state, f, "ftilt", facing);
     out.x = facing * 100;
     return out;
   }
 
-  if (target.percent > (level <= 3 ? 85 : 45)) {
-    const smash = killMove(state, f, target, facing);
-    const commits = level >= 4 ? (!mistake || level >= 8) : hash(state, f, 0x510a, 18) % 100 < 28 + level * 8;
+  if (target.percent > (sk.c < 0.3 ? 85 : 45)) {
+    const smash = killMove(state, f, target, facing, sk);
+    const commits = sk.c >= 0.3 ? (!mistake || sk.c >= 0.8) : hash(state, f, 0x510a, 18) % 100 < 36;
     if (smash && commits) return startSmash(state, f, smash, facing);
   }
 
-  const special = specialChoice(state, f, target, level, facing, distance, stage);
+  const special = specialChoice(state, f, target, sk, facing, distance, stage);
   if (special) return special;
+
+  // a zoner: run in while its shot is out or it's stuck in a move, and hop the last stretch
+  const zoning = ownsProjectile(state, target, sk.delay) || target.action === "attack";
+  if (zoning && distance > 220 && sk.c >= 0.3) {
+    out.x = facing * 100;
+    if (distance < 360 && f.action === "run" && hash(state, f, 0x2011, 30) % 100 < at(sk, 10, 45)) out.b = pulse(state, f.slot, B.JUMP);
+    return out;
+  }
 
   const nav = navInput(state, f, target, stage);
   if (nav) return nav;
 
   if (dy < -65) {
-    if (moveCanReach(f, target, "utilt", facing)) return startTilt(state, f, "utilt", facing);
-    if (distance < 180 + level * 8) { out.x = facing * 65; out.b = pulse(state, f.slot, B.JUMP); return out; }
+    if (moveCanReach(f, target, "utilt", facing, sk.slack)) return startTilt(state, f, "utilt", facing);
+    if (distance < at(sk, 188, 252)) { out.x = facing * 65; out.b = pulse(state, f.slot, B.JUMP); return out; }
   }
 
   const moveCycle = (f.moveInstance + hash(state, f, 0xa771, 30)) % 5;
+  const close = 84 + sk.slack;
   if (!mistake) {
-    if (moveCycle === 0 && moveCanReach(f, target, "dtilt", facing)) return startTilt(state, f, "dtilt", facing);
-    if (moveCycle === 1 && distance < 85) return startTilt(state, f, "jab1", facing);
-    if (moveCycle === 2 && moveCanReach(f, target, "ftilt", facing)) return startTilt(state, f, "ftilt", facing);
-    if (moveCycle === 3 && distance < 82) return startTilt(state, f, "jab1", facing);
-    if (moveCycle === 4 && moveCanReach(f, target, "ftilt", facing)) return startTilt(state, f, "ftilt", facing);
-  } else if (distance < 150 && state.frame % THINK[level] === 0) {
+    if (moveCycle === 0 && moveCanReach(f, target, "dtilt", facing, sk.slack)) return startTilt(state, f, "dtilt", facing);
+    if ((moveCycle === 1 || moveCycle === 3) && distance < close) return startTilt(state, f, "jab1", facing);
+    if ((moveCycle === 2 || moveCycle === 4) && moveCanReach(f, target, "ftilt", facing, sk.slack)) return startTilt(state, f, "ftilt", facing);
+  } else if (distance < 150 && state.frame % thinkEvery(sk) === 0) {
     return startTilt(state, f, moveCycle & 1 ? "jab1" : "ftilt", facing);
   }
 
   const ftilt = reachOf(f).ftilt ?? EMPTY_MOVE;
-  const desired = Math.max(55, ftilt.maxX + defOf(target).stats.width * 0.35 - (level <= 3 ? 25 : 5));
+  const desired = Math.max(55, ftilt.maxX + defOf(target).stats.width * 0.35 - (sk.c < 0.3 ? 25 : 5));
   if (distance > desired + 28) {
     out.x = facing * (distance > desired + 110 ? 100 : 45);
-    if (distance < 250 && f.action === "dash" && !mistake && hash(state, f, 0xda55, 18) % 100 < 20 + level * 4) out.b = pulse(state, f.slot, B.ATTACK);
+    if (distance < 250 && f.action === "dash" && !mistake && hash(state, f, 0xda55, 18) % 100 < at(sk, 24, 56)) out.b = pulse(state, f.slot, B.ATTACK);
     return out;
   }
   if (distance < desired - 24) {
-    out.x = -facing * (level >= 5 ? 100 : 45);
+    out.x = -facing * (sk.c >= 0.5 ? 100 : 45);
     return out;
   }
-  if (hash(state, f, 0xdace, 35) % 100 < 18 + level * 3) out.x = -facing * 100;
-  else if (hash(state, f, 0x5a0b, 30) % 100 < 15 + level * 3) { out.x = facing * 60; out.b = pulse(state, f.slot, B.JUMP); }
+  if (hash(state, f, 0xdace, 35) % 100 < at(sk, 21, 45)) out.x = -facing * 100;
+  else if (hash(state, f, 0x5a0b, 30) % 100 < at(sk, 18, 42)) { out.x = facing * 60; out.b = pulse(state, f.slot, B.JUMP); }
   return out;
 }
 
-export function cpuInput(state: State, slot: number, rawLevel: number): InputFrame {
+/** How many frames a dithering low-tier CPU waits between looks at the fight. */
+function thinkEvery(sk: Skill): number {
+  return Math.round(at(sk, 12, 2));
+}
+
+/** The target as the CPU sees it: where it was and what it was doing `sk.delay` frames ago. */
+function perceived(state: State, target: Fighter, sk: Skill): Fighter {
+  const past = state.seen[Math.min(sk.delay, state.seen.length - 1)]?.[target.slot];
+  return past ? { ...target, ...past } : target;
+}
+
+/** `tier` is 1 (PATHETIC) to 5 (UNFAIR); see cpu-skill.ts. */
+export function cpuInput(state: State, slot: number, tier: number): InputFrame {
   const f = state.fighters[slot];
   if (!f || f.action === "dead") return blank();
-  const level = Math.max(1, Math.min(9, rawLevel | 0));
+  const sk = skillOf(tier);
   const stage = stageOf(state);
-  const target = targetOf(state, f);
+  const seen = targetOf(state, f);
+  const target = seen && perceived(state, seen, sk);
 
   if (f.hitlag > 0 || f.action === "grabbed" || f.action === "thrown" || f.action === "tumble" || f.action === "hitstun") {
-    if (offStage(state, f, stage) && f.hitlag === 0 && f.action === "tumble" && f.frame >= f.hitstun) return recoveryInput(state, f, level, stage);
-    return disadvantageInput(state, f, target, level, stage);
+    if (offStage(state, f, stage) && f.hitlag === 0 && f.action === "tumble" && f.frame >= f.hitstun) return recoveryInput(state, f, sk, stage);
+    return disadvantageInput(state, f, target, sk, stage);
   }
-  if (f.ledge >= 0) return ledgeInput(state, f, target, level, stage);
-  if (offStage(state, f, stage)) return recoveryInput(state, f, level, stage);
+  if (f.ledge >= 0) return ledgeInput(state, f, target, sk, stage);
+  if (offStage(state, f, stage)) return recoveryInput(state, f, sk, stage);
 
-  const committed = handleCommitted(state, f, target, level, stage);
+  const committed = handleCommitted(state, f, target, sk, stage);
   if (committed) return committed;
   if (!target) return blank();
-  if (!f.grounded) return aerialNeutral(state, f, target, level, stage);
+  if (!f.grounded) return aerialNeutral(state, f, target, sk, stage);
 
-  if (level <= 3 && state.frame % THINK[level] !== 0 && hash(state, f, 0x5107, THINK[level]) % 100 < 45) {
+  const think = thinkEvery(sk);
+  if (sk.c < 0.3 && state.frame % think !== 0 && hash(state, f, 0x5107, think) % 100 < 45) {
     const out = blank();
     if (Math.abs(target.x - f.x) > 170) out.x = sign(target.x - f.x) * 45;
     return out;
   }
-  return groundNeutral(state, f, target, level, stage);
+  return groundNeutral(state, f, target, sk, stage);
 }

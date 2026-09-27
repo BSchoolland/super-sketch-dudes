@@ -5,6 +5,7 @@ import { fighterLoad } from "./gen";
 import { houseChoice, isHouseId } from "./fighters";
 import { HOUSE_ROSTER } from "../../shared/house";
 import { roster } from "../../shared/fighters/index";
+import { DEFAULT_TIER } from "../../shared/cpu-skill";
 import { VersusScreen } from "./screens/versus";
 import type { Screen } from "./screens/ui";
 
@@ -28,7 +29,7 @@ export async function quickMatch(params: URLSearchParams, exit: () => Screen): P
   const ids = (params.get("f") ?? "slugbert,woodstove").split(",").filter(Boolean);
   await loadFighters(ids);
   const p2 = params.get("p2") ?? "cpu";
-  const cpu = Number(params.get("cpu") ?? 6);
+  const cpu = Number(params.get("cpu") ?? DEFAULT_TIER);
   const p1 = params.get("p1") ?? "kb1";
   const sources: SlotSource[] = ids.map((_, i) =>
     i === 0 ? (p1 === "cpu" ? { device: null, cpu } : { device: p1 as DeviceId, cpu: 0 })

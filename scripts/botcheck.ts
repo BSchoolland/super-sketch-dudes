@@ -20,7 +20,7 @@ function recoveryCheck(id: string): void {
   for (let seed = 1; seed <= 10; seed++) {
     const state = createMatch({
       stage: "proving",
-      players: [{ fighter: id, cpu: 9 }, { fighter: DUMMY }],
+      players: [{ fighter: id, cpu: 5 }, { fighter: DUMMY }],
       rules: { stocks: 1 },
       seed,
     });
@@ -41,7 +41,7 @@ function recoveryCheck(id: string): void {
 
     let landed = false;
     for (let frame = 0; frame < 900 && fighter.stocks > 0; frame++) {
-      step(state, [cpuInput(state, 0, 9), EMPTY_INPUT]);
+      step(state, [cpuInput(state, 0, 5), EMPTY_INPUT]);
       if (fighter.grounded && fighter.platform === 0 && Math.abs(fighter.x) <= 560) {
         landed = true;
         break;
@@ -57,7 +57,7 @@ function techCheck(): void {
   let techs = 0;
   const attempts = 12;
   for (let seed = 1; seed <= attempts; seed++) {
-    const state = createMatch({ stage: "proving", players: [{ fighter: rosterList[seed % rosterList.length].id, cpu: 9 }, { fighter: DUMMY }], seed });
+    const state = createMatch({ stage: "proving", players: [{ fighter: rosterList[seed % rosterList.length].id, cpu: 5 }, { fighter: DUMMY }], seed });
     const fighter = state.fighters[0];
     fighter.x = (seed - 6) * 35;
     fighter.y = -150 - seed * 4;
@@ -70,7 +70,7 @@ function techCheck(): void {
     fighter.hitstun = 75;
     let teched = false;
     for (let frame = 0; frame < 90 && !fighter.grounded; frame++) {
-      step(state, [cpuInput(state, 0, 9), EMPTY_INPUT]);
+      step(state, [cpuInput(state, 0, 5), EMPTY_INPUT]);
       if (state.events.some((event) => event.t === "tech" && event.slot === 0)) teched = true;
       state.events.length = 0;
     }
@@ -83,7 +83,7 @@ function secondUpSpecialCheck(): void {
   let violations = 0;
   let frames = 0;
   for (const def of rosterList) {
-    const state = createMatch({ stage: "proving", players: [{ fighter: def.id, cpu: 9 }, { fighter: DUMMY }], seed: 71 });
+    const state = createMatch({ stage: "proving", players: [{ fighter: def.id, cpu: 5 }, { fighter: DUMMY }], seed: 71 });
     const fighter = state.fighters[0];
     fighter.x = 690;
     fighter.y = 90;
@@ -95,7 +95,7 @@ function secondUpSpecialCheck(): void {
     fighter.jumpsLeft = 0;
     fighter.usedUpSpecial = true;
     for (let frame = 0; frame < 180 && fighter.stocks > 0 && !fighter.grounded; frame++) {
-      const input = cpuInput(state, 0, 9);
+      const input = cpuInput(state, 0, 5);
       if (fighter.usedUpSpecial && !fighter.grounded && (input.b & B.SPECIAL) !== 0 && input.y < -Math.abs(input.x)) violations++;
       frames++;
       step(state, [input, EMPTY_INPUT]);
@@ -108,13 +108,13 @@ function secondUpSpecialCheck(): void {
 function koCheck(id: string): void {
   const state = createMatch({
     stage: "proving",
-    players: [{ fighter: id, cpu: 9 }, { fighter: DUMMY }],
+    players: [{ fighter: id, cpu: 5 }, { fighter: DUMMY }],
     rules: { stocks: 1 },
     seed: 31337,
   });
   let frames = 0;
   while (state.fighters[1].stocks > 0 && frames < 1800) {
-    step(state, [cpuInput(state, 0, 9), EMPTY_INPUT]);
+    step(state, [cpuInput(state, 0, 5), EMPTY_INPUT]);
     state.events.length = 0;
     frames++;
   }

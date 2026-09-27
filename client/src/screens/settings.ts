@@ -1,4 +1,5 @@
 import { VIEW_W } from "../render/camera";
+import { CPU_TIERS, tierName } from "../../../shared/cpu-skill";
 import type { MenuInput } from "../input/devices";
 import { setMusicVolume, setVolume, sfx } from "../audio/audio";
 import { bg, card, hint, label, title, hover, clicked, arrows, backButton, goTo, type Screen, INK, settings, saveSettings } from "./ui";
@@ -15,7 +16,7 @@ export class SettingsScreen implements Screen {
     { name: "SCREEN SHAKE", get: () => `${Math.round(settings.shake * 100)}%`, adj: (d) => { settings.shake = Math.max(0, Math.min(1.5, settings.shake + d * 0.25)); } },
     { name: "TAP JUMP (stick up)", get: () => (settings.tapJump ? "on" : "off"), adj: () => { settings.tapJump = !settings.tapJump; } },
     { name: "RUMBLE", get: () => (settings.rumble ? "on" : "off"), adj: () => { settings.rumble = !settings.rumble; } },
-    { name: "DEFAULT CPU LEVEL", get: () => `${settings.cpuLevel}`, adj: (d) => { settings.cpuLevel = Math.max(1, Math.min(9, settings.cpuLevel + d)); } },
+    { name: "DEFAULT CPU", get: () => tierName(settings.cpuTier), adj: (d) => { settings.cpuTier = Math.max(1, Math.min(CPU_TIERS.length, settings.cpuTier + d)); } },
     { name: "SIGN OUT", get: () => account.player?.name ?? "", adj: () => {}, act: () => this.onSignOut() },
   ];
   constructor(private onBack: () => Screen, private onSignOut: () => Screen) {}

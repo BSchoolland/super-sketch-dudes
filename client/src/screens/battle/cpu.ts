@@ -6,6 +6,7 @@ import { allChoices, type FighterChoice } from "../../fighters";
 import { bg, title, type Screen, settings, saveSettings, INK } from "../ui";
 import { ButtonMenu, type Button } from "../draw/buttons";
 import { FighterGrid } from "./grid";
+import { CPU_TIERS, tierName } from "../../../../shared/cpu-skill";
 
 /** VS CPU: who the CPU plays and how hard; stage and stocks come next. */
 export class CpuSetupScreen implements Screen {
@@ -24,7 +25,7 @@ export class CpuSetupScreen implements Screen {
     const y = 170 + this.grid.height + 20;
     return [
       ...this.grid.buttons(),
-      { id: "level", x: VIEW_W / 2 - 520, y, w: 480, h: 110, text: `CPU LEVEL ${settings.cpuLevel}`, size: 44, step: (d) => { settings.cpuLevel = Math.max(1, Math.min(9, settings.cpuLevel + d)); saveSettings(); } },
+      { id: "level", x: VIEW_W / 2 - 520, y, w: 480, h: 110, text: tierName(settings.cpuTier), size: 44, step: (d) => { settings.cpuTier = Math.max(1, Math.min(CPU_TIERS.length, settings.cpuTier + d)); saveSettings(); } },
       { id: "next", x: VIEW_W / 2 + 40, y, w: 480, h: 110, text: "NEXT", size: 52 },
       { id: "back", x: 40, y: VIEW_H - 130, w: 240, h: 90, text: "BACK", size: 40 },
     ];
@@ -39,7 +40,7 @@ export class CpuSetupScreen implements Screen {
       this.opponent = picked;
       this.menu.focus = buttons.findIndex((b) => b.id === "next");
     }
-    if (id === "next") return this.onNext(this.opponent, settings.cpuLevel);
+    if (id === "next") return this.onNext(this.opponent, settings.cpuTier);
     if (id === "back" || m.back) { sfx.menuBack(); return this.onBack(); }
     return null;
   }
