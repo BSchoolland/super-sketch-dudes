@@ -11,7 +11,6 @@ export const AGENT_MODEL = "claude-opus-5-5";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
-const PROMPT = fs.readFileSync(path.join(here, "PROMPT.md"), "utf8");
 const TIMEOUT_MS = 15 * 60_000;
 
 export interface JobSpec { id: string; fighterId: string; playerName: string; hint?: { name: string; description: string } | null }
@@ -69,7 +68,8 @@ export async function runForge(job: JobSpec, drawingSrc: string, dir: string, io
   const notes = job.hint
     ? [job.hint.name ? `The player named it "${job.hint.name}".` : "", job.hint.description ? `The player says: "${job.hint.description}".` : ""].filter(Boolean).join(" ")
     : "The player didn't name or describe it.";
-  const prompt = PROMPT.replace(/\{\{DRAWING\}\}/g, rel(drawing)).replace(/\{\{WORK\}\}/g, rel(work)).replace(/\{\{ID\}\}/g, job.fighterId).replace("{{NOTES}}", notes);
+  // read per job, so a prompt edit reaches the next forge without restarting the worker
+  const prompt = fs.readFileSync(path.join(here, "PROMPT.md"), "utf8").replace(/\{\{DRAWING\}\}/g, rel(drawing)).replace(/\{\{WORK\}\}/g, rel(work)).replace(/\{\{ID\}\}/g, job.fighterId).replace("{{NOTES}}", notes);
   fs.writeFileSync(path.join(dir, "prompt.txt"), prompt);
   await io.progress("an agent is making it");
 
