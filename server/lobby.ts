@@ -26,6 +26,7 @@ export interface Client {
 }
 export interface Room {
   code: string; trace: string; members: Client[]; started: boolean; host: Client; seed: number; config: unknown;
+  /** Listed in JOIN ROOM and joinable by QUICK MATCH; private rooms need the code. */ public: boolean;
   /** Game bundle hash the room plays on; null = whatever the page loaded. */ game: string | null;
   event: WideEvent;
   match: RelayMatch | null;
@@ -36,7 +37,7 @@ export interface RelayMatch { event: WideEvent; slots: SlotRelay[]; hashes: Map<
 
 let nextId = 1;
 export const rooms = new Map<string, Room>();
-const queue: Client[] = [];
+const ROOM_SIZE = 4;
 
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export function makeCode(): string {
@@ -54,11 +55,11 @@ function pushCapped(business: Record<string, unknown>, key: string, value: unkno
 }
 const since = (e: WideEvent): number => Date.now() - e.t0;
 
-export function newRoom(host: Client): Room {
+export function newRoom(host: Client, isPublic: boolean): Room {
   const code = makeCode();
   const trace = `r-${code}-${Date.now().toString(36)}`;
-  const room: Room = { code, trace, members: [], started: false, host, seed: 0, config: null, game: null, match: null, event: openEvent("room", trace, host.event.trace) };
-  room.event.set("room", { code, host: host.name });
+  const room: Room = { code, trace, members: [], started: false, host, seed: 0, config: null, public: isPublic, game: null, match: null, event: openEvent("room", trace, host.event.trace) };
+  room.event.set("room", { code, host: host.name, public: isPublic });
   rooms.set(code, room);
   return room;
 }
@@ -107,6 +108,11 @@ function relayHash(m: RelayMatch, slot: number, frame: number, hash: number): vo
 export function broadcast(room: Room, msg: unknown, except?: Client): void {
   for (const m of room.members) if (m !== except) send(m, msg);
 }
+const open = (room: Room): boolean => room.public && !room.started && room.members.length < ROOM_SIZE;
+/** What JOIN ROOM lists: public rooms with a free slot, not mid-match. */
+function publicRooms(): unknown {
+  return { t: "rooms", rooms: [...rooms.values()].filter(open).map((r) => ({ code: r.code, host: r.host.name, members: r.members.map((m) => m.name) })) };
+}
 function roomInfo(room: Room): unknown {
   return {
     t: "room",
@@ -114,6 +120,7 @@ function roomInfo(room: Room): unknown {
     trace: room.trace,
     host: room.host.id,
     started: room.started,
+    public: room.public,
     game: room.game,
     members: room.members.map((m) => ({ id: m.id, name: m.name, slot: m.slot, fighter: m.fighter, bundleUrl: m.bundleUrl, ready: m.ready })),
   };
@@ -176,27 +183,23 @@ export function attachLobby(wss: WebSocketServer): void {
       switch (msg.t) {
         case "name": c.name = String(msg.name ?? "").replace(/[^\w \-.!?]/g, "").slice(0, 14) || c.name; event.set("name", c.name); if (c.room) broadcast(c.room, roomInfo(c.room)); break;
         case "ping": send(c, { t: "pong", at: msg.at }); break;
-        case "create": joinRoom(c, newRoom(c)); break;
+        case "create": joinRoom(c, newRoom(c, !!msg.public)); break;
+        case "rooms": send(c, publicRooms()); break;
+        // the fullest open public room, so lobbies fill up before new ones open
+        case "quick": {
+          leaveRoom(c);
+          const best = [...rooms.values()].filter(open).sort((a, b) => b.members.length - a.members.length)[0];
+          joinRoom(c, best ?? newRoom(c, true));
+          break;
+        }
         case "join": {
           const room = rooms.get(String(msg.code ?? "").toUpperCase());
           if (!room) { send(c, { t: "error", error: "no such room" }); break; }
           if (room.started) { send(c, { t: "error", error: "match in progress" }); break; }
-          if (room.members.length >= 4) { send(c, { t: "error", error: "room full" }); break; }
+          if (room.members.length >= ROOM_SIZE) { send(c, { t: "error", error: "room full" }); break; }
           joinRoom(c, room);
           break;
         }
-        case "queue": {
-          leaveRoom(c);
-          if (!queue.includes(c)) queue.push(c);
-          if (queue.length >= 2) {
-            const a = queue.shift()!, b = queue.shift()!;
-            const room = newRoom(a);
-            joinRoom(a, room); joinRoom(b, room);
-            send(a, { t: "matched" }); send(b, { t: "matched" });
-          } else send(c, { t: "queued" });
-          break;
-        }
-        case "unqueue": { const i = queue.indexOf(c); if (i >= 0) queue.splice(i, 1); break; }
         case "leave": leaveRoom(c); break;
         case "pick": {
           if (!c.room || c.room.started) break;
@@ -242,8 +245,6 @@ export function attachLobby(wss: WebSocketServer): void {
       }
     });
     ws.on("close", (code, reason) => {
-      const i = queue.indexOf(c);
-      if (i >= 0) queue.splice(i, 1);
       leaveRoom(c);
       event.set("exit", { code, reason: String(reason).slice(0, 120) });
       event.set("summary", { message: `${c.name} · rooms ${((event.business.rooms as string[] | undefined) ?? []).join(" ") || "none"} · closed ${code}` });

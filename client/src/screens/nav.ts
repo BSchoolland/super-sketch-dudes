@@ -15,6 +15,6 @@ export interface Nav {
   /** Watching a character the forge is making (or has made); `pad` is kept for TRY AGAIN. */
   forge(entry: LibraryEntry, pad: DrawPad | null): Screen;
   library(): Screen;
-  /** Battle setup: pick a fighter (unless one's chosen already), then CPU, local or online. */
+  /** BATTLE: quick match, a lobby, or bots; `fighter` starts out picked there (a character's FIGHT button). */
   battle(fighter?: FighterChoice): Screen;
 }

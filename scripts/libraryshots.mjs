@@ -1,8 +1,8 @@
 // Walks the account game in real browsers against a local server + scripts/fake-forge.mjs:
-// sign-in, NEW CHARACTER (draw, DONE, forged), MY CHARACTERS, BATTLE vs CPU, LOCAL 2P, and ONLINE
-// with two signed-in players on library fighters. Screenshots into shots/library/.
+// sign-in, NEW CHARACTER (draw, DONE, forged), MY CHARACTERS, BATTLE: VS BOTS, then a public lobby
+// found through JOIN ROOM and QUICK MATCH by two signed-in players. Screenshots into shots/library/.
 //   node scripts/libraryshots.mjs [base=http://localhost:5178/sketch-battle/] [out=shots/library]
-// Server: PORT=3012 DEV_LOGIN=1 FORGE_TOKEN=devtoken npx tsx server/index.ts
+// Server: PORT=3012 DEV_LOGIN=1 FORGE_TOKEN=devtoken npx tsx server/index.ts, plus scripts/fake-forge.mjs
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 import { down as btnDown, up as btnUp, press as btnPress } from "./lib/keys.mjs";
@@ -41,12 +41,14 @@ async function stroke(page, points) {
 }
 const circle = (cx, cy, r, n = 28) => Array.from({ length: n + 1 }, (_, i) => [cx + Math.cos((i / n) * Math.PI * 2) * r, cy + Math.sin((i / n) * Math.PI * 2) * r]);
 
-// title menu rows (x 180..700, from y 430 every 104)
+// title menu rows: BATTLE, MY CHARACTERS, NEW CHARACTER, SETTINGS
 const menu = (i) => [960, 350 + i * 96 + 44];
+// BATTLE's rows: QUICK MATCH, CREATE LOBBY, JOIN ROOM, VS BOTS
+const battle = (i) => [960, 220 + i * 170 + 65];
 
 /** NEW CHARACTER from the title: a stick figure with a red hat, DONE, and wait for the fake forge. */
 async function createCharacter(page, prefix) {
-  await tap(page, ...menu(1));
+  await tap(page, ...menu(2));
   await onScreen(page, "CreateScreen");
   await stroke(page, circle(960, 330, 90));
   await stroke(page, [[960, 420], [960, 700]]);
@@ -98,88 +100,66 @@ await shot(a, "04-library-detail");
 await tap(a, 960, 985);
 await shot(a, "05-library-delete-armed");
 await tap(a, 960 - 540 - 30 + 180, 985);
-await onScreen(a, "ModeScreen");
-await shot(a, "06-mode");
+await onScreen(a, "BattleMenuScreen");
+await shot(a, "06-battle-menu");
 
-// VS CPU: opponent, level, stage, fight
-await tap(a, 1060 + 320, 290);
-await onScreen(a, "CpuSetupScreen");
+// VS BOTS: the shelf, you vs a CPU slot, stage, fight
+await tap(a, ...battle(3));
+await onScreen(a, "BotsScreen");
 await a.waitForTimeout(1200);
-await shot(a, "07-cpu-setup");
-await tap(a, 960 + 40 + 240, 845);
+await shot(a, "07-bots");
+await a.keyboard.press("ArrowDown"); await a.keyboard.press("ArrowRight");
+await a.waitForTimeout(600);
+await shot(a, "07b-bots-other-cpu");
+await tap(a, 960, 1080 - 170 + 42);
 await onScreen(a, "StageScreen");
 await shot(a, "08-stage");
 await a.keyboard.press("Enter");
 await onScreen(a, "VersusScreen");
 await a.waitForTimeout(3500);
 await playFor(a, 3000);
-await shot(a, "09-vs-cpu");
+await shot(a, "09-vs-bots");
 const fighters = await a.evaluate(() => window.sketchbattle.screen.match.state.fighters.map((f) => f.id));
-console.log(`vs cpu fighters: ${fighters.join(" vs ")}`);
+console.log(`vs bots fighters: ${fighters.join(" vs ")}`);
 
-// LOCAL 2P from the title: COUCH CO-OP, your first fighter, LOCAL 2P, player 2 joins on the arrows keyboard
-await a.goto(base);
-await onScreen(a, "TitleScreen");
-await a.waitForTimeout(800);
-await shot(a, "10-title-own-parade");
-await tap(a, ...menu(4));
-await onScreen(a, "PickFighterScreen");
-await a.waitForTimeout(1500);
-await shot(a, "11-pick-fighter");
-await tap(a, 250 + 100, 190 + 100);
-await onScreen(a, "ModeScreen");
-await tap(a, 1060 + 320, 470);
-await onScreen(a, "LocalSetupScreen");
-await a.waitForTimeout(600);
-await shot(a, "12-local-one-player");
-await a.keyboard.press("Numpad1");
-await a.waitForTimeout(200);
-await a.keyboard.press("ArrowRight"); await a.waitForTimeout(150);
-await a.keyboard.press("Numpad1");
-await a.waitForTimeout(600);
-await shot(a, "13-local-both-ready");
-await a.keyboard.press("Enter");
-await onScreen(a, "StageScreen");
-await a.keyboard.press("Enter");
-await onScreen(a, "VersusScreen");
-await a.waitForTimeout(3500);
-await shot(a, "14-local-match");
-const local = await a.evaluate(() => window.sketchbattle.screen.match.sources.map((s) => s.device ?? `cpu${s.cpu}`));
-console.log(`local devices: ${local.join(", ")}`);
-
-// ONLINE: Bob makes his own character, then Ann hosts a room and Bob joins it
+// ONLINE: Bob makes his own character; Ann opens a public lobby, Bob sees it in JOIN ROOM, then QUICK MATCH lands him in it
 const b = await open("bob", "?dev=Bob");
 await onScreen(b, "TitleScreen");
 await createCharacter(b, "");
-await b.goto(base);
-await a.goto(base);
 for (const page of [a, b]) {
+  await page.goto(base);
   await onScreen(page, "TitleScreen");
   await page.waitForTimeout(500);
-  await tap(page, ...menu(3));
-  await onScreen(page, "PickFighterScreen");
-  await page.waitForTimeout(500);
-  await tap(page, 250 + 100, 190 + 100);
-  await onScreen(page, "OnlineScreen");
+  await tap(page, ...menu(0));
+  await onScreen(page, "BattleMenuScreen");
 }
-await tap(a, 960, 230 + 180 + 65);
+await tap(a, ...battle(1));
+await until(a, "the public/private choice", () => window.sketchbattle.screen.phase === "create");
+await shot(a, "10-create-lobby");
+await tap(a, 960, 280 + 70);
 await until(a, "a room", () => !!window.sketchbattle.screen.roomCode);
-const code = await a.evaluate(() => window.sketchbattle.screen.roomCode);
-await tap(b, 960, 230 + 360 + 65);
-await b.keyboard.type(code);
-await b.keyboard.press("Enter");
+await tap(b, ...battle(2));
+await until(b, "ann's lobby listed", () => window.sketchbattle.screen.rooms?.length > 0);
+await b.waitForTimeout(300);
+await shot(b, "11-join-room-list");
+await b.keyboard.press("Escape");
+await onScreen(b, "BattleMenuScreen");
+await tap(b, ...battle(0));
 await until(a, "bob in the room", () => window.sketchbattle.screen.lobbyDebug()?.members.length === 2);
 await a.waitForTimeout(1500);
-await shot(a, "15-online-room-host");
-await shot(b, "16-online-room-guest");
+await shot(a, "12-online-room-host");
+await shot(b, "13-online-room-guest");
+await tap(b, 982 + 85, 120 + 85);
+await b.waitForTimeout(400);
 for (const page of [b, a]) { await page.keyboard.press("Enter"); await page.waitForTimeout(400); }
 await until(a, "everyone ready", () => window.sketchbattle.screen.lobbyDebug()?.members.every((m) => m.ready));
+await shot(a, "14-online-room-ready");
 await a.keyboard.press("Enter");
 for (const page of [a, b]) await until(page, "the online match", () => !!window.sketchbattle.screen.session, null, 20000);
 await a.waitForTimeout(3500);
 await playFor(a, 2500);
-await shot(a, "17-online-match-ann");
-await shot(b, "18-online-match-bob");
+await shot(a, "15-online-match-ann");
+await shot(b, "16-online-match-bob");
 const net = await Promise.all([a, b].map((p) => p.evaluate(() => { const s = window.sketchbattle.screen.session; return { frame: s.state.frame, fighters: s.state.fighters.map((f) => f.id), desync: !!s.desync }; })));
 console.log(`online: ${JSON.stringify(net)}`);
 

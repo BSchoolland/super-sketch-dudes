@@ -1,7 +1,8 @@
 import { inkRect, PENCIL } from "../render/paper";
 import type { LibraryEntry } from "../../../shared/account";
-import { INK } from "./ui";
+import { INK, title } from "./ui";
 import { drawImageIn } from "./images";
+import { wrapped } from "./text";
 
 export const RED = "#c0392b";
 
@@ -43,4 +44,18 @@ export function characterStatus(ch: Pick<LibraryEntry, "status" | "stage" | "err
   if (ch.status === "failed") return { text: ch.error ?? "couldn't be made", color: RED };
   if (ch.status === "queued") return { text: `${ch.stage || "waiting in line"}${dots}`, color: PENCIL };
   return { text: `${ch.stage || "forging"}${dots}`, color: INK };
+}
+
+/** One character as MY CHARACTERS shows it: the art, its name (or what the forge is doing) under it, a box when focused. */
+export function drawCharacterCell(ctx: CanvasRenderingContext2D, e: LibraryEntry, x: number, y: number, size: number, t: number, focused: boolean): void {
+  drawCharacterArt(ctx, e, x, y, size, t);
+  if (focused) {
+    ctx.save(); ctx.strokeStyle = INK; ctx.lineWidth = Math.max(4, size / 40);
+    ctx.strokeRect(x - 8, y - 8, size + 16, size + 16);
+    ctx.restore();
+  }
+  const cx = x + size / 2, ty = y + size + Math.round(size * 0.16);
+  const status = characterStatus(e, t);
+  if (!status) title(ctx, e.name ?? "?", cx, ty, Math.round(size * 0.136), INK, "center", size + 20);
+  else wrapped(ctx, e.status === "failed" ? "failed" : status.text, cx, ty, size + 20, Math.round(size * 0.096), status.color, 2);
 }

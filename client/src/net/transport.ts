@@ -26,18 +26,20 @@ export interface RoomMember {
   ready: boolean;
 }
 
+export interface PublicRoom { code: string; host: string; members: string[] }
+
 export type RelayMessage =
   | { t: "hello"; id: number }
   /** `trace` is the room's wide-event trace; absent from servers older than wide events. */
-  | { t: "room"; code: string; trace?: string; host: number; started: boolean; members: RoomMember[]; game: string | null }
+  | { t: "room"; code: string; trace?: string; host: number; started: boolean; public: boolean; members: RoomMember[]; game: string | null }
   | { t: "start"; seed: number; config: unknown; members: Pick<RoomMember, "id" | "name" | "slot">[] }
   | { t: "left"; id: number; slot: number; duringMatch: boolean }
   /** The room's game bundle changed; the host answers with gameAt. */
   | { t: "game"; hash: string }
   /** Everyone swaps to the bundle at this sim frame (or now, outside a match). */
   | { t: "gameAt"; hash: string; frame: number }
-  | { t: "matched" }
-  | { t: "queued" }
+  /** Public rooms with a free slot, for JOIN ROOM. */
+  | { t: "rooms"; rooms: PublicRoom[] }
   | { t: "error"; error: string };
 
 function removeListener<T>(listeners: Set<T>, listener: T): Unsubscribe {

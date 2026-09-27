@@ -8,7 +8,7 @@ import { libraryChoices, myLibrary, refreshLibrary } from "../fighters";
 import type { LibraryEntry } from "../../../shared/account";
 import { bg, label, title, type Screen, INK } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
-import { characterStatus, drawCharacterArt, RED } from "./character";
+import { drawCharacterArt, drawCharacterCell, RED } from "./character";
 import { wrapped } from "./text";
 import { drawCharacterDetail } from "./charcard";
 import { DrawPad } from "./pad";
@@ -151,16 +151,7 @@ export class LibraryScreen implements Screen {
     this.entries.forEach((e, i) => {
       const b = buttons[i];
       if (b.y < 0) return;
-      drawCharacterArt(ctx, e, b.x, b.y, ART, this.t + i * 0.2);
-      if (i === focus) {
-        ctx.save(); ctx.strokeStyle = INK; ctx.lineWidth = 6;
-        ctx.strokeRect(b.x - 8, b.y - 8, ART + 16, ART + 16);
-        ctx.restore();
-      }
-      const cx = b.x + ART / 2, ty = b.y + ART + 40;
-      const status = characterStatus(e, this.t);
-      if (!status) title(ctx, e.name ?? "?", cx, ty, 34, INK, "center", ART + 20);
-      else wrapped(ctx, e.status === "failed" ? "failed" : status.text, cx, ty, ART + 20, 24, status.color, 2);
+      drawCharacterCell(ctx, e, b.x, b.y, ART, this.t + i * 0.2, i === focus);
     });
     this.menu.draw(ctx, buttons);
   }

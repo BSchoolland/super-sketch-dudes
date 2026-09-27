@@ -40,13 +40,13 @@ window.addEventListener("pointercancel", (e) => { if (e.pointerType === "mouse")
 window.addEventListener("contextmenu", (e) => { if (!(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) e.preventDefault(); });
 window.addEventListener("blur", () => keys.clear());
 
-const padPrev = new Map<number, { buttons: boolean[]; ax: number; ay: number; cx: number; cy: number; jumpFlick: number; cFlick: number }>();
+const padPrev = new Map<number, { ax: number; ay: number; cx: number; cy: number; jumpFlick: number; cFlick: number }>();
 
 function padState(index: number) {
   const gp = navigator.getGamepads?.()[index];
   if (!gp) return null;
   let prev = padPrev.get(index);
-  if (!prev) { prev = { buttons: [], ax: 0, ay: 0, cx: 0, cy: 0, jumpFlick: 0, cFlick: 0 }; padPrev.set(index, prev); }
+  if (!prev) { prev = { ax: 0, ay: 0, cx: 0, cy: 0, jumpFlick: 0, cFlick: 0 }; padPrev.set(index, prev); }
   return { gp, prev };
 }
 
@@ -105,28 +105,6 @@ export function readDevice(dev: DeviceId, opts: { tapJump: boolean; mouse?: bool
   if (prev.cFlick > 0) prev.cFlick--;
   prev.ax = ax; prev.ay = ay; prev.cx = cx; prev.cy = cy;
   return { x: q(ax), y: q(ay), cx: sendC ? q(cx) : 0, cy: sendC ? q(cy) : 0, b: bits };
-}
-
-/** Which devices pressed something this frame (for "press a button to join"). */
-export function pollJoinPresses(): DeviceId[] {
-  const out: DeviceId[] = [];
-  if (pressedThisFrame.size) {
-    const kb1 = [...KB1.jump, ...KB1.attack, ...KB1.special, ...KB1.shield];
-    const kb2 = [...KB2.jump, ...KB2.attack, ...KB2.special, ...KB2.shield];
-    if ([...pressedThisFrame].some((k) => !isMouse(k) && kb1.includes(k))) out.push("kb1");
-    if ([...pressedThisFrame].some((k) => !isMouse(k) && kb2.includes(k))) out.push("kb2");
-  }
-  const pads = navigator.getGamepads?.() ?? [];
-  for (let i = 0; i < pads.length; i++) {
-    const gp = pads[i];
-    if (!gp) continue;
-    const s = padState(i)!;
-    const now = gp.buttons.map((b) => b.pressed);
-    const was = s.prev.buttons;
-    if (now.some((p, j) => p && !was[j] && j < 8)) out.push(`pad${i}`);
-    s.prev.buttons = now;
-  }
-  return out;
 }
 
 /** Menu navigation: edge-triggered directions and confirm/back from every device at once. */

@@ -1,4 +1,3 @@
-import type { DeviceId } from "../input/devices";
 import type { SlotSource } from "../match";
 import { signOut } from "../account";
 import { forgetLibrary, type FighterChoice } from "../fighters";
@@ -11,10 +10,8 @@ import { CreateScreen } from "./create";
 import { DescribeScreen } from "./describe";
 import { ForgeScreen } from "./forging";
 import { LibraryScreen } from "./library";
-import { PickFighterScreen } from "./battle/fighter";
-import { ModeScreen } from "./battle/mode";
-import { CpuSetupScreen } from "./battle/cpu";
-import { LocalSetupScreen } from "./battle/local";
+import { BattleMenuScreen } from "./battle/menu";
+import { BotsScreen } from "./battle/bots";
 import { OnlineScreen } from "./online";
 import { StageScreen, type MatchSetup } from "./stage";
 import { LoadingScreen } from "./loading";
@@ -48,27 +45,16 @@ export function menus(): Nav {
     describe: (pad, hint) => new DescribeScreen(nav, pad, hint),
     forge: (entry, pad) => new ForgeScreen(nav, entry, pad),
     library: () => new LibraryScreen(nav),
-    battle: (fighter) => fighter ? modes(fighter, null) : new PickFighterScreen((f, from) => modes(f, from), () => nav.title()),
+    battle: (fighter) => new BattleMenuScreen((entry) => {
+      const menu = () => nav.battle(fighter);
+      if (entry !== "bots") return new OnlineScreen(menu, entry, fighter ?? null);
+      const bots: Screen = new BotsScreen(fighter ?? null, ({ you, device, opponent, level }) => new StageScreen(
+        (s) => localMatch([{ fighter: you, source: { device, cpu: 0 } }, { fighter: opponent, source: { device: null, cpu: level } }], s, () => nav.title()),
+        () => bots,
+      ), menu);
+      return bots;
+    }, () => nav.title()),
   };
-
-  function modes(you: FighterChoice, from: DeviceId | null): Screen {
-    return new ModeScreen(you, from, ["cpu", "local", "online"], (mode, device) => {
-      const again = () => modes(you, device);
-      if (mode === "online") return new OnlineScreen(() => nav.title(), you);
-      if (mode === "cpu") {
-        const setup = (): Screen => new CpuSetupScreen(you, (opponent, level) => new StageScreen(
-          (s) => localMatch([{ fighter: you, source: { device, cpu: 0 } }, { fighter: opponent, source: { device: null, cpu: level } }], s, () => nav.title()),
-          setup,
-        ), again);
-        return setup();
-      }
-      const setup = (): Screen => new LocalSetupScreen(you, device, (p1, p2) => new StageScreen(
-        (s) => localMatch([{ fighter: p1.fighter, source: { device: p1.device, cpu: 0 } }, { fighter: p2.fighter, source: { device: p2.device, cpu: 0 } }], s, () => nav.title()),
-        setup,
-      ), again);
-      return setup();
-    }, () => nav.battle());
-  }
 
   return nav;
 }
