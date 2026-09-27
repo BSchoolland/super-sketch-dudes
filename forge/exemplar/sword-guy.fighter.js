@@ -33,7 +33,10 @@
 //   (x,y) to (x2,y2). Angle 0 launches away from the attacker, 90 up, 270 down (a spike), 180 pulls in.
 //   Hooks run every frame of their move and may move the fighter (f.vx, f.vy), hold a frame to charge
 //   (f.frame = n - 1), or jump ahead. All mutable state lives in `special()`, every key present from
-//   the start, numbers only: the rollback hash walks it.
+//   the start, numbers only: the rollback hash walks it. A number the player should see is a bar
+//   instead: declared in `bars`, read and written as f.bars.x, clamped to 0..max after each frame and
+//   drawn under the percent. `trip`/`rearm` give it a latch (heat that locks at 100 and frees at 75,
+//   ammo that runs dry at 0 and is back at 9), read with `tripped(f, "x")`.
 export default function make(api) {
   const { hb, cap, key, mv, throwMove, spawnProjectile, spriteAnims, spriteLoops, clamp, sign, B } = api;
 
@@ -188,11 +191,12 @@ export default function make(api) {
     rig: { anims: spriteAnims(), loops: spriteLoops },
     palette: { colors: { marker: "#3f6fb5" }, outline: "#24221e" },
     looks,
-    special: () => ({ out: 0, charge: 0, drop: 0 }),
+    special: () => ({ charge: 0, drop: 0 }),
+    bars: { sword: { label: "SWORD", color: "#3f6fb5", max: 1, start: 1 } },
     hooks: {
       fling: ({ f, state }) => {
-        if (f.frame !== 14 || f.special.out) return;
-        f.special.out = 1;
+        if (f.frame !== 14 || !f.bars.sword) return;
+        f.bars.sword = 0;
         spawnProjectile(state, f, "blade", f.x + f.moveFacing * 40, f.y - 58, f.moveFacing * BLADE_OUT, 0, 90,
           { frames: [0, 999], x: 0, y: 0, r: 22, damage: 7, angle: 45, base: 34, growth: 62, rehit: 20 }, { back: BLADE_BACK });
       },
@@ -250,8 +254,7 @@ export default function make(api) {
           if (Math.abs(dx) < 30 && Math.abs(dy) < 60) p.dead = true;
         }
       }
-      if (!live) f.special.out = 0;
+      if (!live) f.bars.sword = 1;
     },
-    meters: [{ label: "SWORD", color: "#3f6fb5", get: (f) => (f.special.out ? 0 : 1) }],
   };
 }

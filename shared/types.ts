@@ -243,12 +243,33 @@ export interface FighterDef {
   onHit?: (ctx: HookCtx, victim: Fighter, hb: Hitbox) => void;
   onHurt?: (ctx: HookCtx, attacker: Fighter | null, damage: number) => void;
   onFrame?: (ctx: HookCtx) => void;
-  /** HUD meters: label + value getter, 0..1. */
+  /** Numbers the fighter owns and the HUD draws: fighter.bars[key], clamped to [0, max] after every frame. See Bar. */
+  bars?: Record<string, Bar>;
+  /** Fighters from before `bars`: a HUD bar as a getter, 0..1. */
   meters?: { label: string; color: string; get: (f: Fighter) => number; max?: (f: Fighter) => number }[];
   /** Renderer-only per-frame look: overall scale and glow strength 0..1 (e.g. a heat meter). */
   visual?: (f: Fighter) => { scale?: number; glow?: number };
   /** Named looks for projectiles (by `kind`) and hitboxes (by `fx`). See Look. */
   looks?: Record<string, Look>;
+}
+
+/**
+ * A bar: a number from 0 to `max` that the fighter's own code reads and writes as fighter.bars[key].
+ * With `trip` and `rearm` it also carries a latch (fighter.tripped[key]): set when the value reaches
+ * `trip`, cleared when it reaches `rearm`, whichever side of each other they lie. Heat that locks at
+ * 100 and frees at 75 is { trip: 100, rearm: 75 }; ammo that runs dry at 0 and is usable again at 9 is
+ * { trip: 0, rearm: 9 }. The engine clamps and settles latches once per frame, after the hooks.
+ */
+export interface Bar {
+  label: string;
+  color: string;
+  max: number;
+  /** Default 0. */
+  start?: number;
+  trip?: number;
+  rearm?: number;
+  /** Drawn only while this holds (default: always). */
+  show?: (f: Fighter) => boolean;
 }
 
 export interface HookCtx {
@@ -356,6 +377,9 @@ export interface Fighter {
   lastHitBy: number;
   lastHitFrame: number;
   special: Record<string, number>;
+  /** Current value of each declared bar, and 1 while its latch is tripped. */
+  bars: Record<string, number>;
+  tripped: Record<string, number>;
   cpu: number;
   kos: number;
   falls: number;

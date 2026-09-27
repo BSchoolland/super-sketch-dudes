@@ -1,6 +1,6 @@
 import { formDef } from "../fighter";
 import { HIT_FAMILIES, LOOK_SHAPES, LOOK_TEXTURES, LOOK_TRAILS } from "../types";
-import type { Look, Move, FighterDef, SpriteRig } from "../types";
+import type { Bar, Look, Move, FighterDef, SpriteRig } from "../types";
 import { generatedApi } from "./api";
 import { SPRITE_CELLS, defaultCellForMove, STATE_CELLS } from "./sprite";
 
@@ -42,6 +42,25 @@ export function lintGeneratedSource(src: string): string[] {
   });
   if (!/export\s+default\s+function/.test(src)) problems.push("module must `export default function make(api) { ... }`");
   return problems;
+}
+
+function checkBars(bars: unknown, p: string[]): void {
+  if (!bars || typeof bars !== "object" || Array.isArray(bars)) { p.push("bars must be an object of { label, color, max, start?, trip?, rearm?, show? }"); return; }
+  for (const [k, b] of Object.entries(bars as Record<string, Partial<Bar>>)) {
+    const at = `bars.${k}`;
+    if (!b || typeof b !== "object") { p.push(`${at} must be an object`); continue; }
+    if (typeof b.label !== "string" || typeof b.color !== "string") p.push(`${at} needs a label and a color`);
+    if (typeof b.max !== "number" || !isFinite(b.max) || b.max <= 0) { p.push(`${at}.max must be a positive number`); continue; }
+    const inRange = (name: "start" | "trip" | "rearm") => {
+      const v = b[name];
+      if (v === undefined) return;
+      if (typeof v !== "number" || !isFinite(v) || v < 0 || v > b.max!) p.push(`${at}.${name} must be a number from 0 to max (${b.max})`);
+    };
+    inRange("start"); inRange("trip"); inRange("rearm");
+    if ((b.trip === undefined) !== (b.rearm === undefined)) p.push(`${at}: trip and rearm go together`);
+    else if (b.trip !== undefined && b.trip === b.rearm) p.push(`${at}: trip and rearm must differ (the gap between them is what makes it a latch)`);
+    if (b.show !== undefined && typeof b.show !== "function") p.push(`${at}.show must be a function`);
+  }
 }
 
 /** Loads a generated module from source and calls its factory. Works in browsers and Node (data: URL import). */
@@ -186,6 +205,7 @@ export function validateGenerated(def: FighterDef, { strict = false } = {}): str
   else for (const [k, v] of Object.entries(def.hooks)) if (typeof v !== "function") p.push(`hooks.${k} is not a function`);
   for (const k of ["onHit", "onHurt", "onFrame", "visual"] as const) if (def[k] !== undefined && typeof def[k] !== "function") p.push(`${k} must be a function`);
   if (def.meters !== undefined && !Array.isArray(def.meters)) p.push("meters must be an array");
+  if (def.bars !== undefined) checkBars(def.bars, p);
   if (!def.palette?.colors || typeof def.palette.outline !== "string") p.push("palette.colors and palette.outline required");
   return p;
 }

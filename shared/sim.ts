@@ -1,3 +1,4 @@
+import { settleBars, startBars } from "./bars";
 import { C } from "./config";
 import { hashNumbers } from "./fixed";
 import { stepFighter } from "./fighter";
@@ -40,7 +41,7 @@ export function createFighter(slot: number, id: FighterId, stage: Stage, rules: 
     grabbing: -1, grabbedBy: -1, grabTimer: 0, mash: 0,
     respawnTimer: 0, lastShot: -999, charge: 0, chargeMax: C.SMASH_CHARGE_MAX,
     wallJumped: false, techWindow: 0, lastHitBy: -1, lastHitFrame: -1000,
-    special: def.special(), cpu, kos: 0, falls: 0, dealt: 0,
+    special: def.special(), ...startBars(def), cpu, kos: 0, falls: 0, dealt: 0,
     idleFrames: 0, lastDamage: 0, tauntCooldown: 0, landed: false,
     buf: 0, bufAge: 0, flickX: 0, flickY: 0, flickT: 0,
     shieldFrames: 0, chargeMul: 1, counterDmg: 0, dropTimer: 0,
@@ -85,6 +86,7 @@ export function step(state: State, inputs: InputFrame[]): State {
   for (const f of state.fighters) stepPhysics(state, f, inputs[f.slot] ?? EMPTY_INPUT, stage);
   stepProjectiles(state, stage);
   resolveHits(state);
+  for (const f of state.fighters) settleBars(f);
   stepRules(state, stage);
   for (let i = 0; i < state.inputs.length; i++) state.inputs[i] = cloneInput(inputs[i] ?? EMPTY_INPUT);
   state.seen.unshift(state.fighters.map(glimpse));
@@ -112,7 +114,7 @@ export function cloneState(s: State): State {
   return {
     ...s,
     rules: { ...s.rules },
-    fighters: s.fighters.map((f) => ({ ...f, pending: f.pending ? { ...f.pending } : null, hitLog: cloneRecord(f.hitLog), special: cloneRecord(f.special) })),
+    fighters: s.fighters.map((f) => ({ ...f, pending: f.pending ? { ...f.pending } : null, hitLog: cloneRecord(f.hitLog), special: cloneRecord(f.special), bars: cloneRecord(f.bars), tripped: cloneRecord(f.tripped) })),
     projectiles: s.projectiles.map((p) => ({ ...p, hb: { ...p.hb }, hitLog: cloneRecord(p.hitLog), data: cloneRecord(p.data) })),
     events: [], // events are per-frame output, never carried in a snapshot
     platOffsets: s.platOffsets.map((o) => ({ ...o })),
@@ -128,6 +130,7 @@ export function hashState(s: State): number {
     let a = 0; for (let i = 0; i < f.action.length; i++) a = (a * 31 + f.action.charCodeAt(i)) | 0;
     nums.push(a);
     for (const k in f.special) nums.push(f.special[k]);
+    for (const k in f.bars) nums.push(f.bars[k], f.tripped[k]);
   }
   for (const p of s.projectiles) nums.push(p.x, p.y, p.vx, p.vy, p.age, p.owner);
   return hashNumbers(nums);
