@@ -73,11 +73,12 @@ const stepSince = new Map<string, { stage: string; at: number }>();
 
 /**
  * Seconds until a forging character is likely done: what's left after the step it's on, plus
- * what's left of that step going by how long the page has watched it. Null once it isn't forging.
+ * what's left of that step going by how long the page has watched it. Null unless it's being
+ * forged: waiting in line has no honest ETA.
  */
 export function forgeEta(e: Pick<LibraryEntry, "id" | "status" | "stage">): number | null {
-  if (e.status !== "queued" && e.status !== "generating") return null;
-  const stage = e.stage || (e.status === "queued" ? "waiting in line" : "reading the drawing");
+  if (e.status !== "generating") return null;
+  const stage = e.stage || "reading the drawing";
   const now = performance.now() / 1000;
   let seen = stepSince.get(e.id);
   if (!seen || seen.stage !== stage) { seen = { stage, at: now }; stepSince.set(e.id, seen); }
