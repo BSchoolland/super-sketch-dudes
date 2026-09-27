@@ -1,18 +1,19 @@
 import { site } from "../base";
 import type { BrawlRow, BrawlTally } from "../../../server/brawl-stats";
 
-/** Kills, deaths and time survived from this browser's menu brawls, posted to the server's running totals once a minute and on the way out. */
+/** Kills, deaths, time survived and damage dealt from this browser's menu brawls, posted to the server's running totals once a minute and on the way out. */
 const FLUSH_MS = 60_000;
 let pending: BrawlTally = {};
 let started = false;
 
-const row = (id: string): BrawlRow => pending[id] ??= { kills: 0, deaths: 0, lives: 0, survivedSec: 0 };
+const row = (id: string): BrawlRow => pending[id] ??= { kills: 0, deaths: 0, lives: 0, survivedSec: 0, dealt: 0, dealtLives: 0 };
 
-/** `survivedSec` is how long the victim lasted from dropping in. */
-export function tallyKo(victim: string, killer: string | null, survivedSec: number): void {
+/** `survivedSec` is how long the victim lasted from dropping in, `dealt` the damage it did in that time. */
+export function tallyKo(victim: string, killer: string | null, survivedSec: number, dealt: number): void {
   if (!started) start();
   const v = row(victim);
   v.deaths++; v.lives++; v.survivedSec += Math.round(survivedSec);
+  v.dealtLives++; v.dealt += Math.round(dealt);
   if (killer) row(killer).kills++;
 }
 

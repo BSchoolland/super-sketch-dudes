@@ -131,7 +131,10 @@ export class MenuBrawl {
       stepSilently(st, this.inputs);
       this.renderer!.snapshot(st);
       this.renderer!.fx.consume(st, st.events, this.renderer!.cam);
-      for (const e of st.events) if (e.t === "ko") tallyKo(st.fighters[e.slot].id, e.by >= 0 ? st.fighters[e.by].id : null, (st.frame - this.born[e.slot]) / C.FPS);
+      for (const e of st.events) if (e.t === "ko") {
+        const f = st.fighters[e.slot];
+        tallyKo(f.id, e.by >= 0 ? st.fighters[e.by].id : null, (st.frame - this.born[e.slot]) / C.FPS, f.dealt);
+      }
       st.events.length = 0;
       this.acc -= STEP;
       n++;
