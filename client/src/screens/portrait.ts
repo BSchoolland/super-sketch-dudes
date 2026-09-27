@@ -51,9 +51,9 @@ const FIDGETS: Pick<Act, "cell" | "len" | "kind">[] = [
 ];
 
 /**
- * The fighter standing in the box, alive: breathing, glancing toward the pointer, fidgeting now
- * and then, swinging when hovered and cheering when picked. `key` names the spot on screen, so
- * two boxes showing the same fighter act on their own.
+ * The fighter standing in the box, alive: breathing, glancing toward the pointer, swinging
+ * when hovered, cheering when picked, and (`fidget`) hopping about now and then. `key` names the
+ * spot on screen, so two boxes showing the same fighter act on their own.
  */
 export function drawFighterPortrait(ctx: CanvasRenderingContext2D, def: FighterDef, key: string, b: PortraitBounds, mood: PortraitMood = {}): void {
   const sp = def.sprite;
