@@ -16,6 +16,12 @@ describe("forge checks", () => {
     expect(r.killPercents.fsmash).toBeLessThan(300);
   });
 
+  it("passes the second exemplar, the caster", async () => {
+    const wizard = readFileSync(new URL("../forge/exemplar/fire-wizard.fighter.js", import.meta.url), "utf8");
+    const r = await runChecks({ bundle: bundle("gen-forge-wizard", wizard), height: 118 });
+    expect(r.failures).toEqual([]);
+  });
+
   it("fails a fighter whose uspecial doesn't rise, a throwing hook and the wrong height, each with a specific message", async () => {
     const broken = source
       .replace("f.vy = -11 + (f.frame - 5) * 0.3;", "f.vy = 2;").replace("jumps: 2", "jumps: 1")

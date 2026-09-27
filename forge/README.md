@@ -13,7 +13,7 @@ forge/
   sheet.ts         gpt-image-2.5-sunburst images.edit from the drawing, SHEET-PROMPT.md with the nine cell poses
   img/normalize.py sheet -> nine keyed, scaled, aligned cells + cells.json content boxes
   checks.ts        headless gate: lint/build/validate, determinism resim, ladder vs the house roster, recovery, KO
-  exemplar/        the example fighter the agent reads before writing its own
+  exemplar/        the example fighters (SWORD GUY, FIRE WIZARD) the agent reads before writing its own
 ```
 
 ## A job
