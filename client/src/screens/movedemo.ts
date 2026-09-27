@@ -2,7 +2,7 @@ import { createMatch, step } from "../../../shared/sim";
 import { B, EMPTY_INPUT, cloneInput, type InputFrame } from "../../../shared/input";
 import type { FighterDef, State } from "../../../shared/types";
 import { roster } from "../../../shared/fighters/index";
-import { profileOf } from "../../../shared/cpu-profile";
+import { profileOf, type ShotPath } from "../../../shared/cpu-profile";
 import { stages } from "../../../shared/stages/index";
 import { VIEW_H, VIEW_W } from "../render/camera";
 import { PAPER, inkRect, INK } from "../render/paper";
@@ -125,14 +125,23 @@ export class MoveDemo {
     const m = this.move;
     const gap = this.spacing();
     if (!m || !id || !def.moves[id]) return { youX: DUMMY_X - gap, platY: null, approach: "ground", span: gap };
-    const r = profileOf(def).reach[id];
+    const profile = profileOf(def);
+    const r = profile.reach[id];
     const dummyH = roster[this.dummy ?? this.fighter].stats.height;
+    const fullHopRise = (def.stats.fullHop * def.stats.fullHop) / (2 * def.stats.gravity);
+    // a move that fires something: put the dummy where the shot goes, up on a platform if that's in the air
+    const target = this.shotTarget(profile.shots[id], m);
+    if (target && !(m.air && this.dir === "d")) {
+      const rise = m.air ? fullHopRise : 0;
+      const feet = -rise + target.y + dummyH / 2;
+      const platY = feet < -50 ? Math.max(-560, feet) : null;
+      return { youX: DUMMY_X - target.x, platY, approach: m.air ? "fullHop" : "ground", span: Math.abs(target.x) };
+    }
     const midX = r.first === 999 ? 0 : Math.max(-40, Math.min(200, (r.minX + r.maxX) / 2));
     const midY = r.first === 999 ? -def.stats.height : (r.minY + r.maxY) / 2;
-    const fullHop = (def.stats.fullHop * def.stats.fullHop) / (2 * def.stats.gravity);
     if (this.dir === "u") {
       // the dummy up where the hitboxes are: its middle at theirs, standing on a platform
-      const rise = m.air ? fullHop : 0;
+      const rise = m.air ? fullHopRise : 0;
       const platY = Math.max(-520, Math.min(-60, -rise + midY + dummyH / 2));
       return { youX: DUMMY_X - midX, platY, approach: m.air ? "fullHop" : "ground", span: Math.abs(midX) };
     }
@@ -168,6 +177,28 @@ export class MoveDemo {
     if (probe?.shotRange) d = Math.max(d, Math.min(probe.shotRange * 0.5, 380));
     if (probe?.groundDx) d = Math.max(d, probe.groundDx * 0.6);
     return Math.max(bodies * 0.8, Math.min(d, 480));
+  }
+
+  /**
+   * Where along its shot the move is worth watching land: the path the CPU recorded for it (from
+   * the air for an aerial; held for a special that's held), at its last point within reach of the
+   * frame, where it bursts or fades. Relative to the fighter's start, facing +x.
+   */
+  private shotTarget(paths: ShotPath[] | undefined, m: DemoMove): { x: number; y: number } | null {
+    if (!paths?.length) return null;
+    const held = this.holdsFor(m);
+    const path = paths.find((p) => p.air === m.air && (held ? p.hold === Infinity : p.hold === 0)) ?? paths.find((p) => p.air === m.air) ?? paths[0];
+    const near = path.pts.filter((q) => Math.hypot(q.x, q.y) <= 460);
+    // a shot that runs along the floor (a skipped shell) is met by a dummy standing on it
+    const floor = this.dir === "u" ? [] : near.filter((q) => q.y > -30);
+    const pick = floor.length ? floor : near;
+    const q = pick.length ? pick[pick.length - 1] : path.pts[0];
+    return q ? { x: q.x, y: q.y } : null;
+  }
+
+  private holdsFor(m: DemoMove): boolean {
+    const id = MOVE_ID[kindOf(m)][this.dir];
+    return m.button === B.SPECIAL && !!profileOf(roster[this.fighter]).specials[id as keyof ReturnType<typeof profileOf>["specials"]]?.held;
   }
 
   private get dir(): Dir {
