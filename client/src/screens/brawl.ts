@@ -7,6 +7,8 @@ import { houseChoices, type FighterChoice } from "../fighters";
 import { tallyKo } from "./brawl-tally";
 
 const STEP = 1000 / 60;
+/** Seconds between starting to load another contender, so the whole pool is in within a minute. */
+const WARM_EVERY = 2;
 
 interface Contender { id: string; bundleUrl: string }
 
@@ -19,14 +21,16 @@ export class MenuBrawl {
   private brawl = new Brawl(() => this.ready(), (Math.random() * 0x7fffffff) | 0);
   private renderer: Renderer | null = null;
   private acc = 0;
+  private warmT = 0;
   private pool: Contender[] = houseChoices().map((c: FighterChoice) => ({ id: c.id, bundleUrl: c.bundleUrl }));
   private loads = new Map<string, FighterLoad>();
 
   constructor() {
     library.everyone().then(({ characters }) => {
       for (const c of characters) if (!this.pool.some((p) => p.id === c.id)) this.pool.push({ id: c.id, bundleUrl: c.bundleUrl });
+      for (let i = 0; i < 6; i++) this.warm();
     }, (error) => console.error("brawl: everyone's characters", error));
-    for (let i = 0; i < 4; i++) this.warm();
+    for (let i = 0; i < 2; i++) this.warm();
   }
 
   /** Starts loading a random contender so a spawn later finds someone ready. */
@@ -36,13 +40,13 @@ export class MenuBrawl {
     if (!this.loads.has(c.id)) this.loads.set(c.id, fighterLoad(c.bundleUrl));
   }
 
-  /** The loaded contenders; each look warms one more. */
   private ready(): string[] {
-    this.warm();
     return [...this.loads.entries()].filter(([id, l]) => l.state === "ready" && roster[id]).map(([id]) => id);
   }
 
   update(dt: number): void {
+    this.warmT -= dt;
+    if (this.warmT <= 0) { this.warm(); this.warmT = WARM_EVERY; }
     this.acc += dt * 1000;
     let n = 0;
     while (this.acc >= STEP && n < 4) {
