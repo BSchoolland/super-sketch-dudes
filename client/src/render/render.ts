@@ -62,6 +62,7 @@ export class Renderer {
       else if (trail === "streak") this.fx.streak(p.x, p.y, ang, Math.hypot(p.vx, p.vy) * 3, color);
       else if (trail === "smoke") this.fx.dust(p.x, p.y + 4, 1, 0);
       else if (trail === "sparks" && state.frame % 2 === 0) this.fx.spark(p.x, p.y, 2, 140, color, 3, 0.3);
+      else if (trail === "flames") this.fx.flame(p.x - p.vx * 0.5, p.y + 4, 1, look.color ?? color);
     }
     // afterimages for fast moves
     state.fighters.forEach((f) => {

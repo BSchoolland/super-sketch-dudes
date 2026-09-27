@@ -188,9 +188,9 @@ export interface FighterForm {
   loops?: Record<string, number>;
 }
 
-export const LOOK_SHAPES = ["ball", "bolt", "ring", "blob", "star", "shard", "cloud", "puddle", "slash", "bar"] as const;
+export const LOOK_SHAPES = ["ball", "bolt", "ring", "blob", "star", "shard", "cloud", "puddle", "slash", "bar", "fireball"] as const;
 export const LOOK_TEXTURES = ["solid", "hatch", "dots", "scribble", "flame", "glow"] as const;
-export const LOOK_TRAILS = ["none", "ghost", "streak", "smoke", "sparks"] as const;
+export const LOOK_TRAILS = ["none", "ghost", "streak", "smoke", "sparks", "flames"] as const;
 export const HIT_FAMILIES = ["hit", "slash", "heavy", "tip", "fire", "energy"] as const;
 
 /**

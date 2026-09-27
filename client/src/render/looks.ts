@@ -73,6 +73,7 @@ function drawShapeLook(ctx: CanvasRenderingContext2D, look: Look, at: LookAt): v
     ctx.beginPath(); ctx.ellipse(at.len / 2, 0, at.len / 2 + r * 1.9, r * 1.9, 0, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
+  if (shape === "fireball") { drawFireball(ctx, r, color, ink, at.frame); return; }
   if (shape === "bar" || shape === "bolt" || shape === "slash") {
     const len = shape === "slash" ? Math.max(at.len + r * 2, r * 3) : Math.max(at.len + r * 2, r * 2.5);
     ctx.translate(-r, 0);
@@ -84,6 +85,38 @@ function drawShapeLook(ctx: CanvasRenderingContext2D, look: Look, at: LookAt): v
   const rr = look.size !== undefined ? r : Math.max(r, at.len / 2 + r * 0.5);
   ctx.translate(at.len / 2, 0);
   paint(ctx, shape, 0, rr, color, ink, texture, -rr * 1.3, -rr * 1.3, rr * 2.6, rr * 2.6, seed, shape === "ring");
+}
+
+/**
+ * A ball of fire heading along +x: a round head, tongues streaming back from it and flickering, three
+ * layers (the look's colour, a lighter middle, a yellow core) under one inked outline.
+ */
+function drawFireball(ctx: CanvasRenderingContext2D, r: number, color: string, ink: string, frame: number): void {
+  const tongue = (scale: number, flick: number): void => {
+    const R = r * scale;
+    ctx.beginPath();
+    ctx.moveTo(R, 0);
+    ctx.arc(0, 0, R, 0, Math.PI * 0.5);
+    for (let j = 0; j <= 4; j++) {
+      const t = j / 4, side = j % 2 ? 0.35 : 0.8;
+      const wob = (noise(frame * 3 + j * 17 + flick) - 0.5) * R * 0.5;
+      ctx.lineTo(-R * (0.6 + t * 1.5) + wob * 0.5, R * side * (1 - t * 0.9) * (j === 4 ? 0 : 1) + wob);
+    }
+    for (let j = 4; j >= 0; j--) {
+      const t = j / 4, side = j % 2 ? 0.35 : 0.8;
+      const wob = (noise(frame * 3 + j * 23 + flick + 99) - 0.5) * R * 0.5;
+      ctx.lineTo(-R * (0.6 + t * 1.5) + wob * 0.5, -R * side * (1 - t * 0.9) * (j === 4 ? 0 : 1) + wob);
+    }
+    ctx.arc(0, 0, R, Math.PI * 1.5, Math.PI * 2);
+    ctx.closePath();
+  };
+  tongue(1, 0);
+  ctx.fillStyle = color; ctx.fill();
+  ctx.strokeStyle = ink; ctx.lineWidth = 2; ctx.lineJoin = "round"; ctx.stroke();
+  tongue(0.68, 7);
+  ctx.fillStyle = "#ffb43a"; ctx.fill();
+  tongue(0.38, 13);
+  ctx.fillStyle = "#fff2a8"; ctx.fill();
 }
 
 function tracePath(ctx: CanvasRenderingContext2D, shape: Look["shape"], len: number, r: number, seed: number): void {
