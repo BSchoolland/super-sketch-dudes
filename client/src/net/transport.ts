@@ -1,5 +1,6 @@
 import { packInput, unpackInput, type InputFrame } from "../../../shared/input";
 import { site } from "../base";
+import { sessionTrace } from "../telemetry/events";
 
 export type Unsubscribe = () => void;
 export type InputsCallback = (slot: number, frame: number, inputs: InputFrame[]) => void;
@@ -27,7 +28,8 @@ export interface RoomMember {
 
 export type RelayMessage =
   | { t: "hello"; id: number }
-  | { t: "room"; code: string; host: number; started: boolean; members: RoomMember[]; game: string | null }
+  /** `trace` is the room's wide-event trace; absent from servers older than wide events. */
+  | { t: "room"; code: string; trace?: string; host: number; started: boolean; members: RoomMember[]; game: string | null }
   | { t: "start"; seed: number; config: unknown; members: Pick<RoomMember, "id" | "name" | "slot">[] }
   | { t: "left"; id: number; slot: number; duringMatch: boolean }
   /** The room's game bundle changed; the host answers with gameAt. */
@@ -44,7 +46,7 @@ function removeListener<T>(listeners: Set<T>, listener: T): Unsubscribe {
 
 export function relayWebSocketUrl(): string {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${location.host}${site.base}ws`;
+  return `${protocol}//${location.host}${site.base}ws?trace=${sessionTrace()}`;
 }
 
 export class WebSocketTransport implements Transport {

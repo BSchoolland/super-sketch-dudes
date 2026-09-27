@@ -3,6 +3,7 @@ import path from "node:path";
 import type express from "express";
 import { DRAW_PNG_MAX_BYTES } from "../shared/draw";
 import { playerOf } from "./auth";
+import type { WideEvent } from "../shared/wide";
 import { drawingUrlOf, enqueueJob, entryOf, jobOf, newFighterId, storeCharacter } from "./forge";
 import { upsertCharacter } from "./library";
 import { everyCharacter, libraryOf, removeCharacter, setStarters, starterEntries, starterIds } from "./library";
@@ -45,7 +46,9 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
     const description = String(req.body?.description ?? "").replace(/\s+/g, " ").trim().slice(0, 240);
     const hint = name || description ? { name, description } : null;
     const forge = req.body?.forge === "v2" ? "v2" : req.body?.forge === "v1" ? "v1" : undefined;
-    const job = enqueueJob({ fighterId: newFighterId(player.id.replace(/\W+/g, "").slice(-4) || "p"), player, siblings, png, origin: "creator", hint, forge });
+    const event = res.locals.event as WideEvent | undefined;
+    const job = enqueueJob({ fighterId: newFighterId(player.id.replace(/\W+/g, "").slice(-4) || "p"), player, siblings, png, origin: "creator", hint, forge, parent: event?.trace ?? null });
+    event?.set("forge", `f-${job.id}`);
     res.json({ character: entryOf(job) });
   });
 

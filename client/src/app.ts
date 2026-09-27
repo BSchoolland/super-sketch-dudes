@@ -10,7 +10,7 @@ import { SignInScreen } from "./screens/signin";
 import { menus, signInScreen } from "./screens/flow";
 import { loadSettings, settings, takeHandoff, type Screen } from "./screens/ui";
 import { music, setMusicVolume, setVolume } from "./audio/audio";
-import { logClient } from "./telemetry";
+import { noteScreen, noteView, sessionTrace, startTelemetry } from "./telemetry/events";
 import { loadGeneratedFighter } from "./gen";
 import { devSignIn, finishSignIn, loadAccount, signedIn } from "./account";
 import { forgetLibrary } from "./fighters";
@@ -42,13 +42,14 @@ export interface AppController {
 export async function mount(opts: MountOptions): Promise<AppController> {
   setSiteBase(opts.base);
   swap.hash = opts.hash ?? "";
-  if (opts.swap) swap.request = opts.swap;
+  const shellSwap = opts.swap;
+  if (shellSwap) swap.request = (hash, handoff) => shellSwap(hash, { ...handoff, session: sessionTrace() });
+  const canvas = opts.canvas;
+  const stopTelemetry = startTelemetry({ canvas, bundle: swap.hash, continues: opts.resume?.session });
   loadSettings();
   setVolume(settings.volume);
   setMusicVolume(settings.music);
-  logClient("start", { ua: navigator.userAgent, w: innerWidth, h: innerHeight, dpr: devicePixelRatio, pads: connectedPads().length, resumed: !!opts.resume });
 
-  const canvas = opts.canvas;
   const ctx = canvas.getContext("2d", { alpha: false })!;
   let scale = 1, offX = 0, offY = 0;
   function resize(): void {
@@ -59,6 +60,7 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     offX = (canvas.width - VIEW_W * scale) / 2;
     offY = (canvas.height - VIEW_H * scale) / 2;
     setPointerTransform(scale / dpr, offX / dpr, offY / dpr);
+    noteView({ w, h, dpr, canvasW: canvas.width, canvasH: canvas.height, scale });
   }
   const detachPointer = attachPointer(canvas);
   window.addEventListener("resize", resize);
@@ -94,6 +96,7 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     screen = home();
   }
   screen.enter?.();
+  noteScreen(screen.constructor.name);
 
   const onKey = (e: KeyboardEvent) => {
     if (e.code === "F2") { const v = screen as VersusScreen; if (v.renderer) v.renderer.showHitboxes = !v.renderer.showHitboxes; e.preventDefault(); }
@@ -116,7 +119,7 @@ export async function mount(opts: MountOptions): Promise<AppController> {
       forgetLibrary();
       next = signInScreen();
     }
-    if (next) { screen = next; screen.enter?.(); }
+    if (next) { screen = next; screen.enter?.(); noteScreen(screen.constructor.name); }
     music.follow(screen instanceof VersusScreen ? screen : null);
     endInputFrame();
     if (!running) return; // the screen asked the shell for another bundle
@@ -140,6 +143,7 @@ export async function mount(opts: MountOptions): Promise<AppController> {
       window.removeEventListener("resize", resize);
       window.removeEventListener("keydown", onKey);
       detachPointer();
+      stopTelemetry();
     },
   };
   (window as any).sketchbattle = { get screen() { return screen; }, get preview() { return (screen as VersusScreen).preview ?? null; }, build: site.build, hash: swap.hash };

@@ -13,6 +13,7 @@ import { sfx } from "../audio/audio";
 import { WebSocketTransport, type RelayMessage, type RoomMember, type Unsubscribe } from "../net/transport";
 import { drawFighterPortrait } from "./portrait";
 import { NetVersusScreen, startConfig } from "./netversus";
+import { MatchTelemetry } from "../telemetry/match";
 import { swap, type Handoff } from "../handoff";
 import { bg, card, hint, label, settings, title, hover, clicked, arrows, button, backButton, goTo, type Screen, INK } from "./ui";
 
@@ -50,10 +51,12 @@ export class OnlineScreen implements Screen {
     if (!h.match) return screen;
     const m = h.match;
     screen.dispose();
-    return OnlineScreen.matchScreen(onExit, context, { config: m.config, bundles: m.bundles, members: m.members, localSlot: m.localSlot, device: m.device, inputDelay: m.inputDelay, resume: m.session });
+    if (!h.room) throw new Error("handed a match without its room");
+    const telemetry = new MatchTelemetry({ room: { code: h.room.code, trace: h.room.trace ?? null }, config: m.config, members: m.members, localSlot: m.localSlot, inputDelay: m.inputDelay, bundles: m.bundles, resumedAt: m.session.frame });
+    return OnlineScreen.matchScreen(onExit, context, { config: m.config, bundles: m.bundles, members: m.members, localSlot: m.localSlot, device: m.device, inputDelay: m.inputDelay, resume: m.session, telemetry });
   }
 
-  private static matchScreen(onExit: () => Screen, context: OnlineContext, m: { config: MatchConfig; bundles: string[]; members: Pick<RoomMember, "id" | "name" | "slot">[]; localSlot: number; device: DeviceId; inputDelay: number; resume?: SessionHandoff }): Screen {
+  private static matchScreen(onExit: () => Screen, context: OnlineContext, m: { config: MatchConfig; bundles: string[]; members: Pick<RoomMember, "id" | "name" | "slot">[]; localSlot: number; device: DeviceId; inputDelay: number; resume?: SessionHandoff; telemetry: MatchTelemetry }): Screen {
     for (const p of m.config.players) if (!roster[p.fighter]) throw new Error(`online match fighter ${p.fighter} isn't loaded`);
     return new NetVersusScreen({
       transport: context.transport,
@@ -64,6 +67,7 @@ export class OnlineScreen implements Screen {
       device: m.device,
       inputDelay: m.inputDelay,
       resume: m.resume,
+      telemetry: m.telemetry,
       isHost: () => context.room?.host === context.id,
       roomState: () => context.room,
       localId: () => context.id,
@@ -276,17 +280,24 @@ export class OnlineScreen implements Screen {
       const local = message.members.find((member) => member.id === this.context.id);
       if (!local) throw new Error("start message omitted local member");
       const config = startConfig(message.config, message.seed);
+      const room = this.context.room;
+      if (!room) throw new Error("start message outside a room");
+      const telemetry = new MatchTelemetry({ room: { code: room.code, trace: room.trace ?? null }, config: config.match, members: message.members, localSlot: local.slot, inputDelay: config.inputDelay, bundles: config.bundles });
       // every client loads every participant's fighter first; the netcode's input resend covers the skew
       this.phase = "loading";
-      const loads = config.bundles.filter(Boolean).map((url) => fighterLoad(url));
+      const urls = config.bundles.filter(Boolean);
+      const loads = urls.map((url) => fighterLoad(url));
+      telemetry.loading(urls);
       void Promise.all(loads.map((l) => l.promise)).then(() => {
+        telemetry.loaded(loads.map((l, i) => ({ url: urls[i], state: l.state, error: l.error, ms: l.ms })));
         const failed = loads.find((l) => l.state === "failed");
         if (failed) {
+          telemetry.finish("load failed");
           this.error = `A FIGHTER DIDN'T LOAD: ${failed.error}`;
           this.phase = "error";
           return;
         }
-        this.nextScreen = OnlineScreen.matchScreen(this.onExit, this.context, { config: config.match, bundles: config.bundles, members: message.members, localSlot: local.slot, device: this.device, inputDelay: config.inputDelay });
+        this.nextScreen = OnlineScreen.matchScreen(this.onExit, this.context, { config: config.match, bundles: config.bundles, members: message.members, localSlot: local.slot, device: this.device, inputDelay: config.inputDelay, telemetry });
       });
     }
     // bundle switches outside a match: the host answers at once, everyone swaps carrying the room

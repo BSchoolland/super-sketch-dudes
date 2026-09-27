@@ -1,6 +1,7 @@
 import type { FighterDef, Pose } from "../../../shared/types";
 import { PAPER, PENCIL } from "./paper";
 import { roster } from "../../../shared/fighters/index";
+import { drawHealth } from "./health";
 
 /**
  * Drawn fighters: one image per sheet cell, tinted variants built once. Cells are square PNGs
@@ -45,7 +46,7 @@ export function cellImages(url: string): CellImages {
   cache.set(url, e);
   const img = new Image();
   img.onload = () => { e!.base = img; e!.flash = tinted(img, "#ffffff"); e!.ghost = tinted(img, PENCIL); e!.bounds = inkBounds(img); };
-  img.onerror = () => { e!.failed = true; console.error(`sprite cell failed to load: ${url}`); };
+  img.onerror = () => { e!.failed = true; drawHealth.failedCells.add(url); console.error(`sprite cell failed to load: ${url}`); };
   img.src = url;
   return e;
 }
@@ -100,6 +101,8 @@ export function drawSprite(ctx: CanvasRenderingContext2D, def: FighterDef, cell:
   ctx.scale(pose.sx ?? 1, pose.sy ?? 1);
   if (opts.flip) ctx.scale(-1, 1);
   const img = opts.ghost ? e.ghost : opts.flash ? e.flash : e.base;
+  drawHealth.sprites++;
+  if (!img) e.failed ? drawHealth.failed++ : drawHealth.loading++;
   if (img) ctx.drawImage(img, -sp.px / 2 * u, -sp.feetPx * u, sp.px * u, sp.px * u);
   else if (!e.failed) {
     // still loading: a faint paper placeholder the size of the fighter

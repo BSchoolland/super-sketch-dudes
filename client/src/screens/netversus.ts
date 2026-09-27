@@ -5,7 +5,7 @@ import type { MatchConfig } from "../../../shared/sim";
 import { VIEW_W } from "../render/camera";
 import { drawBanner } from "../render/hud";
 import type { DeviceId, MenuInput } from "../input/devices";
-import { logClient } from "../telemetry";
+import type { MatchTelemetry } from "../telemetry/match";
 import { RollbackMatch } from "../net/match";
 import { RollbackSession, type SessionHandoff } from "../net/rollback";
 import { swap } from "../handoff";
@@ -68,6 +68,8 @@ export interface NetVersusOptions {
   /** The room as this bundle last saw it, for the handoff. */
   roomState: () => RelayMessage & { t: "room" } | null;
   localId: () => number;
+  /** The match's wide event, opened when the start arrived. */
+  telemetry: MatchTelemetry;
 }
 
 /** A rollback match over the relay, shared by classic online rooms and DRAW BATTLE. */
@@ -78,23 +80,24 @@ export class NetVersusScreen extends VersusScreen {
   private pingTime = 0;
   private waitingFor = 0;
   private unsubscribers: Unsubscribe[] = [];
-  private cleanupMatch: () => void;
+  private cleanupMatch: (exit: string) => void;
   private swapAt: { hash: string; frame: number } | null = null;
 
   constructor(protected opts: NetVersusOptions) {
-    let cleanup: (() => void) | null = null;
+    let cleanup: ((exit: string) => void) | null = null;
     const done = () => {
       if (!cleanup) throw new Error("online match cleanup is not initialized");
-      cleanup();
+      cleanup("done");
       return opts.exit("done");
     };
+    const telemetry = opts.telemetry;
     const session = new RollbackSession({
       config: opts.config,
       localSlot: opts.localSlot,
       transport: opts.transport,
       inputDelay: opts.inputDelay,
       resume: opts.resume,
-      onDesync: (info) => logClient("desync", { frame: info.frame, localHash: info.localHash, remoteHash: info.remoteHash, remoteSlot: info.remoteSlot }),
+      onDesync: (info) => telemetry.issue("error", "desync", `frame ${info.frame}: local ${info.localHash} ≠ slot ${info.remoteSlot} ${info.remoteHash}`),
     });
     const driver = new RollbackMatch(session, opts.device);
     const names = opts.config.players.map((_, slot) => {
@@ -106,13 +109,16 @@ export class NetVersusScreen extends VersusScreen {
     this.session = session;
     this.renderer.names = names;
     if (opts.resume) this.countdown = 0;
+    telemetry.attach(session, this.renderer);
     this.unsubscribers.push(
       opts.transport.onLobby((message) => {
         opts.onLobby?.(message);
         if (message.t === "left" && message.duringMatch) {
           // someone already out of stocks (or a finished match) can go without ending it for everyone else
           const out = (this.session.state.fighters[message.slot]?.stocks ?? 0) <= 0;
-          if (out || this.session.state.ended) this.session.drop(message.slot);
+          const dropped = out || this.session.state.ended;
+          telemetry.left(message.slot, dropped);
+          if (dropped) this.session.drop(message.slot);
           else {
             this.failure = { title: "PLAYER DISCONNECTED", detail: "Returning to the room", automatic: true };
             this.session.waiting = true;
@@ -123,11 +129,13 @@ export class NetVersusScreen extends VersusScreen {
         if (message.t === "gameAt" && message.hash !== swap.hash) { this.swapAt = { hash: message.hash, frame: message.frame }; this.session.keepFrom = message.frame; }
       }),
       opts.transport.onClose(() => {
+        telemetry.issue("warn", "closed", `the relay connection closed at frame ${this.session.state.frame}`);
         this.failure = { title: "CONNECTION LOST", detail: "The relay closed", automatic: false };
         this.session.waiting = true;
       }),
     );
-    this.cleanupMatch = () => {
+    this.cleanupMatch = (exit) => {
+      telemetry.finish(exit);
       this.session.close();
       for (const unsubscribe of this.unsubscribers) unsubscribe();
       this.unsubscribers.length = 0;
@@ -136,6 +144,7 @@ export class NetVersusScreen extends VersusScreen {
   }
 
   override update(dt: number, menu: MenuInput): Screen | null {
+    this.opts.telemetry.tick(this.opts.transport.rtt(), this.session.waiting && !this.failure);
     this.pingTime += dt;
     if (this.pingTime >= 1) {
       this.pingTime -= 1;
@@ -150,17 +159,18 @@ export class NetVersusScreen extends VersusScreen {
       this.failureTime += dt;
       this.renderer.fx.update(dt);
       if (this.failure.automatic && this.failureTime >= 2) {
-        this.cleanupMatch();
+        this.cleanupMatch("left");
         return this.opts.exit("left");
       }
       if (menu.back || menu.confirm) {
-        this.cleanupMatch();
-        return this.opts.exit(this.failure.title === "CONNECTION LOST" ? "closed" : "failure");
+        const exit = this.failure.title === "CONNECTION LOST" ? "closed" : "failure";
+        this.cleanupMatch(exit);
+        return this.opts.exit(exit);
       }
       return null;
     }
     if (this.opts.finished?.()) {
-      this.cleanupMatch();
+      this.cleanupMatch("done");
       return this.opts.exit("done");
     }
     if (this.swapAt) {
@@ -169,7 +179,7 @@ export class NetVersusScreen extends VersusScreen {
       if (handoff) {
         const { hash } = this.swapAt;
         this.swapAt = null;
-        this.cleanupMatch();
+        this.cleanupMatch("swap");
         swap.request(hash, {
           transport: this.opts.transport, id: this.opts.localId(), room: this.opts.roomState(),
           match: { config: this.opts.config, bundles: this.opts.bundles ?? [], members: this.opts.members, localSlot: this.opts.localSlot, device: this.opts.device, inputDelay: this.opts.inputDelay, session: handoff },
@@ -182,6 +192,7 @@ export class NetVersusScreen extends VersusScreen {
 
   override draw(ctx: CanvasRenderingContext2D, dt: number): void {
     super.draw(ctx, dt);
+    this.opts.telemetry.drew();
     const rollback = this.session.rollbackFramesPerSecond();
     const quality = this.session.connectionQuality();
     const color = quality > 0.72 ? "#4dff88" : quality > 0.38 ? INK : "#ff6b5c";
