@@ -10,11 +10,19 @@ export type ToolKind = "pen" | "eraser";
 export interface Tool { kind: ToolKind; color: string }
 
 interface Stroke { kind: ToolKind; color: string; width: number; points: number[] }
-type Mark = Stroke | "clear";
+/** A picture laid down whole: an earlier character's drawing to start from. */
+interface Picture { kind: "picture"; img: HTMLImageElement }
+type Mark = Stroke | Picture | "clear";
 
 const BASE_WIDTH: Record<ToolKind, number> = { pen: 18, eraser: 40 };
 
-function paint(g: CanvasRenderingContext2D, s: Stroke): void {
+function paint(g: CanvasRenderingContext2D, s: Stroke | Picture): void {
+  if (s.kind === "picture") {
+    const k = PAD_PX / Math.max(s.img.naturalWidth, s.img.naturalHeight);
+    const w = s.img.naturalWidth * k, h = s.img.naturalHeight * k;
+    g.drawImage(s.img, (PAD_PX - w) / 2, (PAD_PX - h) / 2, w, h);
+    return;
+  }
   const p = s.points;
   g.save();
   g.strokeStyle = g.fillStyle = s.kind === "eraser" ? PAPER : s.color;
@@ -88,6 +96,14 @@ export class DrawPad {
     if (this.locked || this.blank) return;
     this.marks.push("clear");
     this.replay();
+  }
+
+  /** Starts from a finished picture (a copied character's drawing); it undoes and clears like any mark. */
+  startFrom(img: HTMLImageElement): void {
+    this.finishStroke();
+    this.marks.push({ kind: "picture", img });
+    paint(this.cg, { kind: "picture", img });
+    this.liveDirty = true;
   }
 
   toPng(): string {

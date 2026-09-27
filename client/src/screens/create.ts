@@ -9,7 +9,7 @@ import { DrawPad } from "./draw/pad";
 import { PadTools } from "./draw/tools";
 import type { CharacterHint, Nav } from "./nav";
 
-const PAD = { x: 510, y: 90, w: 900, h: 900 };
+export const PAD = { x: 510, y: 90, w: 900, h: 900 };
 const RIGHT = 1490, COL_W = 340;
 
 /** NEW CHARACTER: the draw pad with no clock. DONE DRAWING goes on to naming and describing it. */

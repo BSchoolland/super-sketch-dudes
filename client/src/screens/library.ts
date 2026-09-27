@@ -11,6 +11,8 @@ import { ButtonMenu, type Button } from "./draw/buttons";
 import { characterStatus, drawCharacterArt, RED } from "./draw/character";
 import { wrapped } from "./draw/text";
 import { drawCharacterDetail } from "./charcard";
+import { DrawPad } from "./draw/pad";
+import { PAD } from "./create";
 import type { Nav } from "./nav";
 
 const COLS = 6, ROWS = 2, ART = 250, GAP = 50, ROW_H = 350, TOP = 160;
@@ -25,6 +27,7 @@ export class LibraryScreen implements Screen {
   private scroll = 0;
   private deleteArmed = -1;
   private problem = "";
+  private next: Screen | null = null;
 
   constructor(private nav: Nav) {}
 
@@ -52,17 +55,33 @@ export class LibraryScreen implements Screen {
   }
 
   private detailButtons(e: LibraryEntry): Button[] {
-    const y = VIEW_H - 150, w = 360;
+    const y = VIEW_H - 150, w = 320, gap = 24;
     const armed = this.deleteArmed >= 0 && this.t - this.deleteArmed < 3;
     const b: Button[] = [];
-    if (e.status === "ready") b.push({ id: "fight", x: VIEW_W / 2 - w * 1.5 - 30, y, w, h: 110, text: "FIGHT", size: 48 });
-    if (!e.starter) b.push({ id: "delete", x: VIEW_W / 2 - w / 2, y, w, h: 110, text: armed ? "SURE?" : "DELETE", size: 44 });
-    b.push({ id: "back", x: VIEW_W / 2 + w / 2 + 30, y, w, h: 110, text: "BACK", size: 44 });
+    if (e.status === "ready") b.push({ id: "fight", x: 0, y, w, h: 110, text: "FIGHT", size: 48 });
+    b.push({ id: "copy", x: 0, y, w, h: 110, text: "COPY DRAWING", size: 34 });
+    if (!e.starter) b.push({ id: "delete", x: 0, y, w, h: 110, text: armed ? "SURE?" : "DELETE", size: 44 });
+    b.push({ id: "back", x: 0, y, w, h: 110, text: "BACK", size: 44 });
+    const x0 = (VIEW_W - (b.length * w + (b.length - 1) * gap)) / 2;
+    b.forEach((btn, i) => { btn.x = x0 + i * (w + gap); });
     return b;
+  }
+
+  /** Opens the creator with this character's drawing already on the pad. */
+  private copyDrawing(e: LibraryEntry): void {
+    const img = new Image();
+    img.onload = () => {
+      const pad = new DrawPad(PAD);
+      pad.startFrom(img);
+      this.next = this.nav.create(pad, { name: e.name ?? "", description: "" });
+    };
+    img.onerror = () => { this.problem = "couldn't load that drawing"; console.error(`copy drawing failed: ${e.drawingUrl}`); };
+    img.src = e.drawingUrl;
   }
 
   update(dt: number, m: MenuInput): Screen | null {
     this.t += dt;
+    if (this.next) { const n = this.next; this.next = null; this.selected = null; return n; }
     const taps = consumeTaps();
     if (this.selected) return this.updateDetail(this.selected, m, taps);
     const buttons = this.gridButtons();
@@ -86,6 +105,7 @@ export class LibraryScreen implements Screen {
   private updateDetail(e: LibraryEntry, m: MenuInput, taps: ReturnType<typeof consumeTaps>): Screen | null {
     const pressed = this.detailMenu.update(this.detailButtons(e), m, taps);
     if (pressed === "fight") return this.nav.battle("any", libraryChoices([e])[0]);
+    if (pressed === "copy") { sfx.menuConfirm(); this.copyDrawing(e); }
     if (pressed === "delete") {
       if (this.deleteArmed >= 0 && this.t - this.deleteArmed < 3) this.remove(e);
       else this.deleteArmed = this.t;
