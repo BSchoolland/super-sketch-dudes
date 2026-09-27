@@ -58,21 +58,17 @@ export function drawHud(ctx: CanvasRenderingContext2D, state: State, hud: HudSta
     ctx.strokeText("%", 30, 0);
     ctx.fillText("%", 30, 0);
     ctx.restore();
-    // bars: the fighter's own numbers, scaled by their max; a tripped latch draws its fill in ink
-    const rows: { label: string; fill: number; locked: boolean }[] = [];
+    // bars: the fighter's own numbers, scaled by their max; a tripped latch draws its fill in paper
+    let mi = 0;
     for (const k in def.bars) {
       const b = def.bars[k];
       if (b.show && !b.show(f)) continue;
-      rows.push({ label: b.label, fill: f.bars[k] / b.max, locked: f.tripped[k] === 1 });
-    }
-    for (const m of def.meters ?? []) rows.push({ label: m.label, fill: m.get(f), locked: false });
-    rows.forEach((r, mi) => {
-      const mx = x + 20, my = y + 104 - mi * 9;
+      const mx = x + 20, my = y + 104 - mi++ * 9;
       ctx.fillStyle = INK; ctx.fillRect(mx - 1, my - 1, 122, 7);
-      ctx.fillStyle = r.locked ? PAPER : SLOT_COLORS[i]; ctx.fillRect(mx, my, 120 * Math.max(0, Math.min(1, r.fill)), 5);
+      ctx.fillStyle = f.tripped[k] ? PAPER : SLOT_COLORS[i]; ctx.fillRect(mx, my, 120 * Math.max(0, Math.min(1, f.bars[k] / b.max)), 5);
       ctx.fillStyle = SLOT_COLORS[i]; ctx.font = `700 9px ${FONT}`; ctx.textAlign = "left";
-      ctx.fillText(r.label, mx + 124, my + 6);
-    });
+      ctx.fillText(b.label, mx + 124, my + 6);
+    }
     if (f.cpu) { ctx.fillStyle = INK; ctx.font = `600 12px ${FONT}`; ctx.textAlign = "left"; ctx.fillText(tierName(f.cpu), x + 120, y + 34); }
   });
   ctx.globalAlpha = 1;

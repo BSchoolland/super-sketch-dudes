@@ -204,7 +204,7 @@ export function validateGenerated(def: FighterDef, { strict = false } = {}): str
   if (!def.hooks || typeof def.hooks !== "object") p.push("hooks must be an object (may be empty)");
   else for (const [k, v] of Object.entries(def.hooks)) if (typeof v !== "function") p.push(`hooks.${k} is not a function`);
   for (const k of ["onHit", "onHurt", "onFrame", "visual"] as const) if (def[k] !== undefined && typeof def[k] !== "function") p.push(`${k} must be a function`);
-  if (def.meters !== undefined && !Array.isArray(def.meters)) p.push("meters must be an array");
+  if ("meters" in def) p.push("meters is gone: declare the number as a bar (see bars in the exemplar)");
   if (def.bars !== undefined) checkBars(def.bars, p);
   if (!def.palette?.colors || typeof def.palette.outline !== "string") p.push("palette.colors and palette.outline required");
   return p;

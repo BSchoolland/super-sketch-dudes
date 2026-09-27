@@ -194,7 +194,7 @@ sirsticks     2-0       0-2     1-0       2-0
   SLUGBERT lose most matchups. That is fighter tuning; the bot plays all of them.
 - **The bot can't see a fighter's resources.** SIR STICKS keeps pressing its sword throw after the
   sword is gone (the hook does nothing). TANK fires during cooldown (a small shove). It avoids
-  stacking projectiles, but it doesn't read meters.
+  stacking projectiles, but it doesn't read bars.
 - **The probe runs a fighter's hooks in a private match.** That is safe only because hooks keep all
   state in `f.special`, which the forge's determinism check enforces. A hook with closure state would
   be touched by the probe.

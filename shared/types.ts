@@ -245,8 +245,6 @@ export interface FighterDef {
   onFrame?: (ctx: HookCtx) => void;
   /** Numbers the fighter owns and the HUD draws: fighter.bars[key], clamped to [0, max] after every frame. See Bar. */
   bars?: Record<string, Bar>;
-  /** Fighters from before `bars`: a HUD bar as a getter, 0..1. */
-  meters?: { label: string; color: string; get: (f: Fighter) => number; max?: (f: Fighter) => number }[];
   /** Renderer-only per-frame look: overall scale and glow strength 0..1 (e.g. a heat meter). */
   visual?: (f: Fighter) => { scale?: number; glow?: number };
   /** Named looks for projectiles (by `kind`) and hitboxes (by `fx`). See Look. */

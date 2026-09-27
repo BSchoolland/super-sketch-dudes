@@ -148,7 +148,7 @@ arm).
 118, width 56.
 
 **Mechanic: Rounds and Fuel.** Six rounds; a round reloads every 90 frames while grounded.
-Fuel 100; drains during Launch, refills 1/frame grounded. Both meters sit under the percent.
+Fuel 100; drains during Launch, refills 1/frame grounded. Both bars sit under the percent.
 
 | Move | Startup / Active / Total | Damage | Angle | KB | Notes |
 |---|---|---|---|---|---|
