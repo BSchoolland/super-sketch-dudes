@@ -678,7 +678,9 @@ function groundNeutral(state: State, f: Fighter, target: Fighter, sk: Skill, sta
 
   // keep-away: a fighter whose shots are its best damage holds the range they land at instead of rushing in,
   // backs off when the target closes, and only brawls when it has no room left behind it
-  if (p.zoning >= 0.5 && sk.c >= 0.3) {
+  // ...but not while losing: a stock down, or well behind on percent, it has to go and get them
+  const losing = f.stocks < target.stocks || (f.stocks === target.stocks && f.percent > target.percent + 30);
+  if (p.zoning >= 0.5 && sk.c >= 0.3 && !losing) {
     const keep = Math.max(200, Math.min(420, shotReach(p) * 0.6));
     const main = mainBounds(state, stage), behind = f.x - facing * 150;
     const room = behind > main.x1 + 30 && behind < main.x2 - 30;
@@ -687,8 +689,11 @@ function groundNeutral(state: State, f: Fighter, target: Fighter, sk: Skill, sta
       if (distance < keep - 40 && room) { out.x = -facing * 100; return out; }
       if (distance > keep + 80) { out.x = facing * 45; return out; }
       if (distance >= keep - 40) {
-        // in the pocket: the shot fires from specialChoice; shuffle a little meanwhile so it isn't a statue
-        if (hash(state, f, 0x2e0a, 30) % 100 < 20) out.x = -facing * 45;
+        // in the pocket: the shot fires from specialChoice. Meanwhile, ahead: shuffle a little so it isn't a
+        // statue; even or behind on percent: creep in, so two of these don't stare at each other all match
+        const ahead = f.percent < target.percent - 10;
+        if (ahead) { if (hash(state, f, 0x2e0a, 30) % 100 < 20) out.x = -facing * 45; }
+        else if (hash(state, f, 0x2e0b, 30) % 100 < 50) out.x = facing * 45;
         return out;
       }
     }
