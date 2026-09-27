@@ -107,6 +107,25 @@ function changed(job: ForgeJob, player?: Player): void {
   record(job);
 }
 
+/** How many of one player's characters the forge works on at once: two, or three while nobody else is waiting. */
+const PER_PLAYER = 2, PER_PLAYER_QUIET = 3;
+
+/**
+ * The job the forge should take next. A player with nothing being forged goes first (someone
+ * drawing one character isn't stuck behind another player's batch); otherwise first come, first
+ * served. Nobody gets more than their share of the forge at once.
+ */
+function nextFairJob(): ForgeJob | null {
+  for (let i = queue.length - 1; i >= 0; i--) if (jobs.get(queue[i])?.status !== "queued") queue.splice(i, 1);
+  const running = new Map<string, number>();
+  for (const job of jobs.values()) if (job.status === "running") running.set(job.owner, (running.get(job.owner) ?? 0) + 1);
+  const waiting = queue.map((id) => jobs.get(id)).filter((j): j is ForgeJob => !!j && j.status === "queued");
+  const owners = new Set(waiting.map((j) => j.owner));
+  const cap = (owner: string) => ([...owners].some((o) => o !== owner) ? PER_PLAYER : PER_PLAYER_QUIET);
+  const allowed = waiting.filter((j) => (running.get(j.owner) ?? 0) < cap(j.owner));
+  return allowed.find((j) => !running.get(j.owner)) ?? allowed[0] ?? null;
+}
+
 /** Stores the drawing and queues the job; the library gets the entry at once, as "queued". */
 /** `parent` is the trace the job came from: the creator's request. */
 export function enqueueJob(spec: { fighterId: string; player: Player; png: Buffer; origin: LibraryEntry["origin"]; hint?: { name: string; description: string } | null; parent: string | null }): ForgeJob {
@@ -189,10 +208,9 @@ export function attachForge(api: express.Router, opts: ForgeOptions): void {
   };
   api.get("/forge/jobs/next", (req, res) => {
     if (!forgeAuth(req, res)) return;
-    while (queue.length) {
-      const id = queue.shift()!;
-      const job = jobs.get(id);
-      if (!job || job.status !== "queued") continue;
+    const job = nextFairJob();
+    if (job) {
+      queue.splice(queue.indexOf(job.id), 1);
       job.claimedAt = Date.now(); job.attempts++;
       setStatus(job, "running", "reading the drawing");
       return res.json({ id: job.id, fighterId: job.fighterId, playerName: job.playerName, attempts: job.attempts, hint: job.hint });

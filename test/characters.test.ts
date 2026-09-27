@@ -104,6 +104,25 @@ describe("the forge queue survives a restart", () => {
   });
 });
 
+describe("the forge queue is fair", () => {
+  it("puts a player with nothing forging first and caps each player's share", async () => {
+    const { enqueueJob } = await import("../server/forge");
+    const png = Buffer.from(png1x1, "base64");
+    const who = (id: string) => ({ id, name: id, avatar: null });
+    for (const [fighterId, owner] of [["fair-a1", "dev-fa"], ["fair-a2", "dev-fa"], ["fair-a3", "dev-fa"], ["fair-b1", "dev-fb"]] as const)
+      enqueueJob({ fighterId, player: who(owner), png, origin: "creator", parent: null });
+    const claimed: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const res = await api("/forge/jobs/next");
+      if (res.status !== 200) break;
+      claimed.push((await res.json()).fighterId);
+    }
+    // a1 first in line; b1 jumps a2 because B has nothing forging; a2 is A's second; a3 fits once
+    // nobody else is waiting (three while the queue is quiet)
+    expect(claimed).toEqual(["fair-a1", "fair-b1", "fair-a2", "fair-a3"]);
+  });
+});
+
 describe("starter characters", () => {
   it("show up in every library, can't be deleted, and the token sets the list", async () => {
     const own = await (await api("/auth/dev", { method: "POST", body: JSON.stringify({ name: "Own" }) })).json();

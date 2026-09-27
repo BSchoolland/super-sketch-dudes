@@ -11,7 +11,7 @@ const SITE = (process.env.SITE ?? "").replace(/\/$/, "");
 const TOKEN = process.env.FORGE_TOKEN ?? "";
 if (!SITE || !TOKEN) throw new Error("SITE and FORGE_TOKEN must be set (env, forge/.env or ~/.config/sketch-forge/env)");
 if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY must be set (forge/.env)");
-const CONCURRENCY = Number(process.env.FORGE_CONCURRENCY ?? 4);
+const CONCURRENCY = Number(process.env.FORGE_CONCURRENCY ?? 6);
 const POLL_MS = 2000;
 const RUNS = path.join(path.dirname(fileURLToPath(import.meta.url)), "runs");
 
