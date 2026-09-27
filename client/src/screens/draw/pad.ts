@@ -4,7 +4,7 @@ import { PAPER, INK } from "../../render/paper";
 export const PAD_PX = 768;
 /** Pen colours, black first. Lines are solid: the sheet model reads clean ink best. */
 export const COLORS = [INK, "#e4483f", "#e98a2d", "#ddb51d", "#329854", "#287ad4", "#8b5a2b", "#7b4fb8"];
-export const SIZES = [0.5, 1, 2];
+export const SIZES = [0.35, 0.6, 1, 1.5, 2.2];
 
 export type ToolKind = "pen" | "eraser" | "fill";
 export interface Tool { kind: ToolKind; color: string }
@@ -113,7 +113,7 @@ function floodFill(g: CanvasRenderingContext2D, sx: number, sy: number, color: s
 /** The 768x768 drawing: a stack of marks (strokes and clears) replayed onto paper, so undo is exact. */
 export class DrawPad {
   tool: Tool = { kind: "pen", color: INK };
-  size = 1;
+  size = 2;
   locked = false;
   /** When (performance.now) a fill was last refused for reaching the edge. */
   leakedAt = -Infinity;
