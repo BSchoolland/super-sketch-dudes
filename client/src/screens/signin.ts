@@ -3,7 +3,7 @@ import { PENCIL } from "../render/paper";
 import type { MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
 import { sfx } from "../audio/audio";
-import { discordSignInUrl, emailSignIn, emailSignUp } from "../account";
+import { discordSignInUrl, emailSignIn, emailSignUp, googleSignInUrl } from "../account";
 import { bg, card, label, type Screen, INK } from "./ui";
 import { RED } from "./character";
 import { ButtonMenu, type Button } from "./buttons";
@@ -11,15 +11,16 @@ import { TextField } from "./textfield";
 import { drawLogo } from "./title";
 
 const DOOR: Button[] = [
-  { id: "discord", x: VIEW_W / 2 - 330, y: 560, w: 660, h: 130, text: "SIGN IN WITH DISCORD", size: 46 },
-  { id: "email", x: VIEW_W / 2 - 330, y: 720, w: 660, h: 90, text: "EMAIL & PASSWORD", size: 32 },
+  { id: "discord", x: VIEW_W / 2 - 330, y: 530, w: 660, h: 110, text: "SIGN IN WITH DISCORD", size: 42 },
+  { id: "google", x: VIEW_W / 2 - 330, y: 665, w: 660, h: 110, text: "SIGN IN WITH GOOGLE", size: 42 },
+  { id: "email", x: VIEW_W / 2 - 330, y: 800, w: 660, h: 80, text: "EMAIL & PASSWORD", size: 30 },
 ];
 const FIELD_X = VIEW_W / 2 - 420, FIELD_W = 840, FIELD_H = 80, FIELD_GAP = 130, FIELD_TOP = 330;
 
 type Mode = "door" | "signin" | "signup";
 
 /**
- * The way in. Discord sends the browser back with a token that mount() trades for a session;
+ * The way in. Discord and Google send the browser back with a token that mount() trades for a session;
  * email accounts sign in right here and go straight to `home`.
  */
 export class SignInScreen implements Screen {
@@ -53,7 +54,7 @@ export class SignInScreen implements Screen {
     if (this.next) { this.closeForm(); return this.next; }
     const pressed = this.menu.update(this.buttons(), m, consumeTaps());
     if (this.mode === "door") {
-      if (pressed === "discord" && !this.leaving) { this.leaving = true; location.href = discordSignInUrl(); }
+      if ((pressed === "discord" || pressed === "google") && !this.leaving) { this.leaving = true; location.href = pressed === "discord" ? discordSignInUrl() : googleSignInUrl(); }
       else if (pressed === "email") this.openForm("signin");
       return null;
     }
@@ -68,7 +69,7 @@ export class SignInScreen implements Screen {
     if (this.mode === "door") {
       drawLogo(ctx, 300);
       this.menu.draw(ctx, DOOR);
-      if (this.error) label(ctx, this.error, VIEW_W / 2, 880, 28, RED);
+      if (this.error) label(ctx, this.error, VIEW_W / 2, 940, 28, RED);
       return;
     }
     drawLogo(ctx, 140);
@@ -105,7 +106,7 @@ export class SignInScreen implements Screen {
     this.closeForm();
     this.mode = "door";
     this.error = "";
-    this.menu.focus = 1;
+    this.menu.focus = 2;
   }
 
   private closeForm(): void {

@@ -72,10 +72,10 @@ export async function mount(opts: MountOptions): Promise<AppController> {
 
   const nav = menus();
   const params = opts.params;
-  // back from Discord with a token in the fragment, or ?dev=<name> against a DEV_LOGIN server
+  // back from Discord or Google with a token in the fragment, or ?dev=<name> against a DEV_LOGIN server
   loadAccount();
   let signInError = "";
-  if (location.hash.includes("access_token")) {
+  if (/(access|id)_token=/.test(location.hash)) {
     try { await finishSignIn(); } catch (error) { console.error(error); signInError = error instanceof Error ? error.message : String(error); }
   }
   if (!signedIn() && params.get("dev")) await devSignIn(params.get("dev")!);

@@ -2,12 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import type express from "express";
-import { SESSION_HEADER, type Player } from "../shared/account";
+import { GOOGLE_CLIENT_ID, SESSION_HEADER, type Player } from "../shared/account";
 
 /**
  * Sign-in: the browser does Discord's implicit OAuth grant (no client secret), gets an access
  * token, and posts it here. We ask Discord who it belongs to and hand back a session token,
- * which the client sends on every request and on the lobby socket. Or: an email and password,
+ * which the client sends on every request and on the lobby socket. Google is the same trip with
+ * an ID token, which Google checks for us and we hold to our client ID and the client's nonce.
+ * Or: an email and password,
  * scrypt-hashed in accounts.json. Sessions persist to disk. DEV_LOGIN=1 adds a name-only login
  * for local tests.
  */
@@ -76,6 +78,18 @@ export function attachAuth(api: express.Router, opts: AuthOptions): void {
       name: cleanName(u.global_name || u.username),
       avatar: u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=96` : null,
     };
+    res.json({ session: issue(player), player });
+  });
+
+  api.post("/auth/google", async (req, res) => {
+    const idToken = String(req.body?.idToken ?? ""), nonce = String(req.body?.nonce ?? "");
+    if (!idToken || !nonce) return res.status(400).json({ error: "idToken and nonce required" });
+    const r = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
+    if (!r.ok) return res.status(401).json({ error: `google said ${r.status}` });
+    const t = (await r.json()) as { aud: string; iss: string; sub: string; nonce?: string; name?: string; given_name?: string; picture?: string };
+    if (t.aud !== GOOGLE_CLIENT_ID || !["accounts.google.com", "https://accounts.google.com"].includes(t.iss)) return res.status(401).json({ error: "that token isn't for this game" });
+    if (t.nonce !== nonce) return res.status(401).json({ error: "sign-in expired, try again" });
+    const player: Player = { id: `google-${t.sub}`, name: cleanName(t.given_name || t.name), avatar: t.picture ?? null };
     res.json({ session: issue(player), player });
   });
 

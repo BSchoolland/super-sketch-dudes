@@ -1,10 +1,10 @@
 export type CharStatus = "queued" | "generating" | "ready" | "failed";
 
-/** A signed-in player: a Discord identity or an email account. The id is the account. */
+/** A signed-in player: a Discord or Google identity, or an email account. The id is the account. */
 export interface Player {
   id: string;
   name: string;
-  /** Avatar image URL, if Discord has one; email accounts never do. */
+  /** Avatar image URL, if Discord or Google has one; email accounts never do. */
   avatar: string | null;
 }
 
@@ -32,6 +32,9 @@ export interface LibraryEntry {
 
 /** Longest side of the drawing the client uploads; the server rejects bigger. */
 export const DRAW_PNG_MAX_BYTES = 900_000;
+
+/** The Google OAuth client (project super-sketch-dudes) whose ID tokens the server accepts. */
+export const GOOGLE_CLIENT_ID = "568376323404-395dbb6rf9c6p8n3mhnd1obh4u4r1gc3.apps.googleusercontent.com";
 
 /** Header the client sends its session token in. */
 export const SESSION_HEADER = "x-session";

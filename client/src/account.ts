@@ -1,14 +1,16 @@
 import { site } from "./base";
-import { SESSION_HEADER, type Player, type LibraryEntry } from "../../shared/account";
+import { GOOGLE_CLIENT_ID, SESSION_HEADER, type Player, type LibraryEntry } from "../../shared/account";
 import { sessionTrace } from "./telemetry/events";
 
 /**
  * Who's signed in, remembered in localStorage. Sign-in is Discord's implicit OAuth grant: the
  * browser goes to Discord, comes back to /auth with an access token in the URL fragment, and
- * `finishSignIn` trades it for a session token with the server. Or an email and password.
+ * `finishSignIn` trades it for a session token with the server. Google is the same round trip
+ * with an ID token instead. Or an email and password.
  */
 export const account: { session: string | null; player: Player | null } = { session: null, player: null };
 const KEY = "sketchbattle.account";
+const NONCE_KEY = "sketchbattle.googleNonce";
 export const DISCORD_APP_ID = "1506034935838937201";
 
 export function loadAccount(): void {
@@ -25,10 +27,18 @@ export function signedIn(): boolean {
   return !!account.session && !!account.player;
 }
 
+const authRedirect = (): string => encodeURIComponent(`${location.origin}${site.base}auth`);
+
 /** Where Discord sends the browser to sign in; it comes back to /auth on this site. */
 export function discordSignInUrl(): string {
-  const redirect = `${location.origin}${site.base}auth`;
-  return `https://discord.com/oauth2/authorize?client_id=${DISCORD_APP_ID}&response_type=token&redirect_uri=${encodeURIComponent(redirect)}&scope=identify`;
+  return `https://discord.com/oauth2/authorize?client_id=${DISCORD_APP_ID}&response_type=token&redirect_uri=${authRedirect()}&scope=identify`;
+}
+
+/** Where Google sends the browser to sign in; it comes back to /auth with an ID token bound to a nonce kept for the trip. */
+export function googleSignInUrl(): string {
+  const nonce = crypto.randomUUID();
+  sessionStorage.setItem(NONCE_KEY, nonce);
+  return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&response_type=id_token&redirect_uri=${authRedirect()}&scope=openid%20profile&nonce=${nonce}&prompt=select_account`;
 }
 
 /** Posts credentials to an /auth endpoint and keeps the session it hands back. Throws the server's reason on failure. */
@@ -43,13 +53,19 @@ async function authenticate(path: string, body: object): Promise<void> {
   save();
 }
 
-/** Back from Discord: the access token is in the URL fragment. Resolves true when a session was made. */
+/** Back from Discord or Google: the token is in the URL fragment. Resolves true when a session was made. */
 export async function finishSignIn(): Promise<boolean> {
   const hash = new URLSearchParams(location.hash.replace(/^#/, ""));
-  const accessToken = hash.get("access_token");
-  if (!accessToken) return false;
+  const accessToken = hash.get("access_token"), idToken = hash.get("id_token");
+  if (!accessToken && !idToken) return false;
   history.replaceState(null, "", `${site.base}${location.search}`);
-  await authenticate("discord", { accessToken });
+  if (accessToken) await authenticate("discord", { accessToken });
+  else {
+    const nonce = sessionStorage.getItem(NONCE_KEY);
+    sessionStorage.removeItem(NONCE_KEY);
+    if (!nonce) throw new Error("sign-in expired, try again");
+    await authenticate("google", { idToken, nonce });
+  }
   return true;
 }
 
