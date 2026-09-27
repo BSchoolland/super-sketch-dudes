@@ -17,7 +17,7 @@ describe("what the CPU knows about shots", () => {
     expect(paths.some((q) => !q.air)).toBe(true);
     for (const q of paths) {
       expect(q.pts.length).toBeGreaterThan(0);
-      expect(q.damage).toBeGreaterThan(0);
+      expect(q.hit?.damage).toBeGreaterThan(0);
       expect(q.pts.some((r) => r.x > 200)).toBe(true);
     }
     expect(p.specials.nspecial!.cooldown).toBeGreaterThan(0);

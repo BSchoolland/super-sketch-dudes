@@ -359,12 +359,9 @@ function strongestHitbox(move: Move): Hitbox | null {
   return best;
 }
 
-function likelyKills(state: State, f: Fighter, target: Fighter, moveId: string, facing: 1 | -1): boolean {
-  const move = defOf(f).moves[moveId];
-  if (!move) return false;
-  const hb = strongestHitbox(move);
-  if (!hb) return false;
-  const damage = hb.damage * (move.smash ? 1.18 : 1);
+/** Whether `hb` landing on the target from here would send it past a blast line; `smash` allows for a little charge. */
+function likelyKills(state: State, f: Fighter, target: Fighter, hb: Hitbox, smash: boolean, facing: 1 | -1): boolean {
+  const damage = hb.damage * (smash ? 1.18 : 1);
   const kb = knockback(target.percent + damage, damage, defOf(target).stats.weight, hb.growth, hb.base);
   const speed = kb * C.KB_TO_VEL;
   const travel = speed * speed / (2 * C.LAUNCH_DECAY);
@@ -378,9 +375,27 @@ function likelyKills(state: State, f: Fighter, target: Fighter, moveId: string, 
     (angleY > 0.45 && travel * angleY > verticalDistance * 0.82);
 }
 
+/** The smash that would finish the target from here: its own hit if that reaches, or the shot it throws if that flies into the target. */
 function killMove(state: State, f: Fighter, target: Fighter, facing: 1 | -1, sk: Skill): "fsmash" | "usmash" | "dsmash" | null {
-  for (const m of SMASHES) if (moveCanReach(f, target, m, facing, sk.slack) && likelyKills(state, f, target, m, facing)) return m;
+  const moves = defOf(f).moves, p = profile(f);
+  for (const m of SMASHES) {
+    const hb = strongestHitbox(moves[m]);
+    if (hb && moveCanReach(f, target, m, facing, sk.slack) && likelyKills(state, f, target, hb, true, facing)) return m;
+    const shot = canShoot(state, f, target, p, m, facing, sk);
+    if (shot?.hit && likelyKills(state, f, target, shot.hit, false, facing)) return m;
+  }
   return null;
+}
+
+/** Whether one of its smashes would finish the target if it landed, reach aside: time to go in for it. */
+function finishable(state: State, f: Fighter, target: Fighter, facing: 1 | -1): boolean {
+  const moves = defOf(f).moves, p = profile(f);
+  return SMASHES.some((m) => {
+    if (spammed(f, m)) return false;
+    const hb = strongestHitbox(moves[m]);
+    if (hb && likelyKills(state, f, target, hb, true, facing)) return true;
+    return (p.shots[m] ?? []).some((path) => path.hit && likelyKills(state, f, target, path.hit, false, facing));
+  });
 }
 
 function handleCommitted(state: State, f: Fighter, target: Fighter | null, sk: Skill, stage: Stage): InputFrame | null {
@@ -690,9 +705,10 @@ function groundNeutral(state: State, f: Fighter, target: Fighter, sk: Skill, sta
 
   // keep-away: a fighter whose shots are its best damage holds the range they land at instead of rushing in,
   // backs off when the target closes, and only brawls when it has no room left behind it
-  // ...but not while losing: a stock down, or well behind on percent, it has to go and get them
+  // ...but not while losing (a stock down, or well behind on percent, it has to go and get them), nor once
+  // a smash would finish the target: chip damage doesn't take stocks
   const losing = f.stocks < target.stocks || (f.stocks === target.stocks && f.percent > target.percent + 30);
-  if (p.zoning >= 0.5 && sk.c >= 0.3 && !losing) {
+  if (p.zoning >= 0.5 && sk.c >= 0.3 && !losing && !finishable(state, f, target, facing)) {
     const keep = Math.max(200, Math.min(420, shotReach(p) * 0.6));
     const main = mainBounds(state, stage), behind = f.x - facing * 150;
     const room = behind > main.x1 + 30 && behind < main.x2 - 30;

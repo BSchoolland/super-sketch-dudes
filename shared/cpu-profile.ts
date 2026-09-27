@@ -6,7 +6,7 @@ import { roster } from "./fighters/index";
 import { isActionable, startMove } from "./fighter";
 import { B, EMPTY_INPUT } from "./input";
 import { createMatch, step } from "./sim";
-import type { FighterDef } from "./types";
+import type { FighterDef, Hitbox } from "./types";
 
 export interface MoveInfo {
   minX: number;
@@ -52,7 +52,8 @@ export interface ShotPath {
   /** Started airborne (high above the stage) rather than on the ground. */
   air: boolean;
   pts: ShotPoint[];
-  damage: number;
+  /** The hardest-hitting projectile it put out, as fired (tapped: no charge). */
+  hit: Hitbox | null;
 }
 export interface ShotPoint { x: number; y: number; r: number; t: number }
 
@@ -228,7 +229,7 @@ function runSpecial(def: FighterDef, move: string | null, air: boolean, hold: nu
   // already held last frame, so the sim sees no fresh press to buffer into a second special
   s.inputs[0] = { ...input };
   if (move) startMove(s, f, move);
-  let minY = y0, shot = 0, frames = PROBE_FRAMES, done = false, dx = 0, drop = 0, damage = 0;
+  let minY = y0, shot = 0, frames = PROBE_FRAMES, done = false, dx = 0, drop = 0, hit: Hitbox | null = null;
   const trail = [0];
   const pts: ShotPoint[] = [];
   for (let i = 0; i < PROBE_FRAMES; i++) {
@@ -237,7 +238,7 @@ function runSpecial(def: FighterDef, move: string | null, air: boolean, hold: nu
     trail.push(f.x - x0);
     for (const p of s.projectiles) if (p.owner === 0 && !p.dead) {
       shot = Math.max(shot, p.x + p.hb.r - x0);
-      damage = Math.max(damage, p.hb.damage);
+      if (!hit || p.hb.damage > hit.damage) hit = { ...p.hb };
       if (pts.length < 400) pts.push({ x: p.x - x0, y: p.y - y0, r: p.hb.r, t: i + 1 });
     }
     if (!move) continue;
@@ -248,5 +249,5 @@ function runSpecial(def: FighterDef, move: string | null, air: boolean, hold: nu
     if (done && !s.projectiles.some((p) => p.owner === 0 && !p.dead)) break;
   }
   if (!done) { dx = f.x - x0; drop = f.y - y0; }
-  return { dx, rise: y0 - minY, drop, shot, frames, trail, path: { hold, air, pts, damage } };
+  return { dx, rise: y0 - minY, drop, shot, frames, trail, path: { hold, air, pts, hit } };
 }
