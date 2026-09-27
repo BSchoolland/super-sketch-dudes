@@ -93,16 +93,8 @@ export function restOnFloor(def: FighterDef, cell: string, pose: Pose): Pose {
   return { ...pose, dx: -(minX + maxX) / 2, dy: -maxY };
 }
 
-/** Fighters drawn as their idle cell whatever they're doing (the practice dummy): the renderer tilts it instead. */
+/** Fighters drawn as their idle cell whatever they're doing (the practice dummy); the state poses' leans still apply. */
 export const stillSprites = new Set<string>();
-
-/** How far a still sprite leans back in each state, in degrees. */
-export function stillTilt(action: string): number {
-  if (action === "hitstun" || action === "grabbed" || action === "shieldBreak") return -18;
-  if (action === "tumble" || action === "thrown" || action === "helpless") return -40;
-  if (action === "knockdown") return -75;
-  return 0;
-}
 
 /** `spinAround: "middle"` turns the lean about the body's middle instead of its feet (airborne: tumbling, launched). */
 export interface SpriteDrawOpts { alpha?: number; flash?: boolean; ghost?: boolean; flip?: boolean; spinAround?: "feet" | "middle" }
