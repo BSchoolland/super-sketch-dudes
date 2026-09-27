@@ -41,13 +41,11 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
     const png = typeof req.body?.png === "string" ? decodePng(req.body.png) : null;
     if (!png) return res.status(400).json({ error: "drawing must be a PNG data URL" });
     if (png.length > DRAW_PNG_MAX_BYTES) return res.status(400).json({ error: "drawing too large" });
-    const siblings = libraryOf(player.id).map((c) => c.name).filter((n): n is string => !!n);
     const name = String(req.body?.name ?? "").replace(/[^\w .'!?-]/g, "").trim().slice(0, 28).toUpperCase();
     const description = String(req.body?.description ?? "").replace(/\s+/g, " ").trim().slice(0, 240);
     const hint = name || description ? { name, description } : null;
-    const forge = req.body?.forge === "v2" ? "v2" : req.body?.forge === "v1" ? "v1" : undefined;
     const event = res.locals.event as WideEvent | undefined;
-    const job = enqueueJob({ fighterId: newFighterId(player.id.replace(/\W+/g, "").slice(-4) || "p"), player, siblings, png, origin: "creator", hint, forge, parent: event?.trace ?? null });
+    const job = enqueueJob({ fighterId: newFighterId(player.id.replace(/\W+/g, "").slice(-4) || "p"), player, png, origin: "creator", hint, parent: event?.trace ?? null });
     event?.set("forge", `f-${job.id}`);
     res.json({ character: entryOf(job) });
   });

@@ -247,9 +247,8 @@ export function attachDraw(api: express.Router, opts: DrawOptions): void {
           if (png.length > DRAW_PNG_MAX_BYTES) { send(c, { t: "error", error: "drawing too large" }); return true; }
           if (!c.player) { send(c, { t: "error", error: "sign in first" }); return true; }
           const fighterId = `gen-${room.code.toLowerCase()}-${p.slot}-${round}`;
-          const siblings = p.characters.filter((q) => q.round !== round && q.name).map((q) => q.name!);
           jobChars.set(fighterId, { code: room.code, playerId: p.id, round });
-          const job = enqueueJob({ fighterId, player: c.player, siblings, png, origin: { room: room.code, round }, parent: room.trace });
+          const job = enqueueJob({ fighterId, player: c.player, png, origin: { room: room.code, round }, parent: room.trace });
           const drawings = (room.event.business.drawings ??= []) as unknown[];
           if (drawings.length < 60) drawings.push({ player: p.name, round, bytes: png.length, forge: `f-${job.id}` });
           ch.status = "queued"; ch.stage = "waiting in line"; ch.fighterId = fighterId; ch.drawingUrl = drawingUrlOf(fighterId);

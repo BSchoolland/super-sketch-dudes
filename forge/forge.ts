@@ -1,23 +1,57 @@
-// Forge v2: one Opus session with full tools in its own git worktree, driven by forge/v2/PROMPT.md.
+// The forge: one Opus session with full tools in its own git worktree, driven by forge/PROMPT.md.
 // It draws the sheet, writes the fighter, checks it and "deploys" it with the scripts in forge/tools;
 // deploy writes payload.json, which is the only thing that leaves the worktree.
 import fs from "node:fs";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { AGENT_MODEL } from "./agent";
-import type { CompletePayload, JobSpec, PipelineIO } from "./pipeline";
-import { ForgeError } from "./pipeline";
+import type { CheckReport } from "./checks";
+
+export const AGENT_MODEL = "claude-opus-5-5";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
-const PROMPT = fs.readFileSync(path.join(here, "v2/PROMPT.md"), "utf8");
+const PROMPT = fs.readFileSync(path.join(here, "PROMPT.md"), "utf8");
 const TIMEOUT_MS = 15 * 60_000;
 
-export async function runV2(job: JobSpec, drawingSrc: string, dir: string, io: PipelineIO): Promise<CompletePayload> {
+export interface JobSpec { id: string; fighterId: string; playerName: string; hint?: { name: string; description: string } | null }
+
+export interface ForgeReport {
+  fighterId: string;
+  name: string;
+  wallMs: number;
+  costUsd: number;
+  sessionId: string;
+  checks: CheckReport | undefined;
+  soft: string[];
+  notes: string;
+}
+
+export interface CompletePayload {
+  name: string;
+  tagline: string;
+  description: string;
+  /** Lines the players read while the fight loads: attack, special, up+special. */
+  card: string[] | null;
+  source: string;
+  sprite: { px: number; feetPx: number; heightPx: number; anims: Record<string, string> };
+  cells: Record<string, string>;
+  sheet: string | undefined;
+  report: ForgeReport;
+}
+
+export interface ForgeIO {
+  progress(stage: string): Promise<void>;
+  log(line: string): void;
+}
+
+/** A failure the job should be failed with, message as the players will see it. */
+export class ForgeError extends Error {}
+
+export async function runForge(job: JobSpec, drawingSrc: string, dir: string, io: ForgeIO): Promise<CompletePayload> {
   const t0 = Date.now();
   fs.mkdirSync(dir, { recursive: true });
-  const wt = path.join(root, "..", "forge-v2", job.id);
+  const wt = path.join(root, "..", "forge-worktrees", job.id);
   fs.mkdirSync(path.dirname(wt), { recursive: true });
   const git = (...a: string[]) => { const r = spawnSync("git", a, { cwd: root, encoding: "utf8" }); if (r.status !== 0) throw new Error(`git ${a[0]}: ${r.stderr.trim()}`); return r.stdout; };
   git("worktree", "add", "--detach", "--force", wt, "HEAD");
@@ -32,7 +66,7 @@ export async function runV2(job: JobSpec, drawingSrc: string, dir: string, io: P
     : "The player didn't name or describe it.";
   const prompt = PROMPT.replace(/\{\{DRAWING\}\}/g, rel(drawing)).replace(/\{\{WORK\}\}/g, rel(work)).replace(/\{\{ID\}\}/g, job.fighterId).replace("{{NOTES}}", notes);
   fs.writeFileSync(path.join(dir, "prompt.txt"), prompt);
-  await io.progress("an agent is making it (v2)");
+  await io.progress("an agent is making it");
 
   // stream the session so the room sees what it's doing
   const log = fs.createWriteStream(path.join(dir, "session.jsonl"));
@@ -74,13 +108,10 @@ export async function runV2(job: JobSpec, drawingSrc: string, dir: string, io: P
   if (fs.existsSync(path.join(work, "cells"))) fs.cpSync(path.join(work, "cells"), path.join(dir, "cells"), { recursive: true });
   spawnSync("git", ["worktree", "remove", "--force", wt], { cwd: root });
 
-  const wallMs = Date.now() - t0;
-  const report = {
-    forge: "v2", fighterId: job.fighterId, name: p.name, height: 0, mirrored: false, timings: { agent: wallMs }, wallMs,
-    agent: { calls: [{ pass: "v2", ms: wallMs, costUsd: result.costUsd, tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }], tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, costUsd: result.costUsd },
-    sheet: { model: "gpt-image-2.5-sunburst", ms: 0, tokens: null, costUsd: null },
-    costUsd: result.costUsd, attempts: [], checks: p.report?.checks, soft: p.report?.soft ?? [], notes: result.text.slice(0, 2000), sessionId: result.sessionId,
+  const report: ForgeReport = {
+    fighterId: job.fighterId, name: p.name, wallMs: Date.now() - t0, costUsd: result.costUsd, sessionId: result.sessionId,
+    checks: p.report?.checks, soft: p.report?.soft ?? [], notes: result.text.slice(0, 2000),
   };
   fs.writeFileSync(path.join(dir, "report.json"), JSON.stringify(report, null, 1));
-  return { name: p.name, tagline: p.tagline, description: p.description ?? "", card: p.card, source: p.source, sprite: p.sprite, cells: p.cells, sheet: p.sheet, report: report as unknown as CompletePayload["report"] };
+  return { name: p.name, tagline: p.tagline, description: p.description ?? "", card: p.card, source: p.source, sprite: p.sprite, cells: p.cells, sheet: p.sheet, report };
 }

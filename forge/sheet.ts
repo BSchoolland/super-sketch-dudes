@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import OpenAI, { toFile } from "openai";
 import { SPRITE_CELLS } from "../shared/gen/sprite";
-import type { Concept } from "./concept";
 
 export const SHEET_MODEL = "gpt-image-2.5-sunburst";
 const TEMPLATE = fs.readFileSync(new URL("./SHEET-PROMPT.md", import.meta.url), "utf8");
@@ -12,8 +11,8 @@ export interface SheetResult { ms: number; tokens: { text: number; image: number
 // $ per token, gpt-image-1 list rates (sunburst's aren't published); the report calls this an estimate
 const RATE = { text: 5e-6, image: 10e-6, output: 40e-6 };
 
-/** Pose descriptions when the sheet is drawn before the design exists (it runs alongside pass 1). */
-const GENERIC_CELLS: Record<string, string> = {
+/** What the character is doing in each cell. */
+const CELLS: Record<string, string> = {
   idle: "idle stance, at rest, weight settled",
   walk: "walking, mid-stride, the body leaning into the step",
   jump: "jumping, pushed off the ground, limbs or parts tucked or trailing",
@@ -24,19 +23,19 @@ const GENERIC_CELLS: Record<string, string> = {
   launched: "launched flying backwards, the whole body arched and tumbling, loose parts trailing",
   block: "blocking: braced and closed up, whatever it has pulled in front of it like a shield",
 };
-const GENERIC_COUNTS = "  - every countable feature of the input (legs, arms, eyes, wheels, dots, stripes, teeth, spikes) appears EXACTLY as many times as in the input, no more, no fewer";
+const COUNTS = "  - every countable feature of the input (legs, arms, eyes, wheels, dots, stripes, teeth, spikes) appears EXACTLY as many times as in the input, no more, no fewer";
 
-export function sheetPrompt(concept: Concept | null): string {
-  let p = TEMPLATE.replace("{{counts}}", concept ? concept.counts.map((c) => `  - ${c}`).join("\n") : GENERIC_COUNTS);
-  for (const c of SPRITE_CELLS) p = p.replace(`{{${c}}}`, (concept ? concept.cells[c] : GENERIC_CELLS[c]).trim().replace(/\s*\|\s*/g, ", "));
+export function sheetPrompt(): string {
+  let p = TEMPLATE.replace("{{counts}}", COUNTS);
+  for (const c of SPRITE_CELLS) p = p.replace(`{{${c}}}`, CELLS[c]);
   if (/\{\{\w[\w-]*\}\}/.test(p)) throw new Error(`sheet prompt has an unfilled placeholder: ${p.match(/\{\{\w[\w-]*\}\}/)![0]}`);
   return p;
 }
 
-export async function drawSheet(drawingPath: string, concept: Concept | null, outPath: string): Promise<SheetResult> {
+export async function drawSheet(drawingPath: string, outPath: string): Promise<SheetResult> {
   if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not set (forge/.env)");
   const client = new OpenAI({ timeout: 5 * 60_000, maxRetries: 1 });
-  const prompt = sheetPrompt(concept);
+  const prompt = sheetPrompt();
   fs.writeFileSync(path.join(path.dirname(outPath), "sheet-prompt.txt"), prompt);
   const t0 = Date.now();
   const res = await client.images.edit({

@@ -1,11 +1,10 @@
-// The forge worker: polls the site for draw-battle jobs, runs the pipeline, posts the fighter back.
+// The forge worker: polls the site for draw-battle jobs, runs the forge, posts the fighter back.
 // Usage: npx tsx forge/worker.ts   (SITE, FORGE_TOKEN, OPENAI_API_KEY from the env, forge/.env or ~/.config/sketch-forge/env)
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadForgeEnv } from "./env";
-import { runPipeline, ForgeError, type JobSpec } from "./pipeline";
-import { runV2 } from "./v2";
+import { runForge, ForgeError, type JobSpec } from "./forge";
 
 loadForgeEnv();
 const SITE = (process.env.SITE ?? "").replace(/\/$/, "");
@@ -32,18 +31,18 @@ async function handle(job: JobSpec & { attempts: number }): Promise<void> {
   const dir = path.join(RUNS, job.id);
   fs.mkdirSync(dir, { recursive: true });
   const t0 = Date.now();
-  log(tag, `claimed job ${job.id} for ${job.playerName} round ${job.round} (attempt ${job.attempts}, forge ${job.forge ?? "v1"})`);
+  log(tag, `claimed job ${job.id} for ${job.playerName} (attempt ${job.attempts})`);
   try {
     const res = await api(`/jobs/${job.id}/drawing.png`);
     if (!res.ok) throw new Error(`drawing download: HTTP ${res.status}`);
     const drawing = path.join(dir, "drawing.png");
     fs.writeFileSync(drawing, Buffer.from(await res.arrayBuffer()));
-    const payload = await (job.forge === "v2" ? runV2 : runPipeline)(job, drawing, dir, {
+    const payload = await runForge(job, drawing, dir, {
       progress: (stage) => post(`/jobs/${job.id}/progress`, { stage }),
       log: (line) => log(tag, line),
     });
     await post(`/jobs/${job.id}/complete`, payload);
-    log(tag, `DONE ${payload.name} in ${((Date.now() - t0) / 1000).toFixed(0)}s, $${payload.report.costUsd.toFixed(2)} (agent $${payload.report.agent.costUsd.toFixed(2)}, sheet ~$${(payload.report.sheet.costUsd ?? NaN).toFixed(2)})`);
+    log(tag, `DONE ${payload.name} in ${((Date.now() - t0) / 1000).toFixed(0)}s, agent $${payload.report.costUsd.toFixed(2)}`);
   } catch (e) {
     const msg = e instanceof ForgeError ? e.message : `something broke: ${e instanceof Error ? e.message : String(e)}`;
     fs.writeFileSync(path.join(dir, "error.txt"), e instanceof Error ? e.stack ?? e.message : String(e));

@@ -219,7 +219,7 @@ describe("the forge queue survives a restart", () => {
     const p2 = (srv.address() as { port: number }).port;
     const call = (p: string, init?: RequestInit) => fetch(`http://127.0.0.1:${p2}/api${p}`, { ...init, headers: { "x-forge-token": "t2", "content-type": "application/json", ...(init?.headers ?? {}) } });
     const { enqueueJob } = await import("../server/forge");
-    enqueueJob({ fighterId: "gen-restart-1", player: { id: "dev-r", name: "R", avatar: null }, siblings: [], png: Buffer.from(png1x1, "base64"), origin: "creator", parent: null });
+    enqueueJob({ fighterId: "gen-restart-1", player: { id: "dev-r", name: "R", avatar: null }, png: Buffer.from(png1x1, "base64"), origin: "creator", parent: null });
     const job = await (await call("/forge/jobs/next")).json();
     expect(job.fighterId).toBe("gen-restart-1");
     expect((await call("/forge/jobs/next")).status).toBe(204);

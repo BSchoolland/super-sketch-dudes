@@ -1,7 +1,7 @@
 // Packs forge runs into the house roster: client/public/house/<id>/{bundle.json, cells}. The house
 // roster is what the tests, the forge's balance ladder and CPU fights use now that there are no
 // hand-made fighters. Usage: node scripts/house-roster.mjs <id>=<run dir> ...   (a run dir has
-// module.json, concept.json, report.json and cells/; or fighter.js + cells/ for hand-written ones)
+// payload.json and cells/; or fighter.js + cells/ for hand-written ones)
 import fs from "node:fs";
 import path from "node:path";
 const out = path.resolve("client/public/house");
@@ -11,10 +11,9 @@ for (const arg of process.argv.slice(2)) {
   const cellsDir = path.join(dir, "cells");
   const meta = JSON.parse(fs.readFileSync(path.join(cellsDir, "cells.json"), "utf8"));
   let source, anims = {}, name = id.toUpperCase(), tagline = "", description = "", card = null;
-  if (fs.existsSync(path.join(dir, "module.json"))) {
-    const m = JSON.parse(fs.readFileSync(path.join(dir, "module.json"), "utf8"));
-    const c = JSON.parse(fs.readFileSync(path.join(dir, "concept.json"), "utf8"));
-    source = m.source; anims = m.anims ?? {}; name = c.name; tagline = c.tagline; description = c.description; card = c.card ?? null;
+  if (fs.existsSync(path.join(dir, "payload.json"))) {
+    const p = JSON.parse(fs.readFileSync(path.join(dir, "payload.json"), "utf8"));
+    source = p.source; anims = p.sprite.anims ?? {}; name = p.name; tagline = p.tagline; description = p.description ?? ""; card = p.card ?? null;
   } else {
     source = fs.readFileSync(path.join(dir, "fighter.js"), "utf8");
     const extra = fs.existsSync(path.join(dir, "meta.json")) ? JSON.parse(fs.readFileSync(path.join(dir, "meta.json"), "utf8")) : {};

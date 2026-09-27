@@ -1,6 +1,4 @@
-// The forge's headless gate. Runs in its own process (`tsx forge/checks.ts <in.json> <out.json>`) so a
-// runaway hook can be killed and parallel jobs don't share the roster.
-import fs from "node:fs";
+// The forge's headless gate, run by forge/tools/check.ts and deploy.ts.
 import { createMatch, step, cloneState, hashState } from "../shared/sim";
 import { cpuInput } from "../shared/cpu";
 import { hitOf } from "../shared/hits";
@@ -227,8 +225,3 @@ function killPercent(def: FighterDef, moveId: string): number | null {
   return hi;
 }
 
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop()!)) {
-  const [inFile, outFile] = process.argv.slice(2);
-  const input = JSON.parse(fs.readFileSync(inFile, "utf8")) as CheckInput;
-  runChecks(input).then((r) => fs.writeFileSync(outFile, JSON.stringify(r, null, 1)), (e) => { console.error(e); process.exit(1); });
-}

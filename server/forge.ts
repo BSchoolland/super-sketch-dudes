@@ -21,7 +21,6 @@ export interface ForgeJob {
   owner: string;
   playerName: string;
   /** Names of the player's other characters so the agent avoids repeats. */
-  siblings: string[];
   drawingPath: string;
   status: "queued" | "running" | "done" | "failed";
   stage: string;
@@ -31,8 +30,6 @@ export interface ForgeJob {
   origin: LibraryEntry["origin"];
   /** What the player typed about it, if anything: the design pass reads it. */
   hint: { name: string; description: string } | null;
-  /** Which forge makes it: v1 is the two-pass pipeline, v2 one agent with tools in a worktree. */
-  forge: "v1" | "v2";
   createdAt: number;
   /** Filled in on completion. */
   result: { name: string; tagline: string; description: string; card: string[] | null; bundleUrl: string; sheetUrl: string | null } | null;
@@ -87,7 +84,7 @@ export function entryOf(job: ForgeJob): LibraryEntry {
 
 function openJobEvent(job: ForgeJob, parent: string | null): WideEvent {
   const e = openEvent("forge", `f-${job.id}`, parent)
-    .set("job", { id: job.id, fighterId: job.fighterId, owner: job.owner, player: job.playerName, origin: job.origin, forge: job.forge, hint: !!job.hint })
+    .set("job", { id: job.id, fighterId: job.fighterId, owner: job.owner, player: job.playerName, origin: job.origin, hint: !!job.hint })
     .set("timeline", []);
   events.set(job.id, e);
   return e;
@@ -118,15 +115,14 @@ function changed(job: ForgeJob, player?: Player): void {
 }
 
 /** Stores the drawing and queues the job; the library gets the entry at once, as "queued". */
-export const DEFAULT_FORGE = (process.env.FORGE_DEFAULT === "v2" ? "v2" : "v1") as "v1" | "v2";
 /** `parent` is the trace the job came from: the creator's request or the draw room. */
-export function enqueueJob(spec: { fighterId: string; player: Player; siblings: string[]; png: Buffer; origin: LibraryEntry["origin"]; hint?: { name: string; description: string } | null; forge?: "v1" | "v2"; parent: string | null }): ForgeJob {
+export function enqueueJob(spec: { fighterId: string; player: Player; png: Buffer; origin: LibraryEntry["origin"]; hint?: { name: string; description: string } | null; parent: string | null }): ForgeJob {
   const drawingPath = path.join(genDir, "drawings", `${spec.fighterId}.png`);
   fs.mkdirSync(path.dirname(drawingPath), { recursive: true });
   fs.writeFileSync(drawingPath, spec.png);
   const job: ForgeJob = {
-    id: crypto.randomBytes(6).toString("hex"), fighterId: spec.fighterId, owner: spec.player.id, playerName: spec.player.name, siblings: spec.siblings,
-    drawingPath, status: "queued", stage: "waiting in line", error: null, claimedAt: 0, attempts: 0, origin: spec.origin, hint: spec.hint ?? null, forge: spec.forge ?? DEFAULT_FORGE, createdAt: Date.now(), result: null,
+    id: crypto.randomBytes(6).toString("hex"), fighterId: spec.fighterId, owner: spec.player.id, playerName: spec.player.name,
+    drawingPath, status: "queued", stage: "waiting in line", error: null, claimedAt: 0, attempts: 0, origin: spec.origin, hint: spec.hint ?? null, createdAt: Date.now(), result: null,
   };
   jobs.set(job.id, job);
   queue.push(job.id);
@@ -206,7 +202,7 @@ export function attachForge(api: express.Router, opts: ForgeOptions): void {
       if (!job || job.status !== "queued") continue;
       job.claimedAt = Date.now(); job.attempts++;
       setStatus(job, "running", "reading the drawing");
-      return res.json({ id: job.id, fighterId: job.fighterId, playerName: job.playerName, round: 1, siblings: job.siblings, attempts: job.attempts, hint: job.hint, forge: job.forge ?? "v1" });
+      return res.json({ id: job.id, fighterId: job.fighterId, playerName: job.playerName, attempts: job.attempts, hint: job.hint });
     }
     res.status(204).end();
   });

@@ -16,7 +16,7 @@ fs.mkdirSync(out, { recursive: true });
 const sheet = path.join(out, "sheet.png");
 const t0 = Date.now();
 if (!fs.existsSync(sheet)) {
-  const r = await drawSheet(path.resolve(drawing), null, sheet);
+  const r = await drawSheet(path.resolve(drawing), sheet);
   console.log(`sheet drawn in ${(r.ms / 1000).toFixed(0)}s -> ${sheet}`);
 } else console.log(`sheet already there: ${sheet} (delete it to redraw)`);
 const norm = spawnSync("python3", [new URL("../img/normalize.py", import.meta.url).pathname, sheet, out, "--mirror", mirror ? "1" : "0"], { encoding: "utf8" });
