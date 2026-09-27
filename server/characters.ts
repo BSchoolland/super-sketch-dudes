@@ -7,6 +7,7 @@ import type { WideEvent } from "../shared/wide";
 import { drawingUrlOf, enqueueJob, entryOf, jobOf, newFighterId, restoreSource, storeCharacter } from "./forge";
 import { upsertCharacter } from "./library";
 import { dummyEntry, everyCharacter, findCharacter, libraryOf, removeCharacter, setDummy, setStarters, starterEntries, starterIds } from "./library";
+import { HOUSE_ROSTER } from "../shared/house";
 
 /** The character creator and the library, over HTTP, for signed-in players. */
 export function attachCharacters(api: express.Router, forgeToken = "", dataDir = ""): void {
@@ -82,7 +83,20 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
     catch (e) { res.status(400).json({ error: (e as Error).message }); }
   });
 
-  // everyone's finished characters, for the title screen's brawl: just enough to load and name them
+  // a random handful of contenders for the title screen's brawl, none of `not`: the house four (no bundle
+  // URL; the client knows where those live) and everyone's finished characters
+  api.get("/characters/sample", (req, res) => {
+    const n = Math.max(1, Math.min(24, Number(req.query.n) || 8));
+    const not = new Set(String(req.query.not ?? "").split(",").filter(Boolean));
+    const all = [
+      ...HOUSE_ROSTER.map((h) => ({ id: h.id as string, name: h.name as string | null, bundleUrl: null as string | null })),
+      ...everyCharacter().map((c) => ({ id: c.id, name: c.name, bundleUrl: c.bundleUrl })),
+    ].filter((c) => !not.has(c.id));
+    for (let i = 0; i < Math.min(n, all.length); i++) { const j = i + Math.floor(Math.random() * (all.length - i)); [all[i], all[j]] = [all[j], all[i]]; }
+    res.json({ characters: all.slice(0, n) });
+  });
+
+  // everyone's finished characters, for the tools: just enough to load and name them
   api.get("/characters/everyone", (_req, res) => {
     res.json({ characters: everyCharacter().map((c) => ({ id: c.id, name: c.name, bundleUrl: c.bundleUrl })) });
   });

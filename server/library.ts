@@ -67,20 +67,23 @@ export function libraryOf(owner: string): LibraryEntry[] {
   return load(owner).characters;
 }
 
+/** Every library into the cache, once; from then on every owner is in it (new ones arrive through upsertCharacter). */
+let scanned = false;
+function scanAll(): void {
+  if (scanned) return;
+  for (const f of fs.readdirSync(dir)) load(path.basename(f, ".json"));
+  scanned = true;
+}
+
 export function findCharacter(id: string): LibraryEntry | null {
+  scanAll();
   for (const lib of cache.values()) { const e = lib.characters.find((c) => c.id === id); if (e) return e; }
-  // not cached yet: scan the files once
-  for (const f of fs.readdirSync(dir)) {
-    const owner = path.basename(f, ".json");
-    const e = load(owner).characters.find((c) => c.id === id);
-    if (e) return e;
-  }
   return null;
 }
 
-/** Every ready character in every library, for the title screen's brawl. */
+/** Every ready character in every library. */
 export function everyCharacter(): LibraryEntry[] {
-  for (const f of fs.readdirSync(dir)) load(path.basename(f, ".json"));
+  scanAll();
   return [...cache.values()].flatMap((lib) => lib.characters.filter((c) => c.status === "ready" && c.bundleUrl));
 }
 

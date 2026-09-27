@@ -35,6 +35,18 @@ beforeAll(async () => {
 });
 afterAll(() => { server.close(); fs.rmSync(dataDir, { recursive: true, force: true }); });
 
+describe("the brawl's sample", () => {
+  it("is a random handful of the house and everyone's ready characters, none of the ones asked to leave out", async () => {
+    const all = (await (await api("/characters/sample?n=24")).json()).characters as { id: string; bundleUrl: string | null }[];
+    expect(all.length).toBeGreaterThanOrEqual(4);
+    expect(all.filter((c) => c.bundleUrl === null).map((c) => c.id).sort()).toEqual(["rocket", "slugbert", "wizard", "woodstove"]);
+    const three = (await (await api("/characters/sample?n=3")).json()).characters;
+    expect(three).toHaveLength(3);
+    const rest = (await (await api(`/characters/sample?n=24&not=${all.map((c) => c.id).join(",")}`)).json()).characters;
+    expect(rest).toEqual([]);
+  });
+});
+
 describe("the creator", () => {
   it("a signed-in player's drawing becomes a queued library entry, the forge completes it, the library shows it ready", async () => {
     const dev = await (await api("/auth/dev", { method: "POST", body: JSON.stringify({ name: "Dee" }) })).json();

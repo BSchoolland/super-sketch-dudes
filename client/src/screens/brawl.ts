@@ -1,52 +1,78 @@
 import { Brawl } from "../../../shared/brawl";
 import { roster } from "../../../shared/fighters/index";
+import type { HouseId } from "../../../shared/house";
 import { Renderer } from "../render/render";
 import { library } from "../account";
-import { fighterLoad, type FighterLoad } from "../gen";
-import { houseChoices, type FighterChoice } from "../fighters";
+import { fighterLoad, unloadFighter, type FighterLoad } from "../gen";
+import { houseChoice } from "../fighters";
 import { tallyKo } from "./brawl-tally";
 
 const STEP = 1000 / 60;
-/** Seconds between starting to load another contender, so the whole pool is in within a minute. */
-const WARM_EVERY = 2;
-
-interface Contender { id: string; bundleUrl: string }
+/** Contenders asked for at a time, when fewer than LOW loaded ones are waiting to drop in. */
+const BATCH = 8, LOW = 4;
+/** Loaded contenders kept around; past this the oldest not in the fight is unloaded. */
+const MAX_LOADED = 24;
+/** Seconds between asks: the usual, and after the server had nobody new to offer. */
+const ASK_EVERY = 2, ASK_AGAIN = 10;
 
 /**
- * The fight under the title screen (shared/brawl.ts), with fighters drawn from every library and the
- * house, loaded a few at a time as it goes. No sound and no HUD; draws through the normal renderer with
- * a fixed camera, and tallies every KO for the server.
+ * The fight under the title screen (shared/brawl.ts), with contenders sampled from the server a few at
+ * a time and unloaded again once they've had their turn, so any number of characters costs the same.
+ * No sound and no HUD; draws through the normal renderer with a fixed camera, and tallies every KO.
  */
 export class MenuBrawl {
   private brawl = new Brawl(() => this.ready(), (Math.random() * 0x7fffffff) | 0);
   private renderer: Renderer | null = null;
   private acc = 0;
-  /** No loading until everyone's list is in (or has failed), so the first pair is as random as the rest. */
-  private warmT = Infinity;
-  private pool: Contender[] = houseChoices().map((c: FighterChoice) => ({ id: c.id, bundleUrl: c.bundleUrl }));
-  private loads = new Map<string, FighterLoad>();
-
-  constructor() {
-    library.everyone().then(({ characters }) => {
-      for (const c of characters) if (!this.pool.some((p) => p.id === c.id)) this.pool.push({ id: c.id, bundleUrl: c.bundleUrl });
-      for (let i = 0; i < 6; i++) this.warm();
-    }, (error) => console.error("brawl: everyone's characters", error)).finally(() => { this.warmT = 0; });
-  }
-
-  /** Starts loading a random contender so a spawn later finds someone ready. */
-  private warm(): void {
-    if (!this.pool.length) return;
-    const c = this.pool[this.brawl.rand(this.pool.length)];
-    if (!this.loads.has(c.id)) this.loads.set(c.id, fighterLoad(c.bundleUrl));
-  }
+  private askT = 0;
+  private asking = false;
+  /** In the order they arrived, so the oldest is first. */
+  private loads = new Map<string, { url: string; load: FighterLoad }>();
 
   private ready(): string[] {
-    return [...this.loads.entries()].filter(([id, l]) => l.state === "ready" && roster[id]).map(([id]) => id);
+    return [...this.loads.entries()].filter(([id, l]) => l.load.state === "ready" && roster[id]).map(([id]) => id);
+  }
+
+  private fighting(): Set<string> {
+    return new Set(this.brawl.state?.fighters.map((f) => f.id) ?? []);
+  }
+
+  private async ask(): Promise<void> {
+    this.asking = true;
+    let got = 0;
+    try {
+      const { characters } = await library.sample(BATCH, [...this.loads.keys()]);
+      for (const c of characters) {
+        if (this.loads.has(c.id)) continue;
+        const url = c.bundleUrl ?? houseChoice(c.id as HouseId, c.name ?? c.id).bundleUrl;
+        this.loads.set(c.id, { url, load: fighterLoad(url) });
+        got++;
+      }
+    } catch (error) {
+      console.error("brawl: sampling contenders", error);
+    } finally {
+      this.asking = false;
+      this.askT = got ? ASK_EVERY : ASK_AGAIN;
+    }
+  }
+
+  private unload(): void {
+    const fighting = this.fighting();
+    for (const [id, l] of this.loads) {
+      if (this.loads.size <= MAX_LOADED) return;
+      if (fighting.has(id) || l.load.state === "loading") continue;
+      unloadFighter(l.url, id);
+      this.loads.delete(id);
+    }
   }
 
   update(dt: number): void {
-    this.warmT -= dt;
-    if (this.warmT <= 0) { this.warm(); this.warmT = WARM_EVERY; }
+    this.askT -= dt;
+    if (!this.asking && this.askT <= 0) {
+      const fighting = this.fighting();
+      if (this.ready().filter((id) => !fighting.has(id)).length < LOW) void this.ask();
+      else this.askT = ASK_EVERY;
+    }
     this.acc += dt * 1000;
     let n = 0;
     while (this.acc >= STEP && n < 4) {
@@ -66,6 +92,7 @@ export class MenuBrawl {
       n++;
     }
     if (n === 4) this.acc = Math.min(this.acc, STEP);
+    this.unload();
   }
 
   draw(ctx: CanvasRenderingContext2D, dt: number): void {

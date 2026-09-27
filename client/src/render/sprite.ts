@@ -52,6 +52,11 @@ export function cellImages(url: string): CellImages {
   return e;
 }
 
+/** Drops a fighter's cells from the cache; the next draw of them would load them again. */
+export function releaseSprite(def: FighterDef): void {
+  for (const u of Object.values(def.sprite.cells)) cache.delete(u);
+}
+
 /** Start loading every cell so the first frame of a match doesn't draw blanks. Resolves when all have loaded or failed. */
 export function preloadSprite(def: FighterDef): Promise<void> {
   const urls = Object.values(def.sprite.cells);

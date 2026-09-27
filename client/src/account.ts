@@ -94,7 +94,8 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export const library = {
   list: () => api<{ player: Player; characters: LibraryEntry[] }>("/library"),
-  everyone: () => api<{ characters: { id: string; name: string | null; bundleUrl: string }[] }>("/characters/everyone"),
+  /** `n` random contenders for the brawl, none of `not`; a house fighter comes with no bundleUrl. */
+  sample: (n: number, not: string[]) => api<{ characters: { id: string; name: string | null; bundleUrl: string | null }[] }>(`/characters/sample?n=${n}&not=${not.join(",")}`),
   dummy: () => api<{ character: LibraryEntry | null }>("/dummy"),
   remove: (id: string) => api<void>(`/library/${id}`, { method: "DELETE" }),
   /** `hint` is what the player typed on the describe page; the forge's design pass reads it. */

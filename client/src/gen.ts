@@ -1,6 +1,6 @@
 import { buildGenerated, type GeneratedBundle } from "../../shared/gen/load";
-import { registerFighter, roster } from "../../shared/fighters/index";
-import { preloadSprite } from "./render/sprite";
+import { registerFighter, roster, unregisterFighter } from "../../shared/fighters/index";
+import { preloadSprite, releaseSprite } from "./render/sprite";
 import type { FighterDef } from "../../shared/types";
 
 /** Fetches a generated fighter bundle, builds and registers it, and waits for its images. Idempotent per id. */
@@ -13,6 +13,15 @@ export async function loadGeneratedFighter(url: string): Promise<FighterDef> {
   registerFighter(def);
   await preloadSprite(def);
   return def;
+}
+
+/** Forgets a loaded fighter: out of the roster, its images released, loaded from scratch next time. */
+export function unloadFighter(bundleUrl: string, id: string): void {
+  loads.delete(bundleUrl);
+  const def = roster[id];
+  if (!def) return;
+  releaseSprite(def);
+  unregisterFighter(id);
 }
 
 export interface FighterLoad { state: "loading" | "ready" | "failed"; error: string; promise: Promise<void>; /** How long it took, once settled. */ ms: number }
