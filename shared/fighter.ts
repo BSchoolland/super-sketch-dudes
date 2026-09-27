@@ -58,7 +58,8 @@ export function currentMove(f: Fighter): Move | null {
   return defOf(f).moves[f.move] ?? null;
 }
 
-export function startMove(state: State, f: Fighter, id: string, opts: { facing?: 1 | -1; keepVel?: boolean } = {}): void {
+/** `chained` is a follow-up (jab2 off jab1): part of the move already started, not a new one. */
+export function startMove(state: State, f: Fighter, id: string, opts: { facing?: 1 | -1; keepVel?: boolean; chained?: boolean } = {}): void {
   const def = defOf(f);
   const mv = def.moves[id];
   if (!mv) throw new Error(`${f.id} has no move ${id}`);
@@ -67,6 +68,10 @@ export function startMove(state: State, f: Fighter, id: string, opts: { facing?:
   f.frame = 0;
   f.move = id;
   f.moveInstance++;
+  if (!opts.chained) {
+    if (f.streakMove !== id) { f.streakMove = id; f.streakFrom = state.frame; }
+    f.streakLast = state.frame;
+  }
   f.moveFacing = f.facing;
   f.hitsThisMove = 0;
   f.buf = 0;
@@ -913,7 +918,7 @@ function stepMove(state: State, f: Fighter, def: FighterDef, input: InputFrame, 
   if (f.move === "pummel" && f.frame >= mv.total) { setAction(f, "grabHold"); f.frame = 5; return; }
   if (mv.next && f.frame >= (mv.nextFrom ?? 1) && buffered(f, e, B.ATTACK) && (f.hitsThisMove > 0 || f.frame >= (mv.iasa ?? mv.total))) {
     consume(f, B.ATTACK);
-    startMove(state, f, mv.next);
+    startMove(state, f, mv.next, { chained: true });
     return;
   }
   // IASA / end

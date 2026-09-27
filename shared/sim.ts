@@ -45,6 +45,7 @@ export function createFighter(slot: number, id: FighterId, stage: Stage, rules: 
     buf: 0, bufAge: 0, flickX: 0, flickY: 0, flickT: 0,
     shieldFrames: 0, chargeMul: 1, counterDmg: 0, dropTimer: 0,
     cpuSeed: (slot + 1) * 2654435761 >>> 0,
+    streakMove: null, streakFrom: 0, streakLast: 0,
   };
 }
 

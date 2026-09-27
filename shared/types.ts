@@ -379,6 +379,10 @@ export interface Fighter {
   dropTimer: number;
   /** Deterministic per-fighter RNG for the CPU. */
   cpuSeed: number;
+  /** The move this fighter has started every time since `streakFrom`, and the frame it last started it. */
+  streakMove: string | null;
+  streakFrom: number;
+  streakLast: number;
   /** Last damage taken, for the HUD shake. */
   lastDamage: number;
   tauntCooldown: number;

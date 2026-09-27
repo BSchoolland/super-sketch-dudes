@@ -13,6 +13,13 @@ import type { Fighter, Hitbox, Move, Projectile, Stage, State } from "./types";
 const profile = (f: Fighter): Profile => profileOf(defOf(f));
 const reachOf = (f: Fighter): Record<string, MoveInfo> => profile(f).reach;
 
+/** A move it has started over and over, nothing else in between, for this long is off the table until it starts another. */
+const SPAM_FRAMES = 12 * C.FPS;
+
+function spammed(f: Fighter, id: string): boolean {
+  return f.streakMove === id && f.streakLast - f.streakFrom >= SPAM_FRAMES;
+}
+
 function blank(): InputFrame {
   return { x: 0, y: 0, cx: 0, cy: 0, b: 0 };
 }
@@ -60,7 +67,7 @@ function offStage(state: State, f: Fighter, stage: Stage): boolean {
 /** `slack` is how much farther than the truth the attacker believes the move reaches. */
 function moveCanReach(attacker: Fighter, victim: Fighter, moveId: string, facing: 1 | -1, slack = 0): boolean {
   const info = reachOf(attacker)[moveId];
-  if (!info || info.first === 999) return false;
+  if (!info || info.first === 999 || spammed(attacker, moveId)) return false;
   const vdef = defOf(victim);
   const localX = (victim.x - attacker.x) * facing;
   const hurtLeft = localX - vdef.stats.width * 0.5;
@@ -128,6 +135,7 @@ function shotAnswer(state: State, f: Fighter, sk: Skill): InputFrame | null {
   const moves = defOf(f).moves;
   for (const s of NEUTRAL_SPECIALS) {
     const mv = moves[s];
+    if (spammed(f, s)) continue;
     const opens = mv.counter ? mv.counter.frames[0] : mv.reflect ? reachOf(f)[s].first : -1;
     if (opens >= 0 && t >= opens && t <= opens + 4 && (mv.counter || s === "sspecial" || f.facing === toward)) return startSpecial(state, f, s, toward);
   }
@@ -208,7 +216,7 @@ function ledgeInput(state: State, f: Fighter, target: Fighter | null, sk: Skill,
   const ledge = stage.ledges[f.ledge];
   const close = target && Math.abs(target.x - f.x) < 145;
   const option = hash(state, f, 0x1ed6, 90) % 100;
-  if (close && option < at(sk, 31, 55)) out.b = pulse(state, f.slot, B.ATTACK);
+  if (close && option < at(sk, 31, 55) && !spammed(f, "ledgeAttack")) out.b = pulse(state, f.slot, B.ATTACK);
   else if (option < 45) out.b = pulse(state, f.slot, B.SHIELD);
   else if (option < 70) out.b = pulse(state, f.slot, B.JUMP);
   else if (option < 92) out.x = -ledge.side * 55;
@@ -297,7 +305,7 @@ function sidewaysRecovery(f: Fighter, p: Profile): SpecialId | null {
   let best: SpecialId | null = null, far = 120;
   for (const s of SPECIALS) {
     const probe = p.specials[s];
-    if (s === "uspecial" || !probe || moves[s].helpless || probe.airDrop > probe.airDx * 0.5 || probe.airDx <= far) continue;
+    if (s === "uspecial" || !probe || spammed(f, s) || moves[s].helpless || probe.airDrop > probe.airDx * 0.5 || probe.airDx <= far) continue;
     best = s; far = probe.airDx;
   }
   return best;
@@ -307,7 +315,7 @@ const SMASHES = ["usmash", "fsmash", "dsmash"] as const;
 
 function startSmash(state: State, f: Fighter, move: "fsmash" | "usmash" | "dsmash", facing: 1 | -1): InputFrame {
   const out = blank();
-  if (state.inputs[f.slot].cx || state.inputs[f.slot].cy) return out;
+  if (spammed(f, move) || state.inputs[f.slot].cx || state.inputs[f.slot].cy) return out;
   if (move === "usmash") out.cy = -100;
   else if (move === "dsmash") out.cy = 100;
   else out.cx = facing * 100;
@@ -316,6 +324,7 @@ function startSmash(state: State, f: Fighter, move: "fsmash" | "usmash" | "dsmas
 
 function startTilt(state: State, f: Fighter, move: "jab1" | "ftilt" | "utilt" | "dtilt", facing: 1 | -1): InputFrame {
   const out = blank();
+  if (spammed(f, move)) return out;
   if (move === "ftilt") out.x = facing * 45;
   else if (move === "utilt") out.y = -45;
   else if (move === "dtilt") out.y = 45;
@@ -325,7 +334,7 @@ function startTilt(state: State, f: Fighter, move: "jab1" | "ftilt" | "utilt" | 
 
 function startAerial(state: State, f: Fighter, move: "nair" | "fair" | "bair" | "uair" | "dair"): InputFrame {
   const out = blank();
-  if (state.inputs[f.slot].cx || state.inputs[f.slot].cy) return out;
+  if (spammed(f, move) || state.inputs[f.slot].cx || state.inputs[f.slot].cy) return out;
   if (move === "fair") out.cx = f.facing * 100;
   else if (move === "bair") out.cx = -f.facing * 100;
   else if (move === "uair") out.cy = -100;
@@ -336,6 +345,7 @@ function startAerial(state: State, f: Fighter, move: "nair" | "fair" | "bair" | 
 
 function startSpecial(state: State, f: Fighter, move: SpecialId, facing: 1 | -1): InputFrame {
   const out = blank();
+  if (spammed(f, move)) return out;
   if (move === "sspecial") out.x = facing * 100;
   else if (move === "uspecial") out.y = -100;
   else if (move === "dspecial") out.y = 100;
@@ -479,6 +489,7 @@ function shotReach(p: Profile): number {
 
 /** Whether a fighter can be shot from here with `move`, and the hold it takes; a shooting normal or a special. */
 function canShoot(state: State, f: Fighter, target: Fighter, p: Profile, move: string, facing: 1 | -1, sk: Skill): ShotPath | null {
+  if (spammed(f, move)) return null;
   const path = shotHits(f, target, p.shots[move], facing, sk.slack);
   if (!path) return null;
   // not before the move can actually fire again (a whiffed special is a gift); and one at a time, unless
@@ -494,6 +505,7 @@ function specialChoice(state: State, f: Fighter, target: Fighter, sk: Skill, fac
   const dy = target.y - f.y;
   for (const [i, s] of NEUTRAL_SPECIALS.entries()) {
     const mv = moves[s], probe = p.specials[s];
+    if (spammed(f, s)) continue;
     const aimed = s === "sspecial" || f.facing === facing;
     const roll = (salt: number, period: number) => hash(state, f, salt + i * 0x101, period) % 100;
     if (mv.counter) {
@@ -633,7 +645,7 @@ function groundNeutral(state: State, f: Fighter, target: Fighter, sk: Skill, sta
 
   if (attackThreatens(target, f, sk)) {
     // a smash with armour from its first frames trades through the attack instead of shielding it
-    const armoured = SMASHES.find((m) => { const a = defOf(f).moves[m].armour; return a && a.frames[0] <= 3 && a.threshold >= 8; });
+    const armoured = SMASHES.find((m) => { const a = defOf(f).moves[m].armour; return a && a.frames[0] <= 3 && a.threshold >= 8 && !spammed(f, m); });
     if (armoured && sk.c >= 0.55 && moveNearReach(f, target, armoured, facing, 35) && hash(state, f, 0xb41c, 16) % 100 < 68) {
       return startSmash(state, f, armoured, facing);
     }
@@ -655,7 +667,7 @@ function groundNeutral(state: State, f: Fighter, target: Fighter, sk: Skill, sta
   const opponentInfo = target.move ? reachOf(target)[target.move] : null;
   const punishable = target.action === "attack" && opponentMove && opponentInfo && target.frame > opponentInfo.last && opponentMove.total - target.frame - sk.delay >= 4;
   if (punishable && distance < at(sk, 200, 280)) {
-    if (distance < 90 && hash(state, f, 0x9a11, 20) % 100 < at(sk, 35, 75)) return startTilt(state, f, "jab1", facing);
+    if (distance < 90 && !spammed(f, "jab1") && hash(state, f, 0x9a11, 20) % 100 < at(sk, 35, 75)) return startTilt(state, f, "jab1", facing);
     if (moveCanReach(f, target, "ftilt", facing, sk.slack)) return startTilt(state, f, "ftilt", facing);
     out.x = facing * 100;
     return out;
@@ -719,17 +731,18 @@ function groundNeutral(state: State, f: Fighter, target: Fighter, sk: Skill, sta
   const close = 84 + sk.slack;
   if (!mistake) {
     if (moveCycle === 0 && moveCanReach(f, target, "dtilt", facing, sk.slack)) return startTilt(state, f, "dtilt", facing);
-    if ((moveCycle === 1 || moveCycle === 3) && distance < close) return startTilt(state, f, "jab1", facing);
+    if ((moveCycle === 1 || moveCycle === 3) && distance < close && !spammed(f, "jab1")) return startTilt(state, f, "jab1", facing);
     if ((moveCycle === 2 || moveCycle === 4) && moveCanReach(f, target, "ftilt", facing, sk.slack)) return startTilt(state, f, "ftilt", facing);
   } else if (distance < 150 && state.frame % thinkEvery(sk) === 0) {
-    return startTilt(state, f, moveCycle & 1 ? "jab1" : "ftilt", facing);
+    const flail = moveCycle & 1 ? "jab1" : "ftilt";
+    return startTilt(state, f, spammed(f, flail) ? (flail === "jab1" ? "ftilt" : "jab1") : flail, facing);
   }
 
   const ftilt = reachOf(f).ftilt ?? EMPTY_MOVE;
   const desired = Math.max(55, ftilt.maxX + defOf(target).stats.width * 0.35 - (sk.c < 0.3 ? 25 : 5));
   if (distance > desired + 28) {
     out.x = facing * (distance > desired + 110 ? 100 : 45);
-    if (distance < 250 && f.action === "dash" && !mistake && hash(state, f, 0xda55, 18) % 100 < at(sk, 24, 56)) out.b = pulse(state, f.slot, B.ATTACK);
+    if (distance < 250 && f.action === "dash" && !mistake && !spammed(f, "dashAttack") && hash(state, f, 0xda55, 18) % 100 < at(sk, 24, 56)) out.b = pulse(state, f.slot, B.ATTACK);
     return out;
   }
   if (distance < desired - 24) {
