@@ -163,7 +163,7 @@ export default function make(api) {
 
   const FIREBALLS_MAX = 3, FEED_MAX = 48, GREAT_AT = 30;
   const HEAT_MAX = 100, HEAT_PER_FRAME = 1.4, HEAT_BACK = 0.5, HEAT_COOL = 40, SPRAY_FROM = 10, SPRAY_LOOP = 24;
-  const CREEP_LIFE = 300, CREEP_PULL = 0.028, CREEP_TOP = 3, CREEP_FALL = 2, CREEP_EASE = 0.025;
+  const CREEP_LIFE = 600, CREEP_PULL = 0.014, CREEP_TOP = 0.75, CREEP_FALL = 2, CREEP_EASE = 0.006;
   const ownLive = (state, f, kinds) => {
     let n = 0;
     for (const p of state.projectiles) if (!p.dead && p.from === f.slot && kinds.includes(p.kind)) n++;
@@ -297,7 +297,7 @@ export default function make(api) {
           if (d < best) { best = d; near = o; }
         }
         if (!near) continue;
-        const want = Math.sign(near.x - p.x) * Math.min(CREEP_TOP, 0.6 + best * CREEP_EASE);
+        const want = Math.sign(near.x - p.x) * Math.min(CREEP_TOP, CREEP_TOP * 0.2 + best * CREEP_EASE);
         p.vx += Math.max(-CREEP_PULL * 2, Math.min(CREEP_PULL, (want - p.vx) * Math.sign(want || 1))) * Math.sign(want || 1);
       }
     },
