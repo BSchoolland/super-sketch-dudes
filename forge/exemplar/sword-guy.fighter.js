@@ -212,9 +212,9 @@ export default function make(api) {
         if (f.frame === 1) f.bars.drive = 0;
         if (f.frame === 14 && (input.b & B.SPECIAL) && f.bars.drive < DRIVE_CHARGE_MAX) {
           f.bars.drive++;
-          // sparks off the blade, more and faster as it fills; a ring the moment it's full
+          // fire along the blade, more and faster as it fills; a ring the moment it's full
           const c = f.bars.drive / DRIVE_CHARGE_MAX;
-          if (f.bars.drive % (c > 0.66 ? 2 : 4) === 0) fx(state, f, "sparks", f.x + f.moveFacing * 36, f.y - 70, 1 + Math.round(c * 4), "#ff8a2a");
+          if (f.bars.drive % (c > 0.66 ? 1 : 2) === 0) fx(state, f, "flame", f.x + f.moveFacing * (24 + (f.bars.drive % 3) * 14), f.y - 56, 1 + Math.round(c * 2), "#ff8a2a");
           if (f.bars.drive === DRIVE_CHARGE_MAX) fx(state, f, "ring", f.x, f.y - 60, 2, "#ff8a2a");
           f.frame = 13;
           return;

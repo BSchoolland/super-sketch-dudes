@@ -5,7 +5,7 @@ import { defOf } from "../../../shared/fighter";
 import { lookColor, lookOf } from "./looks";
 import { markerOf } from "./strikes";
 
-interface Particle { x: number; y: number; vx: number; vy: number; life: number; age: number; size: number; color: string; kind: "spark" | "dust" | "ring" | "line" | "star" | "ember"; grav: number; ang?: number; len?: number; drag: number }
+interface Particle { x: number; y: number; vx: number; vy: number; life: number; age: number; size: number; color: string; kind: "spark" | "dust" | "ring" | "line" | "star" | "ember" | "flame"; grav: number; ang?: number; len?: number; drag: number }
 interface Flash { life: number; age: number; color: string; alpha: number }
 interface SlashLine { x: number; y: number; ang: number; life: number; age: number }
 interface KoBurst { x: number; y: number; side: string; life: number; age: number; color: string }
@@ -26,6 +26,12 @@ export class Fx {
     for (let i = 0; i < n; i++) {
       const a = this.rnd(0, Math.PI * 2), s = this.rnd(speed * 0.3, speed);
       this.particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: this.rnd(life * 0.6, life), age: 0, size: this.rnd(size * 0.5, size), color, kind: "spark", grav: 500, drag: 3 });
+    }
+  }
+  /** Tongues of fire that rise, flicker and shrink; `color` is the body, the core is always yellow. */
+  flame(x: number, y: number, n: number, color: string): void {
+    for (let i = 0; i < n; i++) {
+      this.particles.push({ x: x + this.rnd(-12, 12), y: y + this.rnd(-4, 4), vx: this.rnd(-30, 30), vy: this.rnd(-200, -90), life: this.rnd(0.28, 0.5), age: 0, size: this.rnd(7, 13), color, kind: "flame", grav: -140, drag: 2 });
     }
   }
   dust(x: number, y: number, n: number, dir: number, color = "rgba(255,255,255,0.55)"): void {
@@ -130,6 +136,7 @@ export class Fx {
         case "fx": {
           const c = e.color ?? this.colors[e.slot] ?? "#fff";
           if (e.kind === "sparks") this.spark(e.x, e.y, e.n, 260, c, 3, 0.3);
+          else if (e.kind === "flame") this.flame(e.x, e.y, e.n, e.color ?? "#ff8a2a");
           else if (e.kind === "smoke") this.dust(e.x, e.y, e.n, 0);
           else this.ring(e.x, e.y, 30 + e.n * 10, c, 0.3);
           break;
@@ -170,6 +177,21 @@ export class Fx {
       } else if (p.kind === "line") {
         const len = (p.len ?? 40) * (1 - t * 0.5);
         inkLine(ctx, p.x, p.y, p.x - Math.cos(p.ang!) * len, p.y - Math.sin(p.ang!) * len, color, p.size * a + 1);
+      } else if (p.kind === "flame") {
+        const h = p.size * (1.8 - t * 1.2), w = p.size * (1 - t * 0.4);
+        const wob = Math.sin(p.age * 28 + p.x * 0.1) * w * 0.35;
+        const tongue = (s: number, fill: string) => {
+          ctx.beginPath();
+          ctx.moveTo(p.x - w * s * 0.5, p.y);
+          ctx.quadraticCurveTo(p.x - w * s * 0.55 + wob * 0.4, p.y - h * s * 0.5, p.x + wob * s, p.y - h * s);
+          ctx.quadraticCurveTo(p.x + w * s * 0.55 + wob * 0.4, p.y - h * s * 0.5, p.x + w * s * 0.5, p.y);
+          ctx.closePath();
+          ctx.fillStyle = fill; ctx.fill();
+        };
+        tongue(1, t < 0.6 ? p.color : "#c93a1c");
+        tongue(0.55, "#ffd84a");
+        ctx.globalAlpha = a * 0.5;
+        ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.stroke();
       } else if (p.kind === "dust") {
         ctx.globalAlpha *= 0.5;
         inkArc(ctx, p.x, p.y, p.size * (0.6 + t * 0.8), Math.PI * 1.05, Math.PI * 1.9, PENCIL, 1);

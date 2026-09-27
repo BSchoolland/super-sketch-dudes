@@ -463,7 +463,7 @@ export type GameEvent =
   | { t: "projectile"; frame: number; slot: number; kind: string; x: number; y: number }
   | { t: "sfx"; frame: number; slot: number; name: string; x: number; y: number }
   /** A character's own particle burst (shared/fx.ts); `color` defaults to the slot's. */
-  | { t: "fx"; frame: number; slot: number; kind: "sparks" | "smoke" | "ring"; x: number; y: number; n: number; color?: string }
+  | { t: "fx"; frame: number; slot: number; kind: "sparks" | "flame" | "smoke" | "ring"; x: number; y: number; n: number; color?: string }
   | { t: "hookError"; frame: number; slot: number; move: string; error: string }
   | { t: "end"; frame: number; winner: number }
   | { t: "suddenDeath"; frame: number };
