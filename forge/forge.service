@@ -7,7 +7,7 @@ Description=SKETCH BATTLE forge worker
 After=network-online.target
 
 [Service]
-WorkingDirectory=%h/Projects/sketch-battle-draw
+WorkingDirectory=%h/Projects/sketch-battle
 EnvironmentFile=%h/.config/sketch-forge/env
 Environment=PATH=%h/.local/share/mise/installs/node/26/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=%h/.local/share/mise/installs/node/26/bin/npx tsx forge/worker.ts
