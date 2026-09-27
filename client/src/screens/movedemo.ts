@@ -1,6 +1,6 @@
 import { createMatch, step } from "../../../shared/sim";
 import { B, EMPTY_INPUT, cloneInput, type InputFrame } from "../../../shared/input";
-import type { State } from "../../../shared/types";
+import type { FighterDef, State } from "../../../shared/types";
 import { roster } from "../../../shared/fighters/index";
 import { profileOf } from "../../../shared/cpu-profile";
 import { VIEW_H, VIEW_W } from "../render/camera";
@@ -9,8 +9,8 @@ import { Renderer } from "../render/render";
 import { label } from "./ui";
 
 type Dir = "n" | "f" | "u" | "d";
-/** A card line's move: which button, and every direction it comes in. */
-export interface DemoMove { button: number; dirs: Dir[] }
+/** One button on the detail screen: what's pressed (from the air or not) and the directions the fighter has it in. */
+export interface DemoMove { name: string; button: number; air: boolean; dirs: Dir[] }
 
 const STEP = 1000 / 60;
 const PRESS_AT = 12, AFTER = 50, MAX_FRAMES = 300;
@@ -19,20 +19,37 @@ const DUMMY_X = 0;
 const STICK: Record<Dir, [number, number]> = { n: [0, 0], f: [100, 0], u: [0, -100], d: [0, 100] };
 const ARROW: Record<Dir, string> = { n: "●", f: "▶", u: "▲", d: "▼" };
 const WORD: Record<Dir, string> = { n: "", f: "FORWARD + ", u: "UP + ", d: "DOWN + " };
-const MOVE_ID: Record<"attack" | "special", Record<Dir, string>> = {
+const MOVE_ID: Record<"attack" | "air" | "special", Record<Dir, string>> = {
   attack: { n: "jab", f: "ftilt", u: "utilt", d: "dtilt" },
+  air: { n: "nair", f: "fair", u: "uair", d: "dair" },
   special: { n: "nspecial", f: "sspecial", u: "uspecial", d: "dspecial" },
 };
+const kindOf = (m: DemoMove): keyof typeof MOVE_ID => (m.button === B.SPECIAL ? "special" : m.air ? "air" : "attack");
+const DIRS: Dir[] = ["n", "f", "u", "d"];
+const SPECIAL_NAME: Record<Dir, string> = { n: "SPECIAL", f: "SIDE+SPECIAL", u: "UP+SPECIAL", d: "DOWN+SPECIAL" };
 
-/** The move a card line ("SIDE+SPECIAL hammer toss…") names, or null for a line that isn't one. */
-export function moveOfLine(line: string): DemoMove | null {
-  const head = line.trim().split(/\s+/)[0].toUpperCase();
-  if (head === "ATTACK") return { button: B.ATTACK, dirs: ["n", "f", "u", "d"] };
-  if (head === "SPECIAL") return { button: B.SPECIAL, dirs: ["n"] };
-  if (head === "SIDE+SPECIAL") return { button: B.SPECIAL, dirs: ["f"] };
-  if (head === "UP+SPECIAL") return { button: B.SPECIAL, dirs: ["u"] };
-  if (head === "DOWN+SPECIAL") return { button: B.SPECIAL, dirs: ["d"] };
-  return null;
+/** Every move the fighter actually has, as detail-screen buttons: its tilts, its aerials, each special. */
+export function demoMoves(def: FighterDef): DemoMove[] {
+  const has = (kind: keyof typeof MOVE_ID) => DIRS.filter((d) => def.moves[MOVE_ID[kind][d]]);
+  const out: DemoMove[] = [];
+  if (has("attack").length) out.push({ name: "ATTACK", button: B.ATTACK, air: false, dirs: has("attack") });
+  if (has("air").length) out.push({ name: "AIR", button: B.ATTACK, air: true, dirs: has("air") });
+  for (const d of has("special")) out.push({ name: SPECIAL_NAME[d], button: B.SPECIAL, air: false, dirs: [d] });
+  return out;
+}
+
+/**
+ * What the forge's card says about a move, if any line covers it. Card heads come as "ATTACK",
+ * "SIDE+SPECIAL", and run together as "DOWN/UP+SPECIAL" or "SIDE/DOWN".
+ */
+export function cardText(card: string[], name: string): string {
+  for (const line of card) {
+    const [head, ...rest] = line.trim().split(/\s+/);
+    const h = head.toUpperCase();
+    const names = h === "ATTACK" || h === "AIR" || h === "SPECIAL" ? [h] : h.replace(/\+SPECIAL$/, "").split("/").map((p) => `${p}+SPECIAL`);
+    if (names.includes(name)) return rest.join(" ");
+  }
+  return "";
 }
 
 /**
@@ -70,14 +87,14 @@ export class MoveDemo {
 
   /** Show `move` (null: just the two of them standing there). */
   play(move: DemoMove | null): void {
-    if (move === this.move || (move && this.move && move.button === this.move.button && move.dirs.join() === this.move.dirs.join())) return;
+    if (move === this.move || (move && this.move && move.name === this.move.name)) return;
     this.move = move;
     this.rep = 0;
     this.reset();
   }
 
   private get moveId(): string | null {
-    return this.move ? MOVE_ID[this.move.button === B.ATTACK ? "attack" : "special"][this.dir] : null;
+    return this.move ? MOVE_ID[kindOf(this.move)][this.dir] : null;
   }
 
   /**
@@ -105,6 +122,8 @@ export class MoveDemo {
   private tick(): void {
     const you = this.state.fighters[0];
     const input = cloneInput(EMPTY_INPUT);
+    // aerials: a one-frame jump (a short hop), the attack on the way up
+    if (this.move?.air && this.frame === PRESS_AT - 8) input.b = B.JUMP;
     if (this.move && this.frame === PRESS_AT) {
       // digital, so a direction plus the button is a tilt, never a smash flick
       [input.x, input.y] = STICK[this.dir];
@@ -145,7 +164,7 @@ export class MoveDemo {
     inkRect(ctx, x, y, w, h, INK, 1.6);
     if (this.move) {
       const button = this.move.button === B.ATTACK ? "ATTACK" : "SPECIAL";
-      label(ctx, `${ARROW[this.dir]}  ${WORD[this.dir]}${button}`, x + 24, y + 44, 28, INK, "left", 900);
+      label(ctx, `${ARROW[this.dir]}  ${this.move.air ? "JUMP, " : ""}${WORD[this.dir]}${button}`, x + 24, y + 44, 28, INK, "left", 900);
       if (this.move.dirs.length > 1) this.move.dirs.forEach((d, i) => label(ctx, ARROW[d], x + 36 + i * 34, y + 84, 22, d === this.dir ? INK : "rgba(41,39,34,0.3)", "center", 900));
     }
   }
