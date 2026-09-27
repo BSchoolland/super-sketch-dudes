@@ -48,6 +48,9 @@ export interface ForgeIO {
 /** A failure the job should be failed with, message as the players will see it. */
 export class ForgeError extends Error {}
 
+/** The steps the agent's tool use announces, in the order a forge goes through them. */
+const STAGE_ORDER = ["drawing the animation", "designing the moves", "writing the fighter", "balance testing", "final checks and upload"];
+
 export async function runForge(job: JobSpec, drawingSrc: string, dir: string, io: ForgeIO): Promise<CompletePayload> {
   const t0 = Date.now();
   fs.mkdirSync(dir, { recursive: true });
@@ -74,7 +77,7 @@ export async function runForge(job: JobSpec, drawingSrc: string, dir: string, io
   const log = fs.createWriteStream(path.join(dir, "session.jsonl"));
   const result = await new Promise<{ costUsd: number; text: string; sessionId: string }>((resolve, reject) => {
     const child = spawn("claude", ["-p", "--model", AGENT_MODEL, "--dangerously-skip-permissions", "--output-format", "stream-json", "--verbose"], { cwd: wt, stdio: ["pipe", "pipe", "pipe"], env: { ...process.env } });
-    let buf = "", err = "", timedOut = false, costUsd = 0, text = "", sessionId = "", lost = "";
+    let buf = "", err = "", timedOut = false, costUsd = 0, text = "", sessionId = "", lost = "", reached = -1;
     const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, TIMEOUT_MS);
     const onLine = (line: string) => {
       log.write(line + "\n");
@@ -82,9 +85,18 @@ export async function runForge(job: JobSpec, drawingSrc: string, dir: string, io
       if (e.type === "assistant") for (const b of e.message?.content ?? []) {
         if (b.type === "tool_use") {
           const cmd = String(b.input?.command ?? b.input?.file_path ?? "");
-          const stage = /tools\/sheet/.test(cmd) ? "drawing the animation" : /tools\/check/.test(cmd) ? "balance testing" : /tools\/deploy/.test(cmd) ? "final checks and upload" : /\.fighter\.js/.test(cmd) && b.name === "Write" ? "writing the fighter" : null;
-          // the server no longer has this job running (it gave it to someone else): stop working on it
-          if (stage) io.progress(stage).catch((e: Error) => { lost = e.message; io.log(`progress rejected, stopping: ${e.message}`); child.kill("SIGKILL"); });
+          const stage = /tools\/sheet/.test(cmd) ? "drawing the animation"
+            // the agent opening the cut-out cells means the drawing is done and it's on to the moves
+            : b.name === "Read" && /\/cells\//.test(cmd) ? "designing the moves"
+            : /tools\/check/.test(cmd) ? "balance testing" : /tools\/deploy/.test(cmd) ? "final checks and upload"
+            : /\.fighter\.js/.test(cmd) && b.name === "Write" ? "writing the fighter" : null;
+          const step = stage ? STAGE_ORDER.indexOf(stage) : -1;
+          // steps only move forward (a later look at the cells isn't a step back); the server no longer
+          // having this job running (it gave it to someone else) stops the work
+          if (stage && step > reached) {
+            reached = step;
+            io.progress(stage).catch((e: Error) => { lost = e.message; io.log(`progress rejected, stopping: ${e.message}`); child.kill("SIGKILL"); });
+          }
           io.log(`${b.name} ${cmd.slice(0, 120)}`);
         } else if (b.type === "text" && b.text) text = b.text;
       }

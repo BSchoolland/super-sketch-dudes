@@ -50,25 +50,28 @@ export function drawCharacterArt(ctx: CanvasRenderingContext2D, ch: ArtSource | 
 /**
  * The forge's steps as the player sees them: what's happening in plain words, and where on the
  * progress bar the step starts. Starts are the median share of the whole forge each step begins
- * at, from the server's job timelines (a forge takes about five minutes).
+ * at, from the forge worker's timestamps over real forges (about 280 s from claim to done: the poses
+ * are drawn by ~45 s, the moves written by ~145 s, testing runs until ~260 s).
  */
 const FORGE_STEPS: { stage: RegExp; label: string; start: number }[] = [
   { stage: /line/, label: "waiting for a free spot in the forge", start: 0 },
-  { stage: /reading the drawing/, label: "looking at your drawing", start: 0.01 },
-  { stage: /agent is making it/, label: "working out who they are", start: 0.02 },
-  { stage: /designing|drawing the (sheet|animation)/, label: "drawing their poses", start: 0.03 },
-  { stage: /cutting out/, label: "cutting out the poses", start: 0.25 },
-  { stage: /writing the fighter/, label: "teaching them to fight", start: 0.57 },
-  { stage: /balance testing/, label: "test fights, to keep it fair", start: 0.6 },
-  { stage: /final checks|upload/, label: "finishing touches", start: 0.95 },
+  { stage: /reading the drawing/, label: "looking at your drawing", start: 0.005 },
+  { stage: /agent is making it/, label: "working out who they are", start: 0.01 },
+  { stage: /designing the moves/, label: "working out their moves", start: 0.17 },
+  { stage: /drawing the (sheet|animation)|designing the moveset/, label: "drawing their poses", start: 0.02 },
+  { stage: /cutting out/, label: "cutting out the poses", start: 0.1 },
+  { stage: /writing the fighter/, label: "putting the fighter together", start: 0.52 },
+  { stage: /balance testing/, label: "test fights, to keep it fair", start: 0.55 },
+  { stage: /final checks|upload/, label: "finishing touches", start: 0.93 },
 ];
 
 /** Where a forge stage sits: its words, and the progress-bar span it covers. */
 export function forgeStep(stage: string): { label: string; start: number; end: number } {
   const i = FORGE_STEPS.findIndex((s) => s.stage.test(stage));
   if (i < 0) return { label: stage, start: 0, end: 0.05 };
-  const next = FORGE_STEPS.slice(i + 1).find((s) => s.start > FORGE_STEPS[i].start);
-  return { label: FORGE_STEPS[i].label, start: FORGE_STEPS[i].start, end: next?.start ?? 1 };
+  const start = FORGE_STEPS[i].start;
+  const end = Math.min(1, ...FORGE_STEPS.filter((s) => s.start > start).map((s) => s.start));
+  return { label: FORGE_STEPS[i].label, start, end };
 }
 
 /** What the forge is doing with it, in words; null once it's a fighter. */
