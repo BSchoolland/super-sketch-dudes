@@ -174,7 +174,8 @@ export default function make(api) {
       { hook: "tornado", cells: [[0, "atk-fwd"], [6, "block"], [10, "atk-fwd"], [14, "block"], [18, "atk-fwd"], [22, "block"], [26, "atk-fwd"], [30, "block"], [34, "atk-up"]] }),
     // RECOVERY, CORKSCREW: the tornado, but rising: he spins up with the sword out, and finishes with a thrust at the top
     uspecial: mv("uspecial", 56, [
-      hb([5, 22], 0, -70, 66, 2, 80, 12, 16, { fx: "tornado", rehit: 4, radial: true }),
+      // set knockback (growth 0): the same shove at any percent, angled just past straight up so they ride up with him
+      hb([5, 22], 0, -70, 66, 2, 95, 66, 0, { fx: "tornado", rehit: 4 }),
       hb([23, 26], 0, -200, 22, 7, 88, 50, 90, { fx: "point", group: 1 }),
       cap([23, 27], 0, -80, 0, -186, 15, 5, 86, 40, 60, { fx: "skewer", group: 1, priority: 1 }),
     ], [key(0, { sy: 0.86, sx: 1.1 }), key(5, { sy: 1.14, sx: 0.92 }, true), key(9, { sx: 0.3 }), key(13, { sx: 1.0, rot: -8 }), key(17, { sx: 0.3 }), key(21, { sx: 1.0, rot: 8 }), key(23, { sy: 1.2, sx: 0.9, dy: -12 }, true), key(36, { sy: 1.06 }), key(56, { rot: 0 })],
@@ -243,11 +244,17 @@ export default function make(api) {
         // a slow drift down through the stabs (about a third of fall speed), no fast fall
         if (f.frame >= 3 && f.frame <= 30) { f.fastFalling = false; f.vy = Math.min(f.vy, 2.2); }
       },
-      rise: ({ f, input }) => {
+      rise: ({ f, input, state }) => {
         if (f.frame === 5) { f.grounded = false; f.platform = -1; f.usedUpSpecial = true; }
         if (f.frame >= 5 && f.frame <= 24) {
           f.vy = -11 + (f.frame - 5) * 0.3;
           f.vx = (input.x / 100) * 2.6;
+          // whoever the spin has caught is steered over him, in line for the thrust at the top
+          for (const v of state.fighters) {
+            if (v === f || v.lastHitBy !== f.slot || state.frame - v.lastHitFrame > 30 || v.hitstun <= 0 || v.pending) continue;
+            v.vx += clamp(f.x - v.x, -20, 20) * 0.12;
+            v.vy = Math.min(v.vy, f.vy - 5);
+          }
         }
       },
     },
