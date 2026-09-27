@@ -31,7 +31,7 @@ export interface PublicRoom { code: string; host: string; members: string[] }
 export type RelayMessage =
   | { t: "hello"; id: number }
   /** `trace` is the room's wide-event trace; absent from servers older than wide events. */
-  | { t: "room"; code: string; trace?: string; host: number; started: boolean; public: boolean; members: RoomMember[]; game: string | null }
+  | { t: "room"; code: string; trace?: string; host: number; started: boolean; public: boolean; picking: { stage: string; stocks: number; time: number } | null; members: RoomMember[]; game: string | null }
   | { t: "start"; seed: number; config: unknown; members: Pick<RoomMember, "id" | "name" | "slot">[] }
   | { t: "left"; id: number; slot: number; duringMatch: boolean }
   /** The room's game bundle changed; the host answers with gameAt. */

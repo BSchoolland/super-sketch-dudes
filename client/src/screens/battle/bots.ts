@@ -1,18 +1,18 @@
-import { VIEW_H, VIEW_W } from "../../render/camera";
+import { VIEW_W } from "../../render/camera";
 import { PENCIL } from "../../render/paper";
 import type { DeviceId, MenuInput } from "../../input/devices";
 import { sfx } from "../../audio/audio";
-import { SLOT_COLORS } from "../../render/hud";
 import { allChoices, choiceDef, type FighterChoice } from "../../fighters";
 import { CPU_TIERS, tierName } from "../../../../shared/cpu-skill";
-import { drawFighterPortrait } from "../portrait";
-import { CharacterShelf, SHELF_H } from "../shelf";
-import { bg, card, hint, label, title, arrows, button, backButton, goTo, type Screen, INK, settings, saveSettings } from "../ui";
+import { CharacterShelf } from "../shelf";
+import { ACTION_Y, SETUP, drawEmptySlot, drawSlotCard, slotX, type SlotFighter } from "./slots";
+import { bg, hint, label, title, arrows, button, backButton, goTo, type Screen, INK, settings, saveSettings } from "../ui";
 
 export interface Bot { fighter: FighterChoice; level: number }
 export interface BotsPick { you: FighterChoice; device: DeviceId; bots: Bot[] }
 
-const SHELF_Y = 130, SLOT_Y = SHELF_Y + SHELF_H + 30, SLOT_W = 380, SLOT_H = 500, SLOT_GAP = 36, MAX_BOTS = 3;
+const MAX_BOTS = 3;
+const slotFighter = (c: FighterChoice | null): SlotFighter | null => c && { def: choiceDef(c).def, name: c.name };
 
 /** A keyboard stop: up/down walks them, left/right changes the focused one, Enter on "add" adds a bot. */
 type Row = { kind: "you" } | { kind: "fighter" | "level"; bot: number } | { kind: "add" };
@@ -29,7 +29,7 @@ export class BotsScreen implements Screen {
 
   constructor(preferred: FighterChoice | null, private onFight: (pick: BotsPick) => Screen, private onBack: () => Screen) {
     const { mine, house } = allChoices();
-    this.shelf = new CharacterShelf(SHELF_Y);
+    this.shelf = new CharacterShelf(SETUP.shelfY);
     this.you = mine.find((c) => c.id === preferred?.id) ?? null;
     this.opponents = [...house, ...mine];
     this.bots = [{ fighter: Math.max(0, house.findIndex((h) => h.id !== preferred?.id)), level: settings.cpuTier }];
@@ -111,46 +111,31 @@ export class BotsScreen implements Screen {
 
   draw(ctx: CanvasRenderingContext2D): void {
     bg(ctx, this.t);
-    title(ctx, "VS BOTS", VIEW_W / 2, 90, 64);
+    title(ctx, "VS BOTS", VIEW_W / 2, SETUP.titleY, 52);
     const clicked = this.shelf.draw(ctx, this.t, this.you?.id ?? null, false);
     if (clicked) { this.you = clicked; this.focus = 0; sfx.menuMove(); }
     const focused = this.rows[this.focus];
-    const x0 = (VIEW_W - (4 * SLOT_W + 3 * SLOT_GAP)) / 2;
-    this.drawSlot(ctx, x0, 0, this.you, "YOU", focused.kind === "you");
+    drawSlotCard(ctx, 0, "YOU", slotFighter(this.you), this.t, { focused: focused.kind === "you" });
+    const { slotY, slotW, slotH } = SETUP;
     for (let i = 0; i < MAX_BOTS; i++) {
-      const x = x0 + (i + 1) * (SLOT_W + SLOT_GAP);
       const bot = this.bots[i];
       if (!bot) {
-        if (i === this.bots.length && this.drawAdd(ctx, x, focused.kind === "add")) this.addBot();
+        if (i > this.bots.length) drawEmptySlot(ctx, i + 1, "");
+        else if (button(ctx, slotX(i + 1), slotY, slotW, slotH, "+ ADD BOT", { size: 34, focused: focused.kind === "add" })) this.addBot();
         continue;
       }
       const here = (focused.kind === "fighter" || focused.kind === "level") && focused.bot === i;
-      this.drawSlot(ctx, x, i + 1, this.opponents[bot.fighter], `CPU ${i + 1}`, here && focused.kind === "fighter");
-      const d = arrows(ctx, x + SLOT_W / 2, SLOT_Y + 180, SLOT_W / 2 - 34, 40);
+      const x = drawSlotCard(ctx, i + 1, `CPU ${i + 1}`, slotFighter(this.opponents[bot.fighter]), this.t, { focused: here && focused.kind === "fighter" });
+      const d = arrows(ctx, x + slotW / 2, slotY + 180, slotW / 2 - 34, 40);
       if (d) { this.focusOn((r) => r.kind === "fighter" && r.bot === i); this.stepFighter(i, d); }
-      const ly = SLOT_Y + 400;
-      label(ctx, tierName(bot.level), x + SLOT_W / 2, ly, 26, here && focused.kind === "level" ? INK : PENCIL, "center", 900);
-      const l = arrows(ctx, x + SLOT_W / 2, ly, 120, 30);
+      const ly = slotY + 392;
+      label(ctx, tierName(bot.level), x + slotW / 2, ly, 26, here && focused.kind === "level" ? INK : PENCIL, "center", 900);
+      const l = arrows(ctx, x + slotW / 2, ly, 120, 30);
       if (l) { this.focusOn((r) => r.kind === "level" && r.bot === i); this.stepLevel(i, l); }
-      if (this.bots.length > 1 && button(ctx, x + SLOT_W / 2 - 80, SLOT_Y + SLOT_H - 70, 160, 50, "REMOVE", { size: 20 })) this.removeBot(i);
+      if (this.bots.length > 1 && button(ctx, x + slotW / 2 - 80, slotY + slotH - 58, 160, 44, "REMOVE", { size: 20 })) this.removeBot(i);
     }
-    if (button(ctx, VIEW_W / 2 - 170, VIEW_H - 170, 340, 84, "FIGHT", { key: "Enter", size: 36, disabled: !this.you })) goTo(this.fight());
+    if (button(ctx, VIEW_W / 2 - 170, ACTION_Y, 340, 84, "FIGHT", { key: "Enter", size: 36, disabled: !this.you })) goTo(this.fight());
     if (backButton(ctx)) goTo(this.onBack());
     hint(ctx, "click a character, or up/down + left/right · Enter: fight");
-  }
-
-  private drawSlot(ctx: CanvasRenderingContext2D, x: number, i: number, choice: FighterChoice | null, who: string, focused: boolean): void {
-    card(ctx, x, SLOT_Y, SLOT_W, SLOT_H, SLOT_COLORS[i], focused);
-    label(ctx, who, x + SLOT_W / 2, SLOT_Y + 44, 26, SLOT_COLORS[i], "center", 900);
-    if (!choice) return;
-    const def = choiceDef(choice).def;
-    if (def) drawFighterPortrait(ctx, def, this.t + i * 0.4, false, { x: x + 40, y: SLOT_Y + 64, w: SLOT_W - 80, h: 240 });
-    else label(ctx, "…", x + SLOT_W / 2, SLOT_Y + 180, 40, PENCIL);
-    title(ctx, choice.name, x + SLOT_W / 2, SLOT_Y + 352, 38, INK, "center", SLOT_W - 32);
-  }
-
-  /** The empty slot after the last bot: the whole card is the ADD BOT button. */
-  private drawAdd(ctx: CanvasRenderingContext2D, x: number, focused: boolean): boolean {
-    return button(ctx, x, SLOT_Y, SLOT_W, SLOT_H, "+ ADD BOT", { size: 34, focused });
   }
 }

@@ -1,26 +1,24 @@
 import type { MatchConfig } from "../../../shared/sim";
 import type { SessionHandoff } from "../net/rollback";
 import { roster } from "../../../shared/fighters/index";
-import { stageList } from "../../../shared/stages/index";
 import { isBundlePath } from "../../../shared/account";
 import { account } from "../account";
 import { fighterLoad } from "../gen";
 import type { FighterChoice } from "../fighters";
-import { CharacterShelf, SHELF_H } from "./shelf";
+import { CharacterShelf } from "./shelf";
+import { StagePicker, type MatchSetup, type PickerAction } from "./stage";
+import { ACTION_Y, SETUP, drawEmptySlot, drawSlotCard, type SlotFighter } from "./battle/slots";
 import { PENCIL } from "../render/paper";
 import { VIEW_H, VIEW_W } from "../render/camera";
-import { SLOT_COLORS } from "../render/hud";
 import { consumeTypedChars, type DeviceId, type MenuInput } from "../input/devices";
 import { sfx } from "../audio/audio";
 import { WebSocketTransport, type PublicRoom, type RelayMessage, type RoomMember, type Unsubscribe } from "../net/transport";
-import { drawFighterPortrait } from "./portrait";
 import { NetVersusScreen, startConfig } from "./netversus";
 import { MatchTelemetry } from "../telemetry/match";
 import { swap, type Handoff } from "../handoff";
-import { bg, card, hint, label, settings, title, hover, clicked, arrows, button, backButton, goTo, type Screen, INK } from "./ui";
+import { bg, card, hint, label, title, hover, clicked, arrows, button, backButton, goTo, type Screen, INK } from "./ui";
 
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-const SHELF_Y = 120, SLOT_Y = SHELF_Y + SHELF_H + 30, SLOT_H = 470;
 const LIST_Y = 170, ROW_H = 84, LIST_MAX = 5, CODE_Y = LIST_Y + LIST_MAX * ROW_H + 60;
 
 /** How BATTLE sent you here. */
@@ -43,8 +41,8 @@ export class OnlineScreen implements Screen {
   code = ["A", "A", "A", "A"];
   codePos = 0;
   inputDelay = 2;
-  /** The host's stage pick, an index into stageList. */
-  stage = 0;
+  /** The stage screen after the host's START: theirs to edit, everyone else's to watch. */
+  private picker: StagePicker | null = null;
   error = "";
   /** keyboard focus in the lobby: 0 fighter, 1 ready, 2 start (host, when everyone is ready), 3 leave */
   focus = 1;
@@ -94,7 +92,7 @@ export class OnlineScreen implements Screen {
 
   /** `fighter` is the one to bring into the room; a room that's resumed keeps whatever was picked there. */
   constructor(private onExit: () => Screen, entry: OnlineEntry | null, fighter: FighterChoice | null, context?: OnlineContext) {
-    this.shelf = new CharacterShelf(SHELF_Y);
+    this.shelf = new CharacterShelf(SETUP.shelfY);
     this.mine = this.shelf.choices.find((c) => c.id === fighter?.id) ?? null;
     if (this.mine) this.shelf.show(this.mine.id);
     this.context = context ?? { transport: new WebSocketTransport(), id: 0, room: null };
@@ -202,6 +200,7 @@ export class OnlineScreen implements Screen {
     if (!room) throw new Error("lobby phase without room state");
     const member = room.members.find((candidate) => candidate.id === this.context.id);
     if (!member) throw new Error("local member missing from room");
+    if (this.picker) { this.onPicker(this.picker.update(m)); return null; }
     this.bringFighter();
     if (!member.ready && (m.left || m.right)) this.pickFighter(m.right ? 1 : -1);
     const canStart = this.canStart();
@@ -215,7 +214,7 @@ export class OnlineScreen implements Screen {
     if (isHost && canStart && this.focus === 1 && member.ready) this.focus = 2;
     if (m.confirm) {
       if (this.focus === 3) this.leave();
-      else if (this.focus === 2 && isHost && canStart) this.startMatch();
+      else if (this.focus === 2 && isHost && canStart) this.openStagePick();
       else this.toggleReady();
     }
     if (m.back) this.leave();
@@ -260,18 +259,38 @@ export class OnlineScreen implements Screen {
     this.context.transport.sendLobby({ t: "pick", fighter: choice.id, bundleUrl: choice.bundleUrl, ready: false });
   }
 
-  startMatch(): void {
+  /** The host's START: everyone moves to the stage screen, the host picking. */
+  openStagePick(): void {
     const room = this.context.room;
     if (!room || room.host !== this.context.id || !this.canStart()) return;
+    this.context.transport.sendLobby({ t: "picking", pick: new StagePicker(false).setup });
+    sfx.menuConfirm();
+  }
+
+  private onPicker(action: PickerAction): void {
+    const room = this.context.room;
+    if (!room || !this.picker || !action) return;
+    const isHost = room.host === this.context.id;
+    if (action === "back") { if (isHost) this.context.transport.sendLobby({ t: "picking", pick: null }); else this.leave(); return; }
+    if (isHost) this.startMatch(this.picker.setup);
+  }
+
+  private startMatch(setup: MatchSetup): void {
     this.context.transport.sendLobby({
       t: "start",
-      config: {
-        stage: stageList[this.stage].id,
-        rules: { stocks: settings.stocks, time: settings.time * 60 * 60 },
-        inputDelay: this.inputDelay,
-      },
+      config: { stage: setup.stage, rules: { stocks: setup.stocks, time: setup.time }, inputDelay: this.inputDelay },
     });
     sfx.go();
+  }
+
+  /** Follows the room onto and off the stage screen; the host's own picker is the one being mirrored. */
+  private followPicking(room: RoomState): void {
+    if (!room.picking || room.started) { this.picker = null; return; }
+    const isHost = room.host === this.context.id;
+    if (!this.picker) {
+      this.picker = new StagePicker(!isHost, (setup) => this.context.transport.sendLobby({ t: "picking", pick: setup }));
+      this.picker.show(room.picking);
+    } else if (!isHost) this.picker.show(room.picking);
   }
 
   leave(): void {
@@ -284,6 +303,7 @@ export class OnlineScreen implements Screen {
     if (message.t === "room") {
       this.context.room = message;
       if (this.phase !== "loading") this.phase = "lobby";
+      this.followPicking(message);
       this.bringFighter();
     }
     if (message.t === "rooms") this.rooms = message.rooms;
@@ -374,51 +394,47 @@ export class OnlineScreen implements Screen {
   private drawLobby(ctx: CanvasRenderingContext2D): void {
     const room = this.context.room;
     if (!room) throw new Error("lobby phase without room state");
-    title(ctx, `ROOM ${room.code}`, VIEW_W / 2, 80, 52);
-    label(ctx, room.public ? "public" : "private", VIEW_W / 2 + 190, 76, 24, PENCIL, "left");
+    if (this.picker && this.phase === "lobby") {
+      const host = room.members.find((member) => member.id === room.host);
+      this.onPicker(this.picker.draw(ctx, this.t, `${host?.name ?? "the host"} is picking the stage`));
+      return;
+    }
+    title(ctx, `ROOM ${room.code}`, VIEW_W / 2, SETUP.titleY, 52);
+    label(ctx, room.public ? "public" : "private", VIEW_W / 2 + 190, SETUP.titleY - 4, 24, PENCIL, "left");
     const me = room.members.find((candidate) => candidate.id === this.context.id);
     const picked = this.shelf.draw(ctx, this.t, me?.fighter ?? null, !me || me.ready || this.phase !== "lobby");
     if (picked) { this.pick(picked); this.focus = 0; sfx.menuMove(); }
-    const w = 380, h = SLOT_H, gap = 36;
-    const x0 = (VIEW_W - (w * 4 + gap * 3)) / 2;
+    const { slotY, slotW, slotH } = SETUP;
     for (let slot = 0; slot < 4; slot++) {
       const member = room.members.find((candidate) => candidate.slot === slot);
-      const x = x0 + slot * (w + gap), y = SLOT_Y;
-      card(ctx, x, y, w, h, member ? SLOT_COLORS[slot] : "rgba(18,16,26,0.5)", !!member?.ready, member ? 1 : 0.65);
-      if (!member) {
-        label(ctx, "WAITING", x + w / 2, y + h / 2, 28, "rgba(41,39,34,0.65)");
-        continue;
-      }
-      label(ctx, `${member.name}${member.id === room.host ? " · HOST" : ""}`, x + w / 2, y + 42, 23, INK, "center", 900);
-      const load = isBundlePath(member.bundleUrl, member.fighter) ? fighterLoad(member.bundleUrl) : null;
-      const fighter = load?.state === "ready" ? roster[member.fighter] : null;
-      if (fighter) {
-        drawFighterPortrait(ctx, fighter, this.t, member.ready, { x: x + 16, y: y + 64, w: w - 32, h: 260 });
-        title(ctx, fighter.name, x + w / 2, y + 368, 38, INK, "center", w - 32);
-      } else label(ctx, load?.state === "failed" ? "didn't load" : member.fighter ? "loading …" : "choosing", x + w / 2, y + 200, 28, load?.state === "failed" ? "#c0392b" : PENCIL);
+      if (!member) { drawEmptySlot(ctx, slot, "WAITING"); continue; }
+      const x = drawSlotCard(ctx, slot, `${member.name}${member.id === room.host ? " · HOST" : ""}`, this.slotFighter(member), this.t, { ready: member.ready });
       const mine = member.id === this.context.id && this.phase === "lobby";
       if (mine) {
-        if (button(ctx, x + 40, y + h - 84, w - 80, 64, member.ready ? "UNREADY" : "READY", { key: "Enter", size: 26, focused: this.focus === 1 })) this.toggleReady();
-      } else label(ctx, member.ready ? "READY" : "CHOOSING", x + w / 2, y + h - 42, 24);
+        if (button(ctx, x + 40, slotY + slotH - 84, slotW - 80, 64, member.ready ? "UNREADY" : "READY", { key: "Enter", size: 26, focused: this.focus === 1 })) this.toggleReady();
+      } else label(ctx, member.ready ? "READY" : "CHOOSING", x + slotW / 2, slotY + slotH - 42, 24);
     }
     if (this.phase === "loading") {
-      label(ctx, `loading ${".".repeat(1 + (Math.floor(this.t * 3) % 3))}`, VIEW_W / 2, SLOT_Y + SLOT_H + 70, 36, PENCIL);
+      label(ctx, `loading ${".".repeat(1 + (Math.floor(this.t * 3) % 3))}`, VIEW_W / 2, ACTION_Y + 46, 36, PENCIL);
       return;
     }
     const canStart = this.canStart();
     const isHost = room.host === this.context.id;
-    const by = SLOT_Y + SLOT_H + 24;
+    const by = ACTION_Y;
     if (isHost) {
-      if (button(ctx, VIEW_W / 2 - 170, by, 340, 84, "START", { key: "Enter", size: 36, focused: this.focus === 2, disabled: !canStart })) this.startMatch();
-      label(ctx, stageList[this.stage].name, VIEW_W / 2 - 350, by + 52, 26, INK, "center", 900);
-      const s = arrows(ctx, VIEW_W / 2 - 350, by + 52, 130, 26);
-      if (s) { this.stage = (this.stage + s + stageList.length) % stageList.length; sfx.menuMove(); }
+      if (button(ctx, VIEW_W / 2 - 170, by, 340, 84, "START", { key: "Enter", size: 36, focused: this.focus === 2, disabled: !canStart })) this.openStagePick();
       label(ctx, `input delay ${this.inputDelay}f`, VIEW_W / 2 + 330, by + 52, 20, "rgba(41,39,34,0.85)");
       const d = arrows(ctx, VIEW_W / 2 + 330, by + 52, 90, 22);
       if (d) { this.inputDelay = Math.max(1, Math.min(6, this.inputDelay + d)); sfx.menuMove(); }
     } else label(ctx, canStart ? "waiting for the host to press START" : "everyone readies up, then the host starts", VIEW_W / 2, by + 52, 24, INK);
     if (button(ctx, 40, VIEW_H - 100, 200, 64, "LEAVE", { key: "Esc", size: 26, focused: this.focus === 3 })) this.leave();
     hint(ctx, isHost && !canStart ? `START unlocks when everyone is ready (${room.members.length}/2+ players)` : "click a character, or left/right, to pick");
+  }
+
+  private slotFighter(member: RoomMember): SlotFighter {
+    const load = isBundlePath(member.bundleUrl, member.fighter) ? fighterLoad(member.bundleUrl) : null;
+    const def = load?.state === "ready" ? roster[member.fighter] : null;
+    return { def, name: def?.name ?? "", pending: load?.state === "failed" ? "didn't load" : member.fighter ? "loading …" : "choosing" };
   }
 
   private drawError(ctx: CanvasRenderingContext2D): void {

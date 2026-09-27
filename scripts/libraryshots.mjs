@@ -111,7 +111,7 @@ await shot(a, "07-bots");
 await a.keyboard.press("ArrowDown"); await a.keyboard.press("ArrowRight");
 await a.waitForTimeout(600);
 await shot(a, "07b-bots-other-cpu");
-await tap(a, 960, 1080 - 170 + 42);
+await tap(a, 960, 864 + 42);
 await onScreen(a, "StageScreen");
 await shot(a, "08-stage");
 await a.keyboard.press("Enter");
@@ -154,6 +154,14 @@ await b.waitForTimeout(400);
 for (const page of [b, a]) { await page.keyboard.press("Enter"); await page.waitForTimeout(400); }
 await until(a, "everyone ready", () => window.sketchbattle.screen.lobbyDebug()?.members.every((m) => m.ready));
 await shot(a, "14-online-room-ready");
+// START takes the room to the stage screen: Ann picks, Bob watches her pick land
+await a.keyboard.press("Enter");
+await until(b, "bob on the stage screen", () => !!window.sketchbattle.screen.context?.room?.picking);
+await a.keyboard.press("ArrowRight");
+await until(b, "ann's stage pick mirrored", () => window.sketchbattle.screen.context.room.picking.stage === "proving");
+await a.waitForTimeout(300);
+await shot(a, "14b-stage-host");
+await shot(b, "14c-stage-guest");
 await a.keyboard.press("Enter");
 for (const page of [a, b]) await until(page, "the online match", () => !!window.sketchbattle.screen.session, null, 20000);
 await a.waitForTimeout(3500);

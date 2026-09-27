@@ -27,6 +27,7 @@ export interface Client {
 export interface Room {
   code: string; trace: string; members: Client[]; started: boolean; host: Client; seed: number; config: unknown;
   /** Listed in JOIN ROOM and joinable by QUICK MATCH; private rooms need the code. */ public: boolean;
+  /** Set while the host is on the stage screen after START: what they have picked so far, for everyone to watch. */ picking: StagePick | null;
   /** Game bundle hash the room plays on; null = whatever the page loaded. */ game: string | null;
   event: WideEvent;
   match: RelayMatch | null;
@@ -38,6 +39,13 @@ export interface RelayMatch { event: WideEvent; slots: SlotRelay[]; hashes: Map<
 let nextId = 1;
 export const rooms = new Map<string, Room>();
 const ROOM_SIZE = 4;
+export interface StagePick { stage: string; stocks: number; time: number }
+function stagePick(v: unknown): StagePick | null {
+  if (!v || typeof v !== "object") return null;
+  const p = v as Record<string, unknown>;
+  if (typeof p.stage !== "string" || typeof p.stocks !== "number" || typeof p.time !== "number") return null;
+  return { stage: p.stage.slice(0, 32), stocks: p.stocks | 0, time: p.time | 0 };
+}
 
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export function makeCode(): string {
@@ -58,7 +66,7 @@ const since = (e: WideEvent): number => Date.now() - e.t0;
 export function newRoom(host: Client, isPublic: boolean): Room {
   const code = makeCode();
   const trace = `r-${code}-${Date.now().toString(36)}`;
-  const room: Room = { code, trace, members: [], started: false, host, seed: 0, config: null, public: isPublic, game: null, match: null, event: openEvent("room", trace, host.event.trace) };
+  const room: Room = { code, trace, members: [], started: false, host, seed: 0, config: null, public: isPublic, picking: null, game: null, match: null, event: openEvent("room", trace, host.event.trace) };
   room.event.set("room", { code, host: host.name, public: isPublic });
   rooms.set(code, room);
   return room;
@@ -121,6 +129,7 @@ function roomInfo(room: Room): unknown {
     host: room.host.id,
     started: room.started,
     public: room.public,
+    picking: room.picking,
     game: room.game,
     members: room.members.map((m) => ({ id: m.id, name: m.name, slot: m.slot, fighter: m.fighter, bundleUrl: m.bundleUrl, ready: m.ready })),
   };
@@ -148,6 +157,7 @@ export function leaveRoom(c: Client): void {
     return;
   }
   if (room.host === c) room.host = room.members[0];
+  if (room.members.length < 2) room.picking = null;
   // mid-match the relay keeps everyone's slot: the clients carry on without an eliminated player, and the host's "end" reopens the room
   if (!duringMatch) room.members.forEach((m, i) => (m.slot = i));
   broadcast(room, { t: "left", id: c.id, slot, duringMatch });
@@ -159,6 +169,7 @@ export function joinRoom(c: Client, room: Room): void {
   c.slot = room.members.length;
   c.ready = false;
   room.members.push(c);
+  room.picking = null;
   pushCapped(room.event.business, "joins", { id: c.id, name: c.name, session: c.event.trace, at: since(room.event) });
   pushCapped(c.event.business, "rooms", room.code);
   broadcast(room, roomInfo(room));
@@ -209,7 +220,17 @@ export function attachLobby(wss: WebSocketServer): void {
           c.fighter = fighter;
           c.bundleUrl = bundleUrl;
           c.ready = !!msg.ready;
+          if (!c.ready) c.room.picking = null;
           broadcast(c.room, roomInfo(c.room));
+          break;
+        }
+        // the host moving between the lobby and the stage screen, and every change they make there
+        case "picking": {
+          const room = c.room;
+          if (!room || room.host !== c || room.started) break;
+          if (msg.pick !== null && !room.members.every((m) => m.ready)) { send(c, { t: "error", error: "not everyone is ready" }); break; }
+          room.picking = msg.pick === null ? null : stagePick(msg.pick);
+          broadcast(room, roomInfo(room));
           break;
         }
         case "start": {
@@ -219,6 +240,7 @@ export function attachLobby(wss: WebSocketServer): void {
           if (!msg.config || typeof msg.config !== "object" || Array.isArray(msg.config)) { send(c, { t: "error", error: "invalid match config" }); break; }
           const requested = msg.config;
           room.started = true;
+          room.picking = null;
           room.seed = (Math.random() * 0xffffffff) >>> 0;
           room.config = { ...requested, players: room.members.map((m) => ({ fighter: m.fighter, bundleUrl: m.bundleUrl })) };
           startRelayMatch(room, room.seed, room.config, room.members);
