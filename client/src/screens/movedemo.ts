@@ -8,6 +8,7 @@ import { VIEW_H, VIEW_W } from "../render/camera";
 import { PAPER, inkRect, INK } from "../render/paper";
 import { Renderer } from "../render/render";
 import { label } from "./ui";
+import { drawKeyIcons, type KeyIcon } from "./keyicons";
 
 type Dir = "n" | "f" | "u" | "d";
 /** One button on the detail screen: what's pressed (from the air or not) and the directions the fighter has it in. */
@@ -21,7 +22,6 @@ const HOLD_FRAMES = 100;
 const DUMMY_X = 0;
 const STICK: Record<Dir, [number, number]> = { n: [0, 0], f: [100, 0], u: [0, -100], d: [0, 100] };
 const ARROW: Record<Dir, string> = { n: "●", f: "▶", u: "▲", d: "▼" };
-const WORD: Record<Dir, string> = { n: "", f: "FORWARD + ", u: "UP + ", d: "DOWN + " };
 /**
  * How a rep gets the fighter onto the dummy: from the ground; a short hop (nair, fair); a full hop
  * with the attack at the top (uair, under a dummy up on a platform); or jumping over it (dair).
@@ -311,9 +311,13 @@ export class MoveDemo {
     ctx.restore();
     inkRect(ctx, x, y, w, h, INK, 1.6);
     if (this.move) {
-      const button = this.move.button === B.ATTACK ? "ATTACK" : "SPECIAL";
-      label(ctx, `${ARROW[this.dir]}  ${this.jumps ? "JUMP, " : ""}${WORD[this.dir]}${button}`, x + 24, y + 44, 28, INK, "left", 900);
-      if (this.move.dirs.length > 1) this.move.dirs.forEach((d, i) => label(ctx, ARROW[d], x + 36 + i * 34, y + 84, 22, d === this.dir ? INK : "rgba(41,39,34,0.3)", "center", 900));
+      // what keyboard player 1 presses for it (facing right, so forward is D)
+      const icons: KeyIcon[] = [];
+      if (this.jumps) icons.push({ space: true });
+      if (this.dir !== "n") icons.push({ key: ({ f: "D", u: "W", d: "S" } as const)[this.dir] });
+      icons.push({ mouse: this.move.button === B.ATTACK ? "left" : "right" });
+      drawKeyIcons(ctx, icons, x + 20, y + 16, 48);
+      if (this.move.dirs.length > 1) this.move.dirs.forEach((d, i) => label(ctx, ARROW[d], x + 34 + i * 34, y + 96, 22, d === this.dir ? INK : "rgba(41,39,34,0.3)", "center", 900));
     }
   }
 }
