@@ -25,16 +25,17 @@ describe("what the CPU knows about shots", () => {
     expect(p.zoning).toBeLessThanOrEqual(1);
   });
 
-  it("a fighter's projectile marks its last shot, and the CPU waits for the cooldown before firing again", () => {
+  it("a fighter's projectile marks its last shot, and the CPU waits for the special's cooldown before firing it again", () => {
     const s = createMatch({ stage: "proving", players: [{ fighter: "wizard", cpu: 5 }, { fighter: "woodstove" }], seed: 4 });
     const [w, d] = s.fighters;
     d.x = w.x + 420; d.facing = -1;
     const shots: number[] = [];
     for (let i = 0; i < 600; i++) {
       step(s, [cpuInput(s, 0, 5), EMPTY_INPUT]);
-      for (const e of s.events) if (e.t === "projectile" && e.slot === 0) shots.push(s.frame);
+      let fired = false;
+      for (const e of s.events) if (e.t === "projectile" && e.slot === 0) { fired = true; if (w.move === "nspecial") shots.push(s.frame); }
       s.events.length = 0;
-      if (shots.length) expect(w.lastShot).toBe(shots[shots.length - 1]);
+      if (fired) expect(w.lastShot).toBe(s.frame);
     }
     expect(shots.length).toBeGreaterThan(0);
     const cooldown = profileOf(roster.wizard).specials.nspecial!.cooldown;

@@ -23,7 +23,7 @@ export interface CheckReport {
   timings: Record<string, number>;
 }
 
-/** The balance ladder, from the house roster: an all-rounder, a heavy, a swordsman and a floaty zoner. */
+/** The balance ladder, from the house roster: an all-rounder, a heavy, a swordsman and a fire-throwing caster. */
 export const LADDER: readonly HouseId[] = ["woodstove", "slugbert", "rocket", "wizard"];
 /** The punching bag for the move, recovery and KO checks. */
 const DUMMY: HouseId = "woodstove";
