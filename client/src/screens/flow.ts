@@ -48,8 +48,8 @@ export function menus(): Nav {
     battle: (fighter) => new BattleMenuScreen((entry) => {
       const menu = () => nav.battle(fighter);
       if (entry !== "bots") return new OnlineScreen(menu, entry, fighter ?? null);
-      const bots: Screen = new BotsScreen(fighter ?? null, ({ you, device, opponent, level }) => new StageScreen(
-        (s) => localMatch([{ fighter: you, source: { device, cpu: 0 } }, { fighter: opponent, source: { device: null, cpu: level } }], s, () => nav.title()),
+      const bots: Screen = new BotsScreen(fighter ?? null, ({ you, device, bots: cpus }) => new StageScreen(
+        (s) => localMatch([{ fighter: you, source: { device, cpu: 0 } }, ...cpus.map((b) => ({ fighter: b.fighter, source: { device: null, cpu: b.level } }))], s, () => nav.title()),
         () => bots,
       ), menu);
       return bots;
