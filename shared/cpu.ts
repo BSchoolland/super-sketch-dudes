@@ -5,6 +5,7 @@ import { knockback } from "./hits";
 import { B, type InputFrame } from "./input";
 import { EMPTY_MOVE, SPECIALS, profileOf, type MoveInfo, type Profile, type ShotPath, type SpecialId } from "./cpu-profile";
 import { at, skillOf, type Skill } from "./cpu-skill";
+import { plansOf, type Plan, type Spot } from "./cpu-plans";
 import { stageOf } from "./sim";
 import { canCross, legs, route, surfaces, surfaceUnder, type Surface } from "./nav";
 import type { Fighter, Hitbox, Move, Projectile, Stage, State } from "./types";
@@ -398,6 +399,26 @@ function finishable(state: State, f: Fighter, target: Fighter, facing: 1 | -1): 
   });
 }
 
+/** Where the target stands for a plan started now: a side special turns to face it, the others fire the way the fighter faces. */
+function spotOf(f: Fighter, target: Fighter, move: SpecialId): Spot {
+  const dx = target.x - f.x;
+  if (move !== "sspecial" && sign(dx) !== f.facing) return "behind";
+  return Math.abs(dx) < 250 ? "near" : "far";
+}
+
+/** A measured plan that KO'd a dummy standing where the target stands now. */
+function planAgainst(f: Fighter, target: Fighter): Plan | null {
+  return plansOf(defOf(f)).find((p) => !spammed(f, p.move) && p.kos.includes(spotOf(f, target, p.move))) ?? null;
+}
+
+/** Going for a plan while nobody is close or swinging, more readily the stronger the CPU. */
+function planInput(state: State, f: Fighter, target: Fighter, sk: Skill, distance: number): InputFrame | null {
+  if (distance < 250 || attackThreatens(target, f, sk)) return null;
+  const plan = planAgainst(f, target);
+  if (!plan || hash(state, f, 0x91a2, 30) % 100 >= at(sk, 15, 70)) return null;
+  return startSpecial(state, f, plan.move, sign(target.x - f.x) as 1 | -1);
+}
+
 function handleCommitted(state: State, f: Fighter, target: Fighter | null, sk: Skill, stage: Stage): InputFrame | null {
   if (f.action === "smashCharge") {
     const out = blank();
@@ -434,6 +455,17 @@ function handleCommitted(state: State, f: Fighter, target: Fighter | null, sk: S
     const move = currentMove(f);
     if (!move) return out;
     const probe = profile(f).specials[f.move as SpecialId];
+    // a special with a measured payoff: hold it as long as the study did, letting go only if someone gets in its face
+    const plan = plansOf(defOf(f)).find((p) => p.move === f.move);
+    if (plan) {
+      const danger = target && (Math.abs(target.x - f.x) < 110 || attackThreatens(target, f, sk));
+      if (state.frame - f.streakLast < plan.hold && !danger) {
+        out.b = B.SPECIAL;
+        if (f.move === "sspecial") out.x = f.moveFacing * 100;
+        else if (f.move === "dspecial") out.y = 100;
+      }
+      return out;
+    }
     if (probe?.held) {
       if (f.move === "uspecial") { out.b = B.SPECIAL; out.y = -100; }
       else if (Math.abs(probe.groundDx) > 100) {
@@ -676,6 +708,9 @@ function groundNeutral(state: State, f: Fighter, target: Fighter, sk: Skill, sta
 
   const edgeguard = edgeguardInput(state, f, target, sk, stage);
   if (edgeguard) return edgeguard;
+
+  const plan = planInput(state, f, target, sk, distance);
+  if (plan) return plan;
 
   // what it sees is `delay` frames old, so the move has that much less left than it looks
   const opponentMove = currentMove(target);
