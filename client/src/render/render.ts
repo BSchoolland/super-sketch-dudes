@@ -6,7 +6,7 @@ import { stageOf } from "../../../shared/sim";
 import { Camera, VIEW_H, VIEW_W } from "./camera";
 import { Fx } from "./fx";
 import { animFor, poseAt } from "./rig";
-import { drawSprite, FLOOR_ANIMS, restOnFloor } from "./sprite";
+import { drawSprite, FLOOR_ANIMS, restOnFloor, stillSprites, stillTilt } from "./sprite";
 import { cellFor } from "../../../shared/gen/sprite";
 import type { FighterDef, Look, Pose } from "../../../shared/types";
 import { drawBackdrop, drawShadow, drawStage } from "./stage";
@@ -181,8 +181,10 @@ export class Renderer {
     const dodging = f.action === "airDodge" || f.action === "spotDodge" || f.action === "roll" || f.action === "getupRoll" || f.action === "techRoll" || f.action === "ledgeRoll";
     const blink = f.invuln > 0 && !dodging && f.action !== "respawn" && (state.frame >> 2) % 2 === 0;
     const alpha = f.action === "respawn" ? 0.8 : dodging && f.invuln > 0 ? 0.45 : blink ? 0.7 : 1;
-    const c = cellFor(f, def, a.name);
-    const seated = FLOOR_ANIMS.has(a.name) ? restOnFloor(def, c.cell, pose) : pose;
+    const still = stillSprites.has(def.id);
+    const c = still ? { cell: "idle", flip: false } : cellFor(f, def, a.name);
+    const floored = FLOOR_ANIMS.has(a.name) ? restOnFloor(def, c.cell, pose) : pose;
+    const seated = still ? { ...floored, rot: (floored.rot ?? 0) + stillTilt(f.action) } : floored;
     drawSprite(ctx, def, c.cell, seated, { alpha, flash: f.hitlag > 0 && !!f.pending, flip: c.flip });
     ctx.restore();
     // shield bubble

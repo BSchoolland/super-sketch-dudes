@@ -1,6 +1,8 @@
 import { createMatch, step } from "../../../shared/sim";
 import { B, EMPTY_INPUT, cloneInput, type InputFrame } from "../../../shared/input";
 import type { State } from "../../../shared/types";
+import { roster } from "../../../shared/fighters/index";
+import { profileOf } from "../../../shared/cpu-profile";
 import { VIEW_H, VIEW_W } from "../render/camera";
 import { PAPER, inkRect, INK } from "../render/paper";
 import { Renderer } from "../render/render";
@@ -11,10 +13,16 @@ type Dir = "n" | "f" | "u" | "d";
 export interface DemoMove { button: number; dirs: Dir[] }
 
 const STEP = 1000 / 60;
-const PRESS_AT = 12, MIN_FRAMES = 60, MAX_FRAMES = 200;
+const PRESS_AT = 12, AFTER = 50, MAX_FRAMES = 300;
+/** Where the dummy stands; the fighter lines up to its left at the move's range. */
+const DUMMY_X = 0;
 const STICK: Record<Dir, [number, number]> = { n: [0, 0], f: [100, 0], u: [0, -100], d: [0, 100] };
 const ARROW: Record<Dir, string> = { n: "●", f: "▶", u: "▲", d: "▼" };
 const WORD: Record<Dir, string> = { n: "", f: "FORWARD + ", u: "UP + ", d: "DOWN + " };
+const MOVE_ID: Record<"attack" | "special", Record<Dir, string>> = {
+  attack: { n: "jab", f: "ftilt", u: "utilt", d: "dtilt" },
+  special: { n: "nspecial", f: "sspecial", u: "uspecial", d: "dspecial" },
+};
 
 /** The move a card line ("SIDE+SPECIAL hammer toss…") names, or null for a line that isn't one. */
 export function moveOfLine(line: string): DemoMove | null {
@@ -49,13 +57,13 @@ export class MoveDemo {
     const players = [{ fighter: this.fighter, cpu: 0 }, ...(this.dummy ? [{ fighter: this.dummy, cpu: 0 }] : [])];
     this.state = createMatch({ stage: "proving", players, rules: { stocks: 99, time: 0 }, seed: 1 });
     const [you, dummy] = this.state.fighters;
-    you.x = -170; you.facing = 1;
-    if (dummy) { dummy.x = 40; dummy.facing = -1; dummy.percent = 40; }
+    you.x = DUMMY_X - this.spacing(); you.facing = 1;
+    if (dummy) { dummy.x = DUMMY_X; dummy.facing = -1; dummy.percent = 40; }
     this.inputs = this.state.fighters.map(() => cloneInput(EMPTY_INPUT));
     this.renderer = new Renderer(this.state, []);
     this.renderer.chrome = false;
-    // the pair and a body's height above them, enough headroom for an up special
-    this.renderer.cam.pinned = { x: -65, y: -190, zoom: VIEW_W / 820 };
+    // the dummy a little right of centre, room behind it to fly and above for an up special
+    this.renderer.cam.pinned = { x: 60, y: -190, zoom: VIEW_W / 860 };
     this.frame = 0;
   }
 
@@ -65,6 +73,28 @@ export class MoveDemo {
     this.move = move;
     this.rep = 0;
     this.reset();
+  }
+
+  private get moveId(): string | null {
+    return this.move ? MOVE_ID[this.move.button === B.ATTACK ? "attack" : "special"][this.dir] : null;
+  }
+
+  /**
+   * How far from the dummy to stand so the move lands: the middle of its hitboxes' reach, as the
+   * CPU measures it, or for a special that shoots or travels, part of the way along.
+   */
+  private spacing(): number {
+    const you = roster[this.fighter], dummy = this.dummy ? roster[this.dummy] : null;
+    const bodies = (you.stats.width + (dummy?.stats.width ?? you.stats.width)) / 2;
+    const id = this.moveId;
+    if (!id || !you.moves[id]) return bodies + 60;
+    const p = profileOf(you);
+    const r = p.reach[id];
+    const probe = p.specials[id as keyof typeof p.specials];
+    let d = r && r.first !== 999 && r.maxX > 0 ? (Math.max(0, r.minX) + r.maxX) / 2 : bodies + 30;
+    if (probe?.shotRange) d = Math.max(d, Math.min(probe.shotRange * 0.5, 380));
+    if (probe?.groundDx) d = Math.max(d, probe.groundDx * 0.6);
+    return Math.max(bodies * 0.8, Math.min(d, 360));
   }
 
   private get dir(): Dir {
@@ -87,7 +117,8 @@ export class MoveDemo {
     this.state.events.length = 0;
     this.frame++;
     const settled = you.grounded && (you.action === "idle" || you.action === "walk") && !this.state.projectiles.length;
-    if (this.move && ((this.frame > MIN_FRAMES && settled) || this.frame > MAX_FRAMES)) {
+    const total = (this.moveId && roster[this.fighter].moves[this.moveId]?.total) || 40;
+    if (this.move && ((this.frame > PRESS_AT + total + AFTER && settled) || this.frame > MAX_FRAMES)) {
       this.rep++;
       this.reset();
     }

@@ -83,6 +83,17 @@ export function restOnFloor(def: FighterDef, cell: string, pose: Pose): Pose {
   return { ...pose, dx: -(minX + maxX) / 2, dy: -maxY };
 }
 
+/** Fighters drawn as their idle cell whatever they're doing (the practice dummy): the renderer tilts it instead. */
+export const stillSprites = new Set<string>();
+
+/** How far a still sprite leans back in each state, in degrees. */
+export function stillTilt(action: string): number {
+  if (action === "hitstun" || action === "grabbed" || action === "shieldBreak") return -18;
+  if (action === "tumble" || action === "thrown" || action === "helpless") return -40;
+  if (action === "knockdown") return -75;
+  return 0;
+}
+
 export interface SpriteDrawOpts { alpha?: number; flash?: boolean; ghost?: boolean; flip?: boolean }
 
 /**
@@ -91,7 +102,7 @@ export interface SpriteDrawOpts { alpha?: number; flash?: boolean; ghost?: boole
  */
 export function drawSprite(ctx: CanvasRenderingContext2D, def: FighterDef, cell: string, pose: Pose, opts: SpriteDrawOpts = {}): void {
   const sp = def.sprite;
-  const url = sp.cells[cell] ?? sp.cells.idle;
+  const url = stillSprites.has(def.id) ? sp.cells.idle : sp.cells[cell] ?? sp.cells.idle;
   const e = cellImages(url);
   const u = (roster[def.id] ?? def).stats.height / sp.heightPx;
   ctx.save();

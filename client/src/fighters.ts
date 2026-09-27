@@ -1,3 +1,4 @@
+import { stillSprites } from "./render/sprite";
 import { library } from "./account";
 import { site } from "./base";
 import { fighterLoad, type FighterLoad } from "./gen";
@@ -57,6 +58,8 @@ export async function refreshDummy(): Promise<void> {
   try {
     const { character } = await library.dummy();
     practiceDummy.choice = character ? libraryChoices([character])[0] ?? null : null;
+    stillSprites.clear();
+    if (character) stillSprites.add(character.id);
     practiceDummy.error = "";
   } catch (error) {
     console.error("dummy fetch failed", error);
