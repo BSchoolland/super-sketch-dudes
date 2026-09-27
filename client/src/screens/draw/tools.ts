@@ -1,12 +1,12 @@
 import { DRAW_PNG_MAX_BYTES } from "../../../../shared/draw";
-import { card, title, INK } from "../ui";
+import { card, label, title, INK } from "../ui";
 import { PENCIL } from "../../render/paper";
 import type { Button } from "./buttons";
 import { DrawPad, COLORS, SIZES } from "./pad";
 
 const LEFT = 90, COL_W = 340;
 
-/** The tool column left of a draw pad: colours, eraser, sizes, undo, clear. Ctrl+Z undoes while attached. */
+/** The tool column left of a draw pad: colours, eraser, fill, sizes, undo, clear. Ctrl+Z undoes while attached. */
 export class PadTools {
   private readonly onKey = (e: KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.code === "KeyZ") { e.preventDefault(); this.pad.undo(); }
@@ -27,7 +27,8 @@ export class PadTools {
   buttons(): Button[] {
     const b: Button[] = [];
     COLORS.forEach((_, i) => b.push({ id: `color${i}`, x: LEFT + i * 42, y: 100, w: 42, h: 64, text: "", custom: true }));
-    b.push({ id: "eraser", x: LEFT, y: 214, w: COL_W, h: 84, text: "", custom: true });
+    b.push({ id: "eraser", x: LEFT, y: 214, w: COL_W / 2 - 6, h: 84, text: "", custom: true });
+    b.push({ id: "fill", x: LEFT + COL_W / 2 + 6, y: 214, w: COL_W / 2 - 6, h: 84, text: "", custom: true });
     SIZES.forEach((_, i) => b.push({ id: `size${i}`, x: LEFT + i * 116, y: 422, w: 104, h: 90, text: "", custom: true }));
     b.push({ id: "undo", x: LEFT, y: 590, w: COL_W, h: 84, text: "UNDO", size: 36, disabled: !this.pad.canUndo });
     b.push({ id: "clear", x: LEFT, y: 700, w: COL_W, h: 84, text: "CLEAR", size: 36, disabled: this.pad.blank });
@@ -37,8 +38,9 @@ export class PadTools {
   /** Handles a pressed tool button; false if the id isn't one of ours. */
   press(id: string): boolean {
     const pad = this.pad;
-    if (id === "eraser") pad.tool = { kind: "eraser", color: INK };
-    else if (id.startsWith("color")) pad.tool = { kind: "pen", color: COLORS[Number(id.slice(5))] };
+    if (id === "eraser") pad.tool = { kind: "eraser", color: pad.tool.color };
+    else if (id === "fill") pad.tool = { kind: "fill", color: pad.tool.color };
+    else if (id.startsWith("color")) pad.tool = { kind: pad.tool.kind === "fill" ? "fill" : "pen", color: COLORS[Number(id.slice(5))] };
     else if (id.startsWith("size")) pad.size = Number(id.slice(4));
     else if (id === "undo") pad.undo();
     else if (id === "clear") pad.clear();
@@ -56,9 +58,14 @@ export class PadTools {
       title(ctx, text, b.x + b.w / 2, b.y + 56, 40, active ? INK : PENCIL);
     };
     toolCard("eraser", "eraser", tool.kind === "eraser");
+    toolCard("fill", "fill", tool.kind === "fill");
+    if (performance.now() - this.pad.leakedAt < 1800) {
+      const b = at("clear");
+      label(ctx, "fill leaks to the edge", b.x + b.w / 2, b.y + b.h + 44, 28, "#c0392b");
+    }
     COLORS.forEach((color, i) => {
       const b = at(`color${i}`);
-      const active = tool.kind === "pen" && tool.color === color;
+      const active = tool.kind !== "eraser" && tool.color === color;
       ctx.save();
       ctx.fillStyle = color;
       ctx.beginPath(); ctx.arc(b.x + 21, b.y + 32, active ? 20 : 15, 0, Math.PI * 2); ctx.fill();
