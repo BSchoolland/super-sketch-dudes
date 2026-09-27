@@ -9,25 +9,25 @@ import { EMPTY_INPUT } from "../shared/input";
 import { SPRITE_CELLS } from "../shared/gen/sprite";
 import { loadHouse } from "./house";
 
-const source = readFileSync(new URL("../forge/exemplar/lampjack.fighter.js", import.meta.url), "utf8");
-const sprite = { px: 512, feetPx: 448, heightPx: 360, anims: {}, cells: Object.fromEntries(SPRITE_CELLS.map((c) => [c, `/gen/lampjack/${c}.png`])) };
+const source = readFileSync(new URL("../forge/exemplar/sword-guy.fighter.js", import.meta.url), "utf8");
+const sprite = { px: 512, feetPx: 448, heightPx: 300, anims: {}, cells: Object.fromEntries(SPRITE_CELLS.map((c) => [c, `/gen/sword-guy/${c}.png`])) };
 
 describe("generated fighters", () => {
   beforeAll(async () => { await loadHouse("woodstove"); await loadHouse("slugbert"); });
 
   it("the exemplar lints, builds, validates and registers", async () => {
     expect(lintGeneratedSource(source)).toEqual([]);
-    const def = await buildGenerated({ id: "gen-lamp", source, sprite, player: "test", description: "a lamp" });
+    const def = await buildGenerated({ id: "gen-sword", source, sprite, player: "test", description: "a sword guy" });
     expect(validateGenerated(def)).toEqual([]);
     registerFighter(def);
-    expect(roster["gen-lamp"]).toBe(def);
-    expect(rosterList.some((d) => d.id === "gen-lamp")).toBe(true);
+    expect(roster["gen-sword"]).toBe(def);
+    expect(rosterList.some((d) => d.id === "gen-sword")).toBe(true);
   });
 
   it("a 4-player CPU match with a generated fighter resimulates from a snapshot to the same hash", async () => {
-    const def = await buildGenerated({ id: "gen-lamp", source, sprite, player: "test", description: "a lamp" });
+    const def = await buildGenerated({ id: "gen-sword", source, sprite, player: "test", description: "a sword guy" });
     registerFighter(def);
-    const cfg = { stage: "proving", players: [{ fighter: "gen-lamp", cpu: 5 }, { fighter: "woodstove", cpu: 5 }, { fighter: "slugbert", cpu: 5 }, { fighter: "gen-lamp", cpu: 5 }], seed: 7 };
+    const cfg = { stage: "proving", players: [{ fighter: "gen-sword", cpu: 5 }, { fighter: "woodstove", cpu: 5 }, { fighter: "slugbert", cpu: 5 }, { fighter: "gen-sword", cpu: 5 }], seed: 7 };
     const a = createMatch(cfg);
     let snap: ReturnType<typeof cloneState> | null = null;
     const inputsAt: ReturnType<typeof cpuInput>[][] = [];
@@ -36,7 +36,7 @@ describe("generated fighters", () => {
       const inputs = a.fighters.map((f) => cpuInput(a, f.slot, 5));
       inputsAt.push(inputs);
       step(a, inputs);
-      for (const e of a.events) { if (e.t === "hookError") hookErrors++; if (e.t === "move" && a.fighters[e.slot].id === "gen-lamp") moves.add(e.move); }
+      for (const e of a.events) { if (e.t === "hookError") hookErrors++; if (e.t === "move" && a.fighters[e.slot].id === "gen-sword") moves.add(e.move); }
       a.events.length = 0;
       if (i === 1200) snap = cloneState(a);
     }
@@ -48,7 +48,7 @@ describe("generated fighters", () => {
   });
 
   it("a hook that throws disables the move, drops the fighter to idle and reports it", async () => {
-    const bad = source.replace("cast: ({ f, state }) => {", "cast: ({ f, state }) => {\n        if (f.frame === 3) throw new Error(\"kaboom\");");
+    const bad = source.replace("drive: ({ f, input }) => {", "drive: ({ f, input }) => {\n        if (f.frame === 3) throw new Error(\"kaboom\");");
     expect(bad).not.toBe(source);
     const def = await buildGenerated({ id: "gen-bad", source: bad, sprite, player: "test", description: "" });
     registerFighter(def);
@@ -69,7 +69,7 @@ describe("generated fighters", () => {
 
   it("validates looks and the hitbox fx that name them", async () => {
     const def = await buildGenerated({ id: "gen-look", source, sprite, player: "test", description: "" });
-    expect(def.looks?.hook.crop).toEqual([400, 225, 55, 70]);
+    expect(def.looks?.blade.crop).toEqual([298, 290, 132, 50]);
     const bad = { ...def, looks: { ...def.looks, weird: { cell: "nope", crop: [0, 0, 600, 10], shape: "cube", texture: "fur", trail: "rainbow", size: 2 } } } as unknown as typeof def;
     const problems = validateGenerated(bad, { strict: true });
     expect(problems).toEqual(expect.arrayContaining([
@@ -89,7 +89,7 @@ describe("generated fighters", () => {
   });
 
   it("reports every validation problem at once", async () => {
-    const broken = source.replace("fullHop: 13", "fullHop: 999").replace('aim("dtilt"', 'aim("dtiltx"');
+    const broken = source.replace("fullHop: 13.5", "fullHop: 999").replace('mv("dtilt"', 'mv("dtiltx"');
     await expect(buildGenerated({ id: "gen-broken", source: broken, sprite, player: "t", description: "" })).rejects.toThrow(/fullHop=999[\s\S]*dtilt\.id/);
   });
 });
@@ -97,7 +97,7 @@ describe("generated fighters", () => {
 describe("the source lint", () => {
   it("ignores words inside comments and strings", async () => {
     const { codeOnly, lintGeneratedSource } = await import("../shared/gen/load");
-    expect(lintGeneratedSource(source.replace("// LAMPJACK", "// LAMPJACK fights with the fire in its window, says document.title"))).toEqual([]);
+    expect(lintGeneratedSource(source.replace("// SWORD GUY", "// SWORD GUY fights with a sword, says document.title"))).toEqual([]);
     expect(codeOnly('const a = "window"; // Date\nlet b = 1;')).toBe('const a = "      ";        \nlet b = 1;');
     expect(lintGeneratedSource(source.replace("const stats = {", "const w = window;\n  const stats = {"))).toEqual([expect.stringMatching(/reaches outside the sim/)]);
   });

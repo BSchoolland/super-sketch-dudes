@@ -8,10 +8,10 @@ import zlib from "node:zlib";
 const server = process.argv[2] ?? "http://localhost:3010";
 const token = process.argv[3] ?? "devtoken";
 const CELLS = ["idle", "walk", "jump", "atk-fwd", "atk-up", "atk-down", "hit", "launched", "block"];
-const NAMES = ["LAMPJACK", "WICKLAMP", "BULBOUS", "SHADE", "FILAMENT"];
+const NAMES = ["SWORD GUY", "STAB LAD", "BIG KNIFE", "POINTY", "EDGE CASE"];
 const root = new URL("..", import.meta.url);
-const source = fs.readFileSync(new URL("forge/exemplar/lampjack.fighter.js", root), "utf8");
-const cellFiles = Object.fromEntries(CELLS.map((c) => [c, fs.readFileSync(new URL(`test/fixtures/lampjack/${c}.png`, root))]));
+const source = fs.readFileSync(new URL("forge/exemplar/sword-guy.fighter.js", root), "utf8");
+const cellFiles = Object.fromEntries(CELLS.map((c) => [c, fs.readFileSync(new URL(`forge/exemplar/sword-guy/${c}.png`, root))]));
 const cells = Object.fromEntries(CELLS.map((c) => [c, cellFiles[c].toString("base64")]));
 
 function decodeRgba(buf) {

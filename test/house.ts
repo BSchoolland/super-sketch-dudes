@@ -17,9 +17,9 @@ export async function loadHouse(id: HouseId): Promise<FighterDef> {
   return def;
 }
 
-/** The forge exemplar (LAMPJACK), registered under its own id: the fixture the mechanics tests are written against. */
+/** LAMPJACK, the old forge exemplar, registered under its own id: the fixture the mechanics tests are written against. */
 export async function loadExemplar(): Promise<FighterDef> {
-  const bundle = JSON.parse(readFileSync(new URL("../forge/exemplar/lampjack/bundle.json", import.meta.url), "utf8")) as GeneratedBundle;
+  const bundle = JSON.parse(readFileSync(new URL("./fixtures/exemplar-lampjack/bundle.json", import.meta.url), "utf8")) as GeneratedBundle;
   const def = await buildGenerated(bundle);
   registerFighter(def);
   return def;

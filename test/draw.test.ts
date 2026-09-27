@@ -21,7 +21,7 @@ import type { DrawRoomState } from "../shared/draw";
 const TOKEN = "t0k";
 const PASSWORD = "sketch";
 let server: http.Server, port: number, dataDir: string;
-const source = fs.readFileSync(new URL("../forge/exemplar/lampjack.fighter.js", import.meta.url), "utf8");
+const source = fs.readFileSync(new URL("../forge/exemplar/sword-guy.fighter.js", import.meta.url), "utf8");
 const png1x1 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
 class Peer {

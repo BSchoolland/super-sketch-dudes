@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { runChecks } from "../forge/checks";
 import { SPRITE_CELLS } from "../shared/gen/sprite";
 
-const source = readFileSync(new URL("../forge/exemplar/lampjack.fighter.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../forge/exemplar/sword-guy.fighter.js", import.meta.url), "utf8");
 const sprite = { px: 512, feetPx: 448, heightPx: 300, anims: {}, cells: Object.fromEntries(SPRITE_CELLS.map((c) => [c, `/gen/x/${c}.png`])) };
 const bundle = (id: string, src: string) => ({ id, source: src, sprite, player: "t", description: "" });
 
@@ -18,8 +18,8 @@ describe("forge checks", () => {
 
   it("fails a fighter whose uspecial doesn't rise, a throwing hook and the wrong height, each with a specific message", async () => {
     const broken = source
-      .replace("f.vy = -7 + (f.frame - 4) * 0.18;", "f.vy = 2;").replace("jumps: 3", "jumps: 1")
-      .replace("cast: ({ f, state }) => {", "cast: ({ f, state }) => {\n        if (f.frame === 3) throw new Error(\"kaboom\");");
+      .replace("f.vy = -11 + (f.frame - 5) * 0.3;", "f.vy = 2;").replace("jumps: 2", "jumps: 1")
+      .replace("drive: ({ f, input }) => {", "drive: ({ f, input }) => {\n        if (f.frame === 3) throw new Error(\"kaboom\");");
     expect(broken).not.toBe(source);
     const r = await runChecks({ bundle: bundle("gen-forge-bad", broken), height: 100 });
     const msgs = r.failures.map((f) => f.msg).join("\n");
