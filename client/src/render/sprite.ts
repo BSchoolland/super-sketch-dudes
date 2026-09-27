@@ -60,6 +60,14 @@ export function preloadSprite(def: FighterDef): Promise<void> {
   });
 }
 
+/** Cells a fighter stands in: drawn on their own ink bottom, since generated cells don't all put the feet on the sheet's feet line. */
+const STANDING_CELLS = new Set(["idle", "walk", "hit", "block"]);
+
+/** The cell row the fighter's feet (its position) sit on. */
+function feetRow(def: FighterDef, cell: string, e: CellImages): number {
+  return STANDING_CELLS.has(cell) && e.bounds ? e.bounds[3] : def.sprite.feetPx;
+}
+
 /** Animations drawn lying on the floor rather than standing on it. */
 export const FLOOR_ANIMS = new Set(["knockdown", "roll"]);
 
@@ -69,14 +77,16 @@ export const FLOOR_ANIMS = new Set(["knockdown", "roll"]);
  */
 export function restOnFloor(def: FighterDef, cell: string, pose: Pose): Pose {
   const sp = def.sprite;
-  const b = cellImages(sp.cells[cell] ?? sp.cells.idle).bounds;
+  const e = cellImages(sp.cells[cell] ?? sp.cells.idle);
+  const b = e.bounds;
   if (!b) return pose;
+  const feet = feetRow(def, cell, e);
   const u = (roster[def.id] ?? def).stats.height / sp.heightPx;
   const sx = pose.sx ?? 1, sy = pose.sy ?? 1, a = -((pose.rot ?? 0) * Math.PI) / 180;
   const cos = Math.cos(a), sin = Math.sin(a);
   let minX = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const [px, py] of [[b[0], b[1]], [b[2], b[1]], [b[0], b[3]], [b[2], b[3]]]) {
-    const x = (px - sp.px / 2) * u * sx, y = (py - sp.feetPx) * u * sy;
+    const x = (px - sp.px / 2) * u * sx, y = (py - feet) * u * sy;
     const rx = x * cos - y * sin, ry = x * sin + y * cos;
     minX = Math.min(minX, rx); maxX = Math.max(maxX, rx); maxY = Math.max(maxY, ry);
   }
@@ -94,7 +104,8 @@ export function stillTilt(action: string): number {
   return 0;
 }
 
-export interface SpriteDrawOpts { alpha?: number; flash?: boolean; ghost?: boolean; flip?: boolean }
+/** `spinAround: "middle"` turns the lean about the body's middle instead of its feet (airborne: tumbling, launched). */
+export interface SpriteDrawOpts { alpha?: number; flash?: boolean; ghost?: boolean; flip?: boolean; spinAround?: "feet" | "middle" }
 
 /**
  * Draws one cell in fighter space (+x facing, +y down, feet at the origin) with the pose's
@@ -108,13 +119,18 @@ export function drawSprite(ctx: CanvasRenderingContext2D, def: FighterDef, cell:
   ctx.save();
   if (opts.alpha !== undefined) ctx.globalAlpha *= opts.alpha;
   ctx.translate(pose.dx ?? 0, pose.dy ?? 0);
-  if (pose.rot) ctx.rotate(-(pose.rot * Math.PI) / 180);
+  if (pose.rot) {
+    const mid = opts.spinAround === "middle" ? (roster[def.id] ?? def).stats.height / 2 : 0;
+    ctx.translate(0, -mid);
+    ctx.rotate(-(pose.rot * Math.PI) / 180);
+    ctx.translate(0, mid);
+  }
   ctx.scale(pose.sx ?? 1, pose.sy ?? 1);
   if (opts.flip) ctx.scale(-1, 1);
   const img = opts.ghost ? e.ghost : opts.flash ? e.flash : e.base;
   drawHealth.sprites++;
   if (!img) e.failed ? drawHealth.failed++ : drawHealth.loading++;
-  if (img) ctx.drawImage(img, -sp.px / 2 * u, -sp.feetPx * u, sp.px * u, sp.px * u);
+  if (img) ctx.drawImage(img, -sp.px / 2 * u, -feetRow(def, stillSprites.has(def.id) ? "idle" : cell, e) * u, sp.px * u, sp.px * u);
   else if (!e.failed) {
     // still loading: a faint paper placeholder the size of the fighter
     ctx.globalAlpha *= 0.25; ctx.fillStyle = PAPER; ctx.strokeStyle = PENCIL; ctx.lineWidth = 2;

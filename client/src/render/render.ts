@@ -15,7 +15,7 @@ import { drawStrikes, inWindup } from "./strikes";
 import { drawLook, lookColor, lookOf, type LookAt } from "./looks";
 import type { Projectile } from "../../../shared/types";
 
-interface Ghost { x: number; y: number; facing: number; age: number; def: FighterDef; cell: string; flip: boolean; pose: Pose }
+interface Ghost { x: number; y: number; facing: number; age: number; def: FighterDef; cell: string; flip: boolean; pose: Pose; spinAround: "feet" | "middle" }
 interface ProjGhost { def: FighterDef; look: Look; at: LookAt; age: number }
 
 export class Renderer {
@@ -73,7 +73,7 @@ export class Renderer {
         const a = animFor(f, def);
         const c = cellFor(f, def, a.name);
         const pose = poseAt(a.keys, a.frame, a.loop);
-        this.ghosts.push({ x: f.x, y: f.y, facing: f.facing, age: 0, def, ...c, pose: FLOOR_ANIMS.has(a.name) ? restOnFloor(def, c.cell, pose) : pose });
+        this.ghosts.push({ x: f.x, y: f.y, facing: f.facing, age: 0, def, ...c, pose: FLOOR_ANIMS.has(a.name) ? restOnFloor(def, c.cell, pose) : pose, spinAround: !f.grounded && !FLOOR_ANIMS.has(a.name) ? "middle" : "feet" });
       }
     });
   }
@@ -107,7 +107,7 @@ export class Renderer {
       ctx.save();
       ctx.translate(g.x, g.y);
       ctx.scale(g.facing, 1);
-      drawSprite(ctx, g.def, g.cell, g.pose, { alpha: 0.35 * (1 - g.age / 0.22), ghost: true, flip: g.flip });
+      drawSprite(ctx, g.def, g.cell, g.pose, { alpha: 0.35 * (1 - g.age / 0.22), ghost: true, flip: g.flip, spinAround: g.spinAround });
       ctx.restore();
     }
     // projectiles
@@ -185,7 +185,9 @@ export class Renderer {
     const c = still ? { cell: "idle", flip: false } : cellFor(f, def, a.name);
     const floored = FLOOR_ANIMS.has(a.name) ? restOnFloor(def, c.cell, pose) : pose;
     const seated = still ? { ...floored, rot: (floored.rot ?? 0) + stillTilt(f.action) } : floored;
-    drawSprite(ctx, def, c.cell, seated, { alpha, flash: f.hitlag > 0 && !!f.pending, flip: c.flip });
+    // in the air a lean is a spin about the body; on the ground it tips from the feet
+    const spinAround = !f.grounded && !FLOOR_ANIMS.has(a.name) ? "middle" : "feet";
+    drawSprite(ctx, def, c.cell, seated, { alpha, flash: f.hitlag > 0 && !!f.pending, flip: c.flip, spinAround });
     ctx.restore();
     // shield bubble
     if (f.shieldHeld || f.action === "shieldStun") {
