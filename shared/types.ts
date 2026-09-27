@@ -39,7 +39,7 @@ export type MoveId =
   | (string & {});
 
 export interface Hitbox {
-  /** Inclusive frame range (1-based move frames) the hitbox is live. */
+  /** Inclusive frame range (1-based move frames) the hitbox is live; on a projectile, its age. */
   frames: [number, number];
   /** Centre in fighter space: +x is facing direction, +y is down, origin at the feet. */
   x: number;

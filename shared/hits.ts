@@ -292,7 +292,7 @@ export function resolveHits(state: State): void {
   }
   // projectiles
   for (const p of state.projectiles) {
-    if (p.dead) continue;
+    if (p.dead || p.age < p.hb.frames[0] || p.age > p.hb.frames[1]) continue;
     const owner = fs[p.owner];
     const cap: Capsule = { x1: p.x, y1: p.y, x2: p.x, y2: p.y, r: p.hb.r };
     for (const v of fs) {
