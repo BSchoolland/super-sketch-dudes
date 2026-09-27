@@ -21,7 +21,8 @@ export class MenuBrawl {
   private brawl = new Brawl(() => this.ready(), (Math.random() * 0x7fffffff) | 0);
   private renderer: Renderer | null = null;
   private acc = 0;
-  private warmT = 0;
+  /** No loading until everyone's list is in (or has failed), so the first pair is as random as the rest. */
+  private warmT = Infinity;
   private pool: Contender[] = houseChoices().map((c: FighterChoice) => ({ id: c.id, bundleUrl: c.bundleUrl }));
   private loads = new Map<string, FighterLoad>();
 
@@ -29,8 +30,7 @@ export class MenuBrawl {
     library.everyone().then(({ characters }) => {
       for (const c of characters) if (!this.pool.some((p) => p.id === c.id)) this.pool.push({ id: c.id, bundleUrl: c.bundleUrl });
       for (let i = 0; i < 6; i++) this.warm();
-    }, (error) => console.error("brawl: everyone's characters", error));
-    for (let i = 0; i < 2; i++) this.warm();
+    }, (error) => console.error("brawl: everyone's characters", error)).finally(() => { this.warmT = 0; });
   }
 
   /** Starts loading a random contender so a spawn later finds someone ready. */
