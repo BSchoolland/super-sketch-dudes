@@ -32,7 +32,7 @@ function puppetAt(key: string, mood: PortraitMood): Puppet {
   let p = puppets.get(key);
   if (!p) {
     const t = now();
-    p = { facing: 1, hovered: false, picked: !!mood.picked, act: mood.cheerOnArrival ? { cell: "atk-up", at: t, len: 0.7, kind: "cheer" } : null, nextFidget: t + 2 + hash(key) * 5, seen: t };
+    p = { facing: 1, hovered: false, picked: !!mood.picked, act: mood.cheerOnArrival ? { cell: "atk-up", at: t, len: 0.7, kind: "cheer" } : null, nextFidget: t + 4 + hash(key) * 12, seen: t };
     puppets.set(key, p);
   }
   // spots nobody has drawn for a while (a scrolled-away cell, a left screen) start over next time
@@ -45,7 +45,6 @@ function puppetAt(key: string, mood: PortraitMood): Puppet {
 const FIDGETS: Pick<Act, "cell" | "len" | "kind">[] = [
   { cell: "jump", len: 0.5, kind: "hop" },
   { cell: "walk", len: 0.6, kind: "step" },
-  { cell: "atk-fwd", len: 0.35, kind: "swing" },
   { cell: "block", len: 0.5, kind: "crouch" },
 ];
 
@@ -70,7 +69,7 @@ export function drawFighterPortrait(ctx: CanvasRenderingContext2D, def: FighterD
   if (!p.act && t >= p.nextFidget) {
     const f = mood.ready ? FIDGETS[0] : FIDGETS[Math.floor(hash(`${key}${Math.floor(t)}`) * FIDGETS.length)];
     p.act = { ...f, at: t };
-    p.nextFidget = t + (mood.ready ? 1.2 : 3 + hash(`${key}:${Math.floor(t * 7)}`) * 5);
+    p.nextFidget = t + (mood.ready ? 1.2 : 8 + hash(`${key}:${Math.floor(t * 7)}`) * 12);
   }
 
   const h = def.stats.height;
