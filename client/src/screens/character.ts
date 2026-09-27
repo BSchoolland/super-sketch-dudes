@@ -3,19 +3,29 @@ import type { LibraryEntry } from "../../../shared/account";
 import { INK, title } from "./ui";
 import { drawImageIn } from "./images";
 import { wrapped } from "./text";
+import { drawFighterPortrait } from "./portrait";
+import { fighterLoad } from "../gen";
+import { roster } from "../../../shared/fighters/index";
 
 export const RED = "#c0392b";
 
-export type ArtSource = Pick<LibraryEntry, "status" | "sheetUrl" | "drawingUrl">;
+export type ArtSource = Pick<LibraryEntry, "id" | "status" | "bundleUrl" | "drawingUrl">;
 
-/** The drawing, or once the forge is done the sheet it drew (big enough, with the original drawing pinned to its corner). */
-export function drawCharacterArt(ctx: CanvasRenderingContext2D, ch: ArtSource | null, x: number, y: number, size: number, t: number): void {
+/**
+ * The drawing, or once the forge is done the fighter itself idling (big enough, with the original
+ * drawing pinned to its corner). Until its bundle has loaded, a ready character shows its drawing.
+ */
+export function drawCharacterArt(ctx: CanvasRenderingContext2D, ch: ArtSource | null, x: number, y: number, size: number, t: number, picked = false): void {
   if (!ch) { drawImageIn(ctx, null, x, y, size, "—"); inkRect(ctx, x, y, size, size, PENCIL, 1.2); return; }
-  const sheet = ch.status === "ready" && ch.sheetUrl;
-  if (sheet) drawImageIn(ctx, sheet, x, y, size);
-  else drawImageIn(ctx, ch.drawingUrl, x, y, size, ch.status === "failed" ? "no drawing" : "");
+  const load = ch.status === "ready" && ch.bundleUrl ? fighterLoad(ch.bundleUrl) : null;
+  const def = load?.state === "ready" ? roster[ch.id] : null;
+  if (def) {
+    drawImageIn(ctx, null, x, y, size);
+    const pad = size * 0.08;
+    drawFighterPortrait(ctx, def, `art@${Math.round(x)},${Math.round(y)}`, { x: x + pad, y: y + pad, w: size - pad * 2, h: size - pad * 2 }, { picked });
+  } else drawImageIn(ctx, ch.drawingUrl, x, y, size, ch.status === "failed" ? "no drawing" : "");
   inkRect(ctx, x, y, size, size, INK, 1.6);
-  if (sheet && size >= 200) {
+  if (def && size >= 200) {
     const inset = Math.round(size * 0.27);
     ctx.save();
     ctx.translate(x - size * 0.07, y - size * 0.07);
@@ -48,7 +58,7 @@ export function characterStatus(ch: Pick<LibraryEntry, "status" | "stage" | "err
 
 /** One character as MY CHARACTERS shows it: the art, its name (or what the forge is doing) under it, a box when focused. */
 export function drawCharacterCell(ctx: CanvasRenderingContext2D, e: LibraryEntry, x: number, y: number, size: number, t: number, focused: boolean): void {
-  drawCharacterArt(ctx, e, x, y, size, t);
+  drawCharacterArt(ctx, e, x, y, size, t, focused);
   if (focused) {
     ctx.save(); ctx.strokeStyle = INK; ctx.lineWidth = Math.max(4, size / 40);
     ctx.strokeRect(x - 8, y - 8, size + 16, size + 16);

@@ -14,13 +14,13 @@ export const slotX = (i: number): number => (VIEW_W - (4 * SETUP.slotW + 3 * SET
 /** Who's in a slot as the card shows them; `def` is null while the fighter loads (`pending` says why). */
 export interface SlotFighter { def: FighterDef | null; name: string; pending?: string }
 
-/** One slot card: who holds it in the slot's colour, the fighter breathing, its name. Returns the card's x. */
-export function drawSlotCard(ctx: CanvasRenderingContext2D, i: number, who: string, fighter: SlotFighter | null, t: number, opts: { focused?: boolean; ready?: boolean } = {}): number {
+/** One slot card: who holds it in the slot's colour, the fighter (alive, see portrait.ts), its name. Returns the card's x. */
+export function drawSlotCard(ctx: CanvasRenderingContext2D, i: number, who: string, fighter: SlotFighter | null, opts: { focused?: boolean; ready?: boolean } = {}): number {
   const x = slotX(i), y = SETUP.slotY, w = SETUP.slotW;
   card(ctx, x, y, w, SETUP.slotH, SLOT_COLORS[i], !!opts.focused || !!opts.ready);
   label(ctx, who, x + w / 2, y + 42, 24, SLOT_COLORS[i], "center", 900);
   if (!fighter) return x;
-  if (fighter.def) drawFighterPortrait(ctx, fighter.def, t + i * 0.4, !!opts.ready, { x: x + 16, y: y + 64, w: w - 32, h: 240 });
+  if (fighter.def) drawFighterPortrait(ctx, fighter.def, `slot${i}`, { x: x + 16, y: y + 64, w: w - 32, h: 240 }, { ready: opts.ready, cheerOnArrival: true });
   else label(ctx, fighter.pending ?? "…", x + w / 2, y + 190, 28, fighter.pending === "didn't load" ? "#c0392b" : PENCIL);
   title(ctx, fighter.name, x + w / 2, y + 348, 38, INK, "center", w - 32);
   return x;

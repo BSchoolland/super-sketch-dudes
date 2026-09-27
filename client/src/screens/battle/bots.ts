@@ -115,7 +115,7 @@ export class BotsScreen implements Screen {
     const clicked = this.shelf.draw(ctx, this.t, this.you?.id ?? null, false);
     if (clicked) { this.you = clicked; this.focus = 0; sfx.menuMove(); }
     const focused = this.rows[this.focus];
-    drawSlotCard(ctx, 0, "YOU", slotFighter(this.you), this.t, { focused: focused.kind === "you" });
+    drawSlotCard(ctx, 0, "YOU", slotFighter(this.you), { focused: focused.kind === "you" });
     const { slotY, slotW, slotH } = SETUP;
     for (let i = 0; i < MAX_BOTS; i++) {
       const bot = this.bots[i];
@@ -125,7 +125,7 @@ export class BotsScreen implements Screen {
         continue;
       }
       const here = (focused.kind === "fighter" || focused.kind === "level") && focused.bot === i;
-      const x = drawSlotCard(ctx, i + 1, `CPU ${i + 1}`, slotFighter(this.opponents[bot.fighter]), this.t, { focused: here && focused.kind === "fighter" });
+      const x = drawSlotCard(ctx, i + 1, `CPU ${i + 1}`, slotFighter(this.opponents[bot.fighter]), { focused: here && focused.kind === "fighter" });
       const d = arrows(ctx, x + slotW / 2, slotY + 180, slotW / 2 - 34, 40);
       if (d) { this.focusOn((r) => r.kind === "fighter" && r.bot === i); this.stepFighter(i, d); }
       const ly = slotY + 392;

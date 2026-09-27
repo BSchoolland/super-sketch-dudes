@@ -408,7 +408,7 @@ export class OnlineScreen implements Screen {
     for (let slot = 0; slot < 4; slot++) {
       const member = room.members.find((candidate) => candidate.slot === slot);
       if (!member) { drawEmptySlot(ctx, slot, "WAITING"); continue; }
-      const x = drawSlotCard(ctx, slot, `${member.name}${member.id === room.host ? " · HOST" : ""}`, this.slotFighter(member), this.t, { ready: member.ready });
+      const x = drawSlotCard(ctx, slot, `${member.name}${member.id === room.host ? " · HOST" : ""}`, this.slotFighter(member), { ready: member.ready });
       const mine = member.id === this.context.id && this.phase === "lobby";
       if (mine) {
         if (button(ctx, x + 40, slotY + slotH - 84, slotW - 80, 64, member.ready ? "UNREADY" : "READY", { key: "Enter", size: 26, focused: this.focus === 1 })) this.toggleReady();
