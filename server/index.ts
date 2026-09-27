@@ -11,6 +11,7 @@ import { attachAuth } from "./auth";
 import { initLibrary } from "./library";
 import { attachForge } from "./forge";
 import { attachCharacters } from "./characters";
+import { attachEvents, initEvents, requestErrors, requestEvents, watchProcess } from "./events";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
@@ -18,14 +19,17 @@ const PORT = Number(process.env.PORT ?? 3008);
 const BASE = (process.env.SKETCHBATTLE_BASE ?? "/sketch-battle/").replace(/\/$/, "");
 const DATA_DIR = process.env.SKETCHBATTLE_DATA ?? path.join(root, "server-data");
 fs.mkdirSync(DATA_DIR, { recursive: true });
+initEvents(DATA_DIR);
+watchProcess({ port: PORT, base: BASE, node: process.version });
 
 const app = express();
 // forge completions carry nine PNG cells + a sheet as base64; a new character carries its drawing
-app.use((req, res, next) => express.json({ limit: req.path.includes("/forge/") || req.path.endsWith("/characters/import") ? "12mb" : req.path.includes("/games") ? "40mb" : req.path.endsWith("/characters") ? "2mb" : "8kb" })(req, res, next));
+app.use((req, res, next) => express.json({ limit: req.path.includes("/forge/") || req.path.endsWith("/characters/import") ? "12mb" : req.path.includes("/games") ? "40mb" : req.path.endsWith("/events") ? "256kb" : req.path.endsWith("/characters") ? "2mb" : "8kb" })(req, res, next));
 const api = express.Router();
 // Apache proxies /sketch-battle/* to / here; when hit directly the prefix is still present, so mount both.
 app.use("/api", api);
 app.use(`${BASE}/api`, api);
+api.use(requestEvents());
 
 api.get("/health", (_req, res) => res.json({ ok: true, build: process.env.BUILD ?? "dev" }));
 
@@ -48,6 +52,8 @@ const genDir = path.join(DATA_DIR, "gen");
 app.use(`${BASE}/gen`, express.static(genDir, { maxAge: "1y", immutable: true }));
 app.use("/gen", express.static(genDir, { maxAge: "1y", immutable: true }));
 
+attachEvents(api);
+// the one-line log that builds from before wide events still post to
 const LOG = path.join(DATA_DIR, "client-log.jsonl");
 const LOG_MAX = 8 * 1024 * 1024;
 api.post("/log", (req, res) => {
@@ -58,6 +64,7 @@ api.post("/log", (req, res) => {
   fs.appendFileSync(LOG, line + "\n");
   res.status(204).end();
 });
+api.use(requestErrors());
 
 const clientDir = fs.existsSync(path.join(root, "dist", "client")) ? path.join(root, "dist", "client") : path.join(root, "client");
 // house fighters keep their URLs across builds, so they revalidate (ETag) instead of sitting in the browser cache

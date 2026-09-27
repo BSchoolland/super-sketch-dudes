@@ -7,6 +7,7 @@ import { startConfig, type NetExit } from "../netversus";
 import { bg, label, title, type Screen } from "../ui";
 import { ButtonMenu, inside, type Button } from "./buttons";
 import { DrawBattleScreen } from "./battle";
+import { MatchTelemetry } from "../../telemetry/match";
 import { RED } from "./character";
 import { DrawingView } from "./drawing";
 import { LineupView } from "./lineup";
@@ -157,6 +158,8 @@ export class DrawScreen implements Screen, DrawHost {
   private battle(start: StartMessage, localSlot: number): Screen {
     const s = this.session;
     const config = startConfig(start.config, start.seed);
+    if (!s.room) throw new Error("draw battle start outside a room");
+    const telemetry = new MatchTelemetry({ room: { code: s.room.code, trace: s.room.trace ?? null }, config: config.match, members: start.members, localSlot, inputDelay: config.inputDelay, bundles: config.bundles });
     const isReporter = () => !!s.room && battleReporter(s.room) === s.id;
     const screen: DrawBattleScreen = new DrawBattleScreen({
       transport: s.transport,
@@ -165,6 +168,7 @@ export class DrawScreen implements Screen, DrawHost {
       localSlot,
       device: this.device,
       inputDelay: config.inputDelay,
+      telemetry,
       finished: () => !!s.room && s.room.phase !== "battle",
       // draw rooms don't switch bundles mid-battle yet
       isHost: () => false,

@@ -1,5 +1,6 @@
 import { site } from "./base";
 import { SESSION_HEADER, type Player, type LibraryEntry } from "../../shared/account";
+import { sessionTrace } from "./telemetry/events";
 
 /**
  * Who's signed in, remembered in localStorage. Sign-in is Discord's implicit OAuth grant: the
@@ -36,7 +37,7 @@ export async function finishSignIn(): Promise<boolean> {
   const accessToken = hash.get("access_token");
   if (!accessToken) return false;
   history.replaceState(null, "", `${site.base}${location.search}`);
-  const res = await fetch(`${site.base}api/auth/discord`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ accessToken }) });
+  const res = await fetch(`${site.base}api/auth/discord`, { method: "POST", headers: { "content-type": "application/json", "x-trace-id": sessionTrace() }, body: JSON.stringify({ accessToken }) });
   if (!res.ok) throw new Error(`sign-in failed: HTTP ${res.status}`);
   const { session, player } = (await res.json()) as { session: string; player: Player };
   account.session = session; account.player = player;
@@ -46,7 +47,7 @@ export async function finishSignIn(): Promise<boolean> {
 
 /** Local testing only: the server accepts a name when it runs with DEV_LOGIN=1. */
 export async function devSignIn(name: string): Promise<void> {
-  const res = await fetch(`${site.base}api/auth/dev`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name }) });
+  const res = await fetch(`${site.base}api/auth/dev`, { method: "POST", headers: { "content-type": "application/json", "x-trace-id": sessionTrace() }, body: JSON.stringify({ name }) });
   if (!res.ok) throw new Error(`dev sign-in failed: HTTP ${res.status}`);
   const { session, player } = (await res.json()) as { session: string; player: Player };
   account.session = session; account.player = player;
@@ -54,14 +55,14 @@ export async function devSignIn(name: string): Promise<void> {
 }
 
 export function signOut(): void {
-  if (account.session) void fetch(`${site.base}api/auth/logout`, { method: "POST", headers: { [SESSION_HEADER]: account.session } }).catch(() => {});
+  if (account.session) void fetch(`${site.base}api/auth/logout`, { method: "POST", headers: { [SESSION_HEADER]: account.session, "x-trace-id": sessionTrace() } }).catch((error: unknown) => console.error("sign-out request failed", error));
   account.session = null; account.player = null;
   localStorage.removeItem(KEY);
 }
 
 /** fetch with the session header; throws on HTTP errors so callers never see a half result. */
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const headers: Record<string, string> = { ...(init.headers as Record<string, string> ?? {}) };
+  const headers: Record<string, string> = { ...(init.headers as Record<string, string> ?? {}), "x-trace-id": sessionTrace() };
   if (account.session) headers[SESSION_HEADER] = account.session;
   if (init.body && !headers["content-type"]) headers["content-type"] = "application/json";
   const res = await fetch(`${site.base}api${path}`, { ...init, headers });

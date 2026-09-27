@@ -7,6 +7,8 @@ import type { CharStatus } from "../shared/draw";
 import { buildGenerated } from "../shared/gen/load";
 import { SPRITE_CELLS } from "../shared/gen/sprite";
 import { upsertCharacter } from "./library";
+import { finish, openEvent } from "./events";
+import type { WideEvent } from "../shared/wide";
 
 /**
  * The forge job queue. A job is one drawing becoming one fighter; it belongs to a player and
@@ -39,6 +41,8 @@ export interface ForgeJob {
 const jobs = new Map<string, ForgeJob>();
 const queue: string[] = [];
 const listeners = new Set<(job: ForgeJob) => void>();
+/** Each job's wide event, from queued to done or failed. A restart starts a new one on the same trace. */
+const events = new Map<string, WideEvent>();
 let genDir = "", genBase = "", jobsFile = "";
 
 /** Every job change is written out, so a restart mid-character requeues it instead of stranding it. */
@@ -57,7 +61,7 @@ function restore(): void {
   }
   const requeued = queue.length;
   if (requeued) console.log(`forge: requeued ${requeued} job(s) from before the restart`);
-  for (const id of queue) { const job = jobs.get(id)!; upsertCharacter(entryOf(job)); }
+  for (const id of queue) { const job = jobs.get(id)!; openJobEvent(job, null).set("restored", true); upsertCharacter(entryOf(job)); }
 }
 
 /** Runs whenever a job changes (status, stage, completion). Draw rooms mirror it into their state. */
@@ -81,15 +85,42 @@ export function entryOf(job: ForgeJob): LibraryEntry {
   };
 }
 
+function openJobEvent(job: ForgeJob, parent: string | null): WideEvent {
+  const e = openEvent("forge", `f-${job.id}`, parent)
+    .set("job", { id: job.id, fighterId: job.fighterId, owner: job.owner, player: job.playerName, origin: job.origin, forge: job.forge, hint: !!job.hint })
+    .set("timeline", []);
+  events.set(job.id, e);
+  return e;
+}
+
+function record(job: ForgeJob): void {
+  const e = events.get(job.id);
+  if (!e) return;
+  const timeline = e.business.timeline as { status: string; stage: string; at: number }[];
+  const last = timeline[timeline.length - 1];
+  if ((!last || last.status !== job.status || last.stage !== job.stage) && timeline.length < 60) timeline.push({ status: job.status, stage: job.stage, at: Date.now() - e.t0 });
+  e.set("attempts", job.attempts);
+  if (job.claimedAt) e.set("queuedMs", job.claimedAt - job.createdAt);
+  if (job.status === "done") {
+    e.set("result", { message: `${job.result?.name ?? "?"} forged in ${Math.round((Date.now() - job.createdAt) / 1000)} s`, bundleUrl: job.result?.bundleUrl ?? null });
+    finish(e); events.delete(job.id);
+  } else if (job.status === "failed") {
+    e.issue("error", "failed", job.error ?? "no reason given");
+    finish(e); events.delete(job.id);
+  }
+}
+
 function changed(job: ForgeJob, player?: Player): void {
   upsertCharacter(entryOf(job), player);
   persist();
+  record(job);
   for (const cb of listeners) cb(job);
 }
 
 /** Stores the drawing and queues the job; the library gets the entry at once, as "queued". */
 export const DEFAULT_FORGE = (process.env.FORGE_DEFAULT === "v2" ? "v2" : "v1") as "v1" | "v2";
-export function enqueueJob(spec: { fighterId: string; player: Player; siblings: string[]; png: Buffer; origin: LibraryEntry["origin"]; hint?: { name: string; description: string } | null; forge?: "v1" | "v2" }): ForgeJob {
+/** `parent` is the trace the job came from: the creator's request or the draw room. */
+export function enqueueJob(spec: { fighterId: string; player: Player; siblings: string[]; png: Buffer; origin: LibraryEntry["origin"]; hint?: { name: string; description: string } | null; forge?: "v1" | "v2"; parent: string | null }): ForgeJob {
   const drawingPath = path.join(genDir, "drawings", `${spec.fighterId}.png`);
   fs.mkdirSync(path.dirname(drawingPath), { recursive: true });
   fs.writeFileSync(drawingPath, spec.png);
@@ -99,6 +130,7 @@ export function enqueueJob(spec: { fighterId: string; player: Player; siblings: 
   };
   jobs.set(job.id, job);
   queue.push(job.id);
+  openJobEvent(job, spec.parent).set("bytes", spec.png.length);
   changed(job, spec.player);
   return job;
 }
@@ -154,6 +186,7 @@ export function attachForge(api: express.Router, opts: ForgeOptions): void {
   setInterval(() => {
     for (const job of jobs.values()) {
       if (job.status === "running" && Date.now() - job.claimedAt > 15 * 60_000) {
+        events.get(job.id)?.issue("warn", "timeout", `claimed ${Math.round((Date.now() - job.claimedAt) / 60_000)} min ago and never finished`);
         if (job.attempts >= 2) setStatus(job, "failed", "", "gave up on this one after two tries");
         else { queue.push(job.id); setStatus(job, "queued", "back in line"); }
       }

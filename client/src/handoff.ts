@@ -11,6 +11,8 @@ export interface Handoff {
   transport: WebSocketTransport;
   id: number;
   room: Extract<RelayMessage, { t: "room" }> | null;
+  /** The page session's wide-event trace, so the next bundle's events file under the same session. */
+  session?: string;
   match?: {
     config: MatchConfig;
     /** Each slot's fighter bundle ("" for one every build has); the next build loads them before resuming. */

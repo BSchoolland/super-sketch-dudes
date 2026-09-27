@@ -10,6 +10,8 @@ export default defineConfig({
   root: path.resolve(__dirname),
   base: process.env.SKETCHBATTLE_BASE ?? "/sketch-battle/",
   define: { __BUILD__: JSON.stringify(build) },
+  // screen class names go into the session's wide event
+  esbuild: { keepNames: true },
   build: {
     outDir: path.resolve(__dirname, "../dist/client"), emptyOutDir: true, target: "es2022",
     rollupOptions: { input: { main: path.resolve(__dirname, "index.html"), shell: path.resolve(__dirname, "shell.html") } },

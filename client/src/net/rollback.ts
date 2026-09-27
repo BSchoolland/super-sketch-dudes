@@ -40,6 +40,8 @@ export class RollbackSession {
   waiting = false;
   desync: DesyncInfo | null = null;
   confirmedThrough = 0;
+  /** Counted for the match's wide event: `stalls` are ticks spent waiting on remote inputs. */
+  readonly stats = { rollbacks: 0, resimFrames: 0, maxDepth: 0, tooDeep: 0, stalls: 0, timeSyncSkips: 0 };
 
   private humanSlots: number[];
   private cpuLevels: number[];
@@ -98,11 +100,12 @@ export class RollbackSession {
     const nextFrame = this.state.frame + 1;
     if (nextFrame - this.confirmedThrough > this.maxRollback) {
       this.waiting = true;
+      this.stats.stalls++;
       return false;
     }
     // time sync: when we are ahead of a remote, give up every other tick so they can catch up instead of us stalling later
     const lead = this.frameLead();
-    if (lead > 2 && (this.slowTick++ & 1) === 0) { this.waiting = false; return false; }
+    if (lead > 2 && (this.slowTick++ & 1) === 0) { this.waiting = false; this.stats.timeSyncSkips++; return false; }
 
     this.waiting = false;
     const inputs = this.inputsForFrame(nextFrame);
@@ -250,6 +253,7 @@ export class RollbackSession {
     const depth = this.state.frame - firstFrame + 1;
     if (depth > this.maxRollback) {
       this.waiting = true;
+      this.stats.tooDeep++;
       return;
     }
     const snapshot = this.snapshots.get(firstFrame - 1);
@@ -264,6 +268,9 @@ export class RollbackSession {
       this.snapshots.set(frame, cloneState(this.state));
     }
     this.rollbackSamples.push({ at: Date.now(), frames: depth });
+    this.stats.rollbacks++;
+    this.stats.resimFrames += depth;
+    this.stats.maxDepth = Math.max(this.stats.maxDepth, depth);
     this.pendingRollback = null;
   }
 

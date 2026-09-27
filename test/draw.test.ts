@@ -11,6 +11,9 @@ import { attachAuth } from "../server/auth";
 import { attachForge } from "../server/forge";
 import { attachCharacters } from "../server/characters";
 import { initLibrary } from "../server/library";
+import { flushOpen, initEvents } from "../server/events";
+import { filterEvents, readEvents } from "../server/eventlog";
+import { matchTrace } from "../shared/wide";
 import { SPRITE_CELLS } from "../shared/gen/sprite";
 import type { DrawRoomState } from "../shared/draw";
 
@@ -46,6 +49,7 @@ beforeAll(async () => {
   const router = express.Router();
   app.use("/api", router);
   initLibrary(dataDir);
+  initEvents(dataDir);
   attachAuth(router, { dataDir, devLogin: true });
   attachForge(router, { token: TOKEN, dataDir, genBase: "/gen" });
   attachCharacters(router, TOKEN);
@@ -156,6 +160,19 @@ describe("draw battle", () => {
     const ann = between.players.find((p) => p.name === "Ann")!, bob = between.players.find((p) => p.name === "Bob")!;
     expect(ann.characters[0].spent).toBe(true); expect(ann.current).toBe(1);
     expect(bob.characters[0].spent).toBe(false); expect(bob.current).toBe(0); expect(bob.wins).toBe(1);
+    // the wide events: the room's timeline, the battle on the clients' match trace, each forge job under the room
+    flushOpen();
+    const events = readEvents(dataDir);
+    const room = events.find((e) => e.kind === "room" && (e.business.room as { code: string }).code === code)!;
+    expect(room.business.room).toMatchObject({ draw: true, host: "Ann" });
+    expect((room.business.phases as { phase: string }[]).map((p) => p.phase)).toEqual(["lobby", "draw", "draw", "reveal", "loading", "battle", "between"]);
+    expect(room.business.drawings).toHaveLength(6);
+    const [battle] = filterEvents(events, { trace: matchTrace(code, start.seed), kind: "match" });
+    expect(battle).toMatchObject({ parent: room.trace, final: true, business: { exit: "Bob won" } });
+    expect((battle.business.relay as { inputs: number }[]).map((r) => r.inputs)).toEqual([0, 1, 0]);
+    const jobs = events.filter((e) => e.kind === "forge" && e.parent === room.trace);
+    expect(jobs).toHaveLength(6);
+    expect(jobs.every((j) => j.final && j.level === "info" && /forged in/.test(j.headline ?? ""))).toBe(true);
     for (const p of peers) p.ws.close();
   }, 15000);
 
@@ -202,7 +219,7 @@ describe("the forge queue survives a restart", () => {
     const p2 = (srv.address() as { port: number }).port;
     const call = (p: string, init?: RequestInit) => fetch(`http://127.0.0.1:${p2}/api${p}`, { ...init, headers: { "x-forge-token": "t2", "content-type": "application/json", ...(init?.headers ?? {}) } });
     const { enqueueJob } = await import("../server/forge");
-    enqueueJob({ fighterId: "gen-restart-1", player: { id: "dev-r", name: "R", avatar: null }, siblings: [], png: Buffer.from(png1x1, "base64"), origin: "creator" });
+    enqueueJob({ fighterId: "gen-restart-1", player: { id: "dev-r", name: "R", avatar: null }, siblings: [], png: Buffer.from(png1x1, "base64"), origin: "creator", parent: null });
     const job = await (await call("/forge/jobs/next")).json();
     expect(job.fighterId).toBe("gen-restart-1");
     expect((await call("/forge/jobs/next")).status).toBe(204);

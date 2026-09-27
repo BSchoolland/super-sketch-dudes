@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import type express from "express";
-import { broadcast, joinRoom, leaveRoom, makeCode, rooms, send, setRoomExtension, type Client, type Room } from "./lobby";
+import { broadcast, endRelayMatch, joinRoom, leaveRoom, newRoom, rooms, send, setRoomExtension, startRelayMatch, type Client, type Room } from "./lobby";
 import { DRAW_DEFAULTS, DRAW_PNG_MAX_BYTES, type CharStatus, type DrawBattle, type DrawCharacter, type DrawPhase, type DrawPlayer, type DrawRoomState } from "../shared/draw";
 import { stageList } from "../shared/stages/index";
 import { playerFromSession } from "./auth";
@@ -44,11 +44,17 @@ export function attachDraw(api: express.Router, opts: DrawOptions): void {
   const snapshot = (room: Room): DrawRoomState => {
     const d = stateOf(room);
     return {
-      code: room.code, host: room.host.id, phase: d.phase, round: d.round, rounds: d.rounds, drawSeconds: d.drawSeconds, deadline: d.deadline,
+      code: room.code, trace: room.trace, host: room.host.id, phase: d.phase, round: d.round, rounds: d.rounds, drawSeconds: d.drawSeconds, deadline: d.deadline,
       players: [...d.players.values()], battles: d.battles, battle: d.battle, note: d.note,
     };
   };
-  const push = (room: Room): void => broadcast(room, { t: "draw", room: snapshot(room) });
+  const push = (room: Room): void => {
+    const d = stateOf(room);
+    const phases = (room.event.business.phases ??= []) as { phase: DrawPhase; round: number; at: number }[];
+    const last = phases[phases.length - 1];
+    if ((!last || last.phase !== d.phase || last.round !== d.round) && phases.length < 60) phases.push({ phase: d.phase, round: d.round, at: Date.now() - room.event.t0 });
+    broadcast(room, { t: "draw", room: snapshot(room) });
+  };
   const setTimer = (room: Room, ms: number, fn: () => void): void => {
     const d = stateOf(room);
     if (d.timer) clearTimeout(d.timer);
@@ -133,7 +139,9 @@ export function attachDraw(api: express.Router, opts: DrawOptions): void {
     room.started = true;
     d.phase = "battle"; d.note = "";
     const members = parts.map((p, slot) => ({ id: p.id, name: p.name, slot }));
-    broadcast(room, { t: "start", seed: d.battle.seed, config: { stage: d.battle.stage, rules: { stocks: DRAW_DEFAULTS.stocks, time: 0 }, inputDelay: 2, players: fighters.map((fighter) => ({ fighter })) }, members });
+    const config = { stage: d.battle.stage, rules: { stocks: DRAW_DEFAULTS.stocks, time: 0 }, inputDelay: 2, players: fighters.map((fighter) => ({ fighter })) };
+    startRelayMatch(room, d.battle.seed, config, d.battle.participants.map((id) => room.members.find((m) => m.id === id)!));
+    broadcast(room, { t: "start", seed: d.battle.seed, config, members });
     push(room);
   }
   function endBattle(room: Room, winnerSlot: number): void {
@@ -151,6 +159,7 @@ export function attachDraw(api: express.Router, opts: DrawOptions): void {
       if (p.current < 0) p.alive = false;
     }
     const w = d.players.get(winnerId);
+    endRelayMatch(room, w ? `${w.name} won` : "no winner");
     d.phase = "between"; d.note = w ? `${w.name} wins with ${w.characters[w.current]?.name ?? "?"}` : "no winner";
     setTimer(room, DRAW_DEFAULTS.betweenSeconds * 1000, () => nextBattle(room));
     push(room);
@@ -159,6 +168,8 @@ export function attachDraw(api: express.Router, opts: DrawOptions): void {
     const d = stateOf(room);
     d.phase = "over"; d.note = note; d.battle = null;
     room.started = false;
+    endRelayMatch(room, note);
+    room.event.set("result", { message: note });
     setTimer(room, 0, () => {});
     push(room);
   }
@@ -198,10 +209,7 @@ export function attachDraw(api: express.Router, opts: DrawOptions): void {
           c.name = player.name;
           let target: Room;
           if (msg.t === "drawCreate") {
-            target = { code: makeCode(), members: [], started: false, host: c, seed: 0, config: null, game: null };
-            const st: DrawState = { phase: "lobby", round: 0, rounds: DRAW_DEFAULTS.rounds, drawSeconds: DRAW_DEFAULTS.drawSeconds, deadline: 0, timer: null, players: new Map(), battles: [], battle: null, note: "", drawRoot: path.join(drawDir, target.code) };
-            target.draw = st;
-            rooms.set(target.code, target);
+            target = newRoom(c, (code): DrawState => ({ phase: "lobby", round: 0, rounds: DRAW_DEFAULTS.rounds, drawSeconds: DRAW_DEFAULTS.drawSeconds, deadline: 0, timer: null, players: new Map(), battles: [], battle: null, note: "", drawRoot: path.join(drawDir, code) }));
           } else {
             const found = rooms.get(String(msg.code ?? "").toUpperCase());
             if (!found || !found.draw) { send(c, { t: "error", error: "no such room" }); return true; }
@@ -241,7 +249,9 @@ export function attachDraw(api: express.Router, opts: DrawOptions): void {
           const fighterId = `gen-${room.code.toLowerCase()}-${p.slot}-${round}`;
           const siblings = p.characters.filter((q) => q.round !== round && q.name).map((q) => q.name!);
           jobChars.set(fighterId, { code: room.code, playerId: p.id, round });
-          enqueueJob({ fighterId, player: c.player, siblings, png, origin: { room: room.code, round } });
+          const job = enqueueJob({ fighterId, player: c.player, siblings, png, origin: { room: room.code, round }, parent: room.trace });
+          const drawings = (room.event.business.drawings ??= []) as unknown[];
+          if (drawings.length < 60) drawings.push({ player: p.name, round, bytes: png.length, forge: `f-${job.id}` });
           ch.status = "queued"; ch.stage = "waiting in line"; ch.fighterId = fighterId; ch.drawingUrl = drawingUrlOf(fighterId);
           push(room);
           if ([...d.players.values()].every((q) => !q.connected || q.characters[round - 1].status !== "waiting")) endDrawRound(room);

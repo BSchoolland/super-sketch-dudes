@@ -27,8 +27,9 @@ sketch-battle/
     src/screens/     title, character select, stage select, versus, online lobby, training, settings
     src/net/         rollback session (predict / snapshot / resimulate) + websocket transport
     src/audio/       procedural WebAudio sfx + music
-    src/telemetry.ts errors and device info to /api/log
-  server/index.ts    static files, /api/health, /api/log, lobby + input relay over /ws
+    src/telemetry/   wide events: the page session, each online match's view, sent to /api/events
+  server/index.ts    static files, /api/health, /api/events, lobby + input relay over /ws
+  server/events.ts   wide event store writer, request/process events; eventlog.ts reads it back
   scripts/           headless: ladder (CPU vs CPU matchups), frames (dump move data),
                      shots (Playwright screenshots of every screen), smoke, deploy.sh
   test/              vitest: determinism (same inputs => same hash), rollback equivalence,
@@ -141,6 +142,32 @@ Server: `/ws` upgrade. Messages: `hello`, `queue` (quick match), `room create/jo
 `start` (host sets rules; the server picks the seed and slot order), `inputs` (frame, bits),
 `hash`, `leave`. The server never simulates; it relays and keeps the lobby. Rooms die when
 empty. Quick match pairs the two oldest queued clients.
+
+## Wide events
+
+`shared/wide.ts` is the model: one record per unit of work with typed tiers (`client`: session,
+build, bundle, viewport, player; `server`; `request`), a level that only escalates, issues (code +
+message, repeats counted), an open `business` payload, and a headline (first error, else first
+warning, else a business value with a `message`). No clock or randomness in it: both are passed in.
+
+Client (`client/src/telemetry/`): `startTelemetry` in `mount` opens the session (device, view
+history, screens visited, hidden time, matches) and catches uncaught errors, rejections,
+`console.error` and canvas context loss onto every open event. `MatchTelemetry` opens when an
+online `start` arrives (bundle load outcomes), attaches to the rollback session and renderer
+(frames, confirmation, WAITING stalls, RTT, rollback counters, frame-time histogram, camera and
+canvas-scale sanity every draw, sprite draws with no image, a readback of the world layer every
+10 s that flags plain paper), and finishes with the exit. `DrawSession` keeps one for its room.
+Open events are sent every 10 s while they change and by `sendBeacon` on `pagehide` or when the
+tab hides; a bundle swap ends the session and the next bundle continues its trace.
+
+Server: the relay opens a `room` event per room, a `connection` event per socket (under the page's
+session trace from `?trace=`), and a `match` event per start with per-slot input/hash counts, input
+gaps, leaves and a hash comparison of its own. Forge jobs get an event from queued to done.
+API requests carry the caller's `x-trace-id`; writes and failures are kept, successful reads only
+when slow. Open server events are rewritten every 30 s and closed with the process.
+
+The store is JSONL rather than sqlite: production runs Node 20 (no `node:sqlite`) and there is no
+sqlite dependency to lean on; `server/eventlog.ts` reads it back, newest snapshot per id.
 
 ## Tooling
 

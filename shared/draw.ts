@@ -58,6 +58,8 @@ export interface DrawBattle {
 
 export interface DrawRoomState {
   code: string;
+  /** The room's wide-event trace; absent from servers older than wide events. */
+  trace?: string;
   host: number;
   phase: DrawPhase;
   /** 1-based draw round while drawing/revealing. */

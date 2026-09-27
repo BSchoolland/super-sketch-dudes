@@ -12,6 +12,8 @@ export default defineConfig({
   root: path.resolve(__dirname),
   base: "./",
   define: { __BUILD__: JSON.stringify(build) },
+  // screen class names go into the session's wide event
+  esbuild: { keepNames: true },
   build: {
     outDir: path.resolve(__dirname, "../dist/game"),
     emptyOutDir: true,

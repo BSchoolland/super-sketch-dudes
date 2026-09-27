@@ -29,6 +29,8 @@ export class Renderer {
   /** Backdrop, HUD and the slot markers over heads; the title screen's brawl draws fighters only. */
   chrome = true;
   names: string[];
+  /** Runs once the world layer is on the canvas, before screen effects and the HUD. */
+  afterWorld: ((ctx: CanvasRenderingContext2D) => void) | null = null;
   private prevPos: { x: number; y: number }[] = [];
   private curPos: { x: number; y: number }[] = [];
   private prevProj: Map<number, { x: number; y: number }> = new Map();
@@ -125,6 +127,7 @@ export class Renderer {
     this.fx.drawWorld(ctx);
     if (this.showHitboxes) this.drawBoxes(ctx, state);
     ctx.restore();
+    this.afterWorld?.(ctx);
     this.fx.drawScreen(ctx, VIEW_W, VIEW_H, this.cam);
     if (this.chrome) drawHud(ctx, state, this.hud, dt, this.names);
     ctx.restore();
