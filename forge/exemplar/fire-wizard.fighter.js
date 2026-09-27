@@ -3,18 +3,21 @@
 // cut from a cell (the fireball look), and the special fed from the hand (the FEED bar and its effects).
 //
 // Everything he does comes out of the fireball in his raised hand, except the book, which he swings.
-//   NORMALS   a flick of sparks then a puff (jab), a short flame jet (ftilt), the fireball swept overhead
-//             (utilt), flames licking along the floor (dtilt), a running fireball shove (dash attack).
+//   NORMALS   a little fireball flicked a short way (jab), a short flame jet (ftilt), a little fireball
+//             flicked straight up (utilt), fire bursting out on both sides (dtilt), a running fireball shove
+//             (dash attack).
 //             Air: a ring of fire (nair), the fireball swept down (fair), a TOME smack behind (bair, the
-//             book is his hardest-hitting normal), a flame burst up (uair), a METEOR spike down (dair).
+//             book is his hardest-hitting normal), a flame burst up (uair), a METEOR spike down (dair) that
+//             blows up if he lands out of it.
 //   SMASHES   BLAST (a fireball explosion in front), PILLAR (a column of fire up), WILDFIRE (fire along
 //             the floor, both sides).
 //   SPECIAL   FIREBALL: throws the fireball from his hand; hold to feed it into a GREAT FIREBALL. Up to
 //             three out at once.
 //             Side: FLAMETHROWER, a stream of flame for as long as he holds it and has HEAT (meter).
-//             Down: FIRE WALL, a patch of fire on the floor that burns anyone standing in it (one at a
-//             time; in the air it drops as an ember and catches where it lands).
-//   RECOVERY  FLAME JET: he rides a jet of fire straight up, steerable, bursting at the top. Helpless after.
+//             Down: CREEPER, a fireball set down on the floor that rolls after the nearest enemy, slowly at
+//             first and faster and faster, burning whoever it touches (one at a time; in the air he drops it).
+//   RECOVERY  FLAME JET: he rides a jet of fire whichever way the stick points, throwing eight embers out at the
+//             end. Helpless after.
 export default function make(api) {
   const { hb, cap, key, mv, throwMove, spawnProjectile, spriteAnims, spriteLoops, B, tripped, fx } = api;
 
@@ -36,17 +39,21 @@ export default function make(api) {
     // the fireball: drawn, not cut from a cell, so it can burn and grow; flames peel off behind it
     fireball: { shape: "fireball", color: RED, ink: "#8a1a0e", size: 36, trail: "flames" },
     bigFireball: { shape: "fireball", color: RED, ink: "#8a1a0e", size: 78, trail: "flames" },
+    // the jab's and utilt's: a little one that burns out fast
+    ember: { shape: "fireball", color: ORANGE, ink: RED, size: 22, trail: "flames" },
+    // the meteor landing, and the dtilt's bursts
+    boom: { shape: "star", color: ORANGE, ink: RED, texture: "flame", size: 130, spin: 10, aim: false },
     // flamethrower puffs: little rising blobs of flame
     flame: { shape: "blob", color: ORANGE, ink: RED, texture: "flame", size: 38, spin: 14, aim: false, trail: "none" },
-    // the fire wall: a standing blaze
-    firewall: { shape: "cloud", color: ORANGE, ink: RED, texture: "flame", size: 96, spin: 3, aim: false, trail: "none" },
+    // the creeper: the fireball again, rolling along the floor
+    creeper: { shape: "fireball", color: RED, ink: "#8a1a0e", size: 56, trail: "flames" },
     // tilts and light aerials: a lick of flame
     lick: { shape: "slash", color: YELLOW, ink: RED, texture: "flame" },
     spark: { shape: "star", color: YELLOW, ink: RED, texture: "glow", size: 40, spin: 20, aim: false },
     puff: { shape: "cloud", color: ORANGE, ink: RED, texture: "flame", size: 90, spin: 8, aim: false },
     jet: { shape: "bolt", color: ORANGE, ink: RED, texture: "flame", size: 90 },
     ring: { shape: "ring", color: ORANGE, ink: RED, texture: "flame", size: 150, spin: 24, aim: false },
-    meteor: { shape: "ball", color: RED, ink: "#7a1a10", texture: "flame", size: 70 },
+    meteor: { shape: "fireball", color: RED, ink: "#7a1a10", size: 100 },
     // the book: plain paper and ink, nothing like the fire
     tome: { shape: "bar", color: "#f4efe4", ink: "#24221e", texture: "hatch", size: 60 },
     // smashes: big fire
@@ -60,11 +67,9 @@ export default function make(api) {
   const toss = (id, angle, base, growth, pose) => throwMove(id, 32, 14, GRAB.damage, angle, base, growth, [key(0, { rot: 6 }), key(14, pose), key(32, rest)]);
 
   const moves = {
-    // JAB: a flick of sparks off the fireball, then (tap again) a puff of flame
-    jab1: mv("jab1", 18, [hb([4, 6], 54, -54, 18, 3, 50, 18, 30, { fx: "spark" })],
-      [key(0, { sx: 0.96 }), key(4, { sx: 1.1, sy: 0.96, dx: 4 }, true), key(10, { sx: 1.02 }), key(18, rest)], { iasa: 14, next: "jab2", nextFrom: 7, cell: "atk-fwd" }),
-    jab2: mv("jab2", 28, [hb([6, 9], 66, -54, 24, 6, 42, 36, 60, { fx: "puff" })],
-      [key(0, { rot: -6, sx: 0.94 }), key(6, { rot: 10, sx: 1.12, sy: 0.94, dx: 6 }, true), key(14, { rot: 6 }), key(28, rest)], { cell: "atk-fwd" }),
+    // JAB: a little fireball flicked off his hand; it burns out after a short way
+    jab1: mv("jab1", 20, [],
+      [key(0, { sx: 0.96 }), key(4, { sx: 1.1, sy: 0.96, dx: 4 }, true), key(10, { sx: 1.02 }), key(20, rest)], { hook: "flick", iasa: 16, cell: "atk-fwd" }),
     // FTILT: a short jet of flame straight out of his palm
     ftilt: mv("ftilt", 32, [cap([9, 13], 44, -52, 124, -52, 17, 10, 38, 36, 80, { fx: "jet" })],
       [key(0, { rot: -10, sx: 0.94, dx: -4 }), key(9, { rot: 8, sx: 1.12, sy: 0.95, dx: 8 }, true), key(18, { rot: 4, sx: 1.04 }), key(32, rest)], { cell: "atk-fwd" }),
@@ -72,14 +77,14 @@ export default function make(api) {
     dashAttack: mv("dashAttack", 38, [hb([8, 14], 60, -52, 28, 10, 45, 40, 72, { fx: "puff" })],
       [key(0, { rot: -6, sx: 0.92 }), key(8, { rot: 14, sx: 1.2, sy: 0.92, dx: 10 }, true), key(20, { rot: 8, sx: 1.06 }), key(38, rest)],
       { cell: "atk-fwd", motion: [[1, 7.5, 0], [12, 3.5, 0], [22, 0.8, 0]] }),
-    // UTILT: the fireball swept over his head, front to back
-    utilt: mv("utilt", 30, [
-      cap([7, 9], 50, -90, 20, -128, 22, 8, 86, 32, 78, { fx: "lick", group: 0 }),
-      cap([10, 12], 20, -128, -40, -110, 22, 8, 100, 32, 78, { fx: "lick", group: 1 }),
-    ], [key(0, { rot: 8, sy: 0.96 }), key(7, { rot: -4, sy: 1.1, dy: -6 }, true), key(12, { rot: -14, sy: 1.06, dy: -4 }), key(30, rest)], { cell: "atk-up" }),
-    // DTILT: flames licking along the floor from his low hand
-    dtilt: mv("dtilt", 26, [cap([6, 10], 24, -14, 104, -10, 15, 7, 24, 30, 62, { fx: "lick" })],
-      [key(0, { sy: 0.92, sx: 1.04, dy: 3 }), key(6, { sy: 0.84, sx: 1.14, rot: 12, dy: 6 }, true), key(14, { sy: 0.88, sx: 1.08, rot: 6 }), key(26, rest)], { cell: "atk-down" }),
+    // UTILT: the same little fireball, flicked straight up from his raised hand
+    utilt: mv("utilt", 26, [],
+      [key(0, { rot: 8, sy: 0.96 }), key(7, { rot: -4, sy: 1.1, dy: -6 }, true), key(12, { rot: -8, sy: 1.04, dy: -3 }), key(26, rest)], { hook: "flickUp", cell: "atk-up" }),
+    // DTILT: he slaps the floor and two fans of fire sweep out from his feet, low at his feet, rising as they go
+    dtilt: mv("dtilt", 32, [
+      cap([7, 12], 30, -10, 190, -70, 28, 7, 60, 34, 62, { fx: "lick", group: 0 }),
+      cap([7, 12], -30, -10, -190, -70, 28, 7, 120, 34, 62, { fx: "lick", group: 1 }),
+    ], [key(0, { sy: 0.92, sx: 1.04, dy: 3 }), key(7, { sy: 0.8, sx: 1.18, dy: 8 }, true), key(16, { sy: 0.88, sx: 1.08, dy: 4 }), key(32, rest)], { hook: "floorBurst", cell: "atk-down" }),
     // NAIR: a ring of fire bursts around him and lingers a moment
     nair: mv("nair", 32, [
       hb([6, 9], 0, -60, 62, 9, 50, 34, 70, { fx: "ring", radial: true }),
@@ -99,12 +104,12 @@ export default function make(api) {
     uair: mv("uair", 30, [hb([8, 13], 20, -134, 30, 10, 88, 32, 80, { fx: "puff" })],
       [key(0, { sy: 0.94, sx: 1.06 }), key(8, { sy: 1.16, sx: 0.92, dy: -10 }, true), key(16, { sy: 1.06, dy: -4 }), key(30, rest)],
       { aerial: true, landingLag: 11, cell: "atk-up" }),
-    // DAIR, METEOR: the fireball driven straight down; the first frames spike
+    // DAIR, METEOR: the fireball driven straight down; the first frames spike, and landing out of it sets it off
     dair: mv("dair", 40, [
-      hb([12, 14], 24, 4, 26, 13, 270, 30, 80, { fx: "meteor", spike: true, priority: 0 }),
-      hb([15, 20], 24, 0, 24, 8, 60, 30, 60, { fx: "meteor", priority: 1 }),
+      hb([12, 14], 24, 4, 40, 13, 270, 30, 80, { fx: "meteor", spike: true, priority: 0 }),
+      hb([15, 22], 24, 0, 36, 8, 60, 30, 60, { fx: "meteor", priority: 1 }),
     ], [key(0, { sy: 1.06, dy: -6 }), key(10, { sy: 1.12, dy: -10 }), key(12, { sy: 0.88, dy: 10, sx: 1.06 }, true), key(22, { sy: 0.96 }), key(40, rest)],
-      { aerial: true, landingLag: 15, cells: [[0, "atk-up"], [12, "atk-down"]] }),
+      { aerial: true, landingLag: 15, hook: "meteor", cells: [[0, "atk-up"], [12, "atk-down"]] }),
     // BLAST: the fireball raised overhead, then thrust forward and set off
     fsmash: mv("fsmash", 56, [
       hb([18, 22], 104, -56, 46, 19, 38, 44, 98, { fx: "blast", priority: 0 }),
@@ -138,16 +143,15 @@ export default function make(api) {
     sspecial: mv("sspecial", 44, [], [
       key(0, { rot: -6, sx: 0.94 }), key(10, { rot: 6, sx: 1.1, sy: 0.96, dx: 6 }, true), key(17, { rot: 3, sx: 1.06, dx: 4 }), key(24, { rot: 7, sx: 1.1, dx: 6 }), key(44, rest),
     ], { hook: "flamethrower", cell: "atk-fwd" }),
-    // FIRE WALL: slaps the fireball onto the floor in front of him, where it keeps burning
+    // CREEPER: sets the fireball down on the floor in front of him and lets it go hunting
     dspecial: mv("dspecial", 40, [], [
       key(0, { sy: 1.06, dy: -4 }), key(12, { sy: 0.84, sx: 1.12, dy: 6 }, true), key(22, { sy: 0.92 }), key(40, rest),
-    ], { hook: "firewall", cells: [[0, "atk-up"], [12, "atk-down"]] }),
-    // FLAME JET: fire pours out beneath him and he rides it up; a burst at the top
-    uspecial: mv("uspecial", 54, [
-      cap([8, 28], 0, 0, 0, 60, 26, 2, 80, 20, 10, { fx: "jet", rehit: 5 }),
-      hb([29, 32], 0, -60, 56, 7, 85, 52, 84, { fx: "burst", group: 1, radial: true }),
-    ], [key(0, { sy: 0.84, sx: 1.12, dy: 4 }), key(8, { sy: 1.16, sx: 0.9 }, true), key(18, { sy: 1.1, rot: 4 }), key(28, { sy: 1.12, rot: -4 }), key(29, { sx: 1.16, sy: 1.1 }, true), key(40, { sy: 1.04 }), key(54, { rot: 0 })],
-      { hook: "jet", helpless: true, ledgeOk: true, cells: [[0, "atk-down"], [8, "jump"], [29, "atk-up"]] }),
+    ], { hook: "creeper", cells: [[0, "atk-up"], [12, "atk-down"]] }),
+    // FLAME JET: fire pours out beneath him and he rides it the way the stick points; at the end eight embers fly out
+    uspecial: mv("uspecial", 64, [
+      cap([8, 38], 0, 0, 0, 60, 26, 2, 80, 20, 10, { fx: "jet", rehit: 5 }),
+    ], [key(0, { sy: 0.84, sx: 1.12, dy: 4 }), key(8, { sy: 1.16, sx: 0.9 }, true), key(23, { sy: 1.1, rot: 4 }), key(38, { sy: 1.12, rot: -4 }), key(39, { sx: 1.16, sy: 1.1 }, true), key(50, { sy: 1.04 }), key(64, { rot: 0 })],
+      { hook: "jet", helpless: true, ledgeOk: true, cells: [[0, "atk-down"], [8, "jump"], [39, "atk-up"]] }),
     ledgeAttack: mv("ledgeAttack", 40, [cap([12, 15], 30, -40, 110, -36, 18, 9, 40, 38, 70, { fx: "lick" })], [key(0, { rot: -8 }), key(12, { rot: 12, sx: 1.1 }, true), key(40, rest)], { cell: "atk-fwd" }),
     getupAttack: mv("getupAttack", 44, [
       cap([12, 15], 10, -14, 100, -12, 18, 7, 45, 40, 60, { fx: "wave", group: 0 }),
@@ -158,7 +162,7 @@ export default function make(api) {
 
   const FIREBALLS_MAX = 3, FEED_MAX = 48, GREAT_AT = 30;
   const HEAT_MAX = 100, HEAT_PER_FRAME = 1.4, HEAT_BACK = 0.5, HEAT_COOL = 40, SPRAY_FROM = 10, SPRAY_LOOP = 24;
-  const WALL_LIFE = 240;
+  const CREEP_LIFE = 300, CREEP_PULL = 0.07, CREEP_TOP = 7;
   const ownLive = (state, f, kinds) => {
     let n = 0;
     for (const p of state.projectiles) if (!p.dead && p.from === f.slot && kinds.includes(p.kind)) n++;
@@ -173,12 +177,28 @@ export default function make(api) {
     rig: { anims: spriteAnims(), loops: spriteLoops },
     palette: { colors: { marker: "#2a7bd4" }, outline: "#24221e" },
     looks,
-    special: () => ({ cool: 0 }),
+    special: () => ({ cool: 0, meteor: 0, jx: 0, jy: -1 }),
     bars: {
       heat: { label: "HEAT", color: "#ff7a1a", max: HEAT_MAX, start: HEAT_MAX, trip: 0, rearm: 30 },
       feed: { label: "FEED", color: ORANGE, max: FEED_MAX, show: (f) => f.move === "nspecial", over: true },
     },
     hooks: {
+      flick: ({ f, state }) => {
+        if (f.frame === 5) spawnProjectile(state, f, "ember", f.x + f.moveFacing * 48, f.y - 56, f.moveFacing * 10, 0, 14,
+          { frames: [0, 999], x: 0, y: 0, r: 12, damage: 3, angle: 40, base: 20, growth: 30 });
+      },
+      flickUp: ({ f, state }) => {
+        if (f.frame === 8) spawnProjectile(state, f, "ember", f.x + f.moveFacing * 20, f.y - 130, 0, -10, 16,
+          { frames: [0, 999], x: 0, y: 0, r: 14, damage: 6, angle: 88, base: 30, growth: 70 });
+      },
+      // the fans: a wave of flame running out along each side, taller the further out it gets
+      floorBurst: ({ f, state }) => {
+        if (f.frame < 7 || f.frame > 12) return;
+        const t = (f.frame - 7) / 5;
+        for (const side of [1, -1]) fx(state, f, "flame", f.x + side * (30 + t * 160), f.y - 6 - t * 50, 3, t > 0.5 ? RED : ORANGE, 1 + t * 2.5);
+      },
+      // armed while he's coming down with it; onFrame sets it off if he lands before the move is over
+      meteor: ({ f }) => { f.special.meteor = f.frame >= 12 && !f.grounded ? 1 : 0; },
       fireball: ({ f, input, state }) => {
         if (f.frame === 1) f.bars.feed = 0;
         // frame 12 held: the fireball over his head grows, flames licking up off it faster the more it's fed;
@@ -217,30 +237,56 @@ export default function make(api) {
         // keep spraying while held and hot
         if (f.frame === SPRAY_LOOP && (input.b & B.SPECIAL) && !tripped(f, "heat")) f.frame = SPRAY_LOOP - 7;
       },
-      firewall: ({ f, state }) => {
-        if (f.frame !== 12 || ownLive(state, f, ["firewall"])) return;
-        const hit = { frames: [0, 999], x: 0, y: 0, r: 36, damage: 3, angle: 80, base: 40, growth: 28, rehit: 30 };
-        if (f.grounded) spawnProjectile(state, f, "firewall", f.x + f.moveFacing * 70, f.y - 36, 0, 0, WALL_LIFE, hit);
-        else spawnProjectile(state, f, "firewall", f.x + f.moveFacing * 40, f.y - 10, f.moveFacing * 1.5, 3, WALL_LIFE, hit, { g: 0.5, bounce: 1, landed: 0 });
+      creeper: ({ f, state }) => {
+        if (f.frame !== 12 || ownLive(state, f, ["creeper"])) return;
+        const hit = { frames: [0, 999], x: 0, y: 0, r: 28, damage: 3, angle: 80, base: 40, growth: 28, rehit: 30 };
+        if (f.grounded) spawnProjectile(state, f, "creeper", f.x + f.moveFacing * 70, f.y - 28, 0, 0, CREEP_LIFE, hit, { landed: 1 });
+        else spawnProjectile(state, f, "creeper", f.x + f.moveFacing * 40, f.y - 10, f.moveFacing * 1.5, 3, CREEP_LIFE, hit, { g: 0.5, bounce: 1, landed: 0 });
       },
-      jet: ({ f, input }) => {
-        if (f.frame === 8) { f.grounded = false; f.platform = -1; f.usedUpSpecial = true; }
-        if (f.frame >= 8 && f.frame <= 28) {
-          f.vy = -12.5 + (f.frame - 8) * 0.28;
-          f.vx = (input.x / 100) * 3;
+      // the jet points where the stick does (straight up when it's let go), turning toward it rather than snapping
+      jet: ({ f, input, state }) => {
+        if (f.frame === 8) { f.grounded = false; f.platform = -1; f.usedUpSpecial = true; f.special.jx = 0; f.special.jy = -1; }
+        if (f.frame < 8 || f.frame > 38) return;
+        const len = Math.sqrt(input.x * input.x + input.y * input.y);
+        if (len > 30) {
+          const tx = f.special.jx + (input.x / len - f.special.jx) * 0.2, ty = f.special.jy + (input.y / len - f.special.jy) * 0.2;
+          const n = Math.sqrt(tx * tx + ty * ty) || 1;
+          f.special.jx = tx / n; f.special.jy = ty / n;
+        }
+        const speed = 12.5 - (f.frame - 8) * 0.19;
+        f.vx = f.special.jx * speed;
+        f.vy = f.special.jy * speed;
+        if (f.frame === 38) for (let i = 0; i < 8; i++) {
+          const cx = api.cosDeg(i * 45), sy = api.sinDeg(i * 45);
+          spawnProjectile(state, f, "ember", f.x + cx * 30, f.y - 60 - sy * 30, cx * 9, -sy * 9, 18,
+            { frames: [0, 999], x: 0, y: 0, r: 14, damage: 4, angle: 45, base: 36, growth: 60, radial: true });
         }
       },
     },
     onFrame: ({ f, state }) => {
+      if (f.special.meteor && f.grounded) {
+        f.special.meteor = 0;
+        spawnProjectile(state, f, "boom", f.x, f.y - 30, 0, 0, 10,
+          { frames: [0, 999], x: 0, y: 0, r: 70, damage: 10, angle: 70, base: 48, growth: 74 });
+        fx(state, f, "flame", f.x, f.y - 6, 10, ORANGE);
+        fx(state, f, "ring", f.x, f.y - 30, 4, YELLOW);
+      } else if (f.special.meteor && f.move !== "dair") f.special.meteor = 0;
       if (f.special.cool > 0) f.special.cool--;
       else f.bars.heat += HEAT_BACK;
-      // a dropped ember catches where it lands and becomes a wall
+      // the creeper: a dropped one settles where it lands; on the floor it rolls after the nearest enemy, faster and faster
       for (const p of state.projectiles) {
-        if (p.dead || p.kind !== "firewall" || p.from !== f.slot || p.data.landed !== 0 || !p.data.bounces) continue;
-        p.data.landed = 1;
-        p.data.g = 0;
-        p.vx = 0; p.vy = 0;
-        p.y -= 36;
+        if (p.dead || p.kind !== "creeper" || p.from !== f.slot) continue;
+        if (!p.data.landed) {
+          if (!p.data.bounces) continue;
+          p.data.landed = 1; p.data.g = 0; p.vx = 0; p.vy = 0; p.y -= 28;
+        }
+        let near = null, best = Infinity;
+        for (const o of state.fighters) {
+          if (o === f || o.stocks <= 0 || o.action === "dead" || o.action === "respawn") continue;
+          const d = Math.abs(o.x - p.x);
+          if (d < best) { best = d; near = o; }
+        }
+        if (near) p.vx = Math.max(-CREEP_TOP, Math.min(CREEP_TOP, p.vx + Math.sign(near.x - p.x) * CREEP_PULL));
       }
     },
     // feeding the fireball: he glows, braces and shakes harder the bigger it gets

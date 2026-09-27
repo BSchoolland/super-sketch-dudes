@@ -29,9 +29,9 @@ export class Fx {
     }
   }
   /** Tongues of fire that rise, flicker and shrink; `color` is the body, the core is always yellow. */
-  flame(x: number, y: number, n: number, color: string): void {
+  flame(x: number, y: number, n: number, color: string, scale = 1): void {
     for (let i = 0; i < n; i++) {
-      this.particles.push({ x: x + this.rnd(-12, 12), y: y + this.rnd(-4, 4), vx: this.rnd(-30, 30), vy: this.rnd(-200, -90), life: this.rnd(0.28, 0.5), age: 0, size: this.rnd(7, 13), color, kind: "flame", grav: -140, drag: 2 });
+      this.particles.push({ x: x + this.rnd(-12, 12) * scale, y: y + this.rnd(-4, 4), vx: this.rnd(-30, 30), vy: this.rnd(-200, -90) * Math.sqrt(scale), life: this.rnd(0.28, 0.5), age: 0, size: this.rnd(7, 13) * scale, color, kind: "flame", grav: -140, drag: 2 });
     }
   }
   dust(x: number, y: number, n: number, dir: number, color = "rgba(255,255,255,0.55)"): void {
@@ -136,7 +136,7 @@ export class Fx {
         case "fx": {
           const c = e.color ?? this.colors[e.slot] ?? "#fff";
           if (e.kind === "sparks") this.spark(e.x, e.y, e.n, 260, c, 3, 0.3);
-          else if (e.kind === "flame") this.flame(e.x, e.y, e.n, e.color ?? "#ff8a2a");
+          else if (e.kind === "flame") this.flame(e.x, e.y, e.n, e.color ?? "#ff8a2a", e.size ?? 1);
           else if (e.kind === "smoke") this.dust(e.x, e.y, e.n, 0);
           else this.ring(e.x, e.y, 30 + e.n * 10, c, 0.3);
           break;
