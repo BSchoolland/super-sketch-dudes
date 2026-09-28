@@ -18,6 +18,8 @@ export interface Client {
   /** Relay slot. -1 = spectator: inputs from this client are dropped. */
   slot: number;
   lastPing: number;
+  /** Smoothed round trip to the relay in ms, from WebSocket pings; 0 until the first pong. */
+  rtt: number;
   /** Fighter id and the bundle every client loads it from; "" until the first pick. */
   fighter: string;
   bundleUrl: string;
@@ -58,6 +60,23 @@ function stagePick(v: unknown): StagePick | null {
 function mapInMessage(v: unknown): MapDoc | null {
   if (JSON.stringify(v).length > MAP_JSON_MAX || checkMap(v).length) return null;
   return v as MapDoc;
+}
+
+const RTT_PING_MS = 2000;
+const FRAME_MS = 1000 / 60;
+/** Rollback covers this many frames of latency; input delay covers the rest, so rollbacks stay shallow at any ping. */
+const ROLLBACK_BUDGET = 4;
+const MIN_DELAY = 2, MAX_DELAY = 6;
+
+/**
+ * The input delay for a match from each member's round trip to the relay. Inputs between two players cross
+ * the relay, so their one-way latency is half the sum of their round trips; the worst pair decides.
+ */
+export function autoInputDelay(rtts: number[]): { delay: number; oneWayMs: number; rtts: number[] } {
+  let oneWayMs = 0;
+  for (let i = 0; i < rtts.length; i++) for (let j = i + 1; j < rtts.length; j++) oneWayMs = Math.max(oneWayMs, (rtts[i] + rtts[j]) / 2);
+  const delay = Math.max(MIN_DELAY, Math.min(MAX_DELAY, Math.round(oneWayMs / FRAME_MS) - ROLLBACK_BUDGET));
+  return { delay, oneWayMs: Math.round(oneWayMs), rtts: rtts.map(Math.round) };
 }
 
 /** Mid-match, a player whose inputs stop for this long is dropped: the others would otherwise wait on them forever. */
@@ -216,7 +235,14 @@ export function attachLobby(wss: WebSocketServer): void {
     const event = openEvent("connection", session && TRACE_RE.test(session) ? session : newTrace("c"));
     const msgs: Record<string, number> = {};
     event.set("connection", { id, ua: String(req.headers["user-agent"] ?? "").slice(0, 200) }).set("msgs", msgs);
-    const c: Client = { ws, id, name: `guest${id}`, room: null, slot: 0, lastPing: Date.now(), fighter: "", bundleUrl: "", ready: false, event };
+    const c: Client = { ws, id, name: `guest${id}`, room: null, slot: 0, lastPing: Date.now(), rtt: 0, fighter: "", bundleUrl: "", ready: false, event };
+    let pingAt = 0;
+    ws.on("pong", () => {
+      const sample = Date.now() - pingAt;
+      c.rtt = c.rtt ? c.rtt + (sample - c.rtt) * 0.25 : sample;
+    });
+    const pinger = setInterval(() => { pingAt = Date.now(); ws.ping(); }, RTT_PING_MS);
+    ws.on("close", () => clearInterval(pinger));
     send(c, { t: "hello", id: c.id });
     ws.on("message", (raw) => {
       let msg: any;
@@ -280,8 +306,11 @@ export function attachLobby(wss: WebSocketServer): void {
           room.started = true;
           room.picking = null;
           room.seed = (Math.random() * 0xffffffff) >>> 0;
+          const auto = requested.inputDelay === "auto" ? autoInputDelay(room.members.map((m) => m.rtt)) : null;
+          if (auto) requested.inputDelay = auto.delay;
           room.config = { ...requested, players: room.members.map((m) => ({ fighter: m.fighter, bundleUrl: m.bundleUrl })) };
           startRelayMatch(room, room.seed, room.config, room.members);
+          room.match?.event.set("inputDelay", auto ?? { delay: requested.inputDelay, chosen: "host" });
           broadcast(room, { t: "start", seed: room.seed, config: room.config, members: room.members.map((m) => ({ id: m.id, name: m.name, slot: m.slot })) });
           break;
         }
