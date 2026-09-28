@@ -85,6 +85,7 @@ export class MapEditorScreen implements Screen {
   private saving = false;
   private leaveArmed = -Infinity;
   private space = false;
+  private clipboard: MapPiece | null = null;
   private detachers: (() => void)[] = [];
 
   constructor(private nav: Nav, doc: MapDoc | null) {
@@ -383,7 +384,48 @@ export class MapEditorScreen implements Screen {
       this.doc.pieces.push(piece);
       this.sel = { kind: "piece", i: this.doc.pieces.length - 1 };
     });
+    this.tool = "select";
     sfx.menuConfirm();
+  }
+
+  /** A copy of `p` shifted by (dx, dy), its orbit centre moving with it. */
+  private shifted(p: MapPiece, dx: number, dy: number): MapPiece {
+    const c = clone(p);
+    c.x += dx; c.y += dy;
+    if (c.kind === "platform" && c.motion?.kind === "orbit") { c.motion.cx += dx; c.motion.cy += dy; }
+    return c;
+  }
+
+  private place(piece: MapPiece): void {
+    this.edit(() => {
+      this.doc.pieces.push(piece);
+      this.sel = { kind: "piece", i: this.doc.pieces.length - 1 };
+    });
+    this.tool = "select";
+    sfx.menuConfirm();
+  }
+
+  private copy(): void {
+    const p = this.selectedPiece();
+    if (!p) return;
+    this.clipboard = clone(p);
+    this.status = "copied";
+  }
+
+  /** Pastes under the pointer when it's over the map, else a little off the original. */
+  private paste(): void {
+    const c = this.clipboard;
+    if (!c) return;
+    if (pointer.present && !this.overUi(pointer)) {
+      const w = this.toWorld(pointer);
+      const r = pieceRect(c);
+      this.place(this.shifted(c, snap(w.x - r.w / 2) - c.x, snap(w.y) - c.y));
+    } else this.place(this.shifted(c, 40, 40));
+  }
+
+  private duplicate(): void {
+    const p = this.selectedPiece();
+    if (p) this.place(this.shifted(p, 40, 40));
   }
 
   private wheel(e: WheelEvent): void {
@@ -403,6 +445,9 @@ export class MapEditorScreen implements Screen {
     if (mod && e.code === "KeyZ") { e.preventDefault(); if (e.shiftKey) this.redo(); else this.undo(); return; }
     if (mod && e.code === "KeyY") { e.preventDefault(); this.redo(); return; }
     if (mod && e.code === "KeyS") { e.preventDefault(); void this.save(); return; }
+    if (mod && e.code === "KeyC") { e.preventDefault(); this.copy(); return; }
+    if (mod && e.code === "KeyV") { e.preventDefault(); this.paste(); return; }
+    if (mod && e.code === "KeyD") { e.preventDefault(); this.duplicate(); return; }
     if (e.code === "Space") { this.space = true; e.preventDefault(); return; }
     if (e.code === "Delete" || e.code === "Backspace") { e.preventDefault(); this.deleteSelection(); return; }
     if (e.code === "Escape") { if (this.sel) this.sel = null; else this.setTool("select"); return; }
@@ -579,7 +624,7 @@ export class MapEditorScreen implements Screen {
     if (this.problem && !problems.length && this.t % 1 < 0.02) this.problem = "";
     if (trouble) label(ctx, trouble, VIEW_W / 2, VIEW_H - 92, 26, RED);
     const hints: Record<Tool, string> = {
-      select: "drag things to move them, their handles to resize · drag empty paper to pan, wheel to zoom · Delete removes, arrows nudge",
+      select: "drag things to move them, their handles to resize · drag empty paper to pan, wheel to zoom · Delete removes, arrows nudge, Ctrl+C / Ctrl+V copy",
       terrain: "drag to draw a block of ground (click for a standard one) · walls and grabbable ledges come with it",
       platform: "drag to draw a thin platform (click for a standard one) · fighters drop through it",
       mover: "drag to draw a moving platform · then drag the round handle to set where it goes",
@@ -637,6 +682,8 @@ export class MapEditorScreen implements Screen {
         i++;
       }
     }
-    if (button(ctx, x, row(i) + 10, w, 58, "DELETE", { key: "Del", size: 24 })) this.deleteSelection();
+    const half = (w - 12) / 2;
+    if (button(ctx, x, row(i) + 10, half, 58, "DUPLICATE", { key: "Ctrl+D", size: 22 })) this.duplicate();
+    if (button(ctx, x + half + 12, row(i) + 10, half, 58, "DELETE", { key: "Del", size: 22 })) this.deleteSelection();
   }
 }
