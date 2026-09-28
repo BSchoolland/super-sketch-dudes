@@ -54,7 +54,7 @@ beforeAll(async () => {
   app.use("/api", api);
   api.use(requestEvents());
   attachEvents(api);
-  attachAuth(api, { dataDir, devLogin: true });
+  attachAuth(api, { dataDir, devLogin: true, botKey: null });
   api.get("/boom", () => { throw new Error("kaboom"); });
   api.use(requestErrors());
   server = http.createServer(app);

@@ -13,7 +13,8 @@ import { GOOGLE_CLIENT_ID, SESSION_HEADER, type Player } from "../shared/account
  * scrypt-hashed in accounts.json. Sessions persist to disk. DEV_LOGIN=1 adds a name-only login
  * for local tests.
  */
-export interface AuthOptions { dataDir: string; devLogin: boolean }
+/** `botKey`: a secret that lets the bench's bots sign in as bot accounts (ids `bot-…`, never a real player's); unset, no bot login. */
+export interface AuthOptions { dataDir: string; devLogin: boolean; botKey: string | null }
 
 const sessions = new Map<string, { player: Player; at: number }>();
 let file = "";
@@ -117,6 +118,17 @@ export function attachAuth(api: express.Router, opts: AuthOptions): void {
     api.post("/auth/dev", (req, res) => {
       const name = cleanName(req.body?.name);
       const player: Player = { id: `dev-${name.toLowerCase().replace(/\W+/g, "-")}`, name, avatar: null };
+      res.json({ session: issue(player), player });
+    });
+  }
+
+  if (opts.botKey) {
+    const key = Buffer.from(opts.botKey);
+    api.post("/auth/bot", (req, res) => {
+      const given = Buffer.from(String(req.body?.key ?? ""));
+      if (given.length !== key.length || !crypto.timingSafeEqual(given, key)) return res.status(401).json({ error: "wrong bot key" });
+      const name = cleanName(req.body?.name);
+      const player: Player = { id: `bot-${name.toLowerCase().replace(/\W+/g, "-")}`, name, avatar: null };
       res.json({ session: issue(player), player });
     });
   }

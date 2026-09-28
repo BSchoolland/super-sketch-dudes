@@ -38,7 +38,7 @@ const FORGE_TOKEN = process.env.FORGE_TOKEN ?? "";
 if (!FORGE_TOKEN) console.warn("FORGE_TOKEN unset: the forge and game bundle uploads are disabled");
 // sign-in, libraries, the forge queue, the creator
 initLibrary(DATA_DIR);
-attachAuth(api, { dataDir: DATA_DIR, devLogin: process.env.DEV_LOGIN === "1" });
+attachAuth(api, { dataDir: DATA_DIR, devLogin: process.env.DEV_LOGIN === "1", botKey: process.env.BOT_LOGIN_KEY || null });
 attachForge(api, { token: FORGE_TOKEN, dataDir: DATA_DIR, genBase: `${BASE}/gen` });
 attachCharacters(api, FORGE_TOKEN, DATA_DIR);
 // player-made maps, for the accounts in map-makers.json
