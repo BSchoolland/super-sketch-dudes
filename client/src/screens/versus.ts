@@ -79,7 +79,8 @@ export class VersusScreen implements Screen {
         this.acc -= STEP;
         n++;
       } else if (this.match.stalled) {
-        this.acc = Math.min(this.acc, STEP);
+        // waiting on a remote: keep the owed time (bounded) so the sim catches up to the shared clock once it arrives
+        this.acc = Math.min(this.acc, MAX_CATCH_UP * STEP);
         break;
       } else {
         this.acc -= STEP;
