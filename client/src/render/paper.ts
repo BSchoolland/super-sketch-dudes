@@ -54,7 +54,9 @@ function canvas2d(w: number, h: number): [HTMLCanvasElement, CanvasRenderingCont
   if (!ctx) throw new Error("Canvas 2D is required for paper rendering");
   return [canvas, ctx];
 }
-let paper: HTMLCanvasElement | undefined;
+let paper: { canvas: HTMLCanvasElement; w: number; h: number; s: number } | undefined;
+/** Paper above this canvas scale is resampled from a smaller texture rather than cached at full size (memory). */
+const PAPER_MAX_SCALE = 1.5;
 const patterns = new WeakMap<CanvasRenderingContext2D, Map<string, CanvasPattern>>();
 const hatchTiles = new Map<string, HTMLCanvasElement>();
 
@@ -76,9 +78,16 @@ export function hatch(ctx: CanvasRenderingContext2D, x: number, y: number, w: nu
   ctx.fillStyle = pattern; ctx.fillRect(x, y, w, h);
 }
 
+/**
+ * The paper background, built once at the canvas's own resolution so every frame is a 1:1 blit rather than a
+ * filtered resample of a 1920x1080 texture (the single largest per-frame cost on a weak machine).
+ */
 export function drawPaper(ctx: CanvasRenderingContext2D, w: number, h: number): void {
-  if (!paper || paper.width !== w || paper.height !== h) {
-    const [canvas, c] = canvas2d(w, h); paper = canvas;
+  const m = ctx.getTransform();
+  const s = Math.min(PAPER_MAX_SCALE, Math.round(m.a * 100) / 100);
+  if (!paper || paper.w !== w || paper.h !== h || paper.s !== s) {
+    const [canvas, c] = canvas2d(Math.ceil(w * s), Math.ceil(h * s));
+    c.scale(s, s);
     c.fillStyle = PAPER; c.fillRect(0, 0, w, h);
     c.strokeStyle = "rgba(100,105,103,0.075)"; c.lineWidth = 0.7;
     c.beginPath();
@@ -89,8 +98,13 @@ export function drawPaper(ctx: CanvasRenderingContext2D, w: number, h: number): 
       c.fillStyle = i % 2 ? "rgba(65,53,34,0.035)" : "rgba(255,255,255,0.28)";
       c.fillRect(noise(i * 2) * w, noise(i * 2 + 1) * h, 1, 1);
     }
+    paper = { canvas, w, h, s };
   }
-  ctx.drawImage(paper, 0, 0);
+  if (m.a === s && m.b === 0 && m.c === 0) {
+    ctx.setTransform(1, 0, 0, 1, m.e, m.f);
+    ctx.drawImage(paper.canvas, 0, 0);
+    ctx.setTransform(m);
+  } else ctx.drawImage(paper.canvas, 0, 0, w, h);
 }
 
 export function paperCard(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, selected = false): void {

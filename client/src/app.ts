@@ -4,6 +4,7 @@ import { PAPER } from "./render/paper";
 import { connectedPads, endInputFrame, readMenu, type DeviceId } from "./input/devices";
 import { attachPointer, endPointerFrame, setPointerTransform } from "./input/pointer";
 import { OnlineScreen } from "./screens/online";
+import { NetVersusScreen } from "./screens/netversus";
 import { VersusScreen } from "./screens/versus";
 import { SheetScreen } from "./screens/sheet";
 import { SignInScreen } from "./screens/signin";
@@ -53,8 +54,11 @@ export async function mount(opts: MountOptions): Promise<AppController> {
 
   const ctx = canvas.getContext("2d", { alpha: false })!;
   let scale = 1, offX = 0, offY = 0;
+  // canvas pixels per CSS pixel, capped; a machine that can't keep up steps down the cap (see judgeFrames)
+  const DPR_CAPS = [2, 1.5, 1, 0.75];
+  let quality = 0;
   function resize(): void {
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const dpr = Math.min(DPR_CAPS[quality], window.devicePixelRatio || 1);
     const w = window.innerWidth, h = window.innerHeight;
     canvas.width = Math.floor(w * dpr); canvas.height = Math.floor(h * dpr);
     scale = Math.min(w / VIEW_W, h / VIEW_H) * dpr;
@@ -106,12 +110,11 @@ export async function mount(opts: MountOptions): Promise<AppController> {
 
   let running = true;
   let last = performance.now();
-  function frame(now: number): void {
-    if (!running) return;
+  /** One tick of the current screen. False once the shell took over (a bundle swap). */
+  function update(now: number): boolean {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     const menu = readMenu(allDevices());
-    document.body.style.cursor = "default";
     let next = screen.update(dt, menu) ?? takeHandoff();
     // signed out (a 401 anywhere, or SIGN OUT): back to the door, except mid-match or on a no-account page
     const current = next ?? screen;
@@ -124,24 +127,71 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     if (next) { screen = next; screen.enter?.(); noteScreen(screen.constructor.name); }
     music.follow(screen instanceof VersusScreen ? screen : null);
     endInputFrame();
-    if (!running) return; // the screen asked the shell for another bundle
+    return running;
+  }
+
+  // Draws are capped near the sim's 60 Hz: a 144 Hz screen would otherwise draw 2.4x the work for the same
+  // motion. The refresh interval is the median of recent frame gaps, so a draw lands on whichever frame is
+  // closest to 1/60 s. Frame gaps also judge the machine: too many long gaps between draws, and the
+  // canvas steps down a resolution cap (never back up: a session that struggled once keeps the headroom).
+  const DRAW_MS = 1000 / 60;
+  const gaps: number[] = [];
+  let refresh = DRAW_MS, lastDraw = 0, judgeFrom = 0, slowDraws = 0, judgedDraws = 0;
+  function judgeFrames(now: number, gap: number): void {
+    if (gap > DRAW_MS * 1.6) slowDraws++;
+    judgedDraws++;
+    if (now - judgeFrom < 2000) return;
+    if (judgedDraws >= 10 && slowDraws / judgedDraws > 0.3 && quality < DPR_CAPS.length - 1) { quality++; resize(); }
+    judgeFrom = now; slowDraws = 0; judgedDraws = 0;
+  }
+  function frame(now: number): void {
+    if (!running) return;
+    gaps.push(now - last);
+    if (gaps.length > 30) gaps.shift();
+    if (gaps.length === 30) refresh = [...gaps].sort((a, b) => a - b)[15];
+    if (!update(now)) return; // the screen asked the shell for another bundle
+    const sinceDraw = now - lastDraw;
+    if (sinceDraw + refresh / 2 < DRAW_MS) { requestAnimationFrame(frame); return; }
+    if (lastDraw) judgeFrames(now, sinceDraw);
+    lastDraw = now;
+    document.body.style.cursor = "default";
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = PAPER;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // only the letterbox bars: every screen paints the whole view, and a full-canvas fill is the priciest thing a potato does per frame
+    if (offX > 0) { ctx.fillRect(0, 0, Math.ceil(offX), canvas.height); ctx.fillRect(canvas.width - Math.ceil(offX), 0, Math.ceil(offX), canvas.height); }
+    if (offY > 0) { ctx.fillRect(0, 0, canvas.width, Math.ceil(offY)); ctx.fillRect(0, canvas.height - Math.ceil(offY), canvas.width, Math.ceil(offY)); }
     ctx.setTransform(scale, 0, 0, scale, offX, offY);
     ctx.save();
     ctx.beginPath(); ctx.rect(0, 0, VIEW_W, VIEW_H); ctx.clip();
-    screen.draw(ctx, dt);
+    screen.draw(ctx, Math.min(0.1, sinceDraw / 1000));
     ctx.restore();
     endPointerFrame();
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
 
+  // requestAnimationFrame stops in a hidden tab, and an online player who stops ticking stalls everyone else's
+  // match. A worker's timer isn't throttled the way the page's are, so while the tab is hidden it keeps the
+  // match ticking (inputs out, nothing drawn) until the tab is visible and the frame loop takes over again.
+  let ticker: Worker | null = null;
+  function stopTicker(): void { ticker?.terminate(); ticker = null; }
+  function onVisibility(): void {
+    if (document.visibilityState !== "hidden") { stopTicker(); return; }
+    if (ticker || !(screen instanceof NetVersusScreen)) return;
+    ticker = new Worker(URL.createObjectURL(new Blob([`setInterval(() => postMessage(0), ${DRAW_MS})`], { type: "text/javascript" })));
+    ticker.onmessage = () => {
+      if (!running || document.visibilityState !== "hidden" || !(screen instanceof NetVersusScreen)) { stopTicker(); return; }
+      update(performance.now());
+    };
+  }
+  document.addEventListener("visibilitychange", onVisibility);
+
   const controller: AppController = {
     get screen() { return screen; },
     stop() {
       running = false;
+      stopTicker();
+      document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("resize", resize);
       window.removeEventListener("keydown", onKey);
       detachPointer();

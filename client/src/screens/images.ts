@@ -9,6 +9,8 @@ export function image(url: string): Entry {
   let e = images.get(url);
   if (e) return e;
   const img = new Image();
+  // avatars come from the Discord and Google CDNs: drawn without CORS they taint the canvas for the rest of the session
+  img.crossOrigin = "anonymous";
   e = { img, ok: false, error: "" };
   images.set(url, e);
   const entry = e;
