@@ -121,16 +121,25 @@ documented is what ships.
 ## Client loop
 
 `requestAnimationFrame` with a fixed 60 Hz accumulator; the renderer interpolates between the
-previous and current sim states for smooth motion at any refresh rate. Draws are capped near
-60 a second (a 144 Hz screen draws every other frame), and a machine that keeps missing frames
-steps the canvas down a resolution cap (2 → 1.5 → 1 → 0.75 pixels per CSS pixel, never back
-up). In a hidden tab rAF stops, so an online match is ticked by a worker's timer instead
-(inputs out, nothing drawn) until the tab is visible again. Input is sampled at the
+previous and current sim states for smooth motion at any refresh rate. The sim clock is a
+worker's 60 Hz timer, not rAF: paint rate and sim rate are separate, so a machine painting 10
+frames a second still simulates 60 and keeps up with an online match, a hidden tab (no rAF,
+throttled page timers) keeps ticking so nobody else stalls on it, and after a hitch the sim
+catches up to a quarter second rather than dropping time. Draws are capped near 60 a second (a
+144 Hz screen draws every other frame); a machine that keeps missing frames steps the canvas
+down a resolution cap (2 → 1.5 → 1 → 0.75 pixels per CSS pixel) and back up after 16 s of
+clean frames. Input is sampled at the
 start of every sim frame from the latest device state; keyboard events are recorded as they
 arrive so a press between frames is never lost. Gamepads are polled each frame. Each player
 slot has a device (keyboard layout 1, keyboard layout 2, or a gamepad index) and a bindings map.
 
 ## Rendering
+
+Per-frame cost on a weak machine is fill rate and stroke geometry, in that order: the paper is a
+1:1 blit at the canvas's resolution, the parallax backdrop uses plain strokes (its wobble was
+invisible at 12 % alpha) culled to what the camera can show, each player's HUD card is a bitmap
+rebuilt when the name or stocks change, and sparks are plain polygons. `scripts/perfbench.mjs`
+measures it.
 
 Logical canvas 1920x1080 scaled to fit, devicePixelRatio aware. Camera solves a rectangle that
 contains all live fighters plus padding, clamps to the stage's camera bounds, and eases toward

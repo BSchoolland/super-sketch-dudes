@@ -1,4 +1,4 @@
-import { inkArc, inkLine, inkPath, INK, PENCIL } from "./paper";
+import { inkArc, inkLine, INK, PENCIL } from "./paper";
 import type { GameEvent, State } from "../../../shared/types";
 import type { Camera } from "./camera";
 import { defOf } from "../../../shared/fighter";
@@ -198,7 +198,8 @@ export class Fx {
         inkArc(ctx, p.x, p.y, p.size * (0.6 + t * 0.8), Math.PI * 1.05, Math.PI * 1.9, PENCIL, 1);
       } else {
         const r = p.size * (1 - t * 0.6);
-        inkPath(ctx, [[p.x - r, p.y], [p.x - r * 0.3, p.y - r], [p.x + r * 0.8, p.y - r * 0.6], [p.x + r, p.y + r], [p.x, p.y + r * 0.4]], true);
+        ctx.beginPath();
+        ctx.moveTo(p.x - r, p.y); ctx.lineTo(p.x - r * 0.3, p.y - r); ctx.lineTo(p.x + r * 0.8, p.y - r * 0.6); ctx.lineTo(p.x + r, p.y + r); ctx.lineTo(p.x, p.y + r * 0.4); ctx.closePath();
         ctx.fillStyle = color; ctx.fill();
         if (p.kind === "ember") inkLine(ctx, p.x - r, p.y, p.x + r, p.y - r, "#ffc43a", 2);
       }

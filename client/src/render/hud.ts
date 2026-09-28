@@ -1,4 +1,4 @@
-import { FONT, INK, PAPER, inkArc, paperCard } from "./paper";
+import { FONT, INK, PAPER, canvas2d, inkArc, paperCard } from "./paper";
 import type { State } from "../../../shared/types";
 import { roster } from "../../../shared/fighters/index";
 import { tierName } from "../../../shared/cpu-skill";
@@ -6,15 +6,48 @@ import { VIEW_H, VIEW_W } from "./camera";
 
 export const SLOT_COLORS = ["#e4483f", "#287ad4", "#ddb51d", "#329854"];
 
-export interface HudState { bump: number[]; lastPercent: number[] }
-export function createHud(n: number): HudState { return { bump: new Array(n).fill(0), lastPercent: new Array(n).fill(0) }; }
+export interface HudState { bump: number[]; lastPercent: number[]; cards: ({ key: string; canvas: HTMLCanvasElement } | null)[] }
+export function createHud(n: number): HudState { return { bump: new Array(n).fill(0), lastPercent: new Array(n).fill(0), cards: new Array(n).fill(null) }; }
+
+const CARD_W = 300, CARD_H = 120, CARD_PAD = 12;
+
+/**
+ * A player's card, name, fighter and stock dots change a few times a match, so they are drawn once into a
+ * bitmap at the canvas scale and blitted; the wobbly card border and dot rings cost more per frame than
+ * the fight did. The live percent and bars go on top.
+ */
+function playerCard(hud: HudState, i: number, key: string, s: number, name: string, fighter: string, stocks: number): HTMLCanvasElement {
+  const have = hud.cards[i];
+  if (have && have.key === key) return have.canvas;
+  const [canvas, g] = canvas2d(Math.ceil((CARD_W + CARD_PAD * 2) * s), Math.ceil((CARD_H + CARD_PAD * 2) * s));
+  g.scale(s, s);
+  g.translate(CARD_PAD, CARD_PAD);
+  paperCard(g, 0, 0, CARD_W, CARD_H);
+  g.textAlign = "left";
+  g.fillStyle = SLOT_COLORS[i] ?? "#fff";
+  g.font = `700 20px ${FONT}`;
+  g.fillText(name, 20, 34);
+  g.fillStyle = INK;
+  g.font = `600 14px ${FONT}`;
+  g.fillText(fighter, 20, 54, CARD_W - 40);
+  const dots = Math.min(5, stocks);
+  for (let d = 0; d < dots; d++) {
+    g.fillStyle = SLOT_COLORS[i];
+    g.beginPath(); g.arc(28 + d * 24, 88, 8, 0, Math.PI * 2); g.fill();
+    inkArc(g, 28 + d * 24, 88, 8, 0, Math.PI * 2, INK, 1.5);
+  }
+  if (stocks > 5) { g.fillStyle = INK; g.font = `700 16px ${FONT}`; g.fillText(`×${stocks}`, 28 + dots * 24, 94); }
+  hud.cards[i] = { key, canvas };
+  return canvas;
+}
 
 export function drawHud(ctx: CanvasRenderingContext2D, state: State, hud: HudState, dt: number, names: string[]): void {
   const n = state.fighters.length;
-  const cardW = 300, gap = 40;
+  const cardW = CARD_W, gap = 40;
   const total = n * cardW + (n - 1) * gap;
   const x0 = (VIEW_W - total) / 2;
   const y = VIEW_H - 150;
+  const s = Math.min(2, Math.max(0.5, Math.round(ctx.getTransform().a * 4) / 4));
   ctx.save();
   ctx.textAlign = "left";
   state.fighters.forEach((f, i) => {
@@ -25,22 +58,9 @@ export function drawHud(ctx: CanvasRenderingContext2D, state: State, hud: HudSta
     const b = hud.bump[i];
     const dead = f.stocks <= 0;
     ctx.globalAlpha = dead ? 0.35 : 1;
-    paperCard(ctx, x, y, cardW, 120);
-    // name
-    ctx.fillStyle = SLOT_COLORS[i] ?? "#fff";
-    ctx.font = `700 20px ${FONT}`;
-    ctx.fillText(names[i] ?? `P${i + 1}`, x + 20, y + 34);
-    ctx.fillStyle = INK;
-    ctx.font = `600 14px ${FONT}`;
-    ctx.fillText(def.name, x + 20, y + 54, cardW - 40);
-    // stocks: dots up to five, a number past that
-    const dots = Math.min(5, f.stocks);
-    for (let s = 0; s < dots; s++) {
-      ctx.fillStyle = SLOT_COLORS[i];
-      ctx.beginPath(); ctx.arc(x + 28 + s * 24, y + 88, 8, 0, Math.PI * 2); ctx.fill();
-      inkArc(ctx, x + 28 + s * 24, y + 88, 8, 0, Math.PI * 2, INK, 1.5);
-    }
-    if (f.stocks > 5) { ctx.fillStyle = INK; ctx.font = `700 16px ${FONT}`; ctx.textAlign = "left"; ctx.fillText(`×${f.stocks}`, x + 28 + dots * 24, y + 94); }
+    const name = names[i] ?? `P${i + 1}`;
+    const card = playerCard(hud, i, `${name}|${def.name}|${f.stocks}|${s}`, s, name, def.name, f.stocks);
+    ctx.drawImage(card, x - CARD_PAD, y - CARD_PAD, CARD_W + CARD_PAD * 2, CARD_H + CARD_PAD * 2);
     // percent
     const shake = b * 6;
     const scale = 1 + b * 0.35;
@@ -49,13 +69,9 @@ export function drawHud(ctx: CanvasRenderingContext2D, state: State, hud: HudSta
     ctx.scale(scale, scale);
     ctx.textAlign = "right";
     ctx.font = `900 58px ${FONT}`;
-    ctx.lineWidth = 0.7; ctx.strokeStyle = INK; ctx.lineJoin = "round";
-    const txt = `${Math.floor(f.percent)}`;
-    ctx.strokeText(txt, 0, 0);
     ctx.fillStyle = INK;
-    ctx.fillText(txt, 0, 0);
+    ctx.fillText(`${Math.floor(f.percent)}`, 0, 0);
     ctx.font = `900 26px ${FONT}`;
-    ctx.strokeText("%", 30, 0);
     ctx.fillText("%", 30, 0);
     ctx.restore();
     // bars: the fighter's own numbers, scaled by their max; a tripped latch draws its fill in paper
@@ -75,14 +91,11 @@ export function drawHud(ctx: CanvasRenderingContext2D, state: State, hud: HudSta
   // timer
   if (state.rules.time > 0) {
     const secs = Math.max(0, Math.ceil(state.timer / 60));
-    const m = Math.floor(secs / 60), s = secs % 60;
+    const m = Math.floor(secs / 60), sec = secs % 60;
     ctx.textAlign = "center";
     ctx.font = `900 44px ${FONT}`;
-    ctx.lineWidth = 0.7; ctx.strokeStyle = INK;
-    const t = `${m}:${s.toString().padStart(2, "0")}`;
-    ctx.strokeText(t, VIEW_W / 2, 64);
     ctx.fillStyle = INK;
-    ctx.fillText(t, VIEW_W / 2, 64);
+    ctx.fillText(`${m}:${sec.toString().padStart(2, "0")}`, VIEW_W / 2, 64);
   }
   ctx.restore();
 }

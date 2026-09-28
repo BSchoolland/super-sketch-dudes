@@ -55,7 +55,9 @@ function drawCellLook(ctx: CanvasRenderingContext2D, def: FighterDef, look: Look
   if (aim) { ctx.rotate(at.angle); ctx.scale(1, at.facing); } else ctx.scale(at.facing, 1);
   if (look.spin) ctx.rotate(look.spin * at.frame * Math.PI / 180);
   if (look.flip) ctx.scale(-1, 1);
-  ctx.drawImage(img, cx, cy, cw, ch, -w / 2, -h / 2, w, h);
+  // the ghost variant is a half-size canvas: crop in its pixels
+  const k = img.width / sp.px;
+  ctx.drawImage(img, cx * k, cy * k, cw * k, ch * k, -w / 2, -h / 2, w, h);
 }
 
 function drawShapeLook(ctx: CanvasRenderingContext2D, look: Look, at: LookAt): void {

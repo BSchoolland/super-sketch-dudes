@@ -48,7 +48,7 @@ export function inkArc(ctx: CanvasRenderingContext2D, x: number, y: number, r: n
   inkPath(ctx, points); ctx.stroke();
 }
 
-function canvas2d(w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
+export function canvas2d(w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
   const canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas 2D is required for paper rendering");

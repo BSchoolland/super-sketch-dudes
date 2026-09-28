@@ -15,11 +15,12 @@ export interface CellImages {
 }
 const cache = new Map<string, CellImages>();
 
+/** A one-colour copy at half size: flash and ghost show for a few frames, and a full-size copy of each per cell adds up on a small GPU. */
 function tinted(img: HTMLImageElement, color: string): HTMLCanvasElement {
   const c = document.createElement("canvas");
-  c.width = img.naturalWidth; c.height = img.naturalHeight;
+  c.width = Math.ceil(img.naturalWidth / 2); c.height = Math.ceil(img.naturalHeight / 2);
   const g = c.getContext("2d")!;
-  g.drawImage(img, 0, 0);
+  g.drawImage(img, 0, 0, c.width, c.height);
   g.globalCompositeOperation = "source-in";
   g.fillStyle = color; g.fillRect(0, 0, c.width, c.height);
   return c;

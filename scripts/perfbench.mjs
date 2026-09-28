@@ -8,7 +8,7 @@ const args = process.argv.slice(2);
 const opt = (name, dflt) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : dflt; };
 const base = opt("base", "http://localhost:5199/sketch-battle/");
 const throttle = Number(opt("throttle", 4)), seconds = Number(opt("seconds", 12)), dpr = Number(opt("dpr", 1.25));
-const stage = opt("stage", "rooftops"), fighters = opt("fighters", "rocket,wizard"), players = opt("players", "cpu");
+const stage = opt("stage", "rooftops"), fighters = opt("fighters", "rocket,wizard"), players = opt("players", "cpu"), chrome = opt("chrome", "on") !== "off";
 
 const browser = await chromium.launch();
 try {
@@ -20,9 +20,10 @@ try {
   await page.goto(`${base}?quick=1&p1=${players === "cpu" ? "cpu" : "kb1"}&p2=${players === "cpu" ? "cpu" : "kb2"}&cpu=9&f=${fighters}&stage=${stage}&stocks=99&seed=7`);
   await page.waitForFunction(() => !!window.sketchbattle?.screen?.renderer, null, { timeout: 30000 });
   await page.waitForTimeout(1500);
-  const result = await page.evaluate(async (seconds) => {
+  const result = await page.evaluate(async ([seconds, chrome]) => {
     const screen = window.sketchbattle.screen;
     const renderer = screen.renderer;
+    renderer.chrome = chrome;
     const draw = renderer.draw.bind(renderer);
     let draws = 0, drawMs = 0, updates = 0, updateMs = 0;
     renderer.draw = (...a) => { const t = performance.now(); draw(...a); drawMs += performance.now() - t; draws++; };
@@ -47,7 +48,7 @@ try {
       canvas: { w: renderer && document.querySelector("canvas").width, h: document.querySelector("canvas").height },
       particles: renderer.fx.particles.length,
     };
-  }, seconds);
+  }, [seconds, chrome]);
   console.log(JSON.stringify({ throttle, dpr, stage, fighters, ...result }));
 } finally {
   await browser.close();

@@ -6,6 +6,8 @@ const press = async (page, key, n = 1) => { for (let i = 0; i < n; i++) { await 
 export async function signIn(page, url, name) {
   await page.goto(`${url}${url.includes("?") ? "&" : "?"}dev=${encodeURIComponent(name)}`);
   await page.waitForFunction(() => Array.isArray(window.sketchbattle?.screen?.items), null, { timeout: 15000 });
+  // menus select whatever the pointer hovers; a headed window's pointer starts mid-screen, on a menu row
+  await page.mouse.move(2, 2);
 }
 
 /** Title -> BATTLE: the quick match / create / join / bots menu (class names survive the build: keepNames). */

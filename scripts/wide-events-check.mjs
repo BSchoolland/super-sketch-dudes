@@ -12,7 +12,12 @@ import { openOnline } from "./menu-nav.mjs";
 const base = process.argv[2] ?? "http://localhost:5198/sketch-battle/";
 const data = process.argv[3] ?? "/tmp/wide-data";
 const browser = await chromium.launch();
-const pages = await Promise.all(["Ann", "Bob", "Kirill"].map(async () => (await browser.newContext({ viewport: { width: 1280, height: 720 } })).newPage()));
+const pages = await Promise.all(["Ann", "Bob", "Kirill"].map(async (name) => {
+  const page = await (await browser.newContext({ viewport: { width: 1280, height: 720 } })).newPage();
+  page.on("framenavigated", (f) => { if (f === page.mainFrame()) console.log(`  ${name} navigated: ${f.url()}`); });
+  page.on("pageerror", (e) => console.log(`  ${name} page error: ${e.message.split("\n")[0]}`));
+  return page;
+}));
 const press = async (p, key, n = 1) => { for (let i = 0; i < n; i++) { await p.keyboard.press(key); await p.waitForTimeout(110); } };
 const screen = (p, fn) => p.evaluate(fn);
 
@@ -24,7 +29,7 @@ try {
   await press(host, "ArrowDown"); await press(host, "Enter");
   // CREATE LOBBY asks public or code-only; the first is public
   await press(host, "Enter");
-  await host.waitForFunction(() => window.sketchbattle.screen.roomCode !== null);
+  await host.waitForFunction(() => typeof window.sketchbattle.screen.roomCode === "string");
   const code = await screen(host, () => window.sketchbattle.screen.roomCode);
   for (const [i, g] of guests.entries()) {
     await toOnline(g, i ? "Kirill" : "Bob");

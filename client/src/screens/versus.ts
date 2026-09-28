@@ -71,7 +71,8 @@ export class VersusScreen implements Screen {
     const slow = st.slowmo > 0 ? 0.25 : 1;
     this.acc += dt * 1000 * slow;
     let n = 0;
-    while (!this.frozen && this.acc >= STEP && n < 4) {
+    // after a hitch the sim catches up, to a quarter second: dropped sim time would put an online client behind the match
+    while (!this.frozen && this.acc >= STEP && n < 15) {
       if (this.match.tick()) {
         this.renderer.snapshot(this.match.state);
         this.acc -= STEP;
