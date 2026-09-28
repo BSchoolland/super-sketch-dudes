@@ -14,6 +14,7 @@ import { noteScreen, noteView, sessionTrace, startTelemetry } from "./telemetry/
 import { loadGeneratedFighter } from "./gen";
 import { devSignIn, finishSignIn, loadAccount, signedIn } from "./account";
 import { forgetLibrary } from "./fighters";
+import { forgetMaps } from "./maps";
 import { loadFighters, quickMatch } from "./quick";
 import { site, setSiteBase } from "./base";
 import { swap, type Handoff } from "./handoff";
@@ -117,6 +118,7 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     if (!signedIn() && !(current instanceof SignInScreen || current instanceof VersusScreen || current instanceof SheetScreen)) {
       current.abandon?.();
       forgetLibrary();
+      forgetMaps();
       next = signInScreen(nav);
     }
     if (next) { screen = next; screen.enter?.(); noteScreen(screen.constructor.name); }

@@ -1,6 +1,7 @@
 import type { FighterId, StageId } from "../../../shared/types";
 import { roster } from "../../../shared/fighters/index";
 import { stageList } from "../../../shared/stages/index";
+import { checkMap, type MapDoc } from "../../../shared/maps";
 import type { MatchConfig } from "../../../shared/sim";
 import { VIEW_W } from "../render/camera";
 import { drawBanner } from "../render/hud";
@@ -24,7 +25,13 @@ export function startConfig(value: unknown, seed: number): { match: MatchConfig;
   if (!value || typeof value !== "object") throw new Error("online start missing config");
   const raw = value as Record<string, unknown>;
   const stage = String(raw.stage ?? "") as StageId;
-  if (!stageList.some((s) => s.id === stage)) throw new Error(`online start has unknown stage ${stage}`);
+  let map: MapDoc | undefined;
+  if (raw.map !== undefined) {
+    const problems = checkMap(raw.map);
+    if (problems.length) throw new Error(`online start has a bad map: ${problems[0]}`);
+    map = raw.map as MapDoc;
+    if (map.id !== stage) throw new Error(`online start plays ${stage} but carries map ${map.id}`);
+  } else if (!stageList.some((s) => s.id === stage)) throw new Error(`online start has unknown stage ${stage}`);
   if (!Array.isArray(raw.players) || raw.players.length < 2 || raw.players.length > 4) throw new Error("online start has invalid players");
   const bundles: string[] = [];
   const players = raw.players.map((player) => {
@@ -39,7 +46,7 @@ export function startConfig(value: unknown, seed: number): { match: MatchConfig;
   if (!raw.rules || typeof raw.rules !== "object") throw new Error("online start has invalid rules");
   const rules = raw.rules as MatchConfig["rules"];
   const inputDelay = Math.max(1, Math.min(6, Number(raw.inputDelay ?? 2) | 0));
-  return { match: { stage, players, rules, seed }, inputDelay, bundles };
+  return { match: { stage, players, rules, seed, ...(map ? { map } : {}) }, inputDelay, bundles };
 }
 
 /**

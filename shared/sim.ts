@@ -7,7 +7,8 @@ import { resolveHits } from "./hits";
 import { EMPTY_INPUT, cloneInput, type InputFrame } from "./input";
 import { stepPhysics, stepProjectiles, updatePlatforms } from "./physics";
 import { stepRules } from "./rules";
-import { stages } from "./stages/index";
+import { registerStage, stages } from "./stages/index";
+import { stageFromMap, type MapDoc } from "./maps";
 import type { Fighter, FighterId, Glimpse, Rules, Stage, StageId, State } from "./types";
 
 export interface MatchConfig {
@@ -15,6 +16,8 @@ export interface MatchConfig {
   players: { fighter: FighterId; team?: number; cpu?: number }[];
   rules?: Partial<Rules>;
   seed: number;
+  /** The player-made map `stage` names, so every client builds the same geometry. */
+  map?: MapDoc;
 }
 
 export const DEFAULT_RULES: Rules = { stocks: 3, time: 0, teams: false, damageRatio: 1 };
@@ -51,6 +54,10 @@ export function createFighter(slot: number, id: FighterId, stage: Stage, rules: 
 }
 
 export function createMatch(cfg: MatchConfig): State {
+  if (cfg.map) {
+    if (cfg.map.id !== cfg.stage) throw new Error(`match stage ${cfg.stage} is not its map ${cfg.map.id}`);
+    registerStage(stageFromMap(cfg.map));
+  }
   const stage = stages[cfg.stage];
   if (!stage) throw new Error(`unknown stage ${cfg.stage}`);
   const rules: Rules = { ...DEFAULT_RULES, ...cfg.rules };
@@ -63,11 +70,12 @@ export function createMatch(cfg: MatchConfig): State {
     inputs: cfg.players.map(() => cloneInput(EMPTY_INPUT)),
     seen: [],
   };
-  // start on the ground where possible
+  // start standing on whatever the spawn is on; a spawn over nothing drops in
   for (const f of state.fighters) {
+    const i = stage.platforms.findIndex((p) => f.x >= p.x1 && f.x <= p.x2 && p.y === f.y);
+    if (i < 0) continue;
     f.grounded = true;
-    f.platform = 0;
-    f.y = stage.platforms[0].y;
+    f.platform = i;
     f.action = "idle";
   }
   return state;

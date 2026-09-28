@@ -21,10 +21,13 @@ export function surfaces(state: State, stage: Stage): Surface[] {
     const o = state.platOffsets[i] ?? { dx: 0, dy: 0 };
     const m = p.motion;
     const s: Surface = { i, x1: p.x1 + o.dx, x2: p.x2 + o.dx, y: p.y + o.dy, xMin: 0, xMax: 0, yMin: 0, yMax: 0, moving: !!m, covered: false };
-    if (m) {
+    if (m?.kind === "orbit") {
       const cx = m.cx - (p.x1 + p.x2) / 2;
       s.xMin = p.x1 + cx - m.rx; s.xMax = p.x2 + cx + m.rx;
       s.yMin = m.cy - m.ry; s.yMax = m.cy + m.ry;
+    } else if (m) {
+      s.xMin = p.x1 + Math.min(0, m.dx); s.xMax = p.x2 + Math.max(0, m.dx);
+      s.yMin = p.y + Math.min(0, m.dy); s.yMax = p.y + Math.max(0, m.dy);
     } else { s.xMin = s.x1; s.xMax = s.x2; s.yMin = s.y; s.yMax = s.y; }
     return s;
   });

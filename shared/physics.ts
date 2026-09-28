@@ -10,17 +10,21 @@ export function platformOffset(state: State, i: number): { dx: number; dy: numbe
   return state.platOffsets[i] ?? { dx: 0, dy: 0 };
 }
 
+/** Where a platform's motion has carried it on `frame`, relative to its rest position. */
+export function platformMotion(p: Platform, frame: number): { dx: number; dy: number } {
+  const m = p.motion;
+  if (!m) return { dx: 0, dy: 0 };
+  const a = ((frame + m.phase) * 360) / m.period;
+  if (m.kind === "orbit") return { dx: m.cx + cosDeg(a) * m.rx - (p.x1 + p.x2) / 2, dy: m.cy + sinDeg(a) * m.ry - p.y };
+  const s = (1 - cosDeg(a)) / 2;
+  return { dx: m.dx * s + 0, dy: m.dy * s + 0 };
+}
+
 export function updatePlatforms(state: State, stage: Stage): void {
   for (let i = 0; i < stage.platforms.length; i++) {
     const p = stage.platforms[i];
     const prev = state.platOffsets[i] ?? { dx: 0, dy: 0 };
-    let dx = 0, dy = 0;
-    if (p.motion?.kind === "orbit") {
-      const m = p.motion;
-      const a = ((state.frame + m.phase) * 360) / m.period;
-      dx = m.cx + cosDeg(a) * m.rx - (p.x1 + p.x2) / 2;
-      dy = m.cy + sinDeg(a) * m.ry - p.y;
-    }
+    const { dx, dy } = platformMotion(p, state.frame);
     state.platOffsets[i] = { dx, dy };
     // carry riders
     for (const f of state.fighters) if (f.grounded && f.platform === i) { f.x += dx - prev.dx; f.y += dy - prev.dy; }

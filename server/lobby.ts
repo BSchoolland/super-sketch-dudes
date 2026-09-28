@@ -1,6 +1,7 @@
 import type { WebSocketServer, WebSocket } from "ws";
 import type { IncomingMessage } from "node:http";
 import { isBundlePath } from "../shared/account";
+import { checkMap, MAP_JSON_MAX, type MapDoc } from "../shared/maps";
 import { matchTrace, TRACE_RE, type WideEvent } from "../shared/wide";
 import { finish, newTrace, openEvent } from "./events";
 
@@ -39,12 +40,24 @@ export interface RelayMatch { event: WideEvent; slots: SlotRelay[]; hashes: Map<
 let nextId = 1;
 export const rooms = new Map<string, Room>();
 const ROOM_SIZE = 4;
-export interface StagePick { stage: string; stocks: number; time: number }
+/** `map` is the player-made map `stage` names, so guests can see and later play it. */
+export interface StagePick { stage: string; stocks: number; time: number; map?: MapDoc }
 function stagePick(v: unknown): StagePick | null {
   if (!v || typeof v !== "object") return null;
   const p = v as Record<string, unknown>;
   if (typeof p.stage !== "string" || typeof p.stocks !== "number" || typeof p.time !== "number") return null;
-  return { stage: p.stage.slice(0, 32), stocks: p.stocks | 0, time: p.time | 0 };
+  const pick: StagePick = { stage: p.stage.slice(0, 32), stocks: p.stocks | 0, time: p.time | 0 };
+  if (p.map !== undefined && p.map !== null) {
+    const map = mapInMessage(p.map);
+    if (!map || map.id !== pick.stage) return null;
+    pick.map = map;
+  }
+  return pick;
+}
+/** A map a client sent: only ever relayed once it checks out, so nobody can push a broken one at a room. */
+function mapInMessage(v: unknown): MapDoc | null {
+  if (JSON.stringify(v).length > MAP_JSON_MAX || checkMap(v).length) return null;
+  return v as MapDoc;
 }
 
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -238,7 +251,12 @@ export function attachLobby(wss: WebSocketServer): void {
           if (!room || room.host !== c || room.members.length < 2 || room.started) break;
           if (!room.members.every((m) => m.ready)) { send(c, { t: "error", error: "not everyone is ready" }); break; }
           if (!msg.config || typeof msg.config !== "object" || Array.isArray(msg.config)) { send(c, { t: "error", error: "invalid match config" }); break; }
-          const requested = msg.config;
+          const requested = msg.config as Record<string, unknown>;
+          if (requested.map !== undefined) {
+            const map = mapInMessage(requested.map);
+            if (!map || map.id !== requested.stage) { send(c, { t: "error", error: "invalid map" }); break; }
+            requested.map = map;
+          }
           room.started = true;
           room.picking = null;
           room.seed = (Math.random() * 0xffffffff) >>> 0;

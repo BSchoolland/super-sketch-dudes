@@ -16,7 +16,8 @@ sketch-battle/
     fixed.ts         deterministic math: sin/cos tables by degree, sqrt, a seeded PRNG
     fighters/        one folder per fighter: stats.ts, moves.ts, rig.ts, palette.ts, index.ts
     fighters/index.ts  the roster
-    stages/          one file per stage: geometry (platforms, ledges, blast zones), decor spec
+    stages/          one file per stage: geometry (platforms, ledges, blast zones); registerStage for player maps
+    maps.ts          player-made maps: the editor's document, its validation, and the stage derived from it
     cpu.ts           bot controller: reads state, returns an input record
     rules.ts         stocks, time, KO, sudden death
   client/
@@ -24,11 +25,12 @@ sketch-battle/
     src/main.ts      boot, screen router
     src/render/      canvas renderer: camera, rigs, effects, particles, stages, hud
     src/input/       keyboard + gamepad -> input records per slot; device assignment
-    src/screens/     title, character select, stage select, versus, online lobby, training, settings
+    src/screens/     title, character select, stage select, versus, online lobby, training, settings, maps + map editor
     src/net/         rollback session (predict / snapshot / resimulate) + websocket transport
     src/audio/       procedural WebAudio sfx + music
     src/telemetry/   wide events: the page session, each online match's view, sent to /api/events
   server/index.ts    static files, /api/health, /api/events, lobby + input relay over /ws
+  server/maps.ts     /api/maps: player-made maps as files, gated by map-makers.json
   server/events.ts   wide event store writer, request/process events; eventlog.ts reads it back
   scripts/           headless: ladder (CPU vs CPU matchups), frames (dump move data),
                      shots (Playwright screenshots of every screen), smoke, deploy.sh
@@ -36,6 +38,17 @@ sketch-battle/
                      knockback formula, ledge grab, shield math, each fighter's moves have
                      hitboxes on their active frames
 ```
+
+## Player-made maps
+
+A map (`shared/maps.ts`) is terrain blocks, thin platforms (still, back-and-forth or orbiting) and
+four spawns. `stageFromMap` turns it into a `Stage`: the biggest block is platform 0 (the main
+stage the camera keeps in frame), every block gets a ledge at each end, and the blast zone, camera
+box and respawn point are laid out around the geometry with the shipped stages' proportions.
+`createMatch` registers the map named by `config.map` before it looks the stage up, so a config
+that carries its map plays the same everywhere: locally, over the relay (the host's stage pick and
+start message carry it; the server relays a map only after `checkMap` passes), and across a bundle
+swap. Fighters start standing on whatever platform their spawn is on.
 
 ## Determinism (non-negotiable; rollback depends on it)
 

@@ -32,6 +32,16 @@ The house roster (`client/public/house/`, ids in `shared/house.ts`) is four forg
 ship with the game and stand in as CPU opponents and the forge's balance ladder: **WOODSTOVE**,
 **SLUGBERT**, **ROCKET** and **WIZARD**. Everything else a player fights is drawn and forged.
 
+## Maps
+
+Players on the allowlist (`server-data/map-makers.json`, a list of account ids or `"*"`) get a
+MAPS card on the title screen: an editor for terrain, thin platforms, moving platforms and spawn
+points, with TEST and SAVE. Saved maps sit next to the shipped stages in the stage picker, for bot
+matches and online; a host's map travels inside the stage pick and the start message, so guests
+need nothing. `shared/maps.ts` is the model: what the editor keeps, what the server checks, and
+how a stage is derived from it (ledges on every block of terrain, blast zone and camera around
+everything, respawn over the biggest block).
+
 ## Development
 
 ```

@@ -278,7 +278,7 @@ export class OnlineScreen implements Screen {
   private startMatch(setup: MatchSetup): void {
     this.context.transport.sendLobby({
       t: "start",
-      config: { stage: setup.stage, rules: { stocks: setup.stocks, time: setup.time }, inputDelay: this.inputDelay },
+      config: { stage: setup.stage, rules: { stocks: setup.stocks, time: setup.time }, inputDelay: this.inputDelay, ...(setup.map ? { map: setup.map } : {}) },
     });
     sfx.go();
   }
@@ -289,8 +289,8 @@ export class OnlineScreen implements Screen {
     const isHost = room.host === this.context.id;
     if (!this.picker) {
       this.picker = new StagePicker(!isHost, (setup) => this.context.transport.sendLobby({ t: "picking", pick: setup }));
-      this.picker.show(room.picking);
-    } else if (!isHost) this.picker.show(room.picking);
+      this.picker.show({ ...room.picking, map: room.picking.map ?? null });
+    } else if (!isHost) this.picker.show({ ...room.picking, map: room.picking.map ?? null });
   }
 
   leave(): void {

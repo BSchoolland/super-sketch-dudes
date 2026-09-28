@@ -1,6 +1,10 @@
 import type { SlotSource } from "../match";
 import { signOut } from "../account";
-import { forgetLibrary, practiceDummy, type FighterChoice } from "../fighters";
+import { allChoices, forgetLibrary, practiceDummy, type FighterChoice } from "../fighters";
+import { forgetMaps } from "../maps";
+import { MapsScreen } from "./maps";
+import { MapEditorScreen } from "./mapeditor";
+import { settings } from "./ui";
 import type { Nav } from "./nav";
 import type { Screen } from "./ui";
 import { TitleScreen } from "./title";
@@ -22,7 +26,7 @@ export interface LocalPlayer { fighter: FighterChoice; source: SlotSource }
 /** A local match: loads every fighter, then fights; REMATCH replays the same setup with a new seed. */
 export function localMatch(players: LocalPlayer[], setup: MatchSetup, exit: () => Screen): Screen {
   const make = (): Screen => {
-    const cfg = { stage: setup.stage, players: players.map((p) => ({ fighter: p.fighter.id, cpu: p.source.cpu })), rules: { stocks: setup.stocks, time: setup.time }, seed: (Math.random() * 0xffffffff) >>> 0 };
+    const cfg = { stage: setup.stage, players: players.map((p) => ({ fighter: p.fighter.id, cpu: p.source.cpu })), rules: { stocks: setup.stocks, time: setup.time }, seed: (Math.random() * 0xffffffff) >>> 0, ...(setup.map ? { map: setup.map } : {}) };
     return new VersusScreen(cfg, players.map((p) => ({ ...p.source })), exit, make);
   };
   return new LoadingScreen(players.map((p) => p.fighter.bundleUrl), make, exit);
@@ -39,7 +43,8 @@ export function menus(): Nav {
       if (mode === "battle") return nav.battle();
       if (mode === "create") return nav.create();
       if (mode === "library") return nav.library();
-      return new SettingsScreen(() => nav.title(), () => { signOut(); forgetLibrary(); return signInScreen(nav); });
+      if (mode === "maps") return nav.maps();
+      return new SettingsScreen(() => nav.title(), () => { signOut(); forgetLibrary(); forgetMaps(); return signInScreen(nav); });
     }),
     create: (pad, hint) => new CreateScreen(nav, pad, hint),
     describe: (pad, hint) => new DescribeScreen(nav, pad, hint),
@@ -64,6 +69,15 @@ export function menus(): Nav {
         return v;
       };
       return new LoadingScreen([you.bundleUrl, dummy.bundleUrl], make, () => nav.library());
+    },
+    maps: () => new MapsScreen(nav),
+    mapEditor: (doc) => new MapEditorScreen(nav, doc),
+    testMap: (doc, back) => {
+      const { mine, house } = allChoices();
+      const you = mine[0] ?? house[0];
+      const rival = house.find((h) => h.id !== you.id) ?? house[0];
+      const players: LocalPlayer[] = [{ fighter: you, source: { device: "kb1", cpu: 0 } }, { fighter: rival, source: { device: null, cpu: settings.cpuTier } }];
+      return localMatch(players, { stage: doc.id, stocks: 3, time: 0, map: doc }, back);
     },
   };
 

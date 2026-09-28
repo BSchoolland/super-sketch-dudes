@@ -4,6 +4,7 @@ import type { MenuInput } from "../input/devices";
 import { sfx } from "../audio/audio";
 import { account } from "../account";
 import { refreshLibrary } from "../fighters";
+import { myMaps, refreshMaps } from "../maps";
 import { bg, card, hint, label, title, hover, clicked, goTo, type Screen, INK } from "./ui";
 import { image } from "./images";
 import { MenuBrawl } from "./brawl";
@@ -11,7 +12,7 @@ import { MENU_CARD } from "../../../shared/stages/menu";
 
 const MENU_Y = MENU_CARD.y0, MENU_STEP = MENU_CARD.step;
 
-export type Mode = "battle" | "library" | "create" | "settings";
+export type Mode = "battle" | "library" | "create" | "maps" | "settings";
 
 export function drawLogo(ctx: CanvasRenderingContext2D, y: number): void {
   ctx.save();
@@ -47,16 +48,21 @@ export function drawPlayerBadge(ctx: CanvasRenderingContext2D): void {
 export class TitleScreen implements Screen {
   t = 0;
   sel = 0;
-  items: { id: Mode; name: string; desc: string }[] = [
-    { id: "battle", name: "BATTLE", desc: "Fight the CPU, a friend here, or someone online" },
-    { id: "library", name: "MY CHARACTERS", desc: "View characters you've drawn" },
-    { id: "create", name: "NEW CHARACTER", desc: "Draw a new character" },
-    { id: "settings", name: "SETTINGS", desc: "Change settings" },
-  ];
+  /** MAPS is only offered to accounts that may make them. */
+  get items(): { id: Mode; name: string; desc: string }[] {
+    return [
+      { id: "battle", name: "BATTLE", desc: "Fight the CPU, a friend here, or someone online" },
+      { id: "library", name: "MY CHARACTERS", desc: "View characters you've drawn" },
+      { id: "create", name: "NEW CHARACTER", desc: "Draw a new character" },
+      ...(myMaps.canCreate ? [{ id: "maps" as const, name: "MAPS", desc: "Build a stage to fight on" }] : []),
+      { id: "settings", name: "SETTINGS", desc: "Change settings" },
+    ];
+  }
   brawl: MenuBrawl | null = null;
   constructor(private onPick: (m: Mode) => Screen) {}
   enter(): void {
     void refreshLibrary();
+    void refreshMaps();
     this.brawl = new MenuBrawl();
   }
   update(_dt: number, m: MenuInput): Screen | null {

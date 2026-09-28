@@ -281,6 +281,10 @@ export interface HookCtx {
   prev: InputFrame;
 }
 
+/** An orbit rides a circle around (cx, cy); a line goes from the rest position to (+dx, +dy) and back, easing at the ends. `period` is in frames. */
+export type PlatformMotion =
+  | { kind: "orbit"; cx: number; cy: number; rx: number; ry: number; period: number; phase: number }
+  | { kind: "line"; dx: number; dy: number; period: number; phase: number };
 export interface Platform {
   x1: number;
   x2: number;
@@ -289,7 +293,7 @@ export interface Platform {
   solid?: boolean;
   bottom?: number;
   /** Moving platforms report their own offset per frame; static ones omit it. */
-  motion?: { kind: "orbit"; cx: number; cy: number; rx: number; ry: number; period: number; phase: number };
+  motion?: PlatformMotion;
   /** Drawn by the screen that owns the stage (the title screen's menu cards), not the stage renderer. */
   hidden?: boolean;
 }

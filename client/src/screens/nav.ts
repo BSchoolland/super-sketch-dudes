@@ -1,4 +1,5 @@
 import type { LibraryEntry } from "../../../shared/account";
+import type { MapDoc } from "../../../shared/maps";
 import type { FighterChoice } from "../fighters";
 import type { DrawPad } from "./pad";
 import type { Screen } from "./ui";
@@ -20,4 +21,10 @@ export interface Nav {
   battle(fighter?: FighterChoice): Screen;
   /** PRACTICE: Proving Ground against the practice dummy, which never fights back. */
   practice(fighter: FighterChoice, device: DeviceId): Screen;
+  /** MAPS: the player's maps. */
+  maps(): Screen;
+  /** The editor on `doc`, or on a fresh map. */
+  mapEditor(doc: MapDoc | null): Screen;
+  /** A bot fight on a map straight from the editor; `back` is the editor to return to. */
+  testMap(doc: MapDoc, back: () => Screen): Screen;
 }

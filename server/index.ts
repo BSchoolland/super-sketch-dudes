@@ -10,6 +10,7 @@ import { attachAuth } from "./auth";
 import { initLibrary } from "./library";
 import { attachForge } from "./forge";
 import { attachCharacters } from "./characters";
+import { attachMaps, initMaps } from "./maps";
 import { attachBrawlStats } from "./brawl-stats";
 import { attachEvents, initEvents, requestErrors, requestEvents, watchProcess } from "./events";
 
@@ -24,7 +25,7 @@ watchProcess({ port: PORT, base: BASE, node: process.version });
 
 const app = express();
 // forge completions carry nine PNG cells + a sheet as base64; a new character carries its drawing
-app.use((req, res, next) => express.json({ limit: req.path.includes("/forge/") || req.path.endsWith("/characters/import") ? "12mb" : req.path.includes("/games") ? "40mb" : req.path.endsWith("/events") || req.path.endsWith("/source") ? "256kb" : req.path.endsWith("/characters") ? "2mb" : "8kb" })(req, res, next));
+app.use((req, res, next) => express.json({ limit: req.path.includes("/forge/") || req.path.endsWith("/characters/import") ? "12mb" : req.path.includes("/games") ? "40mb" : req.path.endsWith("/events") || req.path.endsWith("/source") ? "256kb" : req.path.endsWith("/characters") ? "2mb" : req.path.includes("/maps") ? "80kb" : "8kb" })(req, res, next));
 const api = express.Router();
 // Apache proxies /sketch-battle/* to / here; when hit directly the prefix is still present, so mount both.
 app.use("/api", api);
@@ -40,6 +41,9 @@ initLibrary(DATA_DIR);
 attachAuth(api, { dataDir: DATA_DIR, devLogin: process.env.DEV_LOGIN === "1" });
 attachForge(api, { token: FORGE_TOKEN, dataDir: DATA_DIR, genBase: `${BASE}/gen` });
 attachCharacters(api, FORGE_TOKEN, DATA_DIR);
+// player-made maps, for the accounts in map-makers.json
+initMaps({ dataDir: DATA_DIR, devLogin: process.env.DEV_LOGIN === "1" });
+attachMaps(api);
 // game bundles: whole builds of the game, one folder per hash; rooms switch between them live
 attachGames(api, { token: FORGE_TOKEN, dataDir: DATA_DIR });
 const gamesDir = path.join(DATA_DIR, "games");
