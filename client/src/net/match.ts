@@ -1,6 +1,7 @@
 import { EMPTY_INPUT, cloneInput, type InputFrame } from "../../../shared/input";
 import type { GameEvent, State } from "../../../shared/types";
 import { readDevice } from "../input/devices";
+import { settings } from "../screens/ui";
 import type { MatchDriver, SlotSource } from "../match";
 import type { RollbackSession } from "./rollback";
 
@@ -27,7 +28,7 @@ export class RollbackMatch implements MatchDriver {
 
   tick(): boolean {
     const source = this.sources[this.session.localSlot];
-    const input = source.device ? readDevice(source.device) : cloneInput(EMPTY_INPUT);
+    const input = source.device ? readDevice(source.device, { tapJump: settings.tapJump }) : cloneInput(EMPTY_INPUT);
     this.lastInputs[this.session.localSlot] = input;
     return this.session.advance(input);
   }

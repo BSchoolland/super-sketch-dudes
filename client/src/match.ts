@@ -5,6 +5,7 @@ import { defOf } from "../../shared/fighter";
 import { B, EMPTY_INPUT, type InputFrame } from "../../shared/input";
 import type { GameEvent, State } from "../../shared/types";
 import { readDevice, type DeviceId } from "./input/devices";
+import { settings } from "./screens/ui";
 
 export interface SlotSource { device: DeviceId | null; cpu: number }
 
@@ -36,7 +37,7 @@ export class LocalMatch implements MatchDriver {
   }
   sample(): InputFrame[] {
     return this.sources.map((s, i) => {
-      if (s.device) return readDevice(s.device);
+      if (s.device) return readDevice(s.device, { tapJump: settings.tapJump });
       if (s.cpu > 0) return cpuInput(this.state, i, s.cpu);
       return { ...EMPTY_INPUT };
     });
