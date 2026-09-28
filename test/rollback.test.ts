@@ -13,6 +13,7 @@ interface Packet {
   frame: number;
   inputs?: InputFrame[];
   hash?: number;
+  leads?: number[];
 }
 
 class SeededNetwork {
@@ -22,7 +23,7 @@ class SeededNetwork {
   private packets: Packet[] = [];
   private endpoints: MemoryTransport[] = [];
 
-  constructor(seed: number, private minLatency: number, private maxLatency: number) {
+  constructor(seed: number, readonly minLatency: number, readonly maxLatency: number) {
     this.seed = seed >>> 0;
   }
 
@@ -71,8 +72,8 @@ class MemoryTransport implements Transport {
 
   constructor(private network: SeededNetwork, private endpointId: number, private slot: number) {}
 
-  send(frame: number, inputs: InputFrame[]): void {
-    this.network.send(this.endpointId, { kind: "inputs", slot: this.slot, frame, inputs: inputs.map(cloneInput) });
+  send(frame: number, inputs: InputFrame[], leads: number[]): void {
+    this.network.send(this.endpointId, { kind: "inputs", slot: this.slot, frame, inputs: inputs.map(cloneInput), leads: [...leads] });
   }
 
   onInputs(cb: InputsCallback): Unsubscribe {
@@ -90,12 +91,13 @@ class MemoryTransport implements Transport {
   }
 
   ping(): void {}
-  rtt(): number { return 4 * 1000 / 60; }
+  /** A round trip is two hops of the network's mean latency. */
+  rtt(): number { return (this.network.minLatency + this.network.maxLatency) * 1000 / 60; }
   close(): void {}
 
   deliver(packet: Packet): void {
     if (packet.kind === "inputs") {
-      for (const listener of this.inputListeners) listener(packet.slot, packet.frame, packet.inputs!.map(cloneInput));
+      for (const listener of this.inputListeners) listener(packet.slot, packet.frame, packet.inputs!.map(cloneInput), { rtt: this.rtt(), leads: packet.leads });
     } else {
       for (const listener of this.hashListeners) listener(packet.slot, packet.frame, packet.hash!);
     }
@@ -264,5 +266,21 @@ describe("rollback session", () => {
     a.synchronize(); b.synchronize();
     const f = Math.min(a.state.frame, b.state.frame);
     expect(a.stateHashAt(f)).toBe(b.stateHashAt(f));
+  });
+
+  it("clients running level over real latency don't slow each other down", () => {
+    const config = makeConfig();
+    const network = new SeededNetwork(0xc0ffee, 4, 6);
+    const a = new RollbackSession({ config, localSlot: 0, transport: network.endpoint(0) });
+    const b = new RollbackSession({ config, localSlot: 1, transport: network.endpoint(1) });
+    for (let tick = 0; tick < 1200; tick++) {
+      network.tick();
+      a.advance(scriptedInput(0, a.state.frame + a.inputDelay + 1));
+      b.advance(scriptedInput(1, b.state.frame + b.inputDelay + 1));
+    }
+    // latency alone once cost every other tick; level clients should give up almost none
+    expect(a.stats.timeSyncSkips + b.stats.timeSyncSkips).toBeLessThan(24);
+    expect(a.stats.stalls + b.stats.stalls).toBe(0);
+    expect(Math.min(a.state.frame, b.state.frame)).toBeGreaterThan(1150);
   });
 });

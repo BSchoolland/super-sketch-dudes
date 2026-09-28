@@ -2,7 +2,7 @@ import { cpuInput } from "../../../shared/cpu";
 import { EMPTY_INPUT, cloneInput, inputEquals, type InputFrame } from "../../../shared/input";
 import { cloneState, createMatch, hashState, step, type MatchConfig } from "../../../shared/sim";
 import type { GameEvent, State } from "../../../shared/types";
-import type { Transport, Unsubscribe } from "./transport";
+import type { SyncReport, Transport, Unsubscribe } from "./transport";
 
 export interface DesyncInfo {
   frame: number;
@@ -57,7 +57,13 @@ export class RollbackSession {
   private remoteNewest = new Map<number, number>();
   /** Remote players who left mid-match: their slot plays empty inputs after this frame. */
   private gone = new Map<number, number>();
-  private slowTick = 0;
+  /** Each remote's reported round trip to the relay, for the one-way time its inputs spend in flight. */
+  private remoteRtt = new Map<number, number>();
+  /** How far ahead of us each remote last reckoned it was. */
+  private remoteLeads = new Map<number, number>();
+  /** Smoothed frameLead, and ticks since the last one given up to time sync. */
+  private leadAvg = 0;
+  private sinceSkip = 0;
   /** Snapshots from this frame on are kept whatever the rollback window, so a bundle swap can hand one over. */
   keepFrom: number | null = null;
   private unsubscribers: Unsubscribe[];
@@ -81,7 +87,7 @@ export class RollbackSession {
     this.snapshots.set(0, cloneState(this.state));
     if (options.resume) this.resume(options.resume);
     this.unsubscribers = [
-      this.transport.onInputs((slot, frame, inputs) => this.receiveInputs(slot, frame, inputs)),
+      this.transport.onInputs((slot, frame, inputs, report) => this.receiveInputs(slot, frame, inputs, report)),
       this.transport.onHash((slot, frame, hash) => this.receiveHash(slot, frame, hash)),
     ];
   }
@@ -103,10 +109,15 @@ export class RollbackSession {
       this.stats.stalls++;
       return false;
     }
-    // time sync: when we are ahead of a remote, give up every other tick so they can catch up instead of us stalling later
-    const lead = this.frameLead();
-    if (lead > 2 && (this.slowTick++ & 1) === 0) { this.waiting = false; this.stats.timeSyncSkips++; return false; }
-
+    // time sync: ahead of a remote on the shared clock, give up ticks until it's level (a stall later would cost more):
+    // one in 6 a frame ahead, up to every other tick against a remote that can only run at half speed
+    this.leadAvg += (this.frameLead() - this.leadAvg) * 0.1;
+    if (this.leadAvg > 1 && ++this.sinceSkip >= Math.max(2, Math.min(6, Math.ceil(6 / this.leadAvg)))) {
+      this.sinceSkip = 0;
+      this.waiting = false;
+      this.stats.timeSyncSkips++;
+      return false;
+    }
     this.waiting = false;
     const inputs = this.inputsForFrame(nextFrame);
     step(this.state, inputs);
@@ -199,10 +210,37 @@ export class RollbackSession {
     this.unsubscribers.length = 0;
   }
 
-  /** How many frames our sim is ahead of the slowest remote's, estimated from the newest input frame each remote has sent. */
+  /**
+   * Our own reckoning of how many frames we're ahead of one remote. Its newest input says which frame
+   * it was simulating when it sent it; that input spent half our round trip and half its own in flight,
+   * during which the remote kept simulating (assumed at full speed).
+   */
+  private ownLead(slot: number, newest: number): number {
+    const ownRtt = this.transport.rtt();
+    const oneWay = (ownRtt + (this.remoteRtt.get(slot) ?? ownRtt)) / 2 / (1000 / 60);
+    return this.state.frame - (newest - this.inputDelay - 1 + oneWay);
+  }
+
+  /** Our reckoning against every slot, reported with our inputs; 0 for ourselves, CPUs and players we haven't heard from. */
+  private leadsBySlot(): number[] {
+    return this.cpuLevels.map((_, slot) => {
+      const newest = this.remoteNewest.get(slot);
+      return newest === undefined ? 0 : this.ownLead(slot, newest);
+    });
+  }
+
+  /**
+   * How many frames we're ahead of the slowest remote. Half the difference between our reckoning and
+   * theirs (GGPO's frame advantage): whatever both got wrong about latency or speed cancels out, so
+   * two clients running level read about 0 at any ping.
+   */
   frameLead(): number {
     let lead = 0;
-    for (const [, newest] of this.remoteNewest) lead = Math.max(lead, this.state.frame - (newest - this.inputDelay));
+    for (const [slot, newest] of this.remoteNewest) {
+      const own = this.ownLead(slot, newest);
+      const theirs = this.remoteLeads.get(slot);
+      lead = Math.max(lead, theirs === undefined ? own : (own - theirs) / 2);
+    }
     return lead;
   }
 
@@ -221,8 +259,11 @@ export class RollbackSession {
     this.advanceConfirmation();
   }
 
-  private receiveInputs(slot: number, newestFrame: number, inputs: InputFrame[]): void {
+  private receiveInputs(slot: number, newestFrame: number, inputs: InputFrame[], report: SyncReport): void {
     if (!this.humanSlots.includes(slot) || slot === this.localSlot) return;
+    if (report.rtt !== undefined) this.remoteRtt.set(slot, report.rtt);
+    const theirs = report.leads?.[this.localSlot];
+    if (theirs !== undefined && Number.isFinite(theirs)) this.remoteLeads.set(slot, theirs);
     this.remoteNewest.set(slot, Math.max(this.remoteNewest.get(slot) ?? 0, newestFrame));
     const firstFrame = newestFrame - inputs.length + 1;
     for (let i = 0; i < inputs.length; i++) {
@@ -307,7 +348,7 @@ export class RollbackSession {
       if (!input) throw new Error(`missing local input for frame ${frame}`);
       inputs.push(input);
     }
-    this.transport.send(newestFrame, inputs);
+    this.transport.send(newestFrame, inputs, this.leadsBySlot());
   }
 
   private advanceConfirmation(): void {

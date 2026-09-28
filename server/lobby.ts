@@ -268,7 +268,7 @@ export function attachLobby(wss: WebSocketServer): void {
         case "inputs":
           if (!c.room?.started || c.slot < 0) break;
           if (c.room.match) relayInput(c.room.match, c.slot, msg.frame | 0);
-          broadcast(c.room, { t: "inputs", slot: c.slot, frame: msg.frame | 0, inputs: msg.inputs }, c);
+          broadcast(c.room, { t: "inputs", slot: c.slot, frame: msg.frame | 0, inputs: msg.inputs, ...syncReport(msg) }, c);
           break;
         case "hash":
           if (!c.room?.started || c.slot < 0) break;
@@ -291,4 +291,12 @@ export function attachLobby(wss: WebSocketServer): void {
       finish(event);
     });
   });
+}
+
+/** A client's time-sync report on its inputs (round trip, per-slot frame leads), passed on to the room when well formed. */
+function syncReport(msg: { r?: unknown; l?: unknown }): { rtt?: number; leads?: number[] } {
+  const out: { rtt?: number; leads?: number[] } = {};
+  if (typeof msg.r === "number" && Number.isFinite(msg.r)) out.rtt = Math.max(0, Math.min(5000, Math.round(msg.r)));
+  if (Array.isArray(msg.l) && msg.l.length <= 8 && msg.l.every((lead) => typeof lead === "number" && Number.isFinite(lead))) out.leads = msg.l.map((lead: number) => Math.max(-600, Math.min(600, lead)));
+  return out;
 }

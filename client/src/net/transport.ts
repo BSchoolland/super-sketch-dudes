@@ -4,11 +4,16 @@ import { sessionTrace } from "../telemetry/events";
 import type { MapDoc } from "../../../shared/maps";
 
 export type Unsubscribe = () => void;
-export type InputsCallback = (slot: number, frame: number, inputs: InputFrame[]) => void;
+/**
+ * What a sender reports alongside its inputs for time sync: its smoothed round trip to the relay in
+ * ms, and by slot how many frames it reckons it is ahead of each player. Absent from older clients.
+ */
+export interface SyncReport { rtt?: number; leads?: number[] }
+export type InputsCallback = (slot: number, frame: number, inputs: InputFrame[], report: SyncReport) => void;
 export type HashCallback = (slot: number, frame: number, hash: number) => void;
 
 export interface Transport {
-  send(frame: number, inputs: InputFrame[]): void;
+  send(frame: number, inputs: InputFrame[], leads: number[]): void;
   onInputs(cb: InputsCallback): Unsubscribe;
   sendHash(frame: number, hash: number): void;
   onHash(cb: HashCallback): Unsubscribe;
@@ -78,8 +83,8 @@ export class WebSocketTransport implements Transport {
     });
   }
 
-  send(frame: number, inputs: InputFrame[]): void {
-    this.sendMessage({ t: "inputs", frame, inputs: inputs.map(packInput) });
+  send(frame: number, inputs: InputFrame[], leads: number[]): void {
+    this.sendMessage({ t: "inputs", frame, inputs: inputs.map(packInput), r: Math.round(this.roundTrip), l: leads.map((lead) => Math.round(lead * 10) / 10) });
   }
 
   onInputs(cb: InputsCallback): Unsubscribe {
@@ -96,7 +101,9 @@ export class WebSocketTransport implements Transport {
     return removeListener(this.hashListeners, cb);
   }
 
+  /** A closed relay is already reported through onClose; a ping after it has nothing to measure. */
   ping(): void {
+    if (this.ws.readyState === WebSocket.CLOSING || this.ws.readyState === WebSocket.CLOSED) return;
     this.sendMessage({ t: "ping", at: Date.now() });
   }
 
@@ -154,7 +161,11 @@ export class WebSocketTransport implements Transport {
         return;
       }
       const inputs = message.inputs.map((input: number[]) => unpackInput(input));
-      for (const listener of this.inputListeners) listener(message.slot | 0, message.frame | 0, inputs);
+      const report: SyncReport = {
+        rtt: typeof message.rtt === "number" ? message.rtt : undefined,
+        leads: Array.isArray(message.leads) ? message.leads.map(Number) : undefined,
+      };
+      for (const listener of this.inputListeners) listener(message.slot | 0, message.frame | 0, inputs, report);
       return;
     }
     if (message.t === "hash") {
@@ -162,7 +173,8 @@ export class WebSocketTransport implements Transport {
       return;
     }
     if (message.t === "pong") {
-      this.roundTrip = Math.max(0, Date.now() - Number(message.at));
+      const sample = Math.max(0, Date.now() - Number(message.at));
+      this.roundTrip = this.roundTrip ? this.roundTrip + (sample - this.roundTrip) * 0.25 : sample;
       return;
     }
     for (const listener of this.lobbyListeners) listener(message as RelayMessage);
