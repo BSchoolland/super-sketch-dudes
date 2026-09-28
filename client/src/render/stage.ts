@@ -72,8 +72,8 @@ export function drawStage(ctx: CanvasRenderingContext2D, state: State, stage: St
     const o = platformOffset(state, i);
     const x = p.x1 + o.dx, y = p.y + o.dy, w = p.x2 - p.x1;
     const h = p.solid ? p.bottom! - p.y : p.motion ? 42 : 16;
-    ctx.fillStyle = PAPER; ctx.fillRect(x, y, w, h);
-    ctx.save(); ctx.globalAlpha = 0.36; hatch(ctx, x, y + 3, w, h - 3); ctx.restore();
+    ctx.fillStyle = PAPER; ctx.fillRect(x, y, w, 3);
+    hatch(ctx, x, y + 3, w, h - 3, PENCIL, 0.36);
     inkRect(ctx, x, y, w, h, PENCIL, 1.8);
     inkLine(ctx, x, y, x + w, y, INK, 3, i);
     inkLine(ctx, x + 3, y + 4, x + w - 3, y + 4, PENCIL, 1, i + 4);
