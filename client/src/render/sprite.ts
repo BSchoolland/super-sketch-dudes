@@ -7,22 +7,42 @@ import { drawHealth } from "./health";
  * Drawn fighters: one image per sheet cell, tinted variants built once. Cells are square PNGs
  * with the character facing right, feet on row `feetPx`; `heightPx` of image maps onto
  * `stats.height` world units so every cell shares one scale (see SpriteRig).
+ * The drawn copies are resampled to the size they appear on screen: a 768px cell shown 200px tall
+ * costs a slow machine its frame rate and a small one its memory, three variants per cell.
  */
 export interface CellImages {
-  base: HTMLImageElement | null; flash: HTMLCanvasElement | null; ghost: HTMLCanvasElement | null; failed: boolean;
+  src: HTMLImageElement | null;
+  base: HTMLCanvasElement | null; flash: HTMLCanvasElement | null; ghost: HTMLCanvasElement | null; failed: boolean;
+  /** Pixel size of base/flash/ghost; the source's natural size is the cap. */
+  size: number;
   /** Where the ink is, in cell pixels: [x0, y0, x1, y1]. */
   bounds: [number, number, number, number] | null;
 }
 const cache = new Map<string, CellImages>();
 
-function tinted(img: HTMLImageElement, color: string): HTMLCanvasElement {
+/** Canvas pixels per world unit at the camera's closest zoom; the app sets it on every resize. */
+let pixelsPerUnit = 1.25;
+export function setSpriteScale(canvasScale: number): void { pixelsPerUnit = canvasScale * 1.25; }
+
+function resampled(img: HTMLImageElement, size: number, tint: string | null): HTMLCanvasElement {
   const c = document.createElement("canvas");
-  c.width = img.naturalWidth; c.height = img.naturalHeight;
+  c.width = c.height = size;
   const g = c.getContext("2d")!;
-  g.drawImage(img, 0, 0);
-  g.globalCompositeOperation = "source-in";
-  g.fillStyle = color; g.fillRect(0, 0, c.width, c.height);
+  g.imageSmoothingQuality = "high";
+  g.drawImage(img, 0, 0, size, size);
+  if (tint) {
+    g.globalCompositeOperation = "source-in";
+    g.fillStyle = tint; g.fillRect(0, 0, size, size);
+  }
   return c;
+}
+
+function ensureSize(e: CellImages, size: number): void {
+  if (!e.src || e.size === size) return;
+  e.size = size;
+  e.base = resampled(e.src, size, null);
+  e.flash = resampled(e.src, size, "#ffffff");
+  e.ghost = resampled(e.src, size, PENCIL);
 }
 
 function inkBounds(img: HTMLImageElement): [number, number, number, number] {
@@ -43,10 +63,10 @@ function inkBounds(img: HTMLImageElement): [number, number, number, number] {
 export function cellImages(url: string): CellImages {
   let e = cache.get(url);
   if (e) return e;
-  e = { base: null, flash: null, ghost: null, failed: false, bounds: null };
+  e = { src: null, base: null, flash: null, ghost: null, failed: false, size: 0, bounds: null };
   cache.set(url, e);
   const img = new Image();
-  img.onload = () => { e!.base = img; e!.flash = tinted(img, "#ffffff"); e!.ghost = tinted(img, PENCIL); e!.bounds = inkBounds(img); };
+  img.onload = () => { e!.bounds = inkBounds(img); e!.src = img; ensureSize(e!, Math.min(img.naturalWidth, 256)); };
   img.onerror = () => { e!.failed = true; drawHealth.failedCells.add(url); console.error(`sprite cell failed to load: ${url}`); };
   img.src = url;
   return e;
@@ -125,6 +145,11 @@ export function drawSprite(ctx: CanvasRenderingContext2D, def: FighterDef, cell:
   }
   ctx.scale(pose.sx ?? 1, pose.sy ?? 1);
   if (opts.flip) ctx.scale(-1, 1);
+  if (e.src) {
+    // whole 64px steps, so a zooming camera doesn't resample every frame
+    const want = Math.ceil(sp.px * u * pixelsPerUnit / 64) * 64;
+    ensureSize(e, Math.min(e.src.naturalWidth, Math.max(64, want)));
+  }
   const img = opts.ghost ? e.ghost : opts.flash ? e.flash : e.base;
   drawHealth.sprites++;
   if (!img) e.failed ? drawHealth.failed++ : drawHealth.loading++;

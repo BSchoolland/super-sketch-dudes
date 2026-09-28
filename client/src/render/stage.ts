@@ -4,31 +4,64 @@ import type { Camera } from "./camera";
 import { VIEW_H, VIEW_W } from "./camera";
 import { drawPaper, hatch, inkArc, inkLine, inkRect, INK, PAPER, PENCIL, noise } from "./paper";
 
+const DEPTHS = [0.08, 0.22, 0.35];
+const buildings = new Map<string, { canvas: HTMLCanvasElement; x: number; y: number; w: number; h: number }>();
+
+/**
+ * One backdrop building drawn once into a bitmap at the canvas's pixel scale, in layer space.
+ * Buildings, not whole layers: the gaps between them stay unpainted, which matters when Chrome rasterizes in software.
+ */
+function building(i: number, depth: number, scale: number) {
+  const key = `${i} ${depth} ${scale}`;
+  let b = buildings.get(key);
+  if (b) return b;
+  const x = i * 255 + depth * 280, h = 120 + noise(i + Math.round(depth * 100)) * 240;
+  const box = { x: x - 10, y: 175 - h, w: 150, h: h + 250 };
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.ceil(box.w * scale); canvas.height = Math.ceil(box.h * scale);
+  const c = canvas.getContext("2d");
+  if (!c) throw new Error("Canvas 2D is required for the backdrop");
+  c.setTransform(scale, 0, 0, scale, -box.x * scale, -box.y * scale);
+  c.globalAlpha = depth === 0.35 ? 0.23 : 0.12;
+  inkRect(c, x, 210 - h, 125, h + 210, PENCIL, 1.2);
+  inkLine(c, x - 5, 210 - h, x + 131, 208 - h, PENCIL, 1.4);
+  for (let j = 0; j < 3; j++) {
+    inkRect(c, x + 18 + j * 34, 230 - h, 14, 22, PENCIL, 0.8);
+    inkLine(c, x + 12 + j * 8, 280 - h, x + 12 + j * 8, 380 - h, PENCIL, 0.7);
+  }
+  inkLine(c, x + 65, 210 - h, x + 63, 180 - h, PENCIL, 1);
+  if (buildings.size >= 13 * 3 * 3) buildings.clear();
+  b = { canvas, ...box };
+  buildings.set(key, b);
+  return b;
+}
+
 export function drawBackdrop(ctx: CanvasRenderingContext2D, stage: Stage, cam: Camera): void {
   drawPaper(ctx, VIEW_W, VIEW_H);
-  for (const depth of [0.08, 0.22, 0.35]) {
-    ctx.save();
-    ctx.translate(VIEW_W / 2 - cam.x * depth * cam.zoom, VIEW_H / 2 - cam.y * depth * cam.zoom * 0.5);
-    ctx.globalAlpha = depth === 0.35 ? 0.23 : 0.12;
+  const m = ctx.getTransform(), scale = m.a;
+  for (const depth of DEPTHS) {
+    const ox = VIEW_W / 2 - cam.x * depth * cam.zoom, oy = VIEW_H / 2 - cam.y * depth * cam.zoom * 0.5;
     if (stage.theme === "rooftops") {
       for (let i = -6; i <= 6; i++) {
-        const x = i * 255 + depth * 280, h = 120 + noise(i + Math.round(depth * 100)) * 240;
-        inkRect(ctx, x, 210 - h, 125, h + 210, PENCIL, 1.2);
-        inkLine(ctx, x - 5, 210 - h, x + 131, 208 - h, PENCIL, 1.4);
-        for (let j = 0; j < 3; j++) {
-          inkRect(ctx, x + 18 + j * 34, 230 - h, 14, 22, PENCIL, 0.8);
-          inkLine(ctx, x + 12 + j * 8, 280 - h, x + 12 + j * 8, 380 - h, PENCIL, 0.7);
-        }
-        inkLine(ctx, x + 65, 210 - h, x + 63, 180 - h, PENCIL, 1);
+        const b = building(i, depth, scale);
+        if (ox + b.x > VIEW_W || ox + b.x + b.w < 0 || oy + b.y > VIEW_H || oy + b.y + b.h < 0) continue;
+        // at whole device pixels and 1:1, so the draw is a plain copy with no filtering
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.drawImage(b.canvas, Math.round((ox + b.x) * scale + m.e), Math.round((oy + b.y) * scale + m.f));
+        ctx.restore();
       }
-    } else {
-      ctx.setLineDash([9, 12]);
-      inkLine(ctx, -850, depth * 500, 850, depth * 500, PENCIL, 1);
-      inkLine(ctx, -600 + depth * 1000, -350, -600 + depth * 1000, 360, PENCIL, 1);
-      inkLine(ctx, 600 - depth * 1000, -350, 600 - depth * 1000, 360, PENCIL, 1);
-      ctx.setLineDash([]);
-      inkArc(ctx, 0, 100, 160 + depth * 500, Math.PI, Math.PI * 1.6, PENCIL, 1);
+      continue;
     }
+    ctx.save();
+    ctx.translate(ox, oy);
+    ctx.globalAlpha = depth === 0.35 ? 0.23 : 0.12;
+    ctx.setLineDash([9, 12]);
+    inkLine(ctx, -850, depth * 500, 850, depth * 500, PENCIL, 1);
+    inkLine(ctx, -600 + depth * 1000, -350, -600 + depth * 1000, 360, PENCIL, 1);
+    inkLine(ctx, 600 - depth * 1000, -350, 600 - depth * 1000, 360, PENCIL, 1);
+    ctx.setLineDash([]);
+    inkArc(ctx, 0, 100, 160 + depth * 500, Math.PI, Math.PI * 1.6, PENCIL, 1);
     ctx.restore();
   }
 }

@@ -1,3 +1,4 @@
+import { setSpriteScale } from "./render/sprite";
 import "./style.css";
 import { VIEW_H, VIEW_W } from "./render/camera";
 import { PAPER } from "./render/paper";
@@ -61,6 +62,7 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     offX = (canvas.width - VIEW_W * scale) / 2;
     offY = (canvas.height - VIEW_H * scale) / 2;
     setPointerTransform(scale / dpr, offX / dpr, offY / dpr);
+    setSpriteScale(scale);
     noteView({ w, h, dpr, canvasW: canvas.width, canvasH: canvas.height, scale });
   }
   const detachPointer = attachPointer(canvas);

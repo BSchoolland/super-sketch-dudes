@@ -76,9 +76,13 @@ export function hatch(ctx: CanvasRenderingContext2D, x: number, y: number, w: nu
   ctx.fillStyle = pattern; ctx.fillRect(x, y, w, h);
 }
 
+/** The paper at the canvas's pixel size, copied 1:1: resampling a full-screen bitmap every frame is the most expensive thing a slow machine draws. */
 export function drawPaper(ctx: CanvasRenderingContext2D, w: number, h: number): void {
-  if (!paper || paper.width !== w || paper.height !== h) {
-    const [canvas, c] = canvas2d(w, h); paper = canvas;
+  const m = ctx.getTransform();
+  const pw = Math.max(1, Math.round(w * m.a)), ph = Math.max(1, Math.round(h * m.d));
+  if (!paper || paper.width !== pw || paper.height !== ph) {
+    const [canvas, c] = canvas2d(pw, ph); paper = canvas;
+    c.scale(pw / w, ph / h);
     c.fillStyle = PAPER; c.fillRect(0, 0, w, h);
     c.strokeStyle = "rgba(100,105,103,0.075)"; c.lineWidth = 0.7;
     c.beginPath();
@@ -90,7 +94,10 @@ export function drawPaper(ctx: CanvasRenderingContext2D, w: number, h: number): 
       c.fillRect(noise(i * 2) * w, noise(i * 2 + 1) * h, 1, 1);
     }
   }
-  ctx.drawImage(paper, 0, 0);
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(paper, Math.round(m.e), Math.round(m.f));
+  ctx.restore();
 }
 
 export function paperCard(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, selected = false): void {
