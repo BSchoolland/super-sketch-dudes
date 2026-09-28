@@ -1,4 +1,5 @@
 import { setSpriteScale } from "./render/sprite";
+import { FramePacer } from "./render/pacing";
 import "./style.css";
 import { VIEW_H, VIEW_W } from "./render/camera";
 import { PAPER } from "./render/paper";
@@ -54,8 +55,9 @@ export async function mount(opts: MountOptions): Promise<AppController> {
 
   const ctx = canvas.getContext("2d", { alpha: false })!;
   let scale = 1, offX = 0, offY = 0;
+  const pacer = new FramePacer(() => resize());
   function resize(): void {
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const dpr = Math.min(2, window.devicePixelRatio || 1) * pacer.quality;
     const w = window.innerWidth, h = window.innerHeight;
     canvas.width = Math.floor(w * dpr); canvas.height = Math.floor(h * dpr);
     scale = Math.min(w / VIEW_W, h / VIEW_H) * dpr;
@@ -63,7 +65,7 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     offY = (canvas.height - VIEW_H * scale) / 2;
     setPointerTransform(scale / dpr, offX / dpr, offY / dpr);
     setSpriteScale(scale);
-    noteView({ w, h, dpr, canvasW: canvas.width, canvasH: canvas.height, scale });
+    noteView({ w, h, dpr, canvasW: canvas.width, canvasH: canvas.height, scale, quality: pacer.quality });
   }
   const detachPointer = attachPointer(canvas);
   window.addEventListener("resize", resize);
@@ -107,10 +109,10 @@ export async function mount(opts: MountOptions): Promise<AppController> {
   window.addEventListener("keydown", onKey);
 
   let running = true;
-  let last = performance.now();
+  let last = performance.now(), lastPaint = last;
   function frame(now: number): void {
     if (!running) return;
-    const dt = Math.min(0.1, (now - last) / 1000);
+    const dt = Math.min(0.25, (now - last) / 1000);
     last = now;
     const menu = readMenu(allDevices());
     document.body.style.cursor = "default";
@@ -127,13 +129,18 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     music.follow(screen instanceof VersusScreen ? screen : null);
     endInputFrame();
     if (!running) return; // the screen asked the shell for another bundle
+    // only a running fight skips paints: menus and the results screen take clicks and keys inside draw
+    const fighting = screen instanceof VersusScreen && !screen.match.state.ended && !screen.match.paused;
+    if (!pacer.shouldPaint(now, fighting)) { requestAnimationFrame(frame); return; }
+    const paintDt = Math.min(0.25, (now - lastPaint) / 1000);
+    lastPaint = now;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = PAPER;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.setTransform(scale, 0, 0, scale, offX, offY);
     ctx.save();
     ctx.beginPath(); ctx.rect(0, 0, VIEW_W, VIEW_H); ctx.clip();
-    screen.draw(ctx, dt);
+    screen.draw(ctx, paintDt);
     ctx.restore();
     endPointerFrame();
     requestAnimationFrame(frame);

@@ -15,6 +15,8 @@ import { knockback } from "../../../shared/hits";
 import { DEFAULT_TIER } from "../../../shared/cpu-skill";
 
 const STEP = 1000 / 60;
+/** Sim frames one animation frame may run to catch up: a quarter second, so a slow paint never drops the match clock. */
+const MAX_CATCH_UP = 15;
 
 export class VersusScreen implements Screen {
   match: MatchDriver;
@@ -71,7 +73,7 @@ export class VersusScreen implements Screen {
     const slow = st.slowmo > 0 ? 0.25 : 1;
     this.acc += dt * 1000 * slow;
     let n = 0;
-    while (!this.frozen && this.acc >= STEP && n < 4) {
+    while (!this.frozen && this.acc >= STEP && n < MAX_CATCH_UP) {
       if (this.match.tick()) {
         this.renderer.snapshot(this.match.state);
         this.acc -= STEP;
