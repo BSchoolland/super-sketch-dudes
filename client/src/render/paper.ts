@@ -60,20 +60,26 @@ const PAPER_MAX_SCALE = 1.5;
 const patterns = new WeakMap<CanvasRenderingContext2D, Map<string, CanvasPattern>>();
 const hatchTiles = new Map<string, HTMLCanvasElement>();
 
-export function hatch(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, color = PENCIL): void {
+/**
+ * Pencil hatching over the rect. With `onPaper` the tile carries the paper under it and the hatch
+ * at that strength, so a solid hatched area is one opaque fill instead of paper plus a blended layer.
+ */
+export function hatch(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, color = PENCIL, onPaper?: number): void {
   let cache = patterns.get(ctx);
   if (!cache) { cache = new Map(); patterns.set(ctx, cache); }
-  let pattern = cache.get(color);
+  const key = `${color} ${onPaper ?? ""}`;
+  let pattern = cache.get(key);
   if (!pattern) {
-    let tile = hatchTiles.get(color);
+    let tile = hatchTiles.get(key);
     if (!tile) {
       const [canvas, c] = canvas2d(48, 48); tile = canvas;
+      if (onPaper !== undefined) { c.fillStyle = PAPER; c.fillRect(0, 0, 48, 48); c.globalAlpha = onPaper; }
       for (let i = -48; i < 96; i += 8) inkLine(c, i, 48, i + 48, 0, color, 0.8, i);
-      hatchTiles.set(color, tile);
+      hatchTiles.set(key, tile);
     }
     const made = ctx.createPattern(tile, "repeat");
     if (!made) throw new Error("Could not create pencil hatch pattern");
-    pattern = made; cache.set(color, pattern);
+    pattern = made; cache.set(key, pattern);
   }
   ctx.fillStyle = pattern; ctx.fillRect(x, y, w, h);
 }

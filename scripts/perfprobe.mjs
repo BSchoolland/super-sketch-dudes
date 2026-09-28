@@ -23,10 +23,10 @@ await page.evaluate(() => {
 await cdp.send("Profiler.start");
 await page.waitForTimeout(+seconds * 1000);
 const { profile } = await cdp.send("Profiler.stop");
-const r = await page.evaluate(() => ({ ft: window.__ft, frames: window.sketchbattle.screen.match.state.frame - window.__f0 }));
+const r = await page.evaluate(() => ({ ft: window.__ft, frames: window.sketchbattle.screen.match.state.frame - window.__f0, canvas: `${document.getElementById("game").width}x${document.getElementById("game").height}` }));
 const ft = r.ft.slice(2).sort((a, b) => a - b);
 const pct = (p) => ft[Math.min(ft.length - 1, Math.floor(ft.length * p))].toFixed(1);
-console.log(`throttle ${throttle}x ${w}x${h}@${dpr}: ${ft.length} rAFs in ${seconds}s (${(ft.length / +seconds).toFixed(1)} fps), sim frames ${r.frames} (${(r.frames / +seconds).toFixed(1)}/s of 60) · frame ms p50 ${pct(0.5)} p90 ${pct(0.9)} p99 ${pct(0.99)} max ${ft[ft.length - 1].toFixed(1)}`);
+console.log(`throttle ${throttle}x ${w}x${h}@${dpr}: ${ft.length} rAFs in ${seconds}s (${(ft.length / +seconds).toFixed(1)} fps), sim frames ${r.frames} (${(r.frames / +seconds).toFixed(1)}/s of 60), canvas ${r.canvas} · frame ms p50 ${pct(0.5)} p90 ${pct(0.9)} p99 ${pct(0.99)} max ${ft[ft.length - 1].toFixed(1)}`);
 // self time by function
 const self = new Map(); const byId = new Map(profile.nodes.map((n) => [n.id, n]));
 const dt = profile.timeDeltas; let total = 0;
