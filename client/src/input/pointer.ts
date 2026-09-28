@@ -70,11 +70,19 @@ export function onPointer(listener: StrokeListener): () => void {
   return () => listeners.delete(listener);
 }
 
+/** The taps since the last sim tick, for a screen's update. */
 export function consumeTaps(): ViewPoint[] {
   return taps.splice(0);
 }
 
-export function endPointerFrame(): void {
+/**
+ * Taps are read by updates on the sim clock, `pointer.clicked` by draws on the paint clock: each
+ * clock drops only its own, or a paint landing between a tap and the next tick eats the tap.
+ */
+export function endPointerTick(): void {
   taps.length = 0;
+}
+
+export function endPointerFrame(): void {
   pointer.clicked = false;
 }

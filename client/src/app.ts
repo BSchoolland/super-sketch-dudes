@@ -4,7 +4,7 @@ import "./style.css";
 import { VIEW_H, VIEW_W } from "./render/camera";
 import { PAPER } from "./render/paper";
 import { connectedPads, endInputFrame, readMenu, type DeviceId } from "./input/devices";
-import { attachPointer, endPointerFrame, setPointerTransform } from "./input/pointer";
+import { attachPointer, endPointerFrame, endPointerTick, setPointerTransform } from "./input/pointer";
 import { OnlineScreen } from "./screens/online";
 import { NetVersusScreen } from "./screens/netversus";
 import { VersusScreen } from "./screens/versus";
@@ -129,6 +129,7 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     if (next) { screen = next; screen.enter?.(); noteScreen(screen.constructor.name); }
     music.follow(screen instanceof VersusScreen ? screen : null);
     endInputFrame();
+    endPointerTick();
     return running;
   }
 
