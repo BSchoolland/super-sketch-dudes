@@ -54,6 +54,7 @@ npx tsx scripts/killpercents.ts   # kill percent per move, centre and ledge
 node scripts/posesheets.mjs       # pose contact sheets into shots/sheets/
 node scripts/menushots.mjs        # walk the menus and screenshot them
 node scripts/padcheck.mjs         # gamepad smoke test with a fake pad
+node scripts/perfbench.mjs --throttle 4 --dpr 1.25   # frame times on a pretend potato (needs the dev servers)
 scripts/deploy.sh    # build, ship to personal-server, restart pm2 "sketch-battle"
 ```
 

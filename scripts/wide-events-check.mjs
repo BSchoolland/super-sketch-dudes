@@ -7,7 +7,7 @@
 // Usage: node scripts/wide-events-check.mjs [base=http://localhost:5198/sketch-battle/] [data=/tmp/wide-data]
 import { chromium } from "playwright";
 import { execFileSync } from "node:child_process";
-import { signIn } from "./menu-nav.mjs";
+import { openOnline } from "./menu-nav.mjs";
 
 const base = process.argv[2] ?? "http://localhost:5198/sketch-battle/";
 const data = process.argv[3] ?? "/tmp/wide-data";
@@ -16,20 +16,14 @@ const pages = await Promise.all(["Ann", "Bob", "Kirill"].map(async () => (await 
 const press = async (p, key, n = 1) => { for (let i = 0; i < n; i++) { await p.keyboard.press(key); await p.waitForTimeout(110); } };
 const screen = (p, fn) => p.evaluate(fn);
 
-/** Title -> QUICK BATTLE -> the first fighter on the grid -> the online menu. */
-async function toOnline(p, name) {
-  await signIn(p, base, name);
-  await press(p, "ArrowDown", 3);
-  await press(p, "Enter");
-  await p.waitForFunction(() => !!window.sketchbattle.screen.grid, null, { timeout: 15000 });
-  await press(p, "Enter");
-  await p.waitForFunction(() => "roomCode" in window.sketchbattle.screen, null, { timeout: 15000 });
-}
+const toOnline = (p, name) => openOnline(p, base, name);
 
 try {
   const [host, ...guests] = pages;
   await toOnline(host, "Ann");
   await press(host, "ArrowDown"); await press(host, "Enter");
+  // CREATE LOBBY asks public or code-only; the first is public
+  await press(host, "Enter");
   await host.waitForFunction(() => window.sketchbattle.screen.roomCode !== null);
   const code = await screen(host, () => window.sketchbattle.screen.roomCode);
   for (const [i, g] of guests.entries()) {
@@ -37,10 +31,16 @@ try {
     await press(g, "ArrowDown", 2); await press(g, "Enter");
     await g.keyboard.type(code, { delay: 40 }); await press(g, "Enter");
   }
-  await Promise.all(pages.map((p) => p.waitForFunction(() => window.sketchbattle.screen.lobbyDebug?.()?.members.length === 3 && window.sketchbattle.screen.lobbyDebug().members.every((m) => m.fighter))));
+  // fresh dev accounts own no characters, and the shelf only offers your own: pick a house fighter directly
+  await Promise.all(pages.map((p) => p.waitForFunction(() => window.sketchbattle.screen.lobbyDebug?.()?.members.length === 3)));
+  for (const [i, p] of pages.entries()) await p.evaluate((id) => {
+    const s = window.sketchbattle.screen;
+    s.pick({ id, name: id.toUpperCase(), bundleUrl: `/sketch-battle/house/${id}/bundle.json?v=${window.sketchbattle.build}`, house: true, entry: null });
+  }, ["rocket", "wizard", "slugbert"][i]);
+  await Promise.all(pages.map((p) => p.waitForFunction(() => window.sketchbattle.screen.lobbyDebug().members.every((m) => m.fighter))));
   for (const p of pages) await screen(p, () => window.sketchbattle.screen.toggleReady());
   await host.waitForFunction(() => window.sketchbattle.screen.canStart());
-  await screen(host, () => window.sketchbattle.screen.startMatch());
+  await screen(host, () => window.sketchbattle.screen.startMatch({ stage: "rooftops", stocks: 3, time: 0, map: null }));
   await Promise.all(pages.map((p) => p.waitForFunction(() => typeof window.sketchbattle.screen.netDebug === "function", null, { timeout: 20000 })));
   const trace = await screen(host, () => window.sketchbattle.screen.opts.telemetry.trace);
   console.log(`room ${code}, match ${trace}`);

@@ -121,7 +121,11 @@ documented is what ships.
 ## Client loop
 
 `requestAnimationFrame` with a fixed 60 Hz accumulator; the renderer interpolates between the
-previous and current sim states for smooth motion at any refresh rate. Input is sampled at the
+previous and current sim states for smooth motion at any refresh rate. Draws are capped near
+60 a second (a 144 Hz screen draws every other frame), and a machine that keeps missing frames
+steps the canvas down a resolution cap (2 → 1.5 → 1 → 0.75 pixels per CSS pixel, never back
+up). In a hidden tab rAF stops, so an online match is ticked by a worker's timer instead
+(inputs out, nothing drawn) until the tab is visible again. Input is sampled at the
 start of every sim frame from the latest device state; keyboard events are recorded as they
 arrive so a press between frames is never lost. Gamepads are polled each frame. Each player
 slot has a device (keyboard layout 1, keyboard layout 2, or a gamepad index) and a bindings map.
@@ -148,13 +152,24 @@ every frame, up to 8 frames of rollback), local input delay (default 2), remote 
 prediction (repeat last), rollback-and-resimulate on late inputs, and a state hash exchanged
 every 30 frames for desync detection (a desync is fatal and loud: the match ends with a
 message and both clients log the frame). `transport.ts` is a small interface (`send(frame,
-inputs)`, `onInputs`, `ping`) with one implementation over the websocket relay; a WebRTC one
+inputs, ahead)`, `onInputs`, `ping`) with one implementation over the websocket relay; a WebRTC one
 can be added later without touching the rollback code.
+
+Time sync is GGPO's frame advantage. Every client measures how far ahead of each remote it
+looks (its frame minus the remote's frame as of the remote's newest input, averaged over 12
+ticks) and sends that with its inputs as `ahead`. Both measures include the one-way latency, so
+half their difference is the real clock lead: equal clocks over any latency give zero, and only
+a client that is genuinely ahead gives up ticks, in proportion (gain 1/12, dead zone 1.5 frames,
+at most every other tick). The slower client never skips. A stall past the rollback window shows
+WAITING with the name of who it is waiting on; the relay drops any mid-match player it has not
+heard inputs from for 20 s, which the others see as a leave.
 
 Server: `/ws` upgrade. Messages: `hello`, `queue` (quick match), `room create/join <code>`,
 `start` (host sets rules; the server picks the seed and slot order), `inputs` (frame, bits),
 `hash`, `leave`. The server never simulates; it relays and keeps the lobby. Rooms die when
-empty. Quick match pairs the two oldest queued clients.
+empty. Quick match pairs the two oldest queued clients. The host's `end` (leaving the result
+screen, or quitting) reopens the room and takes everyone back to it; a guest quitting mid-match
+closes their connection, so the others see them leave rather than wait on them.
 
 ## Wide events
 
@@ -191,6 +206,8 @@ sqlite dependency to lean on; `server/eventlog.ts` reads it back, newest snapsho
   until the roster settles).
 - `npm run frames <fighter>`: prints the move table from data so it can be diffed against
   CHARACTERS.md.
+- `node scripts/perfbench.mjs`: frame-time bench of a quick match in headless Chromium at a CPU
+  throttle and pixel ratio (`--throttle 4 --dpr 1.25`); run before and after a renderer change.
 - `npm run shots`: Playwright screenshots of a quick match into `shots/`. `scripts/menushots.mjs`
   walks the menu flow, `scripts/fightershots.mjs` takes action shots per fighter and stage,
   `scripts/posesheets.mjs` renders the pose contact sheets. This is how anyone (including agents)

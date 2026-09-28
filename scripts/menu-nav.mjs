@@ -8,16 +8,11 @@ export async function signIn(page, url, name) {
   await page.waitForFunction(() => Array.isArray(window.sketchbattle?.screen?.items), null, { timeout: 15000 });
 }
 
-/** Title -> BATTLE -> the first fighter offered -> ONLINE: the quick match / create / join menu. */
+/** Title -> BATTLE: the quick match / create / join / bots menu (class names survive the build: keepNames). */
 export async function openOnline(page, url, name) {
   await signIn(page, url, name);
-  await press(page, "ArrowDown", 3);
+  await page.evaluate(() => { const s = window.sketchbattle.screen; s.sel = s.items.findIndex((i) => i.id === "battle"); });
   await press(page, "Enter");
-  await page.waitForFunction(() => !!window.sketchbattle.screen.grid, null, { timeout: 15000 });
-  await press(page, "Enter");
-  await page.waitForFunction(() => "device" in window.sketchbattle.screen && "fighter" in window.sketchbattle.screen);
-  await press(page, "ArrowDown", 2);
-  await press(page, "Enter");
-  await page.waitForFunction(() => "roomCode" in window.sketchbattle.screen);
+  await page.waitForFunction(() => window.sketchbattle.screen.constructor.name === "BattleMenuScreen", null, { timeout: 15000 });
   await page.waitForTimeout(200);
 }
