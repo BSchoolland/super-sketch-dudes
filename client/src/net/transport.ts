@@ -4,11 +4,12 @@ import { sessionTrace } from "../telemetry/events";
 import type { MapDoc } from "../../../shared/maps";
 
 export type Unsubscribe = () => void;
-export type InputsCallback = (slot: number, frame: number, inputs: InputFrame[]) => void;
+/** `ahead`: the sender's averaged frame lead over each slot, for time sync (see RollbackSession); absent from clients that don't send it. */
+export type InputsCallback = (slot: number, frame: number, inputs: InputFrame[], ahead?: number[]) => void;
 export type HashCallback = (slot: number, frame: number, hash: number) => void;
 
 export interface Transport {
-  send(frame: number, inputs: InputFrame[]): void;
+  send(frame: number, inputs: InputFrame[], ahead: number[]): void;
   onInputs(cb: InputsCallback): Unsubscribe;
   sendHash(frame: number, hash: number): void;
   onHash(cb: HashCallback): Unsubscribe;
@@ -78,8 +79,8 @@ export class WebSocketTransport implements Transport {
     });
   }
 
-  send(frame: number, inputs: InputFrame[]): void {
-    this.sendMessage({ t: "inputs", frame, inputs: inputs.map(packInput) });
+  send(frame: number, inputs: InputFrame[], ahead: number[]): void {
+    this.sendMessage({ t: "inputs", frame, inputs: inputs.map(packInput), ahead });
   }
 
   onInputs(cb: InputsCallback): Unsubscribe {
@@ -154,7 +155,8 @@ export class WebSocketTransport implements Transport {
         return;
       }
       const inputs = message.inputs.map((input: number[]) => unpackInput(input));
-      for (const listener of this.inputListeners) listener(message.slot | 0, message.frame | 0, inputs);
+      const ahead = Array.isArray(message.ahead) ? message.ahead.map(Number) : undefined;
+      for (const listener of this.inputListeners) listener(message.slot | 0, message.frame | 0, inputs, ahead);
       return;
     }
     if (message.t === "hash") {

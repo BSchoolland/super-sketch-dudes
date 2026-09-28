@@ -60,6 +60,9 @@ function mapInMessage(v: unknown): MapDoc | null {
   return v as MapDoc;
 }
 
+/** Mid-match, a player whose inputs stop for this long is dropped: the others would otherwise wait on them forever. */
+export const INPUT_TIMEOUT_MS = 20_000;
+
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export function makeCode(): string {
   let c = "";
@@ -126,6 +129,21 @@ function relayHash(m: RelayMatch, slot: number, frame: number, hash: number): vo
   else if (seen.hash !== hash) m.event.issue("error", "desync", `frame ${frame}: slot ${seen.slot} hashed ${seen.hash}, slot ${slot} hashed ${hash}`);
   for (const f of m.hashes.keys()) if (f < frame - 900) m.hashes.delete(f);
 }
+/** Closes the socket of every mid-match player the relay hasn't heard inputs from in INPUT_TIMEOUT_MS; the close handler drops them. */
+export function dropSilentPlayers(now = Date.now()): void {
+  for (const room of rooms.values()) {
+    const m = room.match;
+    if (!m || !room.started) continue;
+    for (const c of room.members) {
+      const s = m.slots[c.slot];
+      if (!s) continue;
+      const silentMs = now - (s.lastAt || m.event.t0);
+      if (silentMs < INPUT_TIMEOUT_MS) continue;
+      m.event.issue("warn", "timeout", `${c.name} (slot ${c.slot}) sent no inputs for ${Math.round(silentMs / 1000)} s: dropped`);
+      c.ws.close(4001, "no inputs for 20 s");
+    }
+  }
+}
 export function broadcast(room: Room, msg: unknown, except?: Client): void {
   for (const m of room.members) if (m !== except) send(m, msg);
 }
@@ -189,6 +207,8 @@ export function joinRoom(c: Client, room: Room): void {
 }
 
 export function attachLobby(wss: WebSocketServer): void {
+  const sweep = setInterval(dropSilentPlayers, 1000);
+  wss.on("close", () => clearInterval(sweep));
   wss.on("connection", (ws, req: IncomingMessage) => {
     const id = nextId++;
     // the page's session trace rides on the socket URL, so the connection files under the session that opened it
@@ -268,7 +288,7 @@ export function attachLobby(wss: WebSocketServer): void {
         case "inputs":
           if (!c.room?.started || c.slot < 0) break;
           if (c.room.match) relayInput(c.room.match, c.slot, msg.frame | 0);
-          broadcast(c.room, { t: "inputs", slot: c.slot, frame: msg.frame | 0, inputs: msg.inputs }, c);
+          broadcast(c.room, { t: "inputs", slot: c.slot, frame: msg.frame | 0, inputs: msg.inputs, ...(Array.isArray(msg.ahead) && msg.ahead.length <= ROOM_SIZE ? { ahead: msg.ahead.map((a: unknown) => Number(a) || 0) } : {}) }, c);
           break;
         case "hash":
           if (!c.room?.started || c.slot < 0) break;

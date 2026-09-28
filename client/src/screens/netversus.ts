@@ -51,9 +51,10 @@ export function startConfig(value: unknown, seed: number): { match: MatchConfig;
 
 /**
  * Why a networked match hands control back: "done" (the players left the result screen, or the
- * mode's `finished` said so), "left" (a player dropped mid-match), "failure" (desync), "closed".
+ * mode's `finished` said so), "quit" (this player left through the pause menu before the match
+ * ended), "left" (a player dropped mid-match), "failure" (desync), "closed".
  */
-export type NetExit = "done" | "left" | "failure" | "closed";
+export type NetExit = "done" | "quit" | "left" | "failure" | "closed";
 
 export interface NetVersusOptions {
   transport: WebSocketTransport;
@@ -92,11 +93,14 @@ export class NetVersusScreen extends VersusScreen {
 
   constructor(protected opts: NetVersusOptions) {
     let cleanup: ((exit: string) => void) | null = null;
-    const done = () => {
+    let ended = () => false;
+    const leave = (how: "done" | "quit") => {
       if (!cleanup) throw new Error("online match cleanup is not initialized");
-      cleanup("done");
-      return opts.exit("done");
+      cleanup(how);
+      return opts.exit(how);
     };
+    const done = () => leave("done");
+    const exit = () => leave(ended() ? "done" : "quit");
     const telemetry = opts.telemetry;
     const session = new RollbackSession({
       config: opts.config,
@@ -112,8 +116,9 @@ export class NetVersusScreen extends VersusScreen {
       if (!member) throw new Error(`start message omitted slot ${slot}`);
       return member.name;
     });
-    super(opts.config, driver.sources, done, done, false, driver);
+    super(opts.config, driver.sources, exit, done, false, driver);
     this.session = session;
+    ended = () => session.state.ended;
     this.renderer.names = names;
     if (opts.resume) this.countdown = 0;
     telemetry.attach(session, this.renderer);
@@ -153,7 +158,7 @@ export class NetVersusScreen extends VersusScreen {
   override update(dt: number, menu: MenuInput): Screen | null {
     this.opts.telemetry.tick(this.opts.transport.rtt(), this.session.waiting && !this.failure);
     this.pingTime += dt;
-    if (this.pingTime >= 1) {
+    if (this.pingTime >= 1 && !this.failure) {
       this.pingTime -= 1;
       this.opts.transport.ping();
     }
@@ -208,7 +213,15 @@ export class NetVersusScreen extends VersusScreen {
     label(ctx, swap.hash ? `bundle ${swap.hash}` : `build ${site.build}`, VIEW_W - 24, 56, 15, "rgba(41,39,34,0.55)", "right", 400);
     if (this.swapAt) label(ctx, `switching at frame ${this.swapAt.frame}`, VIEW_W - 24, 78, 15, "#c8402c", "right", 700);
     if (this.failure) drawBanner(ctx, this.failure.title, this.failure.detail, "#ff4d2e", this.failureTime);
-    else if (this.waitingFor > 0.5) drawBanner(ctx, "WAITING", "Connection is catching up", INK, 1);
+    else if (this.waitingFor > 0.5) drawBanner(ctx, "WAITING", this.waitingLine(), INK, 1);
+  }
+
+  /** Who the stall is on, by name; a long one says so, and the relay drops them after 20 s of silence. */
+  private waitingLine(): string {
+    const names = this.session.waitingOn().map((slot) => this.renderer.names[slot] ?? `P${slot + 1}`);
+    if (!names.length) return "Connection is catching up";
+    const who = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
+    return this.waitingFor > 6 ? `${who} stopped responding · ${Math.ceil(20 - this.waitingFor)} s` : `Waiting for ${who}`;
   }
 
   netDebug(frame = this.session.state.frame): { frame: number; hash: number | null } {

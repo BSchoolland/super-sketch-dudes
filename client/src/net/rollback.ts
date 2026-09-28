@@ -31,6 +31,12 @@ export interface SessionHandoff {
   remoteNewest: [number, number][];
 }
 
+/** Time sync: samples averaged per remote, the lead below which nothing is done (network jitter), and how many
+ * frames of lead make up one skipped tick per tick (the loop gain; the measurement lags about half a window). */
+const AHEAD_WINDOW = 12;
+const SYNC_DEAD_ZONE = 1.5;
+const SYNC_GAIN = 12;
+
 export class RollbackSession {
   state: State;
   readonly localSlot: number;
@@ -57,7 +63,11 @@ export class RollbackSession {
   private remoteNewest = new Map<number, number>();
   /** Remote players who left mid-match: their slot plays empty inputs after this frame. */
   private gone = new Map<number, number>();
-  private slowTick = 0;
+  /** Time sync: how far ahead of each remote we look (recent samples) and what each remote last reported about us. */
+  private aheadSamples = new Map<number, number[]>();
+  private remoteAhead = new Map<number, number>();
+  private skipDebt = 0;
+  private skippedLast = false;
   /** Snapshots from this frame on are kept whatever the rollback window, so a bundle swap can hand one over. */
   keepFrom: number | null = null;
   private unsubscribers: Unsubscribe[];
@@ -81,7 +91,7 @@ export class RollbackSession {
     this.snapshots.set(0, cloneState(this.state));
     if (options.resume) this.resume(options.resume);
     this.unsubscribers = [
-      this.transport.onInputs((slot, frame, inputs) => this.receiveInputs(slot, frame, inputs)),
+      this.transport.onInputs((slot, frame, inputs, ahead) => this.receiveInputs(slot, frame, inputs, ahead)),
       this.transport.onHash((slot, frame, hash) => this.receiveHash(slot, frame, hash)),
     ];
   }
@@ -94,6 +104,7 @@ export class RollbackSession {
       input.b &= ~64;
       this.realInputs[this.localSlot].set(targetFrame, input);
     }
+    this.sampleAhead();
     this.sendLocalWindow(targetFrame);
     this.synchronize();
 
@@ -103,9 +114,7 @@ export class RollbackSession {
       this.stats.stalls++;
       return false;
     }
-    // time sync: when we are ahead of a remote, give up every other tick so they can catch up instead of us stalling later
-    const lead = this.frameLead();
-    if (lead > 2 && (this.slowTick++ & 1) === 0) { this.waiting = false; this.stats.timeSyncSkips++; return false; }
+    if (this.timeSyncSkip()) { this.waiting = false; this.stats.timeSyncSkips++; return false; }
 
     this.waiting = false;
     const inputs = this.inputsForFrame(nextFrame);
@@ -207,6 +216,63 @@ export class RollbackSession {
   }
 
   /**
+   * Time sync, GGPO's way. Every client measures how far ahead of each remote it looks: its frame minus the remote's
+   * frame as of the remote's newest input. That includes the one-way latency, so it is never zero on its own; the
+   * remote's measurement of us includes the same latency, and half the difference of the two is the real clock lead.
+   * Equal clocks over any latency give zero and nobody slows down; a client that is genuinely ahead gives up ticks
+   * in proportion, at most every other one, and the slower client never does.
+   */
+  private sampleAhead(): void {
+    for (const slot of this.humanSlots) {
+      if (slot === this.localSlot || this.gone.has(slot)) continue;
+      const newest = this.remoteNewest.get(slot);
+      if (newest === undefined) continue;
+      const remoteFrame = newest - this.inputDelay - 1;
+      let samples = this.aheadSamples.get(slot);
+      if (!samples) { samples = []; this.aheadSamples.set(slot, samples); }
+      samples.push(this.state.frame - remoteFrame);
+      if (samples.length > AHEAD_WINDOW) samples.shift();
+    }
+  }
+
+  /** Our averaged lead over each slot, sent with every input frame; 0 for ourselves, CPUs and slots we've not heard from. */
+  aheadOf(): number[] {
+    return this.cpuLevels.map((_, slot) => {
+      const samples = this.aheadSamples.get(slot);
+      if (!samples?.length) return 0;
+      return Math.round((samples.reduce((sum, s) => sum + s, 0) / samples.length) * 10) / 10;
+    });
+  }
+
+  /** The clock lead over the remote furthest behind us, in frames; 0 until both sides have measured. */
+  clockLead(): number {
+    let lead = 0;
+    const mine = this.aheadOf();
+    for (const [slot, theirs] of this.remoteAhead) {
+      if (this.gone.has(slot) || !this.aheadSamples.get(slot)?.length) continue;
+      lead = Math.max(lead, (mine[slot] - theirs) / 2);
+    }
+    return lead;
+  }
+
+  /** Human slots whose input for the next unconfirmed frame hasn't arrived: who a WAITING stall is waiting on. */
+  waitingOn(): number[] {
+    const frame = this.confirmedThrough + 1;
+    return this.humanSlots.filter((slot) => slot !== this.localSlot && !this.gone.has(slot) && !this.realInputs[slot].has(frame));
+  }
+
+  private timeSyncSkip(): boolean {
+    if (this.skippedLast) { this.skippedLast = false; return false; }
+    const lead = this.clockLead();
+    if (lead > SYNC_DEAD_ZONE) this.skipDebt += lead / SYNC_GAIN;
+    else this.skipDebt = 0;
+    if (this.skipDebt < 1) return false;
+    this.skipDebt -= 1;
+    this.skippedLast = true;
+    return true;
+  }
+
+  /**
    * A remote player left for good. The relay delivers their inputs to everyone in the same order
    * before it announces the leave, so every client fills empty inputs from the same frame on.
    */
@@ -215,15 +281,18 @@ export class RollbackSession {
     const last = this.remoteNewest.get(slot) ?? this.inputDelay;
     this.gone.set(slot, last);
     this.remoteNewest.delete(slot);
+    this.remoteAhead.delete(slot);
+    this.aheadSamples.delete(slot);
     for (const [frame, used] of this.usedInputs) {
       if (frame > last && !inputEquals(used[slot], EMPTY_INPUT)) this.pendingRollback = Math.min(this.pendingRollback ?? frame, frame);
     }
     this.advanceConfirmation();
   }
 
-  private receiveInputs(slot: number, newestFrame: number, inputs: InputFrame[]): void {
+  private receiveInputs(slot: number, newestFrame: number, inputs: InputFrame[], ahead?: number[]): void {
     if (!this.humanSlots.includes(slot) || slot === this.localSlot) return;
     this.remoteNewest.set(slot, Math.max(this.remoteNewest.get(slot) ?? 0, newestFrame));
+    if (ahead && Number.isFinite(ahead[this.localSlot])) this.remoteAhead.set(slot, ahead[this.localSlot]);
     const firstFrame = newestFrame - inputs.length + 1;
     for (let i = 0; i < inputs.length; i++) {
       const frame = firstFrame + i;
@@ -307,7 +376,7 @@ export class RollbackSession {
       if (!input) throw new Error(`missing local input for frame ${frame}`);
       inputs.push(input);
     }
-    this.transport.send(newestFrame, inputs);
+    this.transport.send(newestFrame, inputs, this.aheadOf());
   }
 
   private advanceConfirmation(): void {

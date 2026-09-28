@@ -8,7 +8,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { attachEvents, initEvents, requestErrors, requestEvents } from "../server/events";
 import { filterEvents, readEvents } from "../server/eventlog";
 import { attachAuth } from "../server/auth";
-import { attachLobby } from "../server/lobby";
+import { attachLobby, dropSilentPlayers, INPUT_TIMEOUT_MS } from "../server/lobby";
 import { matchTrace, WideEvent } from "../shared/wide";
 
 /** The wide event store through the real server pieces: client ingest, request events, and the relay's room/match/connection events. */
@@ -115,6 +115,38 @@ describe("request events", () => {
 });
 
 describe("relay events", () => {
+  it("drops a mid-match player the relay hasn't heard inputs from for INPUT_TIMEOUT_MS", async () => {
+    const a = new Peer("s-quiet-host"), b = new Peer("s-quiet-guest");
+    await a.open(); await b.open();
+    await a.expect("hello"); await b.expect("hello");
+    a.send({ t: "create" });
+    const room = await a.expect("room");
+    b.send({ t: "join", code: room.code });
+    await a.expect("room", (m) => m.members.length === 2);
+    a.send({ t: "pick", fighter: "rocket", bundleUrl: "/house/rocket/bundle.json", ready: true });
+    b.send({ t: "pick", fighter: "wizard", bundleUrl: "/house/wizard/bundle.json", ready: true });
+    await a.expect("room", (m) => m.members.every((x: any) => x.ready));
+    a.send({ t: "start", config: { stage: "proving", rules: { stocks: 3, time: 0 }, inputDelay: 2 } });
+    const start = await b.expect("start");
+    await wait(500);
+    a.send({ t: "inputs", frame: 3, inputs: [] });
+    await b.expect("inputs");
+    const now = Date.now();
+    dropSilentPlayers(now + INPUT_TIMEOUT_MS - 1000);
+    await wait(50);
+    expect(b.ws.readyState).toBe(WebSocket.OPEN);
+    // b has been silent since the start, half a second longer than a: b goes, a stays
+    dropSilentPlayers(now + INPUT_TIMEOUT_MS - 200);
+    await a.expect("left", (m) => m.duringMatch === true);
+    await until(() => b.ws.readyState === WebSocket.CLOSED ? true : undefined, "guest socket closed");
+    expect(a.ws.readyState).toBe(WebSocket.OPEN);
+    a.send({ t: "end" });
+    await a.expect("room", (m) => !m.started);
+    const match = await until(() => events().find((e) => e.kind === "match" && e.source === "server" && e.trace === matchTrace(room.code, start.seed) && e.final), "the relay's match event");
+    expect(match.issues.map((i) => i.code)).toEqual(expect.arrayContaining(["timeout", "left"]));
+    a.ws.close();
+  });
+
   it("records the room, each connection under its page session, and the match on the trace the clients use", async () => {
     const a = new Peer("s-host"), b = new Peer("s-guest");
     await a.open(); await b.open();
@@ -130,7 +162,10 @@ describe("relay events", () => {
     await a.expect("room", (m) => m.members.every((x: any) => x.ready));
     a.send({ t: "start", config: { stage: "proving", rules: { stocks: 3, time: 0 }, inputDelay: 2 } });
     const start = await b.expect("start");
-    for (let f = 1; f <= 5; f++) { a.send({ t: "inputs", frame: f, inputs: [] }); b.send({ t: "inputs", frame: f, inputs: [] }); }
+    for (let f = 1; f <= 5; f++) { a.send({ t: "inputs", frame: f, inputs: [], ahead: [0, 2.5] }); b.send({ t: "inputs", frame: f, inputs: [] }); }
+    // the sender's frame lead rides along for time sync; a client that doesn't send one relays none
+    expect(await b.expect("inputs")).toMatchObject({ slot: 0, frame: 1, ahead: [0, 2.5] });
+    expect("ahead" in (await a.expect("inputs"))).toBe(false);
     a.send({ t: "hash", frame: 30, hash: 111 }); b.send({ t: "hash", frame: 30, hash: 222 });
     await b.expect("hash");
     a.send({ t: "end" });

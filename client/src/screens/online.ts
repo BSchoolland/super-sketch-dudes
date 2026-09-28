@@ -68,6 +68,7 @@ export class OnlineScreen implements Screen {
 
   private static matchScreen(onExit: () => Screen, context: OnlineContext, m: { config: MatchConfig; bundles: string[]; members: Pick<RoomMember, "id" | "name" | "slot">[]; localSlot: number; device: DeviceId; inputDelay: number; resume?: SessionHandoff; telemetry: MatchTelemetry }): Screen {
     for (const p of m.config.players) if (!roster[p.fighter]) throw new Error(`online match fighter ${p.fighter} isn't loaded`);
+    let over = false;
     return new NetVersusScreen({
       transport: context.transport,
       config: m.config,
@@ -81,10 +82,15 @@ export class OnlineScreen implements Screen {
       isHost: () => context.room?.host === context.id,
       roomState: () => context.room,
       localId: () => context.id,
-      onLobby: (lobby) => { if (lobby.t === "room") context.room = lobby; },
+      onLobby: (lobby) => { if (lobby.t === "room") { context.room = lobby; if (!lobby.started) over = true; } },
+      // the host ending the match (leaving the result screen or quitting) reopens the room, and that takes everyone back to it
+      finished: () => over,
       exit: (reason) => {
         if (reason === "closed") return onExit();
-        if (context.room?.host === context.id) context.transport.sendLobby({ t: "end" });
+        const host = context.room?.host === context.id;
+        // a guest quitting mid-match leaves the relay: the others see them drop instead of waiting on inputs that never come
+        if (reason === "quit" && !host) { context.transport.close(); return onExit(); }
+        if (host) context.transport.sendLobby({ t: "end" });
         return new OnlineScreen(onExit, null, null, context);
       },
     });

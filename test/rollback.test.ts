@@ -12,6 +12,7 @@ interface Packet {
   slot: number;
   frame: number;
   inputs?: InputFrame[];
+  ahead?: number[];
   hash?: number;
 }
 
@@ -71,8 +72,8 @@ class MemoryTransport implements Transport {
 
   constructor(private network: SeededNetwork, private endpointId: number, private slot: number) {}
 
-  send(frame: number, inputs: InputFrame[]): void {
-    this.network.send(this.endpointId, { kind: "inputs", slot: this.slot, frame, inputs: inputs.map(cloneInput) });
+  send(frame: number, inputs: InputFrame[], ahead: number[]): void {
+    this.network.send(this.endpointId, { kind: "inputs", slot: this.slot, frame, inputs: inputs.map(cloneInput), ahead: [...ahead] });
   }
 
   onInputs(cb: InputsCallback): Unsubscribe {
@@ -95,7 +96,7 @@ class MemoryTransport implements Transport {
 
   deliver(packet: Packet): void {
     if (packet.kind === "inputs") {
-      for (const listener of this.inputListeners) listener(packet.slot, packet.frame, packet.inputs!.map(cloneInput));
+      for (const listener of this.inputListeners) listener(packet.slot, packet.frame, packet.inputs!.map(cloneInput), packet.ahead);
     } else {
       for (const listener of this.hashListeners) listener(packet.slot, packet.frame, packet.hash!);
     }
@@ -257,12 +258,49 @@ describe("rollback session", () => {
       ticks++;
     }
     expect(ticks).toBeLessThan(4000);
-    // the fast client should be held back by time sync, not by hard stalls
+    // the fast client should be held back by time sync, not by hard stalls; the slow one never gives up a tick
     expect(aWaits).toBeLessThan(ticks * 0.25);
+    expect(a.stats.timeSyncSkips).toBeGreaterThan(100);
+    expect(b.stats.timeSyncSkips).toBe(0);
     expect(Math.abs(a.state.frame - b.state.frame)).toBeLessThan(a.maxRollback + a.inputDelay + 2);
     for (let i = 0; i < 12; i++) network.tick();
     a.synchronize(); b.synchronize();
     const f = Math.min(a.state.frame, b.state.frame);
     expect(a.stateHashAt(f)).toBe(b.stateHashAt(f));
+  });
+
+  it("equal clocks over symmetric latency never give up ticks, whatever the latency", () => {
+    for (const [min, max] of [[2, 6], [4, 8], [6, 10]]) {
+      const config = makeConfig();
+      const network = new SeededNetwork(0xabc0 + min, min, max);
+      const a = new RollbackSession({ config, localSlot: 0, transport: network.endpoint(0) });
+      const b = new RollbackSession({ config, localSlot: 1, transport: network.endpoint(1) });
+      for (let tick = 0; tick < 1200; tick++) {
+        network.tick();
+        a.advance(scriptedInput(0, a.state.frame + a.inputDelay + 1));
+        b.advance(scriptedInput(1, b.state.frame + b.inputDelay + 1));
+      }
+      expect(a.stats.timeSyncSkips + b.stats.timeSyncSkips, `latency ${min}-${max}`).toBeLessThan(6);
+      expect(Math.abs(a.state.frame - b.state.frame)).toBeLessThan(4);
+    }
+  });
+
+  it("a client that runs slightly slow is matched by the other without either stalling", () => {
+    const config = makeConfig();
+    const network = new SeededNetwork(0x600d, 2, 6);
+    const a = new RollbackSession({ config, localSlot: 0, transport: network.endpoint(0) });
+    const b = new RollbackSession({ config, localSlot: 1, transport: network.endpoint(1) });
+    let ticks = 0;
+    // b skips every sixth tick: a 50 Hz laptop against a 60 Hz desktop
+    while (b.state.frame < 1200 && ticks < 3000) {
+      network.tick();
+      a.advance(scriptedInput(0, a.state.frame + a.inputDelay + 1));
+      if (ticks % 6 !== 5) b.advance(scriptedInput(1, b.state.frame + b.inputDelay + 1));
+      ticks++;
+    }
+    expect(a.stats.stalls + b.stats.stalls).toBeLessThan(ticks * 0.02);
+    expect(b.stats.timeSyncSkips).toBe(0);
+    expect(a.stats.timeSyncSkips).toBeGreaterThan(ticks / 6 * 0.7);
+    expect(a.stats.timeSyncSkips).toBeLessThan(ticks / 6 * 1.3);
   });
 });
