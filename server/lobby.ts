@@ -18,8 +18,8 @@ export interface Client {
   /** Relay slot. -1 = spectator: inputs from this client are dropped. */
   slot: number;
   lastPing: number;
-  /** Smoothed round trip to the relay in ms, from WebSocket pings; 0 until the first pong. */
-  rtt: number;
+  /** Smoothed round trip to the relay in ms, from WebSocket pings; null until the first pong. */
+  rtt: number | null;
   /** Fighter id and the bundle every client loads it from; "" until the first pick. */
   fighter: string;
   bundleUrl: string;
@@ -62,7 +62,7 @@ function mapInMessage(v: unknown): MapDoc | null {
   return v as MapDoc;
 }
 
-const RTT_PING_MS = 2000;
+const RTT_PING_MS = 1000;
 const FRAME_MS = 1000 / 60;
 /** Rollback covers this many frames of latency; input delay covers the rest, so rollbacks stay shallow at any ping. */
 const ROLLBACK_BUDGET = 4;
@@ -235,13 +235,17 @@ export function attachLobby(wss: WebSocketServer): void {
     const event = openEvent("connection", session && TRACE_RE.test(session) ? session : newTrace("c"));
     const msgs: Record<string, number> = {};
     event.set("connection", { id, ua: String(req.headers["user-agent"] ?? "").slice(0, 200) }).set("msgs", msgs);
-    const c: Client = { ws, id, name: `guest${id}`, room: null, slot: 0, lastPing: Date.now(), rtt: 0, fighter: "", bundleUrl: "", ready: false, event };
+    const c: Client = { ws, id, name: `guest${id}`, room: null, slot: 0, lastPing: Date.now(), rtt: null, fighter: "", bundleUrl: "", ready: false, event };
     let pingAt = 0;
     ws.on("pong", () => {
       const sample = Date.now() - pingAt;
-      c.rtt = c.rtt ? c.rtt + (sample - c.rtt) * 0.25 : sample;
+      c.rtt = c.rtt === null ? sample : c.rtt + (sample - c.rtt) * 0.25;
     });
-    const pinger = setInterval(() => { pingAt = Date.now(); ws.ping(); }, RTT_PING_MS);
+    // the first ping goes out with the hello: joining and readying take round trips of their own, so a member
+    // always has a measurement by the time the host can press START
+    const ping = () => { pingAt = Date.now(); ws.ping(); };
+    ping();
+    const pinger = setInterval(ping, RTT_PING_MS);
     ws.on("close", () => clearInterval(pinger));
     send(c, { t: "hello", id: c.id });
     ws.on("message", (raw) => {
@@ -306,11 +310,13 @@ export function attachLobby(wss: WebSocketServer): void {
           room.started = true;
           room.picking = null;
           room.seed = (Math.random() * 0xffffffff) >>> 0;
-          const auto = requested.inputDelay === "auto" ? autoInputDelay(room.members.map((m) => m.rtt)) : null;
+          const auto = requested.inputDelay === "auto" ? autoInputDelay(room.members.map((m) => m.rtt ?? 0)) : null;
           if (auto) requested.inputDelay = auto.delay;
+          const unmeasured = auto ? room.members.filter((m) => m.rtt === null).map((m) => m.name) : [];
           room.config = { ...requested, players: room.members.map((m) => ({ fighter: m.fighter, bundleUrl: m.bundleUrl })) };
           startRelayMatch(room, room.seed, room.config, room.members);
           room.match?.event.set("inputDelay", auto ?? { delay: requested.inputDelay, chosen: "host" });
+          if (unmeasured.length) room.match?.event.issue("error", "rtt", `auto input delay without a round trip for ${unmeasured.join(", ")}`);
           broadcast(room, { t: "start", seed: room.seed, config: room.config, members: room.members.map((m) => ({ id: m.id, name: m.name, slot: m.slot })) });
           break;
         }
