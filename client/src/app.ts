@@ -13,9 +13,9 @@ import { SignInScreen } from "./screens/signin";
 import { menus, signInScreen } from "./screens/flow";
 import { loadSettings, settings, takeHandoff, type Screen } from "./screens/ui";
 import { music, setMusicVolume, setVolume } from "./audio/audio";
-import { noteScreen, noteView, sessionTrace, startTelemetry } from "./telemetry/events";
+import { everywhere, noteScreen, noteView, sessionTrace, startTelemetry } from "./telemetry/events";
 import { loadGeneratedFighter } from "./gen";
-import { devSignIn, finishSignIn, loadAccount, signedIn } from "./account";
+import { devSignIn, finishSignIn, loadAccount, signedIn, unfinishedSignIn } from "./account";
 import { forgetLibrary } from "./fighters";
 import { forgetMaps } from "./maps";
 import { loadFighters, quickMatch } from "./quick";
@@ -78,12 +78,12 @@ export async function mount(opts: MountOptions): Promise<AppController> {
 
   const nav = menus();
   const params = opts.params;
-  // back from Discord or Google with a token in the fragment, or ?dev=<name> against a DEV_LOGIN server
+  // back from Discord or Google (a token, a refusal, or nothing: the trip died), or ?dev=<name> against a DEV_LOGIN server
   loadAccount();
   let signInError = "";
-  if (/(access|id)_token=/.test(location.hash)) {
-    try { await finishSignIn(); } catch (error) { console.error(error); signInError = error instanceof Error ? error.message : String(error); }
-  }
+  try { await finishSignIn(); } catch (error) { console.error(error); signInError = error instanceof Error ? error.message : String(error); }
+  const unfinished = unfinishedSignIn();
+  if (unfinished) { everywhere("warn", "sign-in", unfinished); signInError = unfinished; }
   if (!signedIn() && params.get("dev")) await devSignIn(params.get("dev")!);
   const home = (): Screen => (signedIn() ? nav.title() : signInScreen(nav, signInError));
 
@@ -108,6 +108,14 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     if (e.code === "F2") { const v = screen as VersusScreen; if (v.renderer) v.renderer.showHitboxes = !v.renderer.showHitboxes; e.preventDefault(); }
   };
   window.addEventListener("keydown", onKey);
+  // Back from Discord or Google restores this page from the back/forward cache: mount doesn't run again
+  const onPageShow = (e: PageTransitionEvent) => {
+    const unfinished = e.persisted && unfinishedSignIn();
+    if (!unfinished) return;
+    everywhere("warn", "sign-in", unfinished);
+    if (screen instanceof SignInScreen) screen.error = unfinished;
+  };
+  window.addEventListener("pageshow", onPageShow);
 
   let running = true;
   let last = performance.now();
@@ -185,6 +193,7 @@ export async function mount(opts: MountOptions): Promise<AppController> {
       ticker.terminate();
       window.removeEventListener("resize", resize);
       window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pageshow", onPageShow);
       detachPointer();
       stopTelemetry();
     },

@@ -3,7 +3,8 @@ import { PENCIL } from "../render/paper";
 import type { MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
 import { sfx } from "../audio/audio";
-import { discordSignInUrl, emailSignIn, emailSignUp, googleSignInUrl } from "../account";
+import { emailSignIn, emailSignUp, oauthSignInUrl } from "../account";
+import { sessionList } from "../telemetry/events";
 import { bg, card, label, type Screen, INK } from "./ui";
 import { RED } from "./character";
 import { ButtonMenu, type Button } from "./buttons";
@@ -29,11 +30,10 @@ export class SignInScreen implements Screen {
   private mode: Mode = "door";
   private fields: { email: TextField; password: TextField; name: TextField | null } | null = null;
   private sending = false;
-  private leaving = false;
   private next: Screen | null = null;
 
   /** `error`: why the last sign-in didn't work. */
-  constructor(private home: () => Screen, private error = "") {}
+  constructor(private home: () => Screen, public error = "") {}
 
   abandon(): void {
     this.closeForm();
@@ -54,7 +54,8 @@ export class SignInScreen implements Screen {
     if (this.next) { this.closeForm(); return this.next; }
     const pressed = this.menu.update(this.buttons(), m, consumeTaps());
     if (this.mode === "door") {
-      if ((pressed === "discord" || pressed === "google") && !this.leaving) { this.leaving = true; location.href = pressed === "discord" ? discordSignInUrl() : googleSignInUrl(); }
+      if (pressed) sessionList("signIn", pressed);
+      if (pressed === "discord" || pressed === "google") location.href = oauthSignInUrl(pressed);
       else if (pressed === "email") this.openForm("signin");
       return null;
     }

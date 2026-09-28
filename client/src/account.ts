@@ -11,6 +11,7 @@ import { sessionTrace } from "./telemetry/events";
 export const account: { session: string | null; player: Player | null } = { session: null, player: null };
 const KEY = "sketchbattle.account";
 const NONCE_KEY = "sketchbattle.googleNonce";
+const PENDING_KEY = "sketchbattle.signingIn";
 export const DISCORD_APP_ID = "1506034935838937201";
 
 export function loadAccount(): void {
@@ -29,16 +30,32 @@ export function signedIn(): boolean {
 
 const authRedirect = (): string => encodeURIComponent(`${location.origin}${site.base}auth`);
 
-/** Where Discord sends the browser to sign in; it comes back to /auth on this site. */
-export function discordSignInUrl(): string {
-  return `https://discord.com/oauth2/authorize?client_id=${DISCORD_APP_ID}&response_type=token&redirect_uri=${authRedirect()}&scope=identify`;
-}
+export type OAuthProvider = "discord" | "google";
+const PROVIDER_NAME: Record<OAuthProvider, string> = { discord: "Discord", google: "Google" };
 
-/** Where Google sends the browser to sign in; it comes back to /auth with an ID token bound to a nonce kept for the trip. */
-export function googleSignInUrl(): string {
+/** Where the browser goes to sign in with Discord or Google; it comes back to /auth on this site. */
+export function oauthSignInUrl(provider: OAuthProvider): string {
+  sessionStorage.setItem(PENDING_KEY, provider);
+  if (provider === "discord") return `https://discord.com/oauth2/authorize?client_id=${DISCORD_APP_ID}&response_type=token&redirect_uri=${authRedirect()}&scope=identify`;
+  // the ID token comes back bound to a nonce kept for the trip
   const nonce = crypto.randomUUID();
   sessionStorage.setItem(NONCE_KEY, nonce);
   return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&response_type=id_token&redirect_uri=${authRedirect()}&scope=openid%20profile&nonce=${nonce}&prompt=select_account`;
+}
+
+function takePending(): OAuthProvider | null {
+  const provider = sessionStorage.getItem(PENDING_KEY) as OAuthProvider | null;
+  sessionStorage.removeItem(PENDING_KEY);
+  return provider;
+}
+
+/**
+ * Why the last trip to Discord or Google came back to this tab without a token (Back from a page a
+ * school Chromebook blocks), or null. Asked once: the trip is forgotten.
+ */
+export function unfinishedSignIn(): string | null {
+  const provider = takePending();
+  return provider && `${PROVIDER_NAME[provider]} sign-in didn't finish. School Chromebooks often block it: try EMAIL & PASSWORD`;
 }
 
 /** Posts credentials to an /auth endpoint and keeps the session it hands back. Throws the server's reason on failure. */
@@ -53,12 +70,21 @@ async function authenticate(path: string, body: object): Promise<void> {
   save();
 }
 
-/** Back from Discord or Google: the token is in the URL fragment. Resolves true when a session was made. */
+/**
+ * Back from Discord or Google: the token is in the URL fragment, or the provider's refusal is in the
+ * fragment (Google) or query (Discord). Resolves true when a session was made.
+ */
 export async function finishSignIn(): Promise<boolean> {
   const hash = new URLSearchParams(location.hash.replace(/^#/, ""));
+  const query = new URLSearchParams(location.search);
   const accessToken = hash.get("access_token"), idToken = hash.get("id_token");
-  if (!accessToken && !idToken) return false;
-  history.replaceState(null, "", `${site.base}${location.search}`);
+  const refused = hash.has("error") ? hash : query.has("error") ? query : null;
+  const refusal = refused && (refused.get("error_description") ?? refused.get("error"));
+  if (!accessToken && !idToken && !refusal) return false;
+  const provider = takePending();
+  for (const key of ["error", "error_description", "error_uri", "state"]) query.delete(key);
+  history.replaceState(null, "", `${site.base}${query.size ? `?${query}` : ""}`);
+  if (refusal) throw new Error(`${provider ? PROVIDER_NAME[provider] : "sign-in"} said no: ${refusal}`);
   if (accessToken) await authenticate("discord", { accessToken });
   else {
     const nonce = sessionStorage.getItem(NONCE_KEY);
