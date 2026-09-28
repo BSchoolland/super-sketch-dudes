@@ -109,10 +109,11 @@ export class RollbackSession {
       this.stats.stalls++;
       return false;
     }
-    // time sync: ahead of a remote on the shared clock, give up ticks until it's level (a stall later would cost more):
-    // one in 6 a frame ahead, up to every other tick against a remote that can only run at half speed
-    this.leadAvg += (this.frameLead() - this.leadAvg) * 0.1;
-    if (this.leadAvg > 1 && ++this.sinceSkip >= Math.max(2, Math.min(6, Math.ceil(6 / this.leadAvg)))) {
+    // time sync: ahead of a remote on the shared clock, give up ticks until it's level (a stall later would cost more).
+    // Under 2 frames is jitter (a slow machine steps in bursts) and costs nothing; past it, one tick in 6, up to every
+    // other tick against a remote that can only run at half speed.
+    this.leadAvg += (this.frameLead() - this.leadAvg) * 0.05;
+    if (this.leadAvg > 2 && ++this.sinceSkip >= Math.max(2, Math.min(6, Math.ceil(12 / this.leadAvg)))) {
       this.sinceSkip = 0;
       this.waiting = false;
       this.stats.timeSyncSkips++;
