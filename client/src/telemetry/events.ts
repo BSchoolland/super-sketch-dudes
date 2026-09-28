@@ -15,8 +15,9 @@ let session: WideEvent | null = null;
 let bundle = "";
 const consoleError = console.error;
 
-export interface View { w: number; h: number; dpr: number; canvasW: number; canvasH: number; scale: number }
-export const view: View = { w: 0, h: 0, dpr: 1, canvasW: 0, canvasH: 0, scale: 0 };
+/** `quality` is the frame pacer's resolution step: dpr already includes it. */
+export interface View { w: number; h: number; dpr: number; canvasW: number; canvasH: number; scale: number; quality: number }
+export const view: View = { w: 0, h: 0, dpr: 1, canvasW: 0, canvasH: 0, scale: 0, quality: 1 };
 
 export function randomHex(chars: number): string {
   const bytes = crypto.getRandomValues(new Uint8Array(Math.ceil(chars / 2)));

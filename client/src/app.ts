@@ -1,4 +1,5 @@
 import { setSpriteScale } from "./render/sprite";
+import { FramePacer } from "./render/pacing";
 import "./style.css";
 import { VIEW_H, VIEW_W } from "./render/camera";
 import { PAPER } from "./render/paper";
@@ -55,11 +56,9 @@ export async function mount(opts: MountOptions): Promise<AppController> {
 
   const ctx = canvas.getContext("2d", { alpha: false })!;
   let scale = 1, offX = 0, offY = 0;
-  // canvas pixels per CSS pixel, capped; a machine that can't keep up steps down the cap (see judgeFrames)
-  const DPR_CAPS = [2, 1.5, 1, 0.75];
-  let quality = 0;
+  const pacer = new FramePacer(() => resize());
   function resize(): void {
-    const dpr = Math.min(DPR_CAPS[quality], window.devicePixelRatio || 1);
+    const dpr = Math.min(2, window.devicePixelRatio || 1) * pacer.quality;
     const w = window.innerWidth, h = window.innerHeight;
     canvas.width = Math.floor(w * dpr); canvas.height = Math.floor(h * dpr);
     scale = Math.min(w / VIEW_W, h / VIEW_H) * dpr;
@@ -67,7 +66,7 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     offY = (canvas.height - VIEW_H * scale) / 2;
     setPointerTransform(scale / dpr, offX / dpr, offY / dpr);
     setSpriteScale(scale);
-    noteView({ w, h, dpr, canvasW: canvas.width, canvasH: canvas.height, scale });
+    noteView({ w, h, dpr, canvasW: canvas.width, canvasH: canvas.height, scale, quality: pacer.quality });
   }
   const detachPointer = attachPointer(canvas);
   window.addEventListener("resize", resize);
@@ -148,23 +147,10 @@ export async function mount(opts: MountOptions): Promise<AppController> {
 
   // Draws are capped near the sim's 60 Hz: a 144 Hz screen would otherwise draw 2.4x the work for the same
   // motion. The refresh interval is the median of recent frame gaps, so a draw lands on whichever frame is
-  // closest to 1/60 s. Frame gaps also judge the machine: too many long gaps between draws, and the
-  // canvas steps down a resolution cap; a long clean stretch steps it back up.
+  // closest to 1/60 s. The pacer watches the draws and steps the resolution down on a machine that can't keep up.
   const DRAW_MS = TICK_MS;
   const gaps: number[] = [];
-  let refresh = DRAW_MS, lastFrame = 0, lastDraw = 0, judgeFrom = 0, slowDraws = 0, judgedDraws = 0, cleanWindows = 0;
-  function judgeFrames(now: number, gap: number): void {
-    if (gap > DRAW_MS * 1.6) slowDraws++;
-    judgedDraws++;
-    if (now - judgeFrom < 2000) return;
-    if (judgedDraws >= 10) {
-      const slow = slowDraws / judgedDraws;
-      if (slow > 0.3 && quality < DPR_CAPS.length - 1) { quality++; resize(); cleanWindows = 0; }
-      else if (slow < 0.05 && quality > 0 && ++cleanWindows >= 8) { quality--; resize(); cleanWindows = 0; }
-      else if (slow >= 0.05) cleanWindows = 0;
-    }
-    judgeFrom = now; slowDraws = 0; judgedDraws = 0;
-  }
+  let refresh = DRAW_MS, lastFrame = 0, lastDraw = 0;
   function frame(now: number): void {
     if (!running) return;
     if (lastFrame) gaps.push(now - lastFrame);
@@ -173,7 +159,7 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     if (gaps.length === 30) refresh = [...gaps].sort((a, b) => a - b)[15];
     const sinceDraw = now - lastDraw;
     if (sinceDraw + refresh / 2 < DRAW_MS) { requestAnimationFrame(frame); return; }
-    if (lastDraw) judgeFrames(now, sinceDraw);
+    pacer.drew(now);
     lastDraw = now;
     document.body.style.cursor = "default";
     ctx.setTransform(1, 0, 0, 1, 0, 0);
