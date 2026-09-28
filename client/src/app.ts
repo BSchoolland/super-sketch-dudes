@@ -136,7 +136,12 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     lastPaint = now;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = PAPER;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (!(screen instanceof VersusScreen && screen.renderer.chrome)) ctx.fillRect(0, 0, canvas.width, canvas.height);
+    else {
+      // a fight's backdrop paints the whole view: only the letterbox bars need filling
+      if (offX >= 1) { ctx.fillRect(0, 0, Math.ceil(offX), canvas.height); ctx.fillRect(Math.floor(canvas.width - offX), 0, Math.ceil(offX), canvas.height); }
+      if (offY >= 1) { ctx.fillRect(0, 0, canvas.width, Math.ceil(offY)); ctx.fillRect(0, Math.floor(canvas.height - offY), canvas.width, Math.ceil(offY)); }
+    }
     ctx.setTransform(scale, 0, 0, scale, offX, offY);
     ctx.save();
     ctx.beginPath(); ctx.rect(0, 0, VIEW_W, VIEW_H); ctx.clip();
