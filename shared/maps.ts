@@ -109,10 +109,12 @@ export function stageFromMap(doc: MapDoc): Stage {
     ...terrain.map((t): Platform => ({ x1: t.x, x2: t.x + t.w, y: t.y, solid: true, bottom: t.y + t.h })),
     ...thin.map((p): Platform => ({ x1: p.x, x2: p.x + p.w, y: p.y, ...(p.motion ? { motion: p.motion } : {}) })),
   ];
+  // a corner is a ledge unless another block fills the air beside it or stands on it
+  const solidAt = (x: number, y: number) => terrain.some((t) => x > t.x && x < t.x + t.w && y > t.y && y < t.y + t.h);
   const ledges = terrain.flatMap((t, i) => [
     { x: t.x, y: t.y, side: -1 as const, platform: i },
     { x: t.x + t.w, y: t.y, side: 1 as const, platform: i },
-  ]);
+  ]).filter((l) => !solidAt(l.x + l.side * 2, l.y + 2) && !solidAt(l.x - l.side * 2, l.y - 2));
   let x1 = Infinity, x2 = -Infinity, y1 = Infinity, y2 = -Infinity;
   for (const t of terrain) { x1 = Math.min(x1, t.x); x2 = Math.max(x2, t.x + t.w); y1 = Math.min(y1, t.y); y2 = Math.max(y2, t.y + t.h); }
   for (const p of thin) { const b = motionBox(p); x1 = Math.min(x1, b.x1); x2 = Math.max(x2, b.x2); y1 = Math.min(y1, b.y1); y2 = Math.max(y2, b.y2); }

@@ -4,6 +4,8 @@ import { createMatch, hashState, step } from "../shared/sim";
 import { platformMotion } from "../shared/physics";
 import { registerStage, stages } from "../shared/stages/index";
 import { cpuInput } from "../shared/cpu";
+import { EMPTY_INPUT } from "../shared/input";
+import { roster } from "../shared/fighters/index";
 import { loadAllHouse } from "./house";
 
 beforeAll(loadAllHouse);
@@ -93,6 +95,25 @@ describe("a match on a map", () => {
     expect(s.fighters[0].grounded).toBe(true);
     expect(s.fighters[0].platform).toBe(2);
     expect(s.fighters[1].grounded).toBe(false);
+  });
+  it("a runner stops at the wall of a pillar standing on the floor instead of walking into it", () => {
+    const d = newMapDoc(ID, "x", "X", "PILLAR", 1);
+    d.pieces.push({ kind: "terrain", x: 200, y: -300, w: 200, h: 300 });
+    const s = createMatch({ stage: ID, map: d, players: [{ fighter: "lampjack" }, { fighter: "lampjack" }], seed: 1 });
+    const f = s.fighters[0];
+    f.x = -300; s.fighters[1].x = -500;
+    for (let i = 0; i < 150; i++) step(s, [{ ...EMPTY_INPUT, x: 100 }, EMPTY_INPUT]);
+    const halfW = roster.lampjack.stats.width / 2;
+    expect(f.grounded).toBe(true);
+    expect(f.x).toBeGreaterThan(100);
+    expect(f.x).toBeLessThanOrEqual(200 - halfW + 0.01);
+  });
+  it("a corner buried under or beside another block is not a ledge", () => {
+    const d = newMapDoc(ID, "x", "X", "STEPS", 1);
+    d.pieces.push({ kind: "terrain", x: 300, y: -300, w: 260, h: 300 });
+    const s = stageFromMap(d);
+    // the floor's right corner (560, 0) sits under the pillar; the pillar's own two corners and the floor's left one remain
+    expect(s.ledges.map((l) => `${l.x},${l.y}`)).toEqual(["-560,0", "300,-300", "560,-300"]);
   });
   it("refuses a config whose stage isn't its map, and a map named like a shipped stage", () => {
     expect(() => createMatch({ stage: "proving", map: doc(), players: [{ fighter: "lampjack" }, { fighter: "lampjack" }], seed: 1 })).toThrow(/not its map/);

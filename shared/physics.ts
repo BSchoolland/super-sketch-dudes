@@ -55,6 +55,18 @@ export function stepPhysics(state: State, f: Fighter, input: InputFrame, stage: 
   if (f.grounded) {
     const t = platTop(state, stage, f.platform);
     f.y = t.y;
+    // walls of solid blocks standing on this ground: stop at them instead of walking in
+    for (let i = 0; i < stage.platforms.length; i++) {
+      if (i === f.platform) continue;
+      const w = platTop(state, stage, i);
+      if (!w.p.solid) continue;
+      const bottom = w.p.bottom! + platformOffset(state, i).dy;
+      if (w.y >= f.y - 1 || bottom <= f.y - s.height) continue;
+      if (f.x + halfW <= w.x1 || f.x - halfW >= w.x2) continue;
+      const side: 1 | -1 = f.x < (w.x1 + w.x2) / 2 ? 1 : -1;
+      f.x = side === 1 ? w.x1 - halfW : w.x2 + halfW;
+      hitWall(state, f, def, side, input);
+    }
     // walk off the edge
     if (f.x < t.x1 - 2 || f.x > t.x2 + 2) {
       const keep = f.action === "attack" || f.action === "hitstun" || f.action === "roll" || f.action === "techRoll" || f.action === "getupRoll" || f.action === "ledgeRoll";
