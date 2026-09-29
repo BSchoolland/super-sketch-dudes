@@ -50,25 +50,39 @@ export function stepPhysics(state: State, f: Fighter, input: InputFrame, stage: 
 
   const px = f.x, py = f.y;
   f.x += f.vx;
-  f.y += f.vy;
+  if (f.grounded) f.y = platTop(state, stage, f.platform).y;
+  else f.y += f.vy;
+
+  // walls: a body beside a solid block (feet below its top, head above its bottom) is pushed clear of it.
+  // Flying into it, or walking into it, is a wall hit; coming down beside it is just a push.
+  for (let i = 0; i < stage.platforms.length; i++) {
+    if (f.grounded && i === f.platform) continue;
+    const t = platTop(state, stage, i);
+    if (!t.p.solid) continue;
+    const bottom = t.p.bottom! + platformOffset(state, i).dy;
+    if (f.y <= t.y + 1 || f.y - s.height >= bottom) continue;
+    const overlaps = f.x + halfW > t.x1 && f.x - halfW < t.x2;
+    const crossed = (px < t.x1 && f.x > t.x2) || (px > t.x2 && f.x < t.x1);
+    if (!overlaps && !crossed) continue;
+    const inside = f.x >= t.x1 && f.x <= t.x2, wasInside = px >= t.x1 && px <= t.x2;
+    // under the block (a ceiling matter), or feet came from above its top (a landing): not a wall
+    if ((inside || crossed) && (wasInside || py <= t.y + 0.01)) continue;
+    const fromLeft = inside || crossed ? px < t.x1 : f.x < t.x1;
+    const flew = fromLeft ? px + halfW <= t.x1 + 0.5 : px - halfW >= t.x2 - 0.5;
+    f.x = fromLeft ? t.x1 - halfW : t.x2 + halfW;
+    if (flew || f.grounded) hitWall(state, f, def, fromLeft ? 1 : -1, input);
+  }
 
   if (f.grounded) {
     const t = platTop(state, stage, f.platform);
-    f.y = t.y;
-    // walls of solid blocks standing on this ground: stop at them instead of walking in
-    for (let i = 0; i < stage.platforms.length; i++) {
-      if (i === f.platform) continue;
-      const w = platTop(state, stage, i);
-      if (!w.p.solid) continue;
-      const bottom = w.p.bottom! + platformOffset(state, i).dy;
-      if (w.y >= f.y - 1 || bottom <= f.y - s.height) continue;
-      if (f.x + halfW <= w.x1 || f.x - halfW >= w.x2) continue;
-      const side: 1 | -1 = f.x < (w.x1 + w.x2) / 2 ? 1 : -1;
-      f.x = side === 1 ? w.x1 - halfW : w.x2 + halfW;
-      hitWall(state, f, def, side, input);
-    }
-    // walk off the edge
     if (f.x < t.x1 - 2 || f.x > t.x2 + 2) {
+      // a top at the same height under the new spot is the same ground (a seam between blocks)
+      for (let i = 0; i < stage.platforms.length; i++) {
+        if (i === f.platform) continue;
+        const n = platTop(state, stage, i);
+        if (Math.abs(n.y - t.y) <= 1 && f.x >= n.x1 && f.x <= n.x2) { f.platform = i; f.y = n.y; return; }
+      }
+      // walk off the edge
       const keep = f.action === "attack" || f.action === "hitstun" || f.action === "roll" || f.action === "techRoll" || f.action === "getupRoll" || f.action === "ledgeRoll";
       if (f.action === "dash" || f.action === "run" || f.action === "walk" || f.action === "idle" || f.action === "skid" || f.action === "runTurn") {
         // idle-ish states teeter instead of falling unless moving
@@ -84,23 +98,11 @@ export function stepPhysics(state: State, f: Fighter, input: InputFrame, stage: 
     return;
   }
 
-  // airborne: walls and ceilings of solid platforms
+  // ceilings
   for (let i = 0; i < stage.platforms.length; i++) {
     const t = platTop(state, stage, i);
     if (!t.p.solid) continue;
     const bottom = t.p.bottom! + platformOffset(state, i).dy;
-    const feetInside = f.y > t.y + 1 && f.y - s.height < bottom;
-    // walls: a body overlapping the side with its centre off the stage is pushed clear, whether it
-    // flew into the wall or came down beside it; only flying into it counts as a wall hit
-    if (feetInside && f.x < t.x1 && f.x + halfW > t.x1) { const flew = px + halfW <= t.x1 + 0.5; f.x = t.x1 - halfW; if (flew) hitWall(state, f, def, 1, input); }
-    else if (feetInside && f.x > t.x2 && f.x - halfW < t.x2) { const flew = px - halfW >= t.x2 - 0.5; f.x = t.x2 + halfW; if (flew) hitWall(state, f, def, -1, input); }
-    // a big launch can carry the centre through a wall in one frame: back out the way it came
-    else if (feetInside && f.x >= t.x1 && f.x <= t.x2 && py > t.y + 0.01 && (px < t.x1 || px > t.x2)) {
-      const side: 1 | -1 = px < t.x1 ? 1 : -1;
-      f.x = side === 1 ? t.x1 - halfW : t.x2 + halfW;
-      hitWall(state, f, def, side, input);
-    }
-    // ceiling
     if (f.vy < 0 && f.x > t.x1 && f.x < t.x2 && py - s.height >= bottom && f.y - s.height < bottom) { f.y = bottom + s.height; f.vy = 0; }
   }
   // landing
