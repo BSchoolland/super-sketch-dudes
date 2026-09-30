@@ -6,6 +6,7 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import type { CheckReport } from "./checks";
+import type { CpuStudy } from "../shared/cpu-study";
 
 export const AGENT_MODEL = "claude-opus-5-5";
 
@@ -32,6 +33,7 @@ export interface CompletePayload {
   description: string;
   /** Lines the players read while the fight loads: attack, special, up+special. */
   source: string;
+  cpu: CpuStudy;
   sprite: { px: number; feetPx: number; heightPx: number; anims: Record<string, string> };
   cells: Record<string, string>;
   sheet: string | undefined;
@@ -128,5 +130,5 @@ export async function runForge(job: JobSpec, drawingSrc: string, dir: string, io
     checks: p.report?.checks, soft: p.report?.soft ?? [], notes: result.text.slice(0, 2000),
   };
   fs.writeFileSync(path.join(dir, "report.json"), JSON.stringify(report, null, 1));
-  return { name: p.name, tagline: p.tagline, description: p.description ?? "", source: p.source, sprite: p.sprite, cells: p.cells, sheet: p.sheet, report };
+  return { name: p.name, tagline: p.tagline, description: p.description ?? "", source: p.source, cpu: p.cpu, sprite: p.sprite, cells: p.cells, sheet: p.sheet, report };
 }
