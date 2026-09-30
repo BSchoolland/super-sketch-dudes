@@ -7,14 +7,15 @@ Usage: normalize.py <sheet.png> <outdir> [--px 512 --feet 448 --height 360 --mir
 its cells.json); `--names` replaces the nine cell names outright (a transformation strip). The
 scale comes from the first cell either way.
 
-Each cell: paper keyed to alpha, the drawing scaled by ONE factor (chosen so the first (idle) cell's
+The sheet is cut by ink, not by a fixed grid (see cut_cells): a pose reaching across a grid line keeps
+all of itself. Each cell: paper keyed to alpha, the drawing scaled by ONE factor (chosen so the first (idle) cell's
 content is `height` px tall, or less if some cell wouldn't fit; cells.json heightPx is the idle
 height actually used) so all cells share a world scale, horizontally centred on its alpha centroid, and rested with the bottom of its content on row `feet`. Writes
 <outdir>/<cell>.png and <outdir>/cells.json with the content box of every cell in cell pixels
 (the hitbox placer reads those). --mirror 1 flips every cell left-right first.
 """
 import json, sys, os
-from PIL import Image, ImageFilter
+from PIL import Image
 import numpy as np
 from scipy import ndimage
 
@@ -32,24 +33,96 @@ def key_paper(im):
     out = np.dstack([np.clip(a, 0, 255).astype(np.uint8), (alpha * 255).astype(np.uint8)])
     return Image.fromarray(out, "RGBA")
 
-def strip_grid_lines(im, thresh=40):
-    """Drop the sheet's grid lines that survive the crop: any connected blob of ink no thicker than
-    4px anywhere (it vanishes under a 5x5 erosion) that spans a quarter of the cell. An L of two
-    grid lines is one blob, so this is by thickness, not by bounding box. Measured: a grid line is
-    ~3px with its antialiasing; the thinnest stroke the image model draws is ~6px."""
-    a = np.asarray(im).copy()
-    mask = a[..., 3] > thresh
+def grid_lines(thin, frac=0.3):
+    """The sheet's drawn grid lines along one axis: runs of rows (or columns) where more than `frac`
+    of the pixels are thin ink. Returns (first, last) index pairs."""
+    hot = thin.sum(axis=1) > frac * thin.shape[1]
+    lines, start = [], None
+    for i, h in enumerate(np.append(hot, False)):
+        if h and start is None: start = i
+        if not h and start is not None: lines.append((start, i - 1)); start = None
+    return lines
+
+def cuts(lines, size):
+    """The two interior cell boundaries: the drawn line nearest each third, or the third itself where the
+    sheet drew none. The image model draws them up to ~20px off the thirds."""
+    out = []
+    for third in (size / 3, 2 * size / 3):
+        near = [(a + b) / 2 for a, b in lines if abs((a + b) / 2 - third) < size / 12]
+        out.append(round(min(near, key=lambda c: abs(c - third))) if near else round(third))
+    return out
+
+def strip_grid(al, thresh=40):
+    """Hard ink mask with the grid removed. Grid pixels are thin (gone under a 5x5 opening; a grid line
+    is ~3px with its antialiasing, the thinnest stroke the image model draws is ~6px): drop thin
+    pixels on a detected grid line, blobs lying on the lines (where two cross they are thick), then any
+    thin blob spanning a quarter of a cell (slanted leftovers). Returns (mask, row cuts, column cuts)."""
+    mask = al > thresh
+    thin = mask & ~ndimage.binary_opening(mask, structure=np.ones((5, 5)))
+    rows, cols = grid_lines(thin), grid_lines(thin.T)
+    band = np.zeros_like(mask)
+    for a, b in rows: band[max(0, a - 3):b + 4, :] = True
+    for a, b in cols: band[:, max(0, a - 3):b + 4] = True
+    mask &= ~(thin & band)
     labels, n = ndimage.label(mask)
-    if not n: return im
-    h, w = mask.shape
+    span = 0.25 * min(mask.shape) / 3
     for i, sl in enumerate(ndimage.find_objects(labels), start=1):
-        ys, xs = sl
-        bh, bw = ys.stop - ys.start, xs.stop - xs.start
-        if bw < 0.25 * w and bh < 0.25 * h: continue
         blob = labels[sl] == i
+        if band[sl][blob].mean() > 0.9: mask[sl][blob] = False; continue
+        ys, xs = sl
+        if ys.stop - ys.start < span and xs.stop - xs.start < span: continue
         if ndimage.binary_erosion(blob, structure=np.ones((5, 5))).any(): continue
-        a[..., 3][labels == i] = 0
-    return Image.fromarray(a, "RGBA")
+        mask[labels == i] = False
+    drop_specks(mask)
+    return mask, cuts(rows, mask.shape[0]), cuts(cols, mask.shape[1])
+
+def drop_specks(mask, area=60, reach=15):
+    """Blobs under `area` px more than `reach` px from any bigger blob are dust, not drawing: one speck
+    above a head sets the idle box, and so the whole fighter's scale."""
+    labels, n = ndimage.label(mask, structure=np.ones((3, 3)))
+    if not n: return
+    sizes = np.bincount(labels.ravel())
+    small = sizes < area
+    small[0] = False
+    dist = ndimage.distance_transform_edt(~(mask & ~small[labels]))
+    for i in np.nonzero(small)[0]:
+        if dist[labels == i].min() > reach: mask[labels == i] = False
+
+def cut_cells(im, thresh=40):
+    """The keyed sheet split into nine RGBA cells, by ink rather than by a fixed grid: every connected
+    blob belongs to the cell holding most of it, so a limb reaching across a grid line stays with its
+    body. A blob with a quarter of itself in a second cell is two poses touching: it is split at the
+    grid line. Returns the cells in sheet order."""
+    rgba = np.asarray(key_paper(im)).copy()
+    mask, (r1, r2), (c1, c2) = strip_grid(rgba[..., 3], thresh)
+    H, W = mask.shape
+    cell_of = (np.digitize(np.arange(H), [r1, r2])[:, None] * 3 + np.digitize(np.arange(W), [c1, c2])[None, :])
+    owner = np.full(mask.shape, -1)
+    labels, n = ndimage.label(mask, structure=np.ones((3, 3)))
+    for i, sl in enumerate(ndimage.find_objects(labels), start=1):
+        blob = labels[sl] == i
+        cs = cell_of[sl][blob]
+        count = np.bincount(cs, minlength=9)
+        home = int(count.argmax())
+        rest = count.sum() - count[home]
+        if rest >= 0.25 * count.sum() and rest >= 500:
+            owner[sl][blob] = cs
+        else:
+            owner[sl][blob] = home
+    # the soft antialiased edge (alpha under thresh) goes with the nearest hard ink within 3px
+    dist, (iy, ix) = ndimage.distance_transform_edt(owner < 0, return_indices=True)
+    near = owner[iy, ix]
+    near[(dist > 3) | (rgba[..., 3] == 0)] = -1
+    near[(rgba[..., 3] > thresh) & (owner < 0)] = -1  # stripped grid stays stripped
+    cells = []
+    for c in range(9):
+        ys, xs = np.nonzero(near == c)
+        if not len(xs): cells.append(None); continue
+        y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
+        a = rgba[y0:y1, x0:x1].copy()
+        a[..., 3] = np.where(near[y0:y1, x0:x1] == c, a[..., 3], 0)
+        cells.append(Image.fromarray(a, "RGBA"))
+    return cells
 
 def content_box(im, thresh=40):
     al = np.asarray(im)[..., 3]
@@ -74,16 +147,11 @@ def main():
     names = opts["names"].split(",") if opts["names"] else [opts["prefix"] + c for c in CELLS]
     if len(names) != 9: sys.exit("--names needs nine names")
     os.makedirs(out, exist_ok=True)
-    im = Image.open(sheet).convert("RGB")
-    W, H = im.size
-    cw, ch = W // 3, H // 3
-    pad = int(cw * 0.03)  # skip the grid lines
+    cut = cut_cells(Image.open(sheet).convert("RGB"))
     cells = {}
-    for i, name in enumerate(names):
-        r, c = divmod(i, 3)
-        crop = im.crop((c * cw + pad, r * ch + pad, (c + 1) * cw - pad, (r + 1) * ch - pad))
-        if opts["mirror"]: crop = crop.transpose(Image.FLIP_LEFT_RIGHT)
-        cells[name] = strip_grid_lines(key_paper(crop))
+    for name, cim in zip(names, cut):
+        if cim is None: sys.exit(f"cell {name} is empty after keying")
+        cells[name] = cim.transpose(Image.FLIP_LEFT_RIGHT) if opts["mirror"] else cim
     boxes = {name: content_box(cim) for name, cim in cells.items()}
     for name, box in boxes.items():
         if not box: sys.exit(f"cell {name} is empty after keying")

@@ -4,7 +4,7 @@ import type express from "express";
 import { DRAW_PNG_MAX_BYTES } from "../shared/account";
 import { playerOf } from "./auth";
 import type { WideEvent } from "../shared/wide";
-import { drawingUrlOf, enqueueJob, entryOf, jobOf, newFighterId, restoreSource, storeCharacter } from "./forge";
+import { drawingUrlOf, enqueueJob, entryOf, jobOf, newFighterId, reviseCharacter, storeCharacter } from "./forge";
 import { upsertCharacter } from "./library";
 import { dummyEntry, everyCharacter, findCharacter, libraryOf, removeCharacter, setDummy, setStarters, starterEntries, starterIds } from "./library";
 import { HOUSE_ROSTER } from "../shared/house";
@@ -74,14 +74,25 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
 
   // a new module for a character that already exists (an engine migration, a fix), keeping everything else
   api.post("/characters/:id/source", async (req, res) => {
-    if (!forgeToken || req.get("x-forge-token") !== forgeToken) return res.status(401).json({ error: "bad token" });
-    const entry = findCharacter(req.params.id);
-    if (!entry || entry.status !== "ready") return res.status(404).json({ error: "no such finished character" });
     const source = typeof req.body?.source === "string" ? req.body.source : "";
     if (!source) return res.status(400).json({ error: "source required" });
-    try { res.json({ character: upsertCharacter({ ...entry, ...(await restoreSource(entry, source)) }) }); }
-    catch (e) { res.status(400).json({ error: (e as Error).message }); }
+    await revise(req, res, { source });
   });
+
+  // re-cut cells for a character that already exists (a normalize.py fix): { cells: { <cell>: base64 png }, heightPx }
+  api.post("/characters/:id/cells", async (req, res) => {
+    const cells = req.body?.cells, heightPx = Number(req.body?.heightPx);
+    if (!cells || typeof cells !== "object" || !(heightPx > 0)) return res.status(400).json({ error: "cells and heightPx required" });
+    await revise(req, res, { cells, heightPx });
+  });
+
+  async function revise(req: express.Request, res: express.Response, change: Parameters<typeof reviseCharacter>[1]): Promise<void> {
+    if (!forgeToken || req.get("x-forge-token") !== forgeToken) { res.status(401).json({ error: "bad token" }); return; }
+    const entry = findCharacter(req.params.id);
+    if (!entry || entry.status !== "ready") { res.status(404).json({ error: "no such finished character" }); return; }
+    try { res.json({ character: upsertCharacter({ ...entry, ...(await reviseCharacter(entry, change)) }) }); }
+    catch (e) { res.status(400).json({ error: (e as Error).message }); }
+  }
 
   // a random handful of contenders for the title screen's brawl, none of `not`: the house four (no bundle
   // URL; the client knows where those live) and everyone's finished characters
