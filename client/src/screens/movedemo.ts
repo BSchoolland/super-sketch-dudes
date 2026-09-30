@@ -2,7 +2,7 @@ import { cloneState, createMatch, step } from "../../../shared/sim";
 import { B, EMPTY_INPUT, cloneInput, type InputFrame } from "../../../shared/input";
 import type { Fighter, FighterDef, State } from "../../../shared/types";
 import { roster } from "../../../shared/fighters/index";
-import { profileOf, type ShotPath } from "../../../shared/cpu-profile";
+import { HELD, profileOf, type ShotPath } from "../../../shared/cpu-profile";
 import { stages } from "../../../shared/stages/index";
 import { VIEW_H, VIEW_W } from "../render/camera";
 import { PAPER, inkRect, INK } from "../render/paper";
@@ -184,7 +184,7 @@ export class MoveDemo {
   private shotTarget(paths: ShotPath[] | undefined, m: DemoMove): { x: number; y: number } | null {
     if (!paths?.length) return null;
     const held = this.holdsFor(m);
-    const path = paths.find((p) => p.air === this.jumps && (held ? p.hold === Infinity : p.hold === 0)) ?? paths.find((p) => p.air === this.jumps) ?? paths[0];
+    const path = paths.find((p) => p.air === this.jumps && (held ? p.hold === HELD : p.hold === 0)) ?? paths.find((p) => p.air === this.jumps) ?? paths[0];
     const near = path.pts.filter((q) => Math.hypot(q.x, q.y) <= 460);
     // a shot that runs along the floor (a skipped shell) is met by a dummy standing on it
     const floor = this.dir === "u" ? [] : near.filter((q) => q.y > -30);

@@ -1,10 +1,12 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { profileOf } from "../shared/cpu-profile";
-import { roster } from "../shared/fighters/index";
+import { hitAt, profileOf } from "../shared/cpu-profile";
+import { GRID_X } from "../shared/cpu-study";
+import { buildGenerated } from "../shared/gen/load";
+import { registerFighter, roster, unregisterFighter } from "../shared/fighters/index";
 import { createMatch, step } from "../shared/sim";
 import { cpuInput } from "../shared/cpu";
 import { EMPTY_INPUT } from "../shared/input";
-import { loadAllHouse } from "./house";
+import { houseBundle, loadAllHouse } from "./house";
 
 describe("what the CPU knows about shots", () => {
   beforeAll(async () => { await loadAllHouse(); });
@@ -23,6 +25,22 @@ describe("what the CPU knows about shots", () => {
     expect(p.specials.nspecial!.cooldown).toBeGreaterThan(0);
     expect(p.zoning).toBeGreaterThanOrEqual(0);
     expect(p.zoning).toBeLessThanOrEqual(1);
+  });
+
+  it("studies where each special lands on a dummy standing still, and looks up the spot nearest the target", () => {
+    const p = profileOf(roster.wizard);
+    const grids = p.hits.nspecial;
+    expect(grids.length).toBe(6);
+    expect(grids.some((g) => g.cells.some(Boolean))).toBe(true);
+    // somewhere in front of it on its own ground the fireball lands; nothing studied lands 2000 away
+    expect(GRID_X.some((x) => x > 100 && hitAt(p, "nspecial", false, x, 0))).toBe(true);
+    expect(hitAt(p, "nspecial", false, 2000, 0)).toBeNull();
+  });
+
+  it("a fighter without the forge's study has no CPU profile", async () => {
+    const def = await buildGenerated({ ...houseBundle("rocket"), id: "unstudied", cpu: undefined });
+    registerFighter(def);
+    try { expect(() => profileOf(def)).toThrow(/no CPU study/); } finally { unregisterFighter("unstudied"); }
   });
 
   it("a fighter's projectile marks its last shot, and the CPU waits for the special's cooldown before firing it again", () => {

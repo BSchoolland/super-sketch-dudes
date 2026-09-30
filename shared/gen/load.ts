@@ -1,6 +1,7 @@
 import { formDef } from "../fighter";
 import { HIT_FAMILIES, LOOK_SHAPES, LOOK_TEXTURES, LOOK_TRAILS } from "../types";
 import type { Bar, Look, Move, FighterDef, SpriteRig } from "../types";
+import type { CpuStudy } from "../cpu-study";
 import { generatedApi } from "./api";
 import { SPRITE_CELLS, defaultCellForMove, STATE_CELLS } from "./sprite";
 
@@ -87,6 +88,8 @@ export interface GeneratedBundle {
   sprite: SpriteRig;
   player: string;
   description: string;
+  /** The forge's study of it for the CPU (cpu-study.ts). */
+  cpu?: CpuStudy;
 }
 
 /** Builds and validates a FighterDef from a bundle. Throws with every problem listed, never a partial fighter. */
@@ -94,7 +97,7 @@ export async function buildGenerated(b: GeneratedBundle): Promise<FighterDef> {
   const make = await instantiateGenerated(b.source);
   let def: FighterDef;
   try { def = make(generatedApi); } catch (e) { throw new Error(`generated fighter factory threw: ${e instanceof Error ? e.message : String(e)}`); }
-  def = { ...def, id: b.id, sprite: b.sprite, generated: { player: b.player, description: b.description } };
+  def = { ...def, id: b.id, sprite: b.sprite, generated: { player: b.player, description: b.description }, cpu: b.cpu };
   if (!def.rig) def.rig = { anims: {}, loops: {} };
   const problems = validateGenerated(def);
   if (problems.length) throw new Error(`generated fighter ${b.id} invalid:\n${problems.join("\n")}`);

@@ -1,9 +1,10 @@
 // Packs forge runs into the house roster: client/public/house/<id>/{bundle.json, cells}. The house
 // roster is what the tests, the forge's balance ladder and CPU fights use now that there are no
 // hand-made fighters. Usage: node scripts/house-roster.mjs <id>=<run dir> ...   (a run dir has
-// payload.json and cells/; or fighter.js + cells/ for hand-written ones)
+// payload.json and cells/; or fighter.js + cells/ for hand-written ones). Studies each for the CPU (forge/tools/study.ts).
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 const out = path.resolve("client/public/house");
 const names = [];
 for (const arg of process.argv.slice(2)) {
@@ -29,3 +30,6 @@ for (const arg of process.argv.slice(2)) {
   names.push({ id, name, tagline });
   console.log(`${id}: ${name} (${Object.keys(cells).length} cells)`);
 }
+// the CPU plays them from the forge's study of them, which has to be of this source
+const study = spawnSync("npx", ["tsx", "forge/tools/study.ts", ...names.map(({ id }) => path.join(out, id, "bundle.json"))], { stdio: "inherit" });
+if (study.status !== 0) { console.error("the CPU study failed"); process.exit(1); }

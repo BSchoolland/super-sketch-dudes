@@ -4,6 +4,7 @@ import { createMatch, step, cloneState, hashState } from "../shared/sim";
 import { cpuInput } from "../shared/cpu";
 import { registerFighter, roster, rosterList, unregisterFighter } from "../shared/fighters/index";
 import { buildGenerated, lintGeneratedSource, validateGenerated } from "../shared/gen/load";
+import { studyFighter } from "../shared/cpu-study";
 import { startMove } from "../shared/fighter";
 import { EMPTY_INPUT } from "../shared/input";
 import { SPRITE_CELLS } from "../shared/gen/sprite";
@@ -27,6 +28,7 @@ describe("generated fighters", () => {
   it("a 4-player CPU match with a generated fighter resimulates from a snapshot to the same hash", async () => {
     const def = await buildGenerated({ id: "gen-sword", source, sprite, player: "test", description: "a sword guy" });
     registerFighter(def);
+    def.cpu = studyFighter(def);
     const cfg = { stage: "proving", players: [{ fighter: "gen-sword", cpu: 5 }, { fighter: "woodstove", cpu: 5 }, { fighter: "slugbert", cpu: 5 }, { fighter: "gen-sword", cpu: 5 }], seed: 7 };
     const a = createMatch(cfg);
     let snap: ReturnType<typeof cloneState> | null = null;

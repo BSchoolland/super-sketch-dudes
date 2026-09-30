@@ -19,7 +19,7 @@ printReport(report);
 if (!report.ok) { console.error("\nnot uploaded: fix the failures above and run again"); process.exit(1); }
 const b64 = (f: string) => fs.readFileSync(f).toString("base64");
 const payload = {
-  name, tagline, description, source: bundle.source,
+  name, tagline, description, source: bundle.source, cpu: bundle.cpu,
   sprite: { px: meta.px, feetPx: meta.feetPx, heightPx: meta.heightPx, anims },
   cells: Object.fromEntries(Object.keys(meta.cells).map((c) => [c, b64(path.join(cells, `${c}.png`))])),
   sheet: fs.existsSync(path.join(cells, "sheet.png")) ? b64(path.join(cells, "sheet.png")) : undefined,

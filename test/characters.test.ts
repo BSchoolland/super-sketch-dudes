@@ -10,10 +10,13 @@ import { attachCharacters } from "../server/characters";
 import { initLibrary } from "../server/library";
 import { initEvents } from "../server/events";
 import { SPRITE_CELLS } from "../shared/gen/sprite";
+import { STUDY_VERSION } from "../shared/cpu-study";
 
 const TOKEN = "t0k";
 let server: http.Server, port: number, dataDir: string;
 const source = fs.readFileSync(new URL("../forge/exemplar/sword-guy.fighter.js", import.meta.url), "utf8");
+// the server stores the forge's CPU study without reading it; an empty one of the right version will do
+const STUDY = { version: STUDY_VERSION, base: {}, forms: {} };
 const png1x1 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
 const api = (p: string, init?: RequestInit) => fetch(`http://127.0.0.1:${port}/api${p}`, { ...init, headers: { "x-forge-token": TOKEN, "content-type": "application/json", ...(init?.headers ?? {}) } });
@@ -63,7 +66,7 @@ describe("the creator", () => {
     expect((await api(`/forge/jobs/${job.id}/progress`, { method: "POST", body: JSON.stringify({ stage: "drawing the sheet" }) })).status).toBe(204);
     expect((await (await api(`/characters/${job.fighterId}`, { headers: H })).json()).character.stage).toBe("drawing the sheet");
     const cells = Object.fromEntries(SPRITE_CELLS.map((c) => [c, png1x1]));
-    expect((await api(`/forge/jobs/${job.id}/complete`, { method: "POST", body: JSON.stringify({ name: "DEE", tagline: "t", description: "d", source, sprite: { px: 512, feetPx: 448, heightPx: 360, anims: {} }, cells }) })).status).toBe(204);
+    expect((await api(`/forge/jobs/${job.id}/complete`, { method: "POST", body: JSON.stringify({ name: "DEE", tagline: "t", description: "d", source, cpu: STUDY, sprite: { px: 512, feetPx: 448, heightPx: 360, anims: {} }, cells }) })).status).toBe(204);
     lib = await (await api("/library", { headers: H })).json();
     const entry = lib.characters.find((c: { id: string }) => c.id === created.character.id);
     expect(entry.status).toBe("ready");
@@ -142,7 +145,7 @@ describe("starter characters", () => {
     const created = await (await api("/characters", { method: "POST", headers: H(own), body: JSON.stringify({ png: `data:image/png;base64,${png1x1}` }) })).json();
     const job = await (await api("/forge/jobs/next")).json();
     const cells = Object.fromEntries(SPRITE_CELLS.map((c) => [c, png1x1]));
-    expect((await api(`/forge/jobs/${job.id}/complete`, { method: "POST", body: JSON.stringify({ name: "REF", tagline: "t", description: "d", source, sprite: { px: 512, feetPx: 448, heightPx: 360, anims: {} }, cells }) })).status).toBe(204);
+    expect((await api(`/forge/jobs/${job.id}/complete`, { method: "POST", body: JSON.stringify({ name: "REF", tagline: "t", description: "d", source, cpu: STUDY, sprite: { px: 512, feetPx: 448, heightPx: 360, anims: {} }, cells }) })).status).toBe(204);
     expect((await api("/starters", { method: "POST", body: JSON.stringify({ ids: ["nope"] }) })).status).toBe(404);
     expect((await api("/starters", { method: "POST", headers: { "x-forge-token": "wrong" }, body: JSON.stringify({ ids: [created.character.id] }) })).status).toBe(401);
     expect((await api("/starters", { method: "POST", body: JSON.stringify({ ids: [created.character.id] }) })).status).toBe(200);

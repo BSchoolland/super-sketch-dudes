@@ -3,9 +3,8 @@ import { cosDeg, sign, sinDeg } from "./fixed";
 import { currentMove, defOf, isActionable } from "./fighter";
 import { knockback } from "./hits";
 import { B, type InputFrame } from "./input";
-import { EMPTY_MOVE, SPECIALS, profileOf, type MoveInfo, type Profile, type ShotPath, type SpecialId } from "./cpu-profile";
+import { EMPTY_MOVE, SPECIALS, hitAt, profileOf, type MoveInfo, type Plan, type Profile, type SpecialId, type Spot } from "./cpu-profile";
 import { at, skillOf, type Skill } from "./cpu-skill";
-import { plansOf, type Plan, type Spot } from "./cpu-plans";
 import { stageOf } from "./sim";
 import { canCross, legs, route, surfaces, surfaceUnder, type Surface } from "./nav";
 import type { Fighter, Hitbox, Move, Projectile, Stage, State } from "./types";
@@ -19,6 +18,11 @@ const SPAM_FRAMES = 12 * C.FPS;
 
 function spammed(f: Fighter, id: string): boolean {
   return f.streakMove === id && f.streakLast - f.streakFrom >= SPAM_FRAMES;
+}
+
+/** A ground attack pressed while dashing or running comes out as the dash attack (up: the up smash). */
+function runningInto(f: Fighter, move: string): string {
+  return (f.action === "dash" || f.action === "run") && move !== "usmash" ? "dashAttack" : move;
 }
 
 function blank(): InputFrame {
@@ -316,7 +320,7 @@ const SMASHES = ["usmash", "fsmash", "dsmash"] as const;
 
 function startSmash(state: State, f: Fighter, move: "fsmash" | "usmash" | "dsmash", facing: 1 | -1): InputFrame {
   const out = blank();
-  if (spammed(f, move) || state.inputs[f.slot].cx || state.inputs[f.slot].cy) return out;
+  if (spammed(f, runningInto(f, move)) || state.inputs[f.slot].cx || state.inputs[f.slot].cy) return out;
   if (move === "usmash") out.cy = -100;
   else if (move === "dsmash") out.cy = 100;
   else out.cx = facing * 100;
@@ -325,7 +329,7 @@ function startSmash(state: State, f: Fighter, move: "fsmash" | "usmash" | "dsmas
 
 function startTilt(state: State, f: Fighter, move: "jab1" | "ftilt" | "utilt" | "dtilt", facing: 1 | -1): InputFrame {
   const out = blank();
-  if (spammed(f, move)) return out;
+  if (spammed(f, runningInto(f, move))) return out;
   if (move === "ftilt") out.x = facing * 45;
   else if (move === "utilt") out.y = -45;
   else if (move === "dtilt") out.y = 45;
@@ -382,7 +386,7 @@ function killMove(state: State, f: Fighter, target: Fighter, facing: 1 | -1, sk:
   for (const m of SMASHES) {
     const hb = strongestHitbox(moves[m]);
     if (hb && moveCanReach(f, target, m, facing, sk.slack) && likelyKills(state, f, target, hb, true, facing)) return m;
-    const shot = canShoot(state, f, target, p, m, facing, sk);
+    const shot = wouldHit(state, f, target, p, m, facing);
     if (shot?.hit && likelyKills(state, f, target, shot.hit, false, facing)) return m;
   }
   return null;
@@ -408,7 +412,7 @@ function spotOf(f: Fighter, target: Fighter, move: SpecialId): Spot {
 
 /** A measured plan that KO'd a dummy standing where the target stands now. */
 function planAgainst(f: Fighter, target: Fighter): Plan | null {
-  return plansOf(defOf(f)).find((p) => !spammed(f, p.move) && p.kos.includes(spotOf(f, target, p.move))) ?? null;
+  return profile(f).plans.find((p) => !spammed(f, p.move) && p.kos.includes(spotOf(f, target, p.move))) ?? null;
 }
 
 /** Going for a plan while nobody is close or swinging, more readily the stronger the CPU. */
@@ -456,7 +460,7 @@ function handleCommitted(state: State, f: Fighter, target: Fighter | null, sk: S
     if (!move) return out;
     const probe = profile(f).specials[f.move as SpecialId];
     // a special with a measured payoff: hold it as long as the study did, letting go only if someone gets in its face
-    const plan = plansOf(defOf(f)).find((p) => p.move === f.move);
+    const plan = profile(f).plans.find((p) => p.move === f.move);
     if (plan) {
       const danger = target && (Math.abs(target.x - f.x) < 110 || attackThreatens(target, f, sk));
       if (state.frame - f.streakLast < plan.hold && !danger) {
@@ -474,9 +478,8 @@ function handleCommitted(state: State, f: Fighter, target: Fighter | null, sk: S
       } else {
         // a charge: let go the moment the tapped shot would land; keep loading while only a charged one would,
         // or while it's safe to, letting go at a random moment
-        const paths = profile(f).shots[f.move!];
-        const tapped = target && shotHits(f, target, paths, f.moveFacing, sk.slack, 0);
-        const charged = target && !tapped && shotHits(f, target, paths, f.moveFacing, sk.slack);
+        const tapped = target && shotAt(profile(f), f.move!, f, target, f.moveFacing, 0);
+        const charged = target && !tapped && shotAt(profile(f), f.move!, f, target, f.moveFacing);
         const safe = target && (Math.abs(target.x - f.x) > 190 || target.action === "hitstun" || target.action === "tumble");
         if (charged || (!tapped && safe && hash(state, f, 0xc4a6) % 100 >= Math.round(at(sk, 6, 3)))) out.b = B.SPECIAL;
       }
@@ -510,21 +513,9 @@ function justFired(state: State, f: Fighter, frames: number): boolean {
   return state.frame - f.lastShot < frames;
 }
 
-/**
- * The cheapest-held probed path of a move whose shots pass through the target from where the fighter is now
- * (grounded or airborne, facing `facing`), or null. `maxHold` 0 asks only about the tapped version.
- */
-function shotHits(f: Fighter, target: Fighter, paths: ShotPath[] | undefined, facing: 1 | -1, slack: number, maxHold = Infinity): ShotPath | null {
-  if (!paths) return null;
-  const air = !f.grounded;
-  const tx = (target.x - f.x) * facing, ty = target.y - f.y;
-  const w = defOf(target).stats.width * 0.5 + slack, h = defOf(target).stats.height;
-  let best: ShotPath | null = null;
-  for (const path of paths) {
-    if (path.air !== air || path.hold > maxHold || (best && path.hold >= best.hold)) continue;
-    for (const q of path.pts) if (Math.abs(q.x - tx) <= q.r + w && q.y <= ty + q.r && q.y >= ty - h - q.r) { best = path; break; }
-  }
-  return best;
+/** What `move` started now would do to the target, by the study (see hitAt), holding special no longer than `maxHold`. */
+function shotAt(p: Profile, move: string, f: Fighter, target: Fighter, facing: 1 | -1, maxHold = Infinity): { hold: number } | null {
+  return hitAt(p, move, !f.grounded, (target.x - f.x) * facing, target.y - f.y, maxHold);
 }
 
 /** Farthest ahead any of the fighter's specials can put a shot from the ground. */
@@ -534,22 +525,29 @@ function shotReach(p: Profile): number {
   return far;
 }
 
-/** Whether a fighter can be shot from here with `move`, and the hold it takes; a shooting normal or a special. */
-function canShoot(state: State, f: Fighter, target: Fighter, p: Profile, move: string, facing: 1 | -1, sk: Skill): ShotPath | null {
+/**
+ * Whether `move` (a special, or a normal that fires something) started now would hit the target where it
+ * stands, and the hold it takes and its hardest shot, if it fires one; null if not, or not yet: it is
+ * still cooling down, or a shot of its own is already out.
+ */
+function wouldHit(state: State, f: Fighter, target: Fighter, p: Profile, move: string, facing: 1 | -1): { hold: number; hit: Hitbox | null } | null {
   if (spammed(f, move)) return null;
-  const path = shotHits(f, target, p.shots[move], facing, sk.slack);
-  if (!path) return null;
-  // not before the move can actually fire again (a whiffed special is a gift); and one at a time, unless
-  // this fighter lives by its shots and the last one is already on its way
-  const cooldown = p.specials[move as SpecialId]?.cooldown ?? 30;
-  if (justFired(state, f, Math.min(150, cooldown * 0.85))) return null;
-  if (ownsProjectile(state, f) && !(p.zoning >= 0.5 && !justFired(state, f, 18))) return null;
-  return path;
+  const spot = shotAt(p, move, f, target, facing);
+  if (!spot) return null;
+  const paths = p.shots[move] ?? [];
+  const path = paths.find((q) => q.air === !f.grounded && q.hold === spot.hold) ?? paths[0];
+  // a shot: not before the move can actually fire again (a whiffed special is a gift); and one at a time,
+  // unless this fighter lives by its shots and the last one is already on its way
+  if (paths.length) {
+    const cooldown = p.specials[move as SpecialId]?.cooldown ?? 30;
+    if (justFired(state, f, Math.min(150, cooldown * 0.85))) return null;
+    if (ownsProjectile(state, f) && !(p.zoning >= 0.5 && !justFired(state, f, 18))) return null;
+  }
+  return { hold: spot.hold, hit: path?.hit ?? null };
 }
 
 function specialChoice(state: State, f: Fighter, target: Fighter, sk: Skill, facing: 1 | -1, distance: number, stage: Stage): InputFrame | null {
   const p = profile(f), moves = defOf(f).moves;
-  const dy = target.y - f.y;
   for (const [i, s] of NEUTRAL_SPECIALS.entries()) {
     const mv = moves[s], probe = p.specials[s];
     if (spammed(f, s)) continue;
@@ -559,11 +557,12 @@ function specialChoice(state: State, f: Fighter, target: Fighter, sk: Skill, fac
       if (attackThreatens(target, f, sk) && roll(0x71f0, 30) < at(sk, 13, 37)) return startSpecial(state, f, s, facing);
       continue;
     }
-    if (mv.helpless) continue;
-    if (moveCanReach(f, target, s, facing, sk.slack) && roll(0x5e11, 25) < at(sk, 13, 37)) return startSpecial(state, f, s, facing);
-    if (!probe || !aimed || !landsOnStage(state, f, stage, probe.groundDx)) continue;
-    if (distance > (p.zoning >= 0.5 ? 90 : 140) && canShoot(state, f, target, p, s, facing, sk) && roll(0x5106, 35) < at(sk, 18, 50) * (0.6 + p.zoning)) return startSpecial(state, f, s, facing);
-    if (probe.groundDx > 150 && mv.hitboxes.length && distance > 150 && distance < probe.groundDx * 0.9 && Math.abs(dy) < 60 && roll(0x7a6e, 40) < at(sk, 11, 35)) return startSpecial(state, f, s, facing);
+    if (mv.helpless || !aimed || !landsOnStage(state, f, stage, probe.groundDx)) continue;
+    // the study says it lands on someone standing where the target is: up close like any attack, from
+    // range as a shot (or a lunge, a pounce, a lock-on) as often as the fighter lives by them
+    const hits = wouldHit(state, f, target, p, s, facing);
+    if (hits && distance <= 140 && roll(0x5e11, 25) < at(sk, 13, 37)) return startSpecial(state, f, s, facing);
+    if (hits && distance > (p.zoning >= 0.5 ? 90 : 140) && roll(0x5106, 35) < at(sk, 18, 50) * (0.6 + p.zoning)) return startSpecial(state, f, s, facing);
     // a special that shows no hit, shot or movement (a stance, a transformation): now and then, from far away
     const inert = !mv.hitboxes.length && !probe.shotRange && Math.abs(probe.groundDx) < 40;
     if (inert && distance > 380 && roll(0x1a9e, 60) < at(sk, 3, 11)) return startSpecial(state, f, s, facing);
@@ -668,10 +667,10 @@ function aerialNeutral(state: State, f: Fighter, target: Fighter, sk: Skill, sta
     if (mv.helpless || mv.counter) continue;
     const facing = s === "sspecial" ? ((sign(dx) || f.facing) as 1 | -1) : f.facing;
     if (p.zoning < 0.3 && dy < 60) continue;
-    if (canShoot(state, f, target, p, s, facing, sk) && hash(state, f, 0xa1f2 + i * 0x101, 30) % 100 < at(sk, 15, 45) * (0.6 + p.zoning)) return startSpecial(state, f, s, facing);
+    if (wouldHit(state, f, target, p, s, facing) && hash(state, f, 0xa1f2 + i * 0x101, 30) % 100 < at(sk, 15, 45) * (0.6 + p.zoning)) return startSpecial(state, f, s, facing);
   }
   for (const a of ["nair", "fair", "bair", "uair", "dair"] as const) {
-    if (canShoot(state, f, target, p, a, f.facing, sk) && hash(state, f, 0xa2f3 + a.length, 24) % 100 < at(sk, 25, 60)) return startAerial(state, f, a);
+    if (wouldHit(state, f, target, p, a, f.facing) && hash(state, f, 0xa2f3 + a.length, 24) % 100 < at(sk, 25, 60)) return startAerial(state, f, a);
   }
   if (target.action === "tumble" || target.action === "hitstun") {
     if (dy < -35 && moveCanReach(f, target, "uair", f.facing, slack)) return startAerial(state, f, "uair");
@@ -735,7 +734,7 @@ function groundNeutral(state: State, f: Fighter, target: Fighter, sk: Skill, sta
   // normals that fire something (a fire lord's embers): thrown when the target sits on their path
   const p = profile(f);
   for (const t of ["ftilt", "utilt", "dtilt"] as const) {
-    if (distance > 90 && canShoot(state, f, target, p, t, facing, sk) && hash(state, f, 0x7e11 + t.length, 24) % 100 < at(sk, 25, 60)) return startTilt(state, f, t, facing);
+    if (distance > 90 && wouldHit(state, f, target, p, t, facing) && hash(state, f, 0x7e11 + t.length, 24) % 100 < at(sk, 25, 60)) return startTilt(state, f, t, facing);
   }
 
   // keep-away: a fighter whose shots are its best damage holds the range they land at instead of rushing in,

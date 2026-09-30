@@ -72,11 +72,17 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
     } catch (e) { res.status(400).json({ error: (e as Error).message }); }
   });
 
-  // a new module for a character that already exists (an engine migration, a fix), keeping everything else
+  // a new module (and the forge's CPU study of it) for a character that already exists (an engine migration, a fix), keeping everything else
   api.post("/characters/:id/source", async (req, res) => {
     const source = typeof req.body?.source === "string" ? req.body.source : "";
     if (!source) return res.status(400).json({ error: "source required" });
-    await revise(req, res, { source });
+    await revise(req, res, { source, cpu: req.body?.cpu });
+  });
+
+  // a new CPU study for a character that already exists (the study changed): { cpu }
+  api.post("/characters/:id/cpu", async (req, res) => {
+    if (!req.body?.cpu) return res.status(400).json({ error: "cpu required" });
+    await revise(req, res, { cpu: req.body.cpu });
   });
 
   // re-cut cells for a character that already exists (a normalize.py fix): { cells: { <cell>: base64 png }, heightPx }

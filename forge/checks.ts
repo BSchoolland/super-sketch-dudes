@@ -5,6 +5,7 @@ import { hitOf } from "../shared/hits";
 import { B, EMPTY_INPUT } from "../shared/input";
 import { startMove } from "../shared/fighter";
 import { registerFighter, roster } from "../shared/fighters/index";
+import { studyFighter } from "../shared/cpu-study";
 import { buildGenerated, lintGeneratedSource, validateGenerated, type GeneratedBundle } from "../shared/gen/load";
 import type { FighterDef, State } from "../shared/types";
 import type { HouseId } from "../shared/house";
@@ -68,6 +69,9 @@ export async function runChecks(input: CheckInput): Promise<CheckReport> {
   const guard = (what: string, fn: () => void): boolean => {
     try { fn(); return true; } catch (e) { hard(`${what} threw: ${(e as Error).message}`); return false; }
   };
+  // the CPU's study of it ships in the bundle; every check below plays against a CPU that reads it
+  await timed("study", () => { guard("the CPU study", () => { bundle.cpu = studyFighter(def); }); });
+  if (!bundle.cpu) return r;
 
   await timed("determinism", async () => {
     await fresh();

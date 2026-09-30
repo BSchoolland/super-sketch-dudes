@@ -6,6 +6,7 @@ import type { LibraryEntry, Player } from "../shared/account";
 import type { CharStatus } from "../shared/account";
 import { buildGenerated } from "../shared/gen/load";
 import { SPRITE_CELLS } from "../shared/gen/sprite";
+import { STUDY_VERSION, type CpuStudy } from "../shared/cpu-study";
 import { upsertCharacter } from "./library";
 import { finish, openEvent } from "./events";
 import type { WideEvent } from "../shared/wide";
@@ -161,7 +162,8 @@ export async function storeCharacter(fighterId: string, playerName: string, b: a
   }
   if (typeof b.sheet === "string") fs.writeFileSync(path.join(dir, "sheet.png"), Buffer.from(b.sheet, "base64"));
   const sprite = { px: Number(b.sprite.px), feetPx: Number(b.sprite.feetPx), heightPx: Number(b.sprite.heightPx), anims: b.sprite.anims && typeof b.sprite.anims === "object" ? b.sprite.anims : {}, cells };
-  const bundle = { id: fighterId, player: playerName, description: b.description, source: b.source, sprite };
+  if (!isStudy(b.cpu)) throw new Error("cpu (the forge's CPU study) missing");
+  const bundle = { id: fighterId, player: playerName, description: b.description, source: b.source, sprite, cpu: b.cpu };
   await buildGenerated(bundle); // the forge already validated; this is the server refusing to serve a broken one
   fs.writeFileSync(path.join(dir, "bundle.json"), JSON.stringify(bundle));
   if (b.report !== undefined) fs.writeFileSync(path.join(dir, "report.json"), JSON.stringify(b.report));
@@ -171,9 +173,16 @@ export async function storeCharacter(fighterId: string, playerName: string, b: a
   };
 }
 
-/** A new version of a stored character with its module and/or its cells (and the idle height they were cut at)
- * replaced; everything else comes along, under a new URL. */
-export async function reviseCharacter(entry: LibraryEntry, change: { source?: string; cells?: Record<string, string>; heightPx?: number }): Promise<{ bundleUrl: string; sheetUrl: string | null }> {
+/** The forge's CPU study, as far as the server checks one: the version the game reads. */
+function isStudy(cpu: unknown): cpu is CpuStudy {
+  return !!cpu && typeof cpu === "object" && (cpu as CpuStudy).version === STUDY_VERSION && typeof (cpu as CpuStudy).base === "object";
+}
+
+/** A new version of a stored character with its module (and the CPU study of it), its CPU study alone, or its
+ * cells (and the idle height they were cut at) replaced; everything else comes along, under a new URL. */
+export async function reviseCharacter(entry: LibraryEntry, change: { source?: string; cpu?: unknown; cells?: Record<string, string>; heightPx?: number }): Promise<{ bundleUrl: string; sheetUrl: string | null }> {
+  if (change.source !== undefined && change.cpu === undefined) throw new Error("a new source needs the CPU study of it (cpu)");
+  if (change.cpu !== undefined && !isStudy(change.cpu)) throw new Error(`cpu is not a v${STUDY_VERSION} CPU study`);
   if (!entry.bundleUrl) throw new Error(`${entry.id} has no bundle`);
   const oldVer = path.basename(path.dirname(entry.bundleUrl));
   const oldDir = path.join(genDir, entry.id, oldVer);
@@ -182,6 +191,7 @@ export async function reviseCharacter(entry: LibraryEntry, change: { source?: st
   const source = change.source ?? old.source;
   const hash = crypto.createHash("sha1").update(source).update(oldVer);
   if (change.cells) hash.update(Object.keys(change.cells).sort().map((c) => change.cells![c]).join(""));
+  if (change.cpu) hash.update(JSON.stringify(change.cpu));
   const ver = hash.digest("hex").slice(0, 8);
   const dir = path.join(genDir, entry.id, ver);
   const base = `${genBase}/${entry.id}/${ver}`;
@@ -195,7 +205,7 @@ export async function reviseCharacter(entry: LibraryEntry, change: { source?: st
   const sheet = fs.existsSync(path.join(oldDir, "sheet.png"));
   if (sheet) fs.copyFileSync(path.join(oldDir, "sheet.png"), path.join(dir, "sheet.png"));
   const heightPx = change.heightPx ?? old.sprite.heightPx;
-  const bundle = { ...old, source, sprite: { ...old.sprite, heightPx, cells } };
+  const bundle = { ...old, source, sprite: { ...old.sprite, heightPx, cells }, cpu: change.cpu ?? old.cpu };
   await buildGenerated(bundle);
   fs.writeFileSync(path.join(dir, "bundle.json"), JSON.stringify(bundle));
   return { bundleUrl: `${base}/bundle.json`, sheetUrl: sheet ? `${base}/sheet.png` : null };

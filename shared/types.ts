@@ -1,3 +1,4 @@
+import type { CpuStudy } from "./cpu-study";
 import type { InputFrame } from "./input";
 
 export type FighterId = string;
@@ -251,6 +252,8 @@ export interface FighterDef {
   visual?: (f: Fighter) => { scale?: number; glow?: number; shake?: number };
   /** Named looks for projectiles (by `kind`) and hitboxes (by `fx`). See Look. */
   looks?: Record<string, Look>;
+  /** What the forge measured about playing it, for the CPU (see cpu-study.ts). */
+  cpu?: CpuStudy;
 }
 
 /**
