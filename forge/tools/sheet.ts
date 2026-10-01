@@ -16,7 +16,10 @@ fs.mkdirSync(out, { recursive: true });
 const sheet = path.join(out, "sheet.png");
 const t0 = Date.now();
 if (!fs.existsSync(sheet)) {
-  const r = await drawSheet(path.resolve(drawing), sheet);
+  const ledger = process.env.FORGE_SHEET_LEDGER;
+  const record = (row: object) => { if (ledger) fs.appendFileSync(ledger, JSON.stringify({ at: new Date().toISOString(), ...row }) + "\n"); };
+  const r = await drawSheet(path.resolve(drawing), sheet).catch((e: Error) => { record({ error: e.message }); throw e; });
+  record({ ms: r.ms, tokens: r.tokens, costUsd: r.costUsd });
   console.log(`sheet drawn in ${(r.ms / 1000).toFixed(0)}s -> ${sheet}`);
 } else console.log(`sheet already there: ${sheet} (delete it to redraw)`);
 const norm = spawnSync("python3", [new URL("../img/normalize.py", import.meta.url).pathname, sheet, out, "--mirror", mirror ? "1" : "0"], { encoding: "utf8" });
