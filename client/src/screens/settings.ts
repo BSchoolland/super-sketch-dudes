@@ -1,9 +1,10 @@
 import { VIEW_W } from "../render/camera";
 import { CPU_TIERS, tierName } from "../../../shared/cpu-skill";
-import type { MenuInput } from "../input/devices";
+import { kb1Bindings, keyName, type MenuInput } from "../input/devices";
 import { setMusicVolume, setVolume, sfx } from "../audio/audio";
 import { bg, card, hint, label, title, hover, clicked, arrows, backButton, goTo, type Screen, INK, settings, saveSettings } from "./ui";
 import { account } from "../account";
+import { ControlsScreen } from "./controls";
 
 interface Row { name: string; get: () => string; adj: (d: number) => void; act?: () => Screen }
 
@@ -17,6 +18,7 @@ export class SettingsScreen implements Screen {
     { name: "TAP JUMP (stick up)", get: () => (settings.tapJump ? "on" : "off"), adj: () => { settings.tapJump = !settings.tapJump; } },
     { name: "RUMBLE", get: () => (settings.rumble ? "on" : "off"), adj: () => { settings.rumble = !settings.rumble; } },
     { name: "DEFAULT CPU", get: () => tierName(settings.cpuTier), adj: (d) => { settings.cpuTier = Math.max(1, Math.min(CPU_TIERS.length, settings.cpuTier + d)); } },
+    { name: "CONTROLS", get: () => "keyboard ▶", adj: () => {}, act: () => new ControlsScreen(() => this) },
     { name: "SIGN OUT", get: () => account.player?.name ?? "", adj: () => {}, act: () => this.onSignOut() },
   ];
   constructor(private onBack: () => Screen, private onSignOut: () => Screen) {}
@@ -34,7 +36,7 @@ export class SettingsScreen implements Screen {
     bg(ctx, this.t);
     title(ctx, "SETTINGS", VIEW_W / 2, 90, 64);
     this.rows.forEach((r, i) => {
-      const y = 160 + i * 96;
+      const y = 150 + i * 86;
       const sel = i === this.sel;
       if (hover(VIEW_W / 2 - 400, y, 800, 76)) this.sel = i;
       card(ctx, VIEW_W / 2 - 400, y, 800, 76, sel ? INK : "rgba(18,16,26,0.6)", sel);
@@ -49,12 +51,20 @@ export class SettingsScreen implements Screen {
       label(ctx, r.name, VIEW_W / 2 - 370, y + 50, 28, INK, "left", 900);
       label(ctx, r.get(), VIEW_W / 2 + 280, y + 50, 28, INK, "center", 900);
     });
-    const y = 160 + this.rows.length * 96 + 30;
-    label(ctx, "KEYBOARD 1: WASD move · Space jump · click attack · E special · R smash · Shift shield · T taunt", VIEW_W / 2, y, 18, INK, "center", 600);
+    const y = 150 + this.rows.length * 86 + 26;
+    label(ctx, `KEYBOARD 1: ${kb1Summary()}`, VIEW_W / 2, y, 18, INK, "center", 600);
     label(ctx, "KEYBOARD 2: arrows move · Numpad0 jump · Numpad1 attack · 6 smash · 2 special · 3/RShift shield · 5 taunt", VIEW_W / 2, y + 30, 18, INK, "center", 600);
     label(ctx, "GAMEPAD: left stick move · X/Y jump · A attack · B special · LB/RB/LT shield · right stick smash · Start pause", VIEW_W / 2, y + 60, 18, INK, "center", 600);
     label(ctx, "tilts: hold a direction then attack · smashes: flick a direction with attack, or the modifier, or the right stick", VIEW_W / 2, y + 100, 18, INK, "center", 600);
     if (backButton(ctx)) { sfx.menuBack(); goTo(this.onBack()); }
     hint(ctx, "click the arrows, or up/down + left/right · Esc: back");
   }
+}
+
+function kb1Summary(): string {
+  const b = kb1Bindings();
+  const k = (keys: string[]) => keys.map(keyName).join("/") || "—";
+  const parts = [`${k(b.up)} ${k(b.left)} ${k(b.down)} ${k(b.right)} move`, `${k(b.jump)} jump`, `${k(b.attack)} attack`, `${k(b.special)} special`, `${k(b.smash)} smash`, `${k(b.shield)} shield`, `${k(b.taunt)} taunt`];
+  if (b.cUp.length || b.cDown.length || b.cLeft.length || b.cRight.length) parts.push(`${k(b.cUp)} ${k(b.cLeft)} ${k(b.cDown)} ${k(b.cRight)} directional attacks`);
+  return parts.join(" · ");
 }

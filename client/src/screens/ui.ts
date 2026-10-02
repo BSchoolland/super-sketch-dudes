@@ -2,7 +2,8 @@ import { DEFAULT_TIER } from "../../../shared/cpu-skill";
 import { drawPaper, paperCard, INK, FONT } from "../render/paper";
 export { INK, FONT } from "../render/paper";
 import { VIEW_H, VIEW_W } from "../render/camera";
-import type { MenuInput } from "../input/devices";
+import { setKb1Overrides, type KeyBindings, type MenuInput } from "../input/devices";
+import { noteControls } from "../telemetry/events";
 import { pointer } from "../input/pointer";
 
 export interface Screen {
@@ -59,13 +60,23 @@ export function hint(ctx: CanvasRenderingContext2D, text: string): void {
   label(ctx, text, VIEW_W / 2, VIEW_H - 36, 22, "rgba(41,39,34,0.8)");
 }
 
-export interface Settings { volume: number; music: number; shake: number; tapJump: boolean; rumble: boolean; stocks: number; time: number; cpuTier: number }
-export const settings: Settings = { volume: 0.8, music: 0.5, shake: 1, tapJump: true, rumble: true, stocks: 3, time: 0, cpuTier: DEFAULT_TIER };
+export interface Settings {
+  volume: number; music: number; shake: number; tapJump: boolean; rumble: boolean; stocks: number; time: number; cpuTier: number;
+  /** Keyboard player 1's rebound actions; everything else keeps its default key. */
+  keys: Partial<KeyBindings>;
+}
+export const settings: Settings = { volume: 0.8, music: 0.5, shake: 1, tapJump: true, rumble: true, stocks: 3, time: 0, cpuTier: DEFAULT_TIER, keys: {} };
 export function loadSettings(): void {
   try { Object.assign(settings, JSON.parse(localStorage.getItem("sketchbattle.settings") ?? "{}")); } catch { /* ignore */ }
+  applyKeys();
 }
 export function saveSettings(): void {
   localStorage.setItem("sketchbattle.settings", JSON.stringify(settings));
+  applyKeys();
+}
+function applyKeys(): void {
+  setKb1Overrides(settings.keys);
+  noteControls(settings.keys);
 }
 
 export function hover(x: number, y: number, w: number, h: number): boolean {

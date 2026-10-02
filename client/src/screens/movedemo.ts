@@ -9,6 +9,7 @@ import { PAPER, inkRect, INK } from "../render/paper";
 import { Renderer } from "../render/render";
 import { label } from "./ui";
 import { drawKeyIcons, type KeyIcon } from "./keyicons";
+import { kb1Bindings, keyName } from "../input/devices";
 
 type Dir = "n" | "f" | "u" | "d";
 /** One button on the detail screen: what's pressed (from the air or not) and the directions the fighter has it in. */
@@ -304,9 +305,11 @@ export class MoveDemo {
     if (this.move) {
       // what keyboard player 1 presses for it (facing right, so forward is D)
       const icons: KeyIcon[] = [];
-      if (this.jumps) icons.push({ space: true });
-      if (this.dir !== "n") icons.push({ key: ({ f: "D", u: "W", d: "S" } as const)[this.dir] });
-      icons.push(this.move.button === B.ATTACK ? { mouse: "left" } : { key: "E" });
+      const b = kb1Bindings();
+      const icon = (keys: string[]): KeyIcon => keys[0] === "Space" ? { space: true } : keys[0] === "Mouse0" ? { mouse: "left" } : keys[0] === "Mouse2" ? { mouse: "right" } : { key: keyName(keys[0] ?? "") };
+      if (this.jumps) icons.push(icon(b.jump));
+      if (this.dir !== "n") icons.push(icon(b[({ f: "right", u: "up", d: "down" } as const)[this.dir]]));
+      icons.push(icon(this.move.button === B.ATTACK ? b.attack : b.special));
       drawKeyIcons(ctx, icons, x + 20, y + 16, 48);
       if (this.move.dirs.length > 1) this.move.dirs.forEach((d, i) => label(ctx, ARROW[d], x + 34 + i * 34, y + 96, 22, d === this.dir ? INK : "rgba(41,39,34,0.3)", "center", 900));
     }

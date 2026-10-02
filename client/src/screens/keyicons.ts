@@ -16,7 +16,7 @@ function svgFor(icon: KeyIcon): { svg: string; w: number; h: number } {
         `<path d="${lit}" fill="${INK}"/><path d="M5 28 H35 M20 5 V28" fill="none" ${stroke}/>`,
     };
   }
-  const w = "space" in icon ? 120 : 48;
+  const w = "space" in icon ? 120 : Math.max(48, 20 + icon.key.length * 15);
   const face = "space" in icon
     ? `<path d="M34 30 V36 H86 V30" fill="none" ${stroke}/>`
     : "";

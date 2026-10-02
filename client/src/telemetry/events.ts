@@ -196,6 +196,12 @@ export function noteView(next: View): void {
   if (!(next.scale > 0) || !Number.isFinite(next.scale)) session?.issue("error", "view", `canvas scale is ${next.scale} (window ${next.w}x${next.h}, dpr ${next.dpr})`);
 }
 
+/** Keyboard player 1's rebound keys (only the changed actions), so the favourite layouts can be counted. */
+export function noteControls(keys: object): void {
+  if (!session) throw new Error("wide events used before startTelemetry");
+  session.set("controls", { custom: Object.keys(keys), keys });
+}
+
 export function noteScreen(name: string): void {
   if (!session) throw new Error("wide events used before startTelemetry");
   sessionList("screens", [name, Math.round((Date.now() - session.t0) / 100) / 10]);
