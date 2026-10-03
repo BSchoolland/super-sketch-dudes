@@ -11,6 +11,7 @@ import { initLibrary } from "../server/library";
 import { initEvents } from "../server/events";
 import { SPRITE_CELLS } from "../shared/gen/sprite";
 import { STUDY_VERSION } from "../shared/cpu-study";
+import { GAME_VERSION } from "../shared/account";
 
 const TOKEN = "t0k";
 let server: http.Server, port: number, dataDir: string;
@@ -37,6 +38,22 @@ beforeAll(async () => {
   port = (server.address() as { port: number }).port;
 });
 afterAll(() => { server.close(); fs.rmSync(dataDir, { recursive: true, force: true }); });
+
+describe("last played", () => {
+  it("a new player starts on the current version; each sign-in or returning visit hands back the one before and moves it to now", async () => {
+    const first = await (await api("/auth/dev", { method: "POST", body: JSON.stringify({ name: "Newbie" }) })).json();
+    expect(first.lastPlayed).toBeNull();
+    const record = () => JSON.parse(fs.readFileSync(path.join(dataDir, "players", `${first.player.id}.json`), "utf8"));
+    const stamped = record().lastPlayed;
+    expect(stamped.version).toBe(GAME_VERSION);
+    const again = await (await api("/auth/dev", { method: "POST", body: JSON.stringify({ name: "Newbie" }) })).json();
+    expect(again.lastPlayed).toEqual(stamped);
+    const visit = await (await api("/me/played", { method: "POST", headers: { "x-session": again.session } })).json();
+    expect(visit.lastPlayed.version).toBe(GAME_VERSION);
+    expect(visit.lastPlayed.at).toBeGreaterThanOrEqual(stamped.at);
+    expect((await api("/me/played", { method: "POST" })).status).toBe(401);
+  });
+});
 
 describe("the brawl's sample", () => {
   it("is a random handful of the house and everyone's ready characters, none of the ones asked to leave out", async () => {

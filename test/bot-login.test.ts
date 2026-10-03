@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import type { Server } from "node:http";
 import { attachAuth } from "../server/auth";
+import { initLibrary } from "../server/library";
 
 const KEY = "test-bot-key";
 let server: Server;
@@ -15,7 +16,9 @@ beforeAll(async () => {
   const app = express();
   const api = express.Router();
   api.use(express.json());
-  attachAuth(api, { dataDir: fs.mkdtempSync(path.join(os.tmpdir(), "bot-login-")), devLogin: false, botKey: KEY });
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "bot-login-"));
+  initLibrary(dataDir);
+  attachAuth(api, { dataDir, devLogin: false, botKey: KEY });
   app.use("/api", api);
   server = app.listen(0, "127.0.0.1");
   await new Promise<void>((r) => server.once("listening", () => r()));
@@ -29,6 +32,7 @@ describe("bot login", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.player).toEqual({ id: "bot-benchhost", name: "BenchHost", avatar: null });
+    expect(body.lastPlayed).toBeNull();
     expect(typeof body.session).toBe("string");
   });
   it("refuses a wrong or missing key", async () => {

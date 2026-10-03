@@ -2,7 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import type express from "express";
-import { GOOGLE_CLIENT_ID, SESSION_HEADER, type Player } from "../shared/account";
+import { GOOGLE_CLIENT_ID, SESSION_HEADER, type LastPlayed, type Player } from "../shared/account";
+import { markPlayed } from "./library";
 
 /**
  * Sign-in: the browser does Discord's implicit OAuth grant (no client secret), gets an access
@@ -53,11 +54,12 @@ export function playerOf(req: express.Request): Player | null {
   return playerFromSession(req.get(SESSION_HEADER) ?? req.query.session);
 }
 
-function issue(player: Player): string {
+/** A signed-in player and when they last played before this sign-in (null: never). */
+function issue(player: Player): { session: string; player: Player; lastPlayed: LastPlayed | null } {
   const token = crypto.randomBytes(24).toString("base64url");
   sessions.set(token, { player, at: Date.now() });
   save();
-  return token;
+  return { session: token, player, lastPlayed: markPlayed(player) };
 }
 
 const cleanName = (s: unknown): string => String(s ?? "").replace(/[^\w \-.!?]/g, "").slice(0, 14) || "someone";
@@ -79,7 +81,7 @@ export function attachAuth(api: express.Router, opts: AuthOptions): void {
       name: cleanName(u.global_name || u.username),
       avatar: u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=96` : null,
     };
-    res.json({ session: issue(player), player });
+    res.json(issue(player));
   });
 
   api.post("/auth/google", async (req, res) => {
@@ -91,7 +93,7 @@ export function attachAuth(api: express.Router, opts: AuthOptions): void {
     if (t.aud !== GOOGLE_CLIENT_ID || !["accounts.google.com", "https://accounts.google.com"].includes(t.iss)) return res.status(401).json({ error: "that token isn't for this game" });
     if (t.nonce !== nonce) return res.status(401).json({ error: "sign-in expired, try again" });
     const player: Player = { id: `google-${t.sub}`, name: cleanName(t.given_name || t.name), avatar: t.picture ?? null };
-    res.json({ session: issue(player), player });
+    res.json(issue(player));
   });
 
   api.post("/auth/signup", async (req, res) => {
@@ -104,21 +106,21 @@ export function attachAuth(api: express.Router, opts: AuthOptions): void {
     const player: Player = { id: `email-${crypto.randomBytes(9).toString("hex")}`, name: cleanName(req.body?.name), avatar: null };
     accounts.set(email, { player, salt, hash: await hashPassword(password, salt) });
     saveAccounts();
-    res.json({ session: issue(player), player });
+    res.json(issue(player));
   });
 
   api.post("/auth/login", async (req, res) => {
     const account = accounts.get(String(req.body?.email ?? "").trim().toLowerCase());
     const password = String(req.body?.password ?? "").slice(0, PASSWORD_MAX);
     if (!account || !(await passwordMatches(account, password))) return res.status(401).json({ error: "wrong email or password" });
-    res.json({ session: issue(account.player), player: account.player });
+    res.json(issue(account.player));
   });
 
   if (opts.devLogin) {
     api.post("/auth/dev", (req, res) => {
       const name = cleanName(req.body?.name);
       const player: Player = { id: `dev-${name.toLowerCase().replace(/\W+/g, "-")}`, name, avatar: null };
-      res.json({ session: issue(player), player });
+      res.json(issue(player));
     });
   }
 
@@ -129,7 +131,7 @@ export function attachAuth(api: express.Router, opts: AuthOptions): void {
       if (given.length !== key.length || !crypto.timingSafeEqual(given, key)) return res.status(401).json({ error: "wrong bot key" });
       const name = cleanName(req.body?.name);
       const player: Player = { id: `bot-${name.toLowerCase().replace(/\W+/g, "-")}`, name, avatar: null };
-      res.json({ session: issue(player), player });
+      res.json(issue(player));
     });
   }
 
@@ -137,6 +139,13 @@ export function attachAuth(api: express.Router, opts: AuthOptions): void {
     const player = playerOf(req);
     if (!player) return res.status(401).json({ error: "not signed in" });
     res.json({ player });
+  });
+
+  // a returning player with a saved session, opening the game
+  api.post("/me/played", (req, res) => {
+    const player = playerOf(req);
+    if (!player) return res.status(401).json({ error: "not signed in" });
+    res.json({ lastPlayed: markPlayed(player) });
   });
 
   api.post("/auth/logout", (req, res) => {
