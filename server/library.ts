@@ -16,6 +16,9 @@ let startersFile = "";
 /** The fighter PRACTICE and the move previews put in front of you, kept in <dataDir>/dummy.json. */
 let dummy: string | null = null;
 let dummyFile = "";
+/** Online matches each fighter has been picked for, one per slot, kept in <dataDir>/plays.json. */
+let plays: Record<string, number> = {};
+let playsFile = "";
 
 function fileOf(owner: string): string {
   return path.join(dir, `${owner.replace(/[^\w-]/g, "_")}.json`);
@@ -44,6 +47,17 @@ export function initLibrary(dataDir: string): void {
   starters = fs.existsSync(startersFile) ? JSON.parse(fs.readFileSync(startersFile, "utf8")) : [];
   dummyFile = path.join(dataDir, "dummy.json");
   dummy = fs.existsSync(dummyFile) ? JSON.parse(fs.readFileSync(dummyFile, "utf8")) : null;
+  playsFile = path.join(dataDir, "plays.json");
+  plays = fs.existsSync(playsFile) ? JSON.parse(fs.readFileSync(playsFile, "utf8")) : {};
+}
+
+/** A room started a match with these fighters, one per player. */
+export function recordPlays(fighters: string[]): void {
+  for (const id of fighters) plays[id] = (plays[id] ?? 0) + 1;
+  fs.writeFileSync(playsFile, JSON.stringify(plays));
+}
+export function playCount(id: string): number {
+  return plays[id] ?? 0;
 }
 
 export function setDummy(id: string): void {
@@ -121,11 +135,11 @@ export function setPublic(owner: string, id: string, pub: boolean): LibraryEntry
 }
 
 /** Ready characters anyone can find and save: public, not deleted, not a starter (everyone has those). */
-export function communityCharacters(): { entry: LibraryEntry; creator: Player | null; saves: number }[] {
+export function communityCharacters(): { entry: LibraryEntry; creator: Player | null; saves: number; plays: number }[] {
   scanAll();
   return [...cache.values()].flatMap((lib) => lib.characters
     .filter((c) => c.status === "ready" && c.bundleUrl && c.public && !c.deleted && !starters.includes(c.id))
-    .map((entry) => ({ entry, creator: lib.player, saves: saves.get(entry.id) ?? 0 })));
+    .map((entry) => ({ entry, creator: lib.player, saves: saves.get(entry.id) ?? 0, plays: playCount(entry.id) })));
 }
 
 /** Every library into the cache, once; from then on every owner is in it (new ones arrive through upsertCharacter). */

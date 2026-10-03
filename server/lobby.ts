@@ -4,6 +4,7 @@ import { isBundlePath } from "../shared/account";
 import { checkMap, MAP_JSON_MAX, type MapDoc } from "../shared/maps";
 import { matchTrace, TRACE_RE, type WideEvent } from "../shared/wide";
 import { finish, newTrace, openEvent } from "./events";
+import { recordPlays } from "./library";
 
 /**
  * Lobby and input relay. The server never simulates: it pairs clients into rooms,
@@ -315,6 +316,7 @@ export function attachLobby(wss: WebSocketServer): void {
           const unmeasured = auto ? room.members.filter((m) => m.rtt === null).map((m) => m.name) : [];
           room.config = { ...requested, players: room.members.map((m) => ({ fighter: m.fighter, bundleUrl: m.bundleUrl })) };
           startRelayMatch(room, room.seed, room.config, room.members);
+          recordPlays(room.members.map((m) => m.fighter));
           room.match?.event.set("inputDelay", auto ?? { delay: requested.inputDelay, chosen: "host" });
           if (unmeasured.length) room.match?.event.issue("error", "rtt", `auto input delay without a round trip for ${unmeasured.join(", ")}`);
           broadcast(room, { t: "start", seed: room.seed, config: room.config, members: room.members.map((m) => ({ id: m.id, name: m.name, slot: m.slot })) });

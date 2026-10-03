@@ -45,17 +45,17 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
     res.json({ character: entry });
   });
 
-  // everyone's public characters, most saved or newest first, a page at a time
+  // everyone's public characters, a page at a time: most saved (ties to the most played online) or newest first
   api.get("/characters/community", (req, res) => {
     const sort = req.query.sort === "new" ? "new" : req.query.sort === "popular" || req.query.sort === undefined ? "popular" : null;
     if (!sort) return res.status(400).json({ error: "sort is popular or new" });
     const page = Math.max(0, Math.floor(Number(req.query.page) || 0));
     const caller = playerOf(req)?.id ?? "";
     const saved = new Set(caller ? savedOf(caller).map((e) => e.id) : []);
-    const all = communityCharacters().sort((a, b) => (sort === "popular" ? b.saves - a.saves : 0) || b.entry.createdAt - a.entry.createdAt);
-    const characters: CommunityCharacter[] = all.slice(page * COMMUNITY_PAGE, (page + 1) * COMMUNITY_PAGE).map(({ entry: e, creator, saves }) => ({
+    const all = communityCharacters().sort((a, b) => (sort === "popular" ? b.saves - a.saves || b.plays - a.plays : 0) || b.entry.createdAt - a.entry.createdAt);
+    const characters: CommunityCharacter[] = all.slice(page * COMMUNITY_PAGE, (page + 1) * COMMUNITY_PAGE).map(({ entry: e, creator, saves, plays }) => ({
       id: e.id, name: e.name, tagline: e.tagline, drawingUrl: e.drawingUrl, bundleUrl: e.bundleUrl!, createdAt: e.createdAt,
-      creator: { name: creator?.name ?? "?", avatar: creator?.avatar ?? null }, saves, saved: saved.has(e.id), mine: e.owner === caller,
+      creator: { name: creator?.name ?? "?", avatar: creator?.avatar ?? null }, saves, plays, saved: saved.has(e.id), mine: e.owner === caller,
     }));
     res.json({ characters, pages: Math.ceil(all.length / COMMUNITY_PAGE) });
   });

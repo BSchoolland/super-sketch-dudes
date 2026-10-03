@@ -40,6 +40,8 @@ export interface CommunityCharacter extends Pick<LibraryEntry, "id" | "name" | "
   bundleUrl: string;
   creator: Pick<Player, "name" | "avatar">;
   saves: number;
+  /** Online matches it was picked for; breaks ties in POPULAR. */
+  plays: number;
   /** In the caller's library by reference. */
   saved: boolean;
   /** The caller made it. */

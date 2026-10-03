@@ -9,6 +9,7 @@ import { attachEvents, initEvents, requestErrors, requestEvents } from "../serve
 import { filterEvents, readEvents } from "../server/eventlog";
 import { attachAuth } from "../server/auth";
 import { attachLobby, dropSilentPlayers, INPUT_TIMEOUT_MS } from "../server/lobby";
+import { initLibrary, playCount } from "../server/library";
 import { matchTrace, WideEvent } from "../shared/wide";
 
 /** The wide event store through the real server pieces: client ingest, request events, and the relay's room/match/connection events. */
@@ -48,6 +49,7 @@ class Peer {
 beforeAll(async () => {
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "sb-events-"));
   initEvents(dataDir);
+  initLibrary(dataDir);
   const app = express();
   app.use(express.json({ limit: "256kb" }));
   const api = express.Router();
@@ -128,6 +130,8 @@ describe("relay events", () => {
     await a.expect("room", (m) => m.members.every((x: any) => x.ready));
     a.send({ t: "start", config: { stage: "proving", rules: { stocks: 3, time: 0 }, inputDelay: 2 } });
     const start = await b.expect("start");
+    expect([playCount("rocket"), playCount("wizard")]).toEqual([1, 1]);
+    expect(JSON.parse(fs.readFileSync(path.join(dataDir, "plays.json"), "utf8"))).toMatchObject({ rocket: 1, wizard: 1 });
     await wait(500);
     a.send({ t: "inputs", frame: 3, inputs: [] });
     await b.expect("inputs");

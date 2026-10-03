@@ -7,7 +7,7 @@ import path from "node:path";
 import { attachAuth } from "../server/auth";
 import { attachForge } from "../server/forge";
 import { attachCharacters } from "../server/characters";
-import { initLibrary } from "../server/library";
+import { initLibrary, recordPlays } from "../server/library";
 import { initEvents } from "../server/events";
 import { SPRITE_CELLS } from "../shared/gen/sprite";
 import { STUDY_VERSION } from "../shared/cpu-study";
@@ -35,7 +35,7 @@ beforeAll(async () => {
   fs.mkdirSync(path.join(dataDir, "players"));
   const file = (owner: string, name: string, characters: object[], saved?: string[]) =>
     fs.writeFileSync(path.join(dataDir, "players", `${owner}.json`), JSON.stringify({ player: { id: owner, name, avatar: null }, characters, ...(saved ? { saved } : {}) }));
-  file("dev-ann", "Ann", [ready("gen-old", "dev-ann", 1), ready("gen-new", "dev-ann", 3), ready("gen-hidden", "dev-ann", 2, { public: false })]);
+  file("dev-ann", "Ann", [ready("gen-old", "dev-ann", 1), ready("gen-new", "dev-ann", 3), ready("gen-mid", "dev-ann", 2), ready("gen-hidden", "dev-ann", 2, { public: false })]);
   file("dev-cal", "Cal", [], ["gen-old"]);
   app();
 });
@@ -62,10 +62,20 @@ describe("community", () => {
   it("lists public ready characters, with creator and save count, popular or new first", async () => {
     const bob = await signIn("Bob");
     const pop = await community(bob);
-    expect(pop.map((c) => c.id)).toEqual(["gen-old", "gen-new"]);
-    expect(pop[0]).toMatchObject({ saves: 1, saved: false, mine: false, creator: { name: "Ann", avatar: null } });
-    expect((await community(bob, "new")).map((c) => c.id)).toEqual(["gen-new", "gen-old"]);
+    expect(pop.map((c) => c.id)).toEqual(["gen-old", "gen-new", "gen-mid"]);
+    expect(pop[0]).toMatchObject({ saves: 1, plays: 0, saved: false, mine: false, creator: { name: "Ann", avatar: null } });
+    expect((await community(bob, "new")).map((c) => c.id)).toEqual(["gen-new", "gen-mid", "gen-old"]);
     expect((await api("/characters/community?sort=weird")).status).toBe(400);
+  });
+
+  it("equal saves rank by online plays, then newest", async () => {
+    const bob = await signIn("Bob");
+    recordPlays(["gen-mid", "gen-mid", "gen-new", "wizard"]);
+    const pop = await community(bob);
+    expect(pop.map((c) => [c.id, c.plays])).toEqual([["gen-old", 0], ["gen-mid", 2], ["gen-new", 1]]);
+    expect((await community(bob, "new")).map((c) => c.id)).toEqual(["gen-new", "gen-mid", "gen-old"]);
+    expect((await api("/library/gen-mid", { method: "DELETE", headers: await signIn("Ann") })).status).toBe(204);
+    expect((await community(bob)).map((c) => c.id)).toEqual(["gen-old", "gen-new"]);
   });
 
   it("saving is a reference: it shows up in the saver's library, counts, and can't be doubled, made of your own, or of a private one", async () => {
