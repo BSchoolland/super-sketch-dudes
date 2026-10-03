@@ -50,6 +50,17 @@ that carries its map plays the same everywhere: locally, over the relay (the hos
 start message carry it; the server relays a map only after `checkMap` passes), and across a bundle
 swap. Fighters start standing on whatever platform their spawn is on.
 
+## Community characters
+
+A player file (`server/library.ts`) holds the player's own characters and `saved`: ids of other
+players' characters, references like the starters, never copies. GET /api/library is own + saved
+(flagged `saved`) + starters, so a saved character is a battle choice like any other. COMMUNITY
+(/api/characters/community) lists ready characters that are `public` (missing means public), not
+starters and not deleted; popularity is how many player files save it, counted when the files are
+scanned and kept current on save and unsave. A creator deleting a character somebody saved only
+marks it `deleted`: it leaves their library and COMMUNITY, its bundle stays, and the entry is
+removed for real when the last saver unsaves it.
+
 ## Determinism (non-negotiable; rollback depends on it)
 
 - `shared/` never touches `Math.sin/cos/tan/atan2/pow/exp/log/random`, `Date`, `performance`,

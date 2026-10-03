@@ -4,7 +4,12 @@ import type { LibraryEntry, Player } from "../shared/account";
 
 /** Every player's characters, one JSON file per player under <dataDir>/players/. */
 let dir = "";
-const cache = new Map<string, { player: Player | null; characters: LibraryEntry[] }>();
+/** `saved` are other players' characters this player keeps in their library: references by id, like starters. */
+interface PlayerFile { player: Player | null; characters: LibraryEntry[]; saved: string[] }
+const cache = new Map<string, PlayerFile>();
+/** How many players have each character saved; built by scanAll, kept current by save and unsave. */
+const saves = new Map<string, number>();
+let scanned = false;
 /** Fighter ids every player sees in their library (reference fighters), kept in <dataDir>/starters.json. */
 let starters: string[] = [];
 let startersFile = "";
@@ -15,21 +20,25 @@ let dummyFile = "";
 function fileOf(owner: string): string {
   return path.join(dir, `${owner.replace(/[^\w-]/g, "_")}.json`);
 }
-function load(owner: string): { player: Player | null; characters: LibraryEntry[] } {
+function load(owner: string): PlayerFile {
   let lib = cache.get(owner);
   if (!lib) {
     const f = fileOf(owner);
-    lib = fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, "utf8")) : { player: null, characters: [] };
-    cache.set(owner, lib!);
+    lib = fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, "utf8")) as PlayerFile : { player: null, characters: [], saved: [] };
+    lib.saved ??= [];
+    for (const c of lib.characters) c.public ??= true;
+    cache.set(owner, lib);
+    for (const id of lib.saved) saves.set(id, (saves.get(id) ?? 0) + 1);
   }
-  return lib!;
+  return lib;
 }
-function save(owner: string): void {
+function write(owner: string): void {
   fs.writeFileSync(fileOf(owner), JSON.stringify(load(owner), null, 1));
 }
 
 export function initLibrary(dataDir: string): void {
   dir = path.join(dataDir, "players");
+  cache.clear(); saves.clear(); scanned = false;
   fs.mkdirSync(dir, { recursive: true });
   startersFile = path.join(dataDir, "starters.json");
   starters = fs.existsSync(startersFile) ? JSON.parse(fs.readFileSync(startersFile, "utf8")) : [];
@@ -63,12 +72,63 @@ export function starterEntries(): LibraryEntry[] {
   return starters.map((id) => findCharacter(id)).filter((e): e is LibraryEntry => !!e && e.status === "ready").map((e) => ({ ...e, starter: true }));
 }
 
+/** The player's own characters, without the ones they deleted that others still have saved. */
 export function libraryOf(owner: string): LibraryEntry[] {
-  return load(owner).characters;
+  return load(owner).characters.filter((c) => !c.deleted);
+}
+
+/** The characters the player saved, marked so the client offers to unsave rather than delete. */
+export function savedOf(owner: string): LibraryEntry[] {
+  return load(owner).saved.map((id) => findCharacter(id)).filter((e): e is LibraryEntry => !!e && e.status === "ready").map((e) => ({ ...e, saved: true }));
+}
+
+export function saveCount(id: string): number {
+  scanAll();
+  return saves.get(id) ?? 0;
+}
+
+/** False if it was already saved. */
+export function saveCharacter(owner: string, id: string): boolean {
+  scanAll();
+  const lib = load(owner);
+  if (lib.saved.includes(id)) return false;
+  lib.saved.push(id);
+  saves.set(id, saveCount(id) + 1);
+  write(owner);
+  return true;
+}
+
+/** False if it wasn't saved. The last saver of a character its creator deleted takes it with them. */
+export function unsaveCharacter(owner: string, id: string): boolean {
+  scanAll();
+  const lib = load(owner);
+  if (!lib.saved.includes(id)) return false;
+  lib.saved = lib.saved.filter((s) => s !== id);
+  const left = saveCount(id) - 1;
+  if (left > 0) saves.set(id, left); else saves.delete(id);
+  write(owner);
+  const e = findCharacter(id);
+  if (e?.deleted && !left) purge(e.owner, id);
+  return true;
+}
+
+export function setPublic(owner: string, id: string, pub: boolean): LibraryEntry | null {
+  const e = libraryOf(owner).find((c) => c.id === id);
+  if (!e) return null;
+  e.public = pub;
+  write(owner);
+  return e;
+}
+
+/** Ready characters anyone can find and save: public, not deleted, not a starter (everyone has those). */
+export function communityCharacters(): { entry: LibraryEntry; creator: Player | null; saves: number }[] {
+  scanAll();
+  return [...cache.values()].flatMap((lib) => lib.characters
+    .filter((c) => c.status === "ready" && c.bundleUrl && c.public && !c.deleted && !starters.includes(c.id))
+    .map((entry) => ({ entry, creator: lib.player, saves: saves.get(entry.id) ?? 0 })));
 }
 
 /** Every library into the cache, once; from then on every owner is in it (new ones arrive through upsertCharacter). */
-let scanned = false;
 function scanAll(): void {
   if (scanned) return;
   for (const f of fs.readdirSync(dir)) load(path.basename(f, ".json"));
@@ -84,24 +144,35 @@ export function findCharacter(id: string): LibraryEntry | null {
 /** Every ready character in every library. */
 export function everyCharacter(): LibraryEntry[] {
   scanAll();
-  return [...cache.values()].flatMap((lib) => lib.characters.filter((c) => c.status === "ready" && c.bundleUrl));
+  return [...cache.values()].flatMap((lib) => lib.characters.filter((c) => c.status === "ready" && c.bundleUrl && !c.deleted));
 }
 
-/** Adds or replaces the entry (by id) in its owner's library. */
+/** Adds or replaces the entry (by id) in its owner's library. A replacement keeps what the owner set on it (public, deleted). */
 export function upsertCharacter(entry: LibraryEntry, player?: Player): LibraryEntry {
   const lib = load(entry.owner);
   if (player) lib.player = player;
   const i = lib.characters.findIndex((c) => c.id === entry.id);
-  if (i >= 0) lib.characters[i] = entry; else lib.characters.push(entry);
-  save(entry.owner);
+  if (i >= 0) {
+    const was = lib.characters[i];
+    entry = { ...entry, public: was.public };
+    if (was.deleted) entry.deleted = true;
+    lib.characters[i] = entry;
+  } else lib.characters.push(entry);
+  write(entry.owner);
   return entry;
 }
 
+/** Deletes the owner's character; one somebody has saved stays on file, marked deleted, until the last of them unsaves it. */
 export function removeCharacter(owner: string, id: string): boolean {
-  const lib = load(owner);
-  const before = lib.characters.length;
-  lib.characters = lib.characters.filter((c) => c.id !== id);
-  if (lib.characters.length === before) return false;
-  save(owner);
+  const e = libraryOf(owner).find((c) => c.id === id);
+  if (!e) return false;
+  if (saveCount(id)) { e.deleted = true; write(owner); }
+  else purge(owner, id);
   return true;
+}
+
+function purge(owner: string, id: string): void {
+  const lib = load(owner);
+  lib.characters = lib.characters.filter((c) => c.id !== id);
+  write(owner);
 }

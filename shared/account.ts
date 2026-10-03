@@ -27,7 +27,26 @@ export interface LibraryEntry {
   origin: "creator" | { room: string; round: number };
   /** In every player's library from the start (a reference fighter); can't be deleted. */
   starter?: boolean;
+  /** Listed in COMMUNITY for anyone to save. */
+  public: boolean;
+  /** In another player's library because they saved it; they can unsave it, not delete it. */
+  saved?: boolean;
+  /** Its creator deleted it while others had it saved: gone from theirs and from COMMUNITY, kept for the savers. */
+  deleted?: boolean;
 }
+
+/** A character in COMMUNITY, as the caller sees it. */
+export interface CommunityCharacter extends Pick<LibraryEntry, "id" | "name" | "tagline" | "drawingUrl" | "createdAt"> {
+  bundleUrl: string;
+  creator: Pick<Player, "name" | "avatar">;
+  saves: number;
+  /** In the caller's library by reference. */
+  saved: boolean;
+  /** The caller made it. */
+  mine: boolean;
+}
+export type CommunitySort = "popular" | "new";
+export const COMMUNITY_PAGE = 36;
 
 /** Longest side of the drawing the client uploads; the server rejects bigger. */
 export const DRAW_PNG_MAX_BYTES = 900_000;

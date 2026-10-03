@@ -14,6 +14,7 @@ import { CreateScreen } from "./create";
 import { DescribeScreen } from "./describe";
 import { ForgeScreen } from "./forging";
 import { LibraryScreen } from "./library";
+import { CommunityScreen } from "./community";
 import { BattleMenuScreen } from "./battle/menu";
 import { BotsScreen } from "./battle/bots";
 import { OnlineScreen } from "./online";
@@ -43,6 +44,7 @@ export function menus(): Nav {
       if (mode === "battle") return nav.battle();
       if (mode === "create") return nav.create();
       if (mode === "library") return nav.library();
+      if (mode === "community") return nav.community();
       if (mode === "maps") return nav.maps();
       return new SettingsScreen(() => nav.title(), () => { signOut(); forgetLibrary(); forgetMaps(); return signInScreen(nav); });
     }),
@@ -50,6 +52,7 @@ export function menus(): Nav {
     describe: (pad, hint) => new DescribeScreen(nav, pad, hint),
     forge: (entry, pad) => new ForgeScreen(nav, entry, pad),
     library: () => new LibraryScreen(nav),
+    community: () => new CommunityScreen(nav),
     battle: (fighter) => new BattleMenuScreen((entry) => {
       const menu = () => nav.battle(fighter);
       if (entry !== "bots") return new OnlineScreen(menu, entry, fighter ?? null);

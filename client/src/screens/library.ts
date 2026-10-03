@@ -18,7 +18,7 @@ import type { Nav } from "./nav";
 const COLS = 6, ROWS = 2, ART = 250, GAP = 50, ROW_H = 350, TOP = 160;
 const X0 = (VIEW_W - (COLS * ART + (COLS - 1) * GAP)) / 2;
 
-/** MY CHARACTERS: the library as a grid; one of them big, with FIGHT and DELETE. */
+/** MY CHARACTERS: the library as a grid (yours, the ones you saved, the starters); one of them big, with PRACTICE and DELETE. */
 export class LibraryScreen implements Screen {
   t = 0;
   private menu = new ButtonMenu();
@@ -65,7 +65,9 @@ export class LibraryScreen implements Screen {
     const b: Button[] = [];
     if (e.status === "ready") b.push({ id: "practice", x: 0, y, w, h: 110, text: "PRACTICE", size: 44, disabled: !practiceDummy.choice });
     b.push({ id: "copy", x: 0, y, w, h: 110, text: "COPY DRAWING", size: 34 });
-    if (!e.starter) b.push({ id: "delete", x: 0, y, w, h: 110, text: armed ? "SURE?" : "DELETE", size: 44 });
+    const own = !e.starter && !e.saved;
+    if (own && e.status === "ready") b.push({ id: "public", x: 0, y, w, h: 110, text: e.public ? "PUBLIC: ON" : "PUBLIC: OFF", size: 38 });
+    if (!e.starter) b.push({ id: "delete", x: 0, y, w, h: 110, text: armed ? "SURE?" : e.saved ? "UNSAVE" : "DELETE", size: 44 });
     b.push({ id: "back", x: 0, y, w, h: 110, text: "BACK", size: 44 });
     const x0 = (VIEW_W - (b.length * w + (b.length - 1) * gap)) / 2;
     b.forEach((btn, i) => { btn.x = x0 + i * (w + gap); });
@@ -124,6 +126,7 @@ export class LibraryScreen implements Screen {
     const pressed = this.detailMenu.update(this.detailButtons(e), m, taps);
     if (pressed === "practice") return this.nav.practice(libraryChoices([e])[0], this.device);
     if (pressed === "copy") { sfx.menuConfirm(); this.copyDrawing(e); }
+    if (pressed === "public") this.flipPublic(e);
     if (pressed === "delete") {
       if (this.deleteArmed >= 0 && this.t - this.deleteArmed < 3) this.remove(e);
       else this.deleteArmed = this.t;
@@ -141,9 +144,19 @@ export class LibraryScreen implements Screen {
     if (row >= this.scroll + ROWS) this.scroll = row - ROWS + 1;
   }
 
+  private flipPublic(e: LibraryEntry): void {
+    library.setPublic(e.id, !e.public).then(
+      ({ character }) => { e.public = character.public; void refreshLibrary(); },
+      (error: unknown) => {
+        console.error(`public ${e.id} failed`, error);
+        this.problem = error instanceof Error ? error.message : String(error);
+      },
+    );
+  }
+
   private remove(e: LibraryEntry): void {
     this.deleteArmed = -1;
-    library.remove(e.id).then(
+    (e.saved ? library.unsave(e.id) : library.remove(e.id)).then(
       () => { sfx.menuBack(); this.selected = null; void refreshLibrary(); },
       (error: unknown) => {
         console.error(`delete ${e.id} failed`, error);

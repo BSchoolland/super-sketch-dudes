@@ -111,7 +111,7 @@ export function characterStatus(ch: Pick<LibraryEntry, "status" | "stage" | "err
 }
 
 /** One character as MY CHARACTERS shows it: the art, its name (or what the forge is doing) under it, a box when focused. */
-export function drawCharacterCell(ctx: CanvasRenderingContext2D, e: LibraryEntry, x: number, y: number, size: number, t: number, focused: boolean): void {
+export function drawCharacterCell(ctx: CanvasRenderingContext2D, e: ArtSource & Pick<LibraryEntry, "name" | "stage" | "error">, x: number, y: number, size: number, t: number, focused: boolean): void {
   drawCharacterArt(ctx, e, x, y, size, t, focused);
   if (focused) {
     ctx.save(); ctx.strokeStyle = INK; ctx.lineWidth = Math.max(4, size / 40);

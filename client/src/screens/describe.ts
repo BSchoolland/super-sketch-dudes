@@ -15,7 +15,7 @@ import type { CharacterHint, Nav } from "./nav";
 const ART = { x: 120, y: 150, w: 720, h: 720 };
 const FORM_X = 960, FORM_W = 840;
 const NAME = { x: FORM_X, y: 240, w: FORM_W, h: 96 };
-const DESC = { x: FORM_X, y: 440, w: FORM_W, h: 220 };
+const DESC = { x: FORM_X, y: 440, w: FORM_W, h: 190 };
 export const NAME_MAX = 28, DESCRIPTION_MAX = 240;
 
 /**
@@ -28,6 +28,8 @@ export class DescribeScreen implements Screen {
   private name: TextField;
   private description: TextField;
   private sending = false;
+  /** Listed in COMMUNITY for anyone to save. */
+  private pub = true;
   private problem = "";
   private next: Screen | null = null;
 
@@ -35,7 +37,7 @@ export class DescribeScreen implements Screen {
     pad.locked = true;
     this.name = new TextField({ maxLength: NAME_MAX, upper: true, value: hint?.name, onSubmit: () => this.description.el.focus(), onCancel: () => this.back() });
     this.description = new TextField({ maxLength: DESCRIPTION_MAX, multiline: true, quiet: true, value: hint?.description, onSubmit: () => this.send(), onCancel: () => this.back() });
-    this.menu.focus = 0;
+    this.menu.focus = 1;
   }
 
   abandon(): void {
@@ -44,8 +46,9 @@ export class DescribeScreen implements Screen {
 
   private buttons(): Button[] {
     return [
-      { id: "send", x: FORM_X, y: 760, w: 400, h: 110, text: this.sending ? "…" : "CREATE CHARACTER", size: 34, disabled: this.sending },
-      { id: "back", x: FORM_X + 440, y: 760, w: 400, h: 110, text: "KEEP DRAWING", size: 34, disabled: this.sending },
+      { id: "public", x: FORM_X, y: 690, w: 400, h: 80, text: this.pub ? "PUBLIC: ON" : "PUBLIC: OFF", size: 32, disabled: this.sending },
+      { id: "send", x: FORM_X, y: 800, w: 400, h: 110, text: this.sending ? "…" : "CREATE CHARACTER", size: 34, disabled: this.sending },
+      { id: "back", x: FORM_X + 440, y: 800, w: 400, h: 110, text: "KEEP DRAWING", size: 34, disabled: this.sending },
     ];
   }
 
@@ -53,7 +56,8 @@ export class DescribeScreen implements Screen {
     this.t += dt;
     if (this.next) { this.dispose(); return this.next; }
     const pressed = this.menu.update(this.buttons(), m, consumeTaps());
-    if (pressed === "send") this.send();
+    if (pressed === "public") this.pub = !this.pub;
+    else if (pressed === "send") this.send();
     else if (pressed === "back" || (m.back && !this.sending)) return this.back();
     return null;
   }
@@ -69,7 +73,7 @@ export class DescribeScreen implements Screen {
     label(ctx, "WHAT IS IT? WHAT DOES IT DO? (optional)", DESC.x, DESC.y - 22, 26, PENCIL, "left", 800);
     card(ctx, DESC.x, DESC.y, DESC.w, DESC.h, INK, document.activeElement === this.description.el);
     this.description.place(DESC.x + 20, DESC.y + 16, DESC.w - 40, DESC.h - 32, 28);
-    if (!this.name.value && !this.description.value) label(ctx, "leave both empty and it's all read from the drawing", FORM_X, DESC.y + DESC.h + 44, 24, PENCIL, "left");
+    if (!this.name.value && !this.description.value) label(ctx, "leave both empty and it's all read from the drawing", FORM_X, DESC.y + DESC.h + 38, 24, PENCIL, "left");
     const buttons = this.buttons();
     this.menu.draw(ctx, buttons);
     if (this.problem) label(ctx, this.problem, VIEW_W / 2, VIEW_H - 40, 28, RED);
@@ -94,7 +98,7 @@ export class DescribeScreen implements Screen {
     if ("problem" in out) { this.problem = out.problem; console.error(out.problem); return; }
     this.sending = true;
     this.problem = "";
-    library.create(out.png, { name: this.name.value.trim(), description: this.description.value.trim() }).then(
+    library.create(out.png, { name: this.name.value.trim(), description: this.description.value.trim() }, this.pub).then(
       () => { sfx.menuConfirm(); this.next = this.nav.library(); },
       (error: unknown) => {
         console.error("character upload failed", error);

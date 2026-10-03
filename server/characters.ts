@@ -1,12 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import type express from "express";
-import { DRAW_PNG_MAX_BYTES } from "../shared/account";
+import { COMMUNITY_PAGE, DRAW_PNG_MAX_BYTES, type CommunityCharacter } from "../shared/account";
 import { playerOf } from "./auth";
 import type { WideEvent } from "../shared/wide";
+import type { LibraryEntry } from "../shared/account";
 import { drawingUrlOf, enqueueJob, entryOf, jobOf, newFighterId, reviseCharacter, storeCharacter } from "./forge";
-import { upsertCharacter } from "./library";
-import { dummyEntry, everyCharacter, findCharacter, libraryOf, removeCharacter, setDummy, setStarters, starterEntries, starterIds } from "./library";
+import { communityCharacters, dummyEntry, everyCharacter, findCharacter, libraryOf, removeCharacter, saveCharacter, saveCount, savedOf, setDummy, setPublic, setStarters, starterEntries, starterIds, unsaveCharacter, upsertCharacter } from "./library";
 import { HOUSE_ROSTER } from "../shared/house";
 
 /** The character creator and the library, over HTTP, for signed-in players. */
@@ -14,8 +14,50 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
   api.get("/library", (req, res) => {
     const player = playerOf(req);
     if (!player) return res.status(401).json({ error: "not signed in" });
-    const own = libraryOf(player.id);
-    res.json({ player, characters: [...own, ...starterEntries().filter((s) => !own.some((c) => c.id === s.id))] });
+    res.json({ player, characters: libraryWithSaves(player.id) });
+  });
+
+  // someone else's public character into your library, by reference
+  api.post("/library/saved/:id", (req, res) => {
+    const player = playerOf(req);
+    if (!player) return res.status(401).json({ error: "not signed in" });
+    const id = req.params.id;
+    const listed = communityCharacters().find((c) => c.entry.id === id);
+    if (!listed) return res.status(404).json({ error: "no such public character" });
+    if (listed.entry.owner === player.id) return res.status(400).json({ error: "that one's yours" });
+    saveCharacter(player.id, id);
+    res.json({ saves: saveCount(id), saved: true });
+  });
+  api.delete("/library/saved/:id", (req, res) => {
+    const player = playerOf(req);
+    if (!player) return res.status(401).json({ error: "not signed in" });
+    if (!unsaveCharacter(player.id, req.params.id)) return res.status(404).json({ error: "not saved" });
+    res.json({ saves: saveCount(req.params.id), saved: false });
+  });
+
+  // { public } on one of your own characters
+  api.patch("/library/:id", (req, res) => {
+    const player = playerOf(req);
+    if (!player) return res.status(401).json({ error: "not signed in" });
+    if (typeof req.body?.public !== "boolean") return res.status(400).json({ error: "public must be true or false" });
+    const entry = setPublic(player.id, req.params.id, req.body.public);
+    if (!entry) return res.status(404).json({ error: "not in your library" });
+    res.json({ character: entry });
+  });
+
+  // everyone's public characters, most saved or newest first, a page at a time
+  api.get("/characters/community", (req, res) => {
+    const sort = req.query.sort === "new" ? "new" : req.query.sort === "popular" || req.query.sort === undefined ? "popular" : null;
+    if (!sort) return res.status(400).json({ error: "sort is popular or new" });
+    const page = Math.max(0, Math.floor(Number(req.query.page) || 0));
+    const caller = playerOf(req)?.id ?? "";
+    const saved = new Set(caller ? savedOf(caller).map((e) => e.id) : []);
+    const all = communityCharacters().sort((a, b) => (sort === "popular" ? b.saves - a.saves : 0) || b.entry.createdAt - a.entry.createdAt);
+    const characters: CommunityCharacter[] = all.slice(page * COMMUNITY_PAGE, (page + 1) * COMMUNITY_PAGE).map(({ entry: e, creator, saves }) => ({
+      id: e.id, name: e.name, tagline: e.tagline, drawingUrl: e.drawingUrl, bundleUrl: e.bundleUrl!, createdAt: e.createdAt,
+      creator: { name: creator?.name ?? "?", avatar: creator?.avatar ?? null }, saves, saved: saved.has(e.id), mine: e.owner === caller,
+    }));
+    res.json({ characters, pages: Math.ceil(all.length / COMMUNITY_PAGE) });
   });
 
   // reference fighters every player starts with; the forge token sets the list
@@ -53,8 +95,9 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
     const name = String(req.body?.name ?? "").replace(/[^\w .'!?-]/g, "").trim().slice(0, 28).toUpperCase();
     const description = String(req.body?.description ?? "").replace(/\s+/g, " ").trim().slice(0, 240);
     const hint = name || description ? { name, description } : null;
+    if (req.body?.public !== undefined && typeof req.body.public !== "boolean") return res.status(400).json({ error: "public must be true or false" });
     const event = res.locals.event as WideEvent | undefined;
-    const job = enqueueJob({ fighterId: newFighterId(player.id.replace(/\W+/g, "").slice(-4) || "p"), player, png, origin: "creator", hint, parent: event?.trace ?? null });
+    const job = enqueueJob({ fighterId: newFighterId(player.id.replace(/\W+/g, "").slice(-4) || "p"), player, png, origin: "creator", hint, public: req.body?.public ?? true, parent: event?.trace ?? null });
     event?.set("forge", `f-${job.id}`);
     res.json({ character: entryOf(job) });
   });
@@ -67,7 +110,7 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
     try {
       const result = await storeCharacter(id, String(req.body?.player ?? "player"), req.body);
       if (typeof req.body?.drawing === "string") { const f = path.join(dataDir, "gen", "drawings", `${id}.png`); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, Buffer.from(req.body.drawing, "base64")); }
-      const entry = upsertCharacter({ id, owner, status: "ready", stage: "", error: null, ...result, drawingUrl: drawingUrlOf(id), createdAt: Date.now(), origin: "creator" });
+      const entry = upsertCharacter({ id, owner, status: "ready", stage: "", error: null, ...result, drawingUrl: drawingUrlOf(id), createdAt: Date.now(), origin: "creator", public: true });
       res.json({ character: entry });
     } catch (e) { res.status(400).json({ error: (e as Error).message }); }
   });
@@ -119,11 +162,18 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
   });
 
   api.get("/characters/:id", (req, res) => {
-    const entry = [...libraryOf(playerOf(req)?.id ?? ""), ...starterEntries()].find((c) => c.id === req.params.id);
+    const caller = playerOf(req)?.id;
+    const entry = (caller ? libraryWithSaves(caller) : starterEntries()).find((c) => c.id === req.params.id);
     if (!entry) return res.status(404).json({ error: "no such character" });
     res.json({ character: entry });
   });
   void jobOf;
+}
+
+/** A player's library as they see it: their own, the ones they saved, then the starters they don't already have. */
+function libraryWithSaves(owner: string): LibraryEntry[] {
+  const own = [...libraryOf(owner), ...savedOf(owner)];
+  return [...own, ...starterEntries().filter((s) => !own.some((c) => c.id === s.id))];
 }
 
 export function decodePng(dataUrl: string): Buffer | null {

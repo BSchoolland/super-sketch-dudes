@@ -1,5 +1,5 @@
 import { site } from "./base";
-import { GOOGLE_CLIENT_ID, SESSION_HEADER, type Player, type LibraryEntry } from "../../shared/account";
+import { GOOGLE_CLIENT_ID, SESSION_HEADER, type CommunityCharacter, type CommunitySort, type Player, type LibraryEntry } from "../../shared/account";
 import { sessionTrace } from "./telemetry/events";
 
 /**
@@ -124,7 +124,11 @@ export const library = {
   sample: (n: number, not: string[]) => api<{ characters: { id: string; name: string | null; bundleUrl: string | null }[] }>(`/characters/sample?n=${n}&not=${not.join(",")}`),
   dummy: () => api<{ character: LibraryEntry | null }>("/dummy"),
   remove: (id: string) => api<void>(`/library/${id}`, { method: "DELETE" }),
+  setPublic: (id: string, pub: boolean) => api<{ character: LibraryEntry }>(`/library/${id}`, { method: "PATCH", body: JSON.stringify({ public: pub }) }),
+  save: (id: string) => api<{ saves: number; saved: boolean }>(`/library/saved/${id}`, { method: "POST" }),
+  unsave: (id: string) => api<{ saves: number; saved: boolean }>(`/library/saved/${id}`, { method: "DELETE" }),
+  community: (sort: CommunitySort, page: number) => api<{ characters: CommunityCharacter[]; pages: number }>(`/characters/community?sort=${sort}&page=${page}`),
   /** `hint` is what the player typed on the describe page; the forge's design pass reads it. */
-  create: (png: string, hint: { name: string; description: string }) => api<{ character: LibraryEntry }>("/characters", { method: "POST", body: JSON.stringify({ png, ...hint }) }),
+  create: (png: string, hint: { name: string; description: string }, pub: boolean) => api<{ character: LibraryEntry }>("/characters", { method: "POST", body: JSON.stringify({ png, ...hint, public: pub }) }),
   get: (id: string) => api<{ character: LibraryEntry }>(`/characters/${id}`),
 };

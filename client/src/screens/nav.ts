@@ -17,6 +17,8 @@ export interface Nav {
   /** Watching a character the forge is making (or has made); `pad` is kept for TRY AGAIN. */
   forge(entry: LibraryEntry, pad: DrawPad | null): Screen;
   library(): Screen;
+  /** COMMUNITY: everyone's public characters, to save into your library. */
+  community(): Screen;
   /** BATTLE: quick match, a lobby, or bots; `fighter` starts out picked there (a character's FIGHT button). */
   battle(fighter?: FighterChoice): Screen;
   /** PRACTICE: Proving Ground against the practice dummy, which never fights back. */

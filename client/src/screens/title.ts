@@ -6,13 +6,13 @@ import { account } from "../account";
 import { refreshLibrary } from "../fighters";
 import { myMaps, refreshMaps } from "../maps";
 import { bg, card, hint, label, title, hover, clicked, goTo, type Screen, INK } from "./ui";
-import { image } from "./images";
+import { drawAvatar } from "./images";
 import { MenuBrawl } from "./brawl";
 import { MENU_CARD } from "../../../shared/stages/menu";
 
 const MENU_Y = MENU_CARD.y0, MENU_STEP = MENU_CARD.step;
 
-export type Mode = "battle" | "library" | "create" | "maps" | "settings";
+export type Mode = "battle" | "library" | "create" | "community" | "maps" | "settings";
 
 export function drawLogo(ctx: CanvasRenderingContext2D, y: number): void {
   ctx.save();
@@ -30,18 +30,7 @@ export function drawPlayerBadge(ctx: CanvasRenderingContext2D): void {
   const p = account.player;
   if (!p) return;
   const r = 30, cx = VIEW_W - 40 - r, cy = 30 + r;
-  ctx.save();
-  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
-  ctx.fillStyle = "rgba(119,114,103,0.15)";
-  ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
-  const img = p.avatar ? image(p.avatar) : null;
-  if (img?.ok) ctx.drawImage(img.img, cx - r, cy - r, r * 2, r * 2);
-  else label(ctx, p.name.slice(0, 1).toUpperCase(), cx, cy + 12, 34, INK, "center", 900);
-  ctx.restore();
-  ctx.save();
-  ctx.strokeStyle = INK; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
-  ctx.restore();
+  drawAvatar(ctx, p, cx, cy, r);
   label(ctx, p.name, cx - r - 16, cy + 10, 30, INK, "right", 800);
 }
 
@@ -54,6 +43,7 @@ export class TitleScreen implements Screen {
       { id: "battle", name: "BATTLE", desc: "Fight the CPU, a friend here, or someone online" },
       { id: "library", name: "MY CHARACTERS", desc: "View characters you've drawn" },
       { id: "create", name: "NEW CHARACTER", desc: "Draw a new character" },
+      { id: "community", name: "COMMUNITY", desc: "Find and save other players' characters" },
       ...(myMaps.canCreate ? [{ id: "maps" as const, name: "MAPS", desc: "Build a stage to fight on" }] : []),
       { id: "settings", name: "SETTINGS", desc: "Change settings" },
     ];

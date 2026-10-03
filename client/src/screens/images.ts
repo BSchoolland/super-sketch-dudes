@@ -1,5 +1,6 @@
 import { PAPER, PENCIL } from "../render/paper";
-import { label } from "./ui";
+import { label, INK } from "./ui";
+import type { Player } from "../../../shared/account";
 
 interface Entry { img: HTMLImageElement; ok: boolean; error: string }
 const images = new Map<string, Entry>();
@@ -35,5 +36,21 @@ export function drawImageIn(ctx: CanvasRenderingContext2D, url: string | null, x
   } else if (empty) {
     label(ctx, empty, x + size / 2, y + size / 2, Math.max(16, size / 14), PENCIL);
   }
+  ctx.restore();
+}
+
+/** A player's avatar in an inked circle, or their initial when they have none. */
+export function drawAvatar(ctx: CanvasRenderingContext2D, p: Pick<Player, "name" | "avatar">, cx: number, cy: number, r: number): void {
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
+  ctx.fillStyle = "rgba(119,114,103,0.15)";
+  ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+  const img = p.avatar ? image(p.avatar) : null;
+  if (img?.ok) ctx.drawImage(img.img, cx - r, cy - r, r * 2, r * 2);
+  else label(ctx, p.name.slice(0, 1).toUpperCase(), cx, cy + r * 0.4, r * 1.13, INK, "center", 900);
+  ctx.restore();
+  ctx.save();
+  ctx.strokeStyle = INK; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
   ctx.restore();
 }

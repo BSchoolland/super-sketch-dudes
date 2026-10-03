@@ -31,6 +31,8 @@ export interface ForgeJob {
   origin: LibraryEntry["origin"];
   /** What the player typed about it, if anything: the design pass reads it. */
   hint: { name: string; description: string } | null;
+  /** Listed in COMMUNITY once it's done. */
+  public: boolean;
   createdAt: number;
   /** Filled in on completion. */
   result: { name: string; tagline: string; description: string; bundleUrl: string; sheetUrl: string | null } | null;
@@ -51,6 +53,7 @@ function restore(): void {
   const saved = JSON.parse(fs.readFileSync(jobsFile, "utf8")) as ForgeJob[];
   const restored: ForgeJob[] = [];
   for (const job of saved) {
+    job.public ??= true;
     jobs.set(job.id, job);
     if (job.status === "queued") { queue.push(job.id); restored.push(job); }
     // the worker outlives a server restart and is still on it: keep it running; the stale-claim
@@ -73,7 +76,7 @@ export function entryOf(job: ForgeJob): LibraryEntry {
     id: job.fighterId, owner: job.owner, status: charStatusOf(job), stage: job.stage, error: job.error,
     name: job.result?.name ?? null, tagline: job.result?.tagline ?? null, description: job.result?.description ?? null,
     drawingUrl: drawingUrlOf(job.fighterId), bundleUrl: job.result?.bundleUrl ?? null, sheetUrl: job.result?.sheetUrl ?? null,
-    createdAt: job.createdAt, origin: job.origin,
+    createdAt: job.createdAt, origin: job.origin, public: job.public,
   };
 }
 
@@ -129,13 +132,13 @@ function nextFairJob(): ForgeJob | null {
 
 /** Stores the drawing and queues the job; the library gets the entry at once, as "queued". */
 /** `parent` is the trace the job came from: the creator's request. */
-export function enqueueJob(spec: { fighterId: string; player: Player; png: Buffer; origin: LibraryEntry["origin"]; hint?: { name: string; description: string } | null; parent: string | null }): ForgeJob {
+export function enqueueJob(spec: { fighterId: string; player: Player; png: Buffer; origin: LibraryEntry["origin"]; hint?: { name: string; description: string } | null; public: boolean; parent: string | null }): ForgeJob {
   const drawingPath = path.join(genDir, "drawings", `${spec.fighterId}.png`);
   fs.mkdirSync(path.dirname(drawingPath), { recursive: true });
   fs.writeFileSync(drawingPath, spec.png);
   const job: ForgeJob = {
     id: crypto.randomBytes(6).toString("hex"), fighterId: spec.fighterId, owner: spec.player.id, playerName: spec.player.name,
-    drawingPath, status: "queued", stage: "waiting in line", error: null, claimedAt: 0, attempts: 0, origin: spec.origin, hint: spec.hint ?? null, createdAt: Date.now(), result: null,
+    drawingPath, status: "queued", stage: "waiting in line", error: null, claimedAt: 0, attempts: 0, origin: spec.origin, hint: spec.hint ?? null, public: spec.public, createdAt: Date.now(), result: null,
   };
   jobs.set(job.id, job);
   queue.push(job.id);
