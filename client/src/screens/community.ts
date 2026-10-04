@@ -12,7 +12,7 @@ import { drawCharacterCell, RED } from "./character";
 import { CharacterDetail, moveRows, type MoveRow } from "./charcard";
 import type { Nav } from "./nav";
 import { TextField } from "./textfield";
-import { drawCharTabs, otherTabButton } from "./chartabs";
+import { drawCharTabs, otherCharTab } from "./chartabs";
 
 const COLS = 6, ROWS = 2, ART = 250, GAP = 50, ROW_H = 350, TOP = 270;
 const X0 = (VIEW_W - (COLS * ART + (COLS - 1) * GAP)) / 2;
@@ -124,7 +124,7 @@ export class CommunityScreen implements Screen {
     const right = X0 + COLS * ART + (COLS - 1) * GAP;
     SORTS.forEach((s, i) => b.push({ id: s, x: right - (SORTS.length - i) * SORT_W, y: SORT_Y, w: SORT_W, h: SEARCH.h, text: SORT_NAME[s], custom: true }));
     b.push({ id: "back", x: 40, y: VIEW_H - 130, w: 240, h: 90, text: "BACK", size: 40 });
-    b.push(otherTabButton("community"));
+    b.push(otherCharTab("community"));
     return b;
   }
 

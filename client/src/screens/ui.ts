@@ -61,7 +61,7 @@ export function hint(ctx: CanvasRenderingContext2D, text: string): void {
 }
 
 export interface Settings {
-  volume: number; music: number; shake: number;
+  volume: number; music: number;
   /** Index into MAYHEM: how often a new fighter drops into the title screen fight. */
   mayhem: number; tapJump: boolean; rumble: boolean; stocks: number; time: number; cpuTier: number;
   /** Keyboard player 1's rebound actions; everything else keeps its default key. */
@@ -71,7 +71,7 @@ export interface Settings {
 export const MAYHEM: { name: string; seconds: number }[] = [
   { name: "CALM", seconds: 20 }, { name: "LIVELY", seconds: 10 }, { name: "ROWDY", seconds: 6 }, { name: "MAYHEM", seconds: 3 },
 ];
-export const settings: Settings = { volume: 0.8, music: 0.5, shake: 1, mayhem: 3, tapJump: true, rumble: true, stocks: 3, time: 0, cpuTier: DEFAULT_TIER, keys: {} };
+export const settings: Settings = { volume: 0.8, music: 0.5, mayhem: 3, tapJump: true, rumble: true, stocks: 3, time: 0, cpuTier: DEFAULT_TIER, keys: {} };
 export function loadSettings(): void {
   try { Object.assign(settings, JSON.parse(localStorage.getItem("sketchbattle.settings") ?? "{}")); } catch { /* ignore */ }
   applyKeys();
