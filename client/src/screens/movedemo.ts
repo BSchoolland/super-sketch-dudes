@@ -10,15 +10,19 @@ import { Renderer } from "../render/render";
 import { label } from "./ui";
 import { drawKeyIcons, type KeyIcon } from "./keyicons";
 import { kb1Bindings, keyName } from "../input/bindings";
+import { C } from "../../../shared/config";
 
 type Dir = "n" | "f" | "u" | "d";
-/** One button on the detail screen: what's pressed (from the air or not) and the directions the fighter has it in. */
-export interface DemoMove { name: string; button: number; air: boolean; dirs: Dir[] }
+type Kind = "attack" | "smash" | "air" | "special";
+/** One button on the detail screen: which kind of move, and the directions the fighter has it in. */
+export interface DemoMove { name: string; kind: Kind; dirs: Dir[] }
 
 const STEP = 1000 / 60;
 const PRESS_AT = 42, AFTER = 110, MAX_FRAMES = 480;
 /** How long a demo holds a special that charges or keeps going while held. */
 const HOLD_FRAMES = 100;
+/** How long a demo holds attack for a smash: past the keyboard's tilt, into a little charge. */
+const SMASH_FRAMES = C.SMASH_HOLD + 16;
 /** Where the dummy stands; the fighter lines up to its left at the move's range. */
 const DUMMY_X = 0;
 const STICK: Record<Dir, [number, number]> = { n: [0, 0], f: [100, 0], u: [0, -100], d: [0, 100] };
@@ -41,22 +45,24 @@ function stageWithPlatform(y: number): string {
   return id;
 }
 
-const MOVE_ID: Record<"attack" | "air" | "special", Record<Dir, string>> = {
+const MOVE_ID: Record<Kind, Partial<Record<Dir, string>>> = {
   attack: { n: "jab", f: "ftilt", u: "utilt", d: "dtilt" },
+  smash: { f: "fsmash", u: "usmash", d: "dsmash" },
   air: { n: "nair", f: "fair", u: "uair", d: "dair" },
   special: { n: "nspecial", f: "sspecial", u: "uspecial", d: "dspecial" },
 };
-const kindOf = (m: DemoMove): keyof typeof MOVE_ID => (m.button === B.SPECIAL ? "special" : m.air ? "air" : "attack");
+const buttonOf = (kind: Kind): number => (kind === "special" ? B.SPECIAL : B.ATTACK);
 const DIRS: Dir[] = ["n", "f", "u", "d"];
 const SPECIAL_NAME: Record<Dir, string> = { n: "SPECIAL", f: "SIDE+SPECIAL", u: "UP+SPECIAL", d: "DOWN+SPECIAL" };
 
-/** Every move the fighter actually has, as detail-screen buttons: its tilts, its aerials, each special. */
+/** Every move the fighter actually has, as detail-screen buttons: its tilts, its smashes, its aerials, each special. */
 export function demoMoves(def: FighterDef): DemoMove[] {
-  const has = (kind: keyof typeof MOVE_ID) => DIRS.filter((d) => def.moves[MOVE_ID[kind][d]]);
+  const has = (kind: Kind) => DIRS.filter((d) => { const id = MOVE_ID[kind][d]; return id && def.moves[id]; });
   const out: DemoMove[] = [];
-  if (has("attack").length) out.push({ name: "ATTACK", button: B.ATTACK, air: false, dirs: has("attack") });
-  if (has("air").length) out.push({ name: "AIR", button: B.ATTACK, air: true, dirs: has("air") });
-  for (const d of has("special")) out.push({ name: SPECIAL_NAME[d], button: B.SPECIAL, air: false, dirs: [d] });
+  if (has("attack").length) out.push({ name: "ATTACK", kind: "attack", dirs: has("attack") });
+  if (has("smash").length) out.push({ name: "SMASH", kind: "smash", dirs: has("smash") });
+  if (has("air").length) out.push({ name: "AIR", kind: "air", dirs: has("air") });
+  for (const d of has("special")) out.push({ name: SPECIAL_NAME[d], kind: "special", dirs: [d] });
   return out;
 }
 
@@ -156,7 +162,7 @@ export class MoveDemo {
   }
 
   private get moveId(): string | null {
-    return this.move ? MOVE_ID[kindOf(this.move)][this.dir] : null;
+    return this.move ? MOVE_ID[this.move.kind][this.dir] ?? null : null;
   }
 
   /**
@@ -195,8 +201,8 @@ export class MoveDemo {
   }
 
   private holdsFor(m: DemoMove): boolean {
-    const id = MOVE_ID[kindOf(m)][this.dir];
-    return m.button === B.SPECIAL && !!profileOf(roster[this.fighter]).specials[id as keyof ReturnType<typeof profileOf>["specials"]]?.held;
+    const id = MOVE_ID[m.kind][this.dir];
+    return m.kind === "special" && !!profileOf(roster[this.fighter]).specials[id as keyof ReturnType<typeof profileOf>["specials"]]?.held;
   }
 
   /** Drifts the fighter until it's right above the dummy, allowing for where the move's hitboxes sit. */
@@ -216,7 +222,7 @@ export class MoveDemo {
     if (!m || this.state.fighters.length < 2) return false;
     const copy = cloneState(this.state);
     const [sx, sy] = STICK[this.dir];
-    const pressed: InputFrame = { ...frameInput, x: sx, y: sy, b: frameInput.b | B.DIGITAL | m.button };
+    const pressed: InputFrame = { ...frameInput, x: sx, y: sy, b: frameInput.b | B.DIGITAL | buttonOf(m.kind) };
     const held = this.holdsFor(m) ? HOLD_FRAMES : 1;
     const inputs = copy.fighters.map(() => cloneInput(EMPTY_INPUT));
     for (let f = 0; f < 90; f++) {
@@ -230,7 +236,7 @@ export class MoveDemo {
 
   /** Started from a jump: aerials, and up specials (a recovery shows best from the air). */
   private get jumps(): boolean {
-    return !!this.move && (this.move.air || (this.move.button === B.SPECIAL && this.dir === "u"));
+    return !!this.move && (this.move.kind === "air" || (this.move.kind === "special" && this.dir === "u"));
   }
 
   private get dir(): Dir {
@@ -242,18 +248,19 @@ export class MoveDemo {
     const input = cloneInput(EMPTY_INPUT);
     const m = this.move;
     const press = () => {
-      // digital, so a direction plus the button is a tilt, never a smash flick
+      // pressed the way a keyboard does: a direction and a tap of attack is the tilt, holding it the smash
       [input.x, input.y] = STICK[this.dir];
-      input.b = B.DIGITAL | m!.button;
+      input.b = B.DIGITAL | buttonOf(m!.kind);
       this.pressed = true;
       const id = this.moveId;
       const probe = id ? profileOf(roster[this.fighter]).specials[id as keyof ReturnType<typeof profileOf>["specials"]] : undefined;
-      if (m!.button === B.SPECIAL && probe?.held) this.hold = HOLD_FRAMES;
+      if (m!.kind === "special" && probe?.held) this.hold = HOLD_FRAMES;
+      if (m!.kind === "smash") this.hold = SMASH_FRAMES;
     };
     if (m && this.pressed && this.hold > 0) {
       this.hold--;
       [input.x, input.y] = STICK[this.dir];
-      input.b = B.DIGITAL | m.button;
+      input.b = B.DIGITAL | buttonOf(m.kind);
     }
     if (m && !this.pressed) {
       const jumpAt = PRESS_AT - 8;
@@ -265,7 +272,7 @@ export class MoveDemo {
         if (this.approach === "overhead" && this.frame >= jumpAt) this.driftOver(you, input);
         // attack on the first frame it would land on the dummy, or at the last moment before touching down
         // (a special, a recovery, goes at the top of the jump rather than the bottom)
-        const late = m.button === B.SPECIAL ? you.vy >= 0 : you.vy > 0 && you.y + you.vy * 2 >= 0;
+        const late = m.kind === "special" ? you.vy >= 0 : you.vy > 0 && you.y + you.vy * 2 >= 0;
         if (this.frame > jumpAt + 3 && !you.grounded && (late || this.wouldHit(input))) press();
       }
     }
@@ -309,8 +316,9 @@ export class MoveDemo {
       const icon = (keys: string[]): KeyIcon => keys[0] === "Space" ? { space: true } : keys[0] === "Mouse0" ? { mouse: "left" } : keys[0] === "Mouse2" ? { mouse: "right" } : { key: keyName(keys[0] ?? "") };
       if (this.jumps) icons.push(icon(b.jump));
       if (this.dir !== "n") icons.push(icon(b[({ f: "right", u: "up", d: "down" } as const)[this.dir]]));
-      icons.push(icon(this.move.button === B.ATTACK ? b.attack : b.special));
-      drawKeyIcons(ctx, icons, x + 20, y + 16, 48);
+      icons.push(icon(this.move.kind === "special" ? b.special : b.attack));
+      const end = drawKeyIcons(ctx, icons, x + 20, y + 16, 48);
+      if (this.move.kind === "smash") label(ctx, "hold", end + 8, y + 50, 28, INK, "left", 800);
       if (this.move.dirs.length > 1) this.move.dirs.forEach((d, i) => label(ctx, ARROW[d], x + 34 + i * 34, y + 96, 22, d === this.dir ? INK : "rgba(41,39,34,0.3)", "center", 900));
     }
   }

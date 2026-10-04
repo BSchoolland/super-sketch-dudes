@@ -35,8 +35,8 @@ function imageFor(icon: KeyIcon): { img: HTMLImageElement; w: number; h: number 
   return { img, w, h };
 }
 
-/** Draws the icons left to right from (x, y) at `height` tall, with a "+" between them. */
-export function drawKeyIcons(ctx: CanvasRenderingContext2D, icons: KeyIcon[], x: number, y: number, height: number): void {
+/** Draws the icons left to right from (x, y) at `height` tall, with a "+" between them. Returns where they end. */
+export function drawKeyIcons(ctx: CanvasRenderingContext2D, icons: KeyIcon[], x: number, y: number, height: number): number {
   let cx = x;
   icons.forEach((icon, i) => {
     if (i > 0) {
@@ -58,4 +58,5 @@ export function drawKeyIcons(ctx: CanvasRenderingContext2D, icons: KeyIcon[], x:
     }
     cx += w * k + 4;
   });
+  return cx;
 }
