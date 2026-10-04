@@ -10,6 +10,8 @@ import { ButtonMenu, type Button } from "./buttons";
 import { RED } from "./character";
 import { TextField } from "./textfield";
 import { wrapLines } from "./text";
+import { DrawPad } from "./pad";
+import { PadTools, padPng } from "./padtools";
 
 const NOTE_W = 1240, NOTE_X = (VIEW_W - NOTE_W) / 2, SIZE = 27, LINE = SIZE * 1.3, GAP = 18;
 
@@ -56,14 +58,16 @@ export class ClassScreen implements Screen {
   }
 }
 
-const BOX = { x: (VIEW_W - 1200) / 2, y: 240, w: 1200, h: 440 };
+const BOX = { x: 160, y: 240, w: 1040, h: 460 };
+const THUMB = { x: 1260, y: 240, w: 460, h: 460 };
 const FEEDBACK_MAX = 2000;
 
-/** Anything a player wants to tell Ben about the game; it lands in feedback.jsonl on the server. */
+/** Anything a player wants to tell Ben about the game, with an optional sketch; it lands in feedback.jsonl on the server. */
 export class FeedbackScreen implements Screen {
   t = 0;
   private menu = new ButtonMenu();
   private field: TextField;
+  private pad = new DrawPad(SKETCH_PAD);
   private sending = false;
   private sent = false;
   private problem = "";
@@ -72,13 +76,16 @@ export class FeedbackScreen implements Screen {
     this.field = new TextField({ maxLength: FEEDBACK_MAX, multiline: true, onSubmit: () => this.send(), onCancel: () => this.field.el.blur() });
   }
 
+  enter(): void { this.field.el.style.display = this.sent ? "none" : ""; }
   abandon(): void { this.field.remove(); }
 
   private buttons(): Button[] {
-    if (this.sent) return [{ id: "back", x: VIEW_W / 2 - 220, y: BOX.y + BOX.h + 60, w: 440, h: 100, text: "DONE", size: 34 }];
+    const y = BOX.y + BOX.h + 60;
+    if (this.sent) return [{ id: "back", x: VIEW_W / 2 - 220, y, w: 440, h: 100, text: "DONE", size: 34 }];
     return [
-      { id: "send", x: VIEW_W / 2 - 460, y: BOX.y + BOX.h + 60, w: 440, h: 100, text: this.sending ? "…" : "SEND", size: 34, disabled: this.sending },
-      { id: "back", x: VIEW_W / 2 + 20, y: BOX.y + BOX.h + 60, w: 440, h: 100, text: "BACK", size: 34, disabled: this.sending },
+      { id: "sketch", ...THUMB, text: "", custom: true, disabled: this.sending },
+      { id: "send", x: VIEW_W / 2 - 460, y, w: 440, h: 100, text: this.sending ? "…" : "SEND", size: 34, disabled: this.sending || (!this.field.value.trim() && this.pad.blank) },
+      { id: "back", x: VIEW_W / 2 + 20, y, w: 440, h: 100, text: "BACK", size: 34, disabled: this.sending },
     ];
   }
 
@@ -87,6 +94,7 @@ export class FeedbackScreen implements Screen {
     const typing = document.activeElement === this.field.el;
     const pressed = this.menu.update(this.buttons(), typing ? { ...m, confirm: false, left: false, right: false, up: false, down: false } : m, consumeTaps());
     if (pressed === "send") this.send();
+    if (pressed === "sketch") { this.field.el.style.display = "none"; return new SketchScreen(this.pad, () => this); }
     if (pressed === "back" || (m.back && !typing && !this.sending)) { sfx.menuBack(); this.field.remove(); return this.onBack(); }
     return null;
   }
@@ -94,27 +102,78 @@ export class FeedbackScreen implements Screen {
   draw(ctx: CanvasRenderingContext2D): void {
     bg(ctx, this.t);
     title(ctx, "FEEDBACK", VIEW_W / 2, 100, 60);
+    const buttons = this.buttons();
     if (this.sent) {
-      this.field.el.style.display = "none";
       label(ctx, "Thanks! Ben will read it.", VIEW_W / 2, BOX.y + BOX.h / 2, 40, INK, "center", 800);
     } else {
-      label(ctx, "Anything about the game: ideas, bugs, what you want changed or added.", VIEW_W / 2, BOX.y - 30, 28, PENCIL, "center", 700);
+      label(ctx, "Anything about the game: ideas, bugs, what you want changed or added.", BOX.x, BOX.y - 30, 28, PENCIL, "left", 700);
       card(ctx, BOX.x, BOX.y, BOX.w, BOX.h, INK, document.activeElement === this.field.el);
       this.field.place(BOX.x + 24, BOX.y + 20, BOX.w - 48, BOX.h - 40, 30);
       label(ctx, `${this.field.value.length} / ${FEEDBACK_MAX}`, BOX.x + BOX.w, BOX.y + BOX.h + 32, 20, PENCIL, "right", 600);
+      label(ctx, "Draw what you mean (optional)", THUMB.x, THUMB.y - 30, 28, PENCIL, "left", 700);
+      card(ctx, THUMB.x, THUMB.y, THUMB.w, THUMB.h, INK, this.menu.focused(buttons)?.id === "sketch");
+      if (this.pad.blank) label(ctx, "+ ADD A SKETCH", THUMB.x + THUMB.w / 2, THUMB.y + THUMB.h / 2 + 12, 34, INK, "center", 900);
+      else {
+        ctx.save(); ctx.translate(THUMB.x, THUMB.y); ctx.scale(THUMB.w / this.pad.rect.w, THUMB.h / this.pad.rect.h); ctx.translate(-this.pad.rect.x, -this.pad.rect.y); this.pad.draw(ctx); ctx.restore();
+        label(ctx, "click to change it", THUMB.x + THUMB.w, THUMB.y + THUMB.h + 32, 20, PENCIL, "right", 600);
+      }
     }
-    this.menu.draw(ctx, this.buttons());
+    this.menu.draw(ctx, buttons);
     if (this.problem) label(ctx, this.problem, VIEW_W / 2, VIEW_H - 40, 28, RED);
   }
 
   private send(): void {
     const text = this.field.value.trim();
-    if (this.sending || this.sent || !text) return;
+    if (this.sending || this.sent || (!text && this.pad.blank)) return;
+    let png: string | undefined;
+    if (!this.pad.blank) {
+      const out = padPng(this.pad);
+      if ("problem" in out) { this.problem = out.problem; return; }
+      png = out.png;
+    }
     this.sending = true;
     this.problem = "";
-    api<void>("/feedback", { method: "POST", body: JSON.stringify({ text }) }).then(
-      () => { this.sent = true; this.sending = false; this.menu.focus = 0; sfx.menuConfirm(); },
+    api<void>("/feedback", { method: "POST", body: JSON.stringify({ text, png }) }).then(
+      () => { this.sent = true; this.sending = false; this.field.el.style.display = "none"; this.menu.focus = 0; sfx.menuConfirm(); },
       (e: unknown) => { console.error("feedback failed", e); this.problem = e instanceof Error ? e.message : String(e); this.sending = false; },
     );
+  }
+}
+
+const SKETCH_PAD = { x: 510, y: 90, w: 900, h: 900 };
+const RIGHT = 1490, COL_W = 340;
+
+/** The character creator's pad and tools, for a feedback sketch. */
+export class SketchScreen implements Screen {
+  t = 0;
+  private tools: PadTools;
+  private menu = new ButtonMenu();
+  constructor(pad: DrawPad, private onDone: () => Screen) {
+    this.tools = new PadTools(pad);
+  }
+
+  enter(): void { this.tools.attach(); }
+  abandon(): void { this.tools.detach(); }
+
+  private buttons(): Button[] {
+    return [...this.tools.buttons(), { id: "done", x: RIGHT, y: 820, w: COL_W, h: 130, text: "DONE", size: 40 }];
+  }
+
+  update(dt: number, m: MenuInput): Screen | null {
+    this.t += dt;
+    const pressed = this.menu.update(this.buttons(), m, consumeTaps());
+    if (pressed === "done" || m.back) { sfx.menuConfirm(); this.tools.detach(); return this.onDone(); }
+    if (pressed) this.tools.press(pressed);
+    return null;
+  }
+
+  draw(ctx: CanvasRenderingContext2D): void {
+    bg(ctx, this.t);
+    card(ctx, SKETCH_PAD.x - 6, SKETCH_PAD.y - 6, SKETCH_PAD.w + 12, SKETCH_PAD.h + 12, INK, false);
+    this.tools.pad.draw(ctx);
+    label(ctx, "sketch your idea", RIGHT + COL_W / 2, 160, 36, INK, "center", 900);
+    const buttons = this.buttons();
+    this.tools.draw(ctx, buttons, this.menu.focused(buttons)?.id);
+    this.menu.draw(ctx, buttons);
   }
 }

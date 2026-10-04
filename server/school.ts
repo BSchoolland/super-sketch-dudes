@@ -2,7 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import express from "express";
 import { playerOf } from "./auth";
+import crypto from "node:crypto";
 import { charactersMade } from "./forge";
+import { decodePng } from "./characters";
+import { DRAW_PNG_MAX_BYTES } from "../shared/account";
 
 /**
  * Class time: a Chromebook on the school's network during school hours gets a note from Ben instead
@@ -34,16 +37,26 @@ export function attachSchool(api: express.Router, dataDir: string): void {
 
   const file = path.join(dataDir, "feedback.jsonl");
   const today = new Map<string, { day: string; n: number }>();
+  // { text, png?: <data URL> }: the sketch is saved next to the log as feedback/<id>.png
   api.post("/feedback", (req, res) => {
     const text = typeof req.body?.text === "string" ? req.body.text.trim().slice(0, FEEDBACK_MAX) : "";
-    if (!text) return res.status(400).json({ error: "empty feedback" });
+    const png = typeof req.body?.png === "string" ? decodePng(req.body.png) : null;
+    if (req.body?.png && !png) return res.status(400).json({ error: "sketch must be a PNG data URL" });
+    if (png && png.length > DRAW_PNG_MAX_BYTES) return res.status(400).json({ error: "sketch too large" });
+    if (!text && !png) return res.status(400).json({ error: "empty feedback" });
     const player = playerOf(req);
     const who = player?.id ?? clientIp(req);
     const day = new Date().toISOString().slice(0, 10);
     const count = today.get(who)?.day === day ? today.get(who)!.n : 0;
     if (count >= FEEDBACK_PER_DAY) return res.status(429).json({ error: "that's a lot of feedback for one day, try again tomorrow" });
     today.set(who, { day, n: count + 1 });
-    fs.appendFileSync(file, JSON.stringify({ at: new Date().toISOString(), player: player ? { id: player.id, name: player.name } : null, text }) + "\n");
+    let sketch: string | null = null;
+    if (png) {
+      sketch = `feedback/${crypto.randomBytes(6).toString("hex")}.png`;
+      fs.mkdirSync(path.join(dataDir, "feedback"), { recursive: true });
+      fs.writeFileSync(path.join(dataDir, sketch), png);
+    }
+    fs.appendFileSync(file, JSON.stringify({ at: new Date().toISOString(), player: player ? { id: player.id, name: player.name } : null, text, sketch }) + "\n");
     res.status(204).end();
   });
 }

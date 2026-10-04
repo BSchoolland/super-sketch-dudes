@@ -14,7 +14,7 @@ import { menus, signInScreen } from "./screens/flow";
 import { loadSettings, settings, takeHandoff, type Screen } from "./screens/ui";
 import { music, setMusicVolume, setVolume } from "./audio/audio";
 import { classTime, watchClassTime } from "./classtime";
-import { ClassScreen, FeedbackScreen } from "./screens/classtime";
+import { ClassScreen, FeedbackScreen, SketchScreen } from "./screens/classtime";
 import { everywhere, noteScreen, noteView, sessionTrace, startTelemetry } from "./telemetry/events";
 import { loadGeneratedFighter } from "./gen";
 import { devSignIn, finishSignIn, loadAccount, signedIn, unfinishedSignIn } from "./account";
@@ -132,12 +132,12 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     // signed out (a 401 anywhere, or SIGN OUT): back to the door, except mid-match or on a no-account page
     const current = next ?? screen;
     // class time takes over anywhere but a match in progress
-    if (classTime.blocked && !(current instanceof VersusScreen || current instanceof ClassScreen || current instanceof FeedbackScreen)) {
+    if (classTime.blocked && !(current instanceof VersusScreen || current instanceof ClassScreen || current instanceof FeedbackScreen || current instanceof SketchScreen)) {
       current.abandon?.();
       next = new ClassScreen(() => nav.title());
     }
     const shown = next ?? screen;
-    if (!signedIn() && !(shown instanceof SignInScreen || shown instanceof VersusScreen || shown instanceof SheetScreen || shown instanceof ClassScreen || shown instanceof FeedbackScreen)) {
+    if (!signedIn() && !(shown instanceof SignInScreen || shown instanceof VersusScreen || shown instanceof SheetScreen || shown instanceof ClassScreen || shown instanceof FeedbackScreen || shown instanceof SketchScreen)) {
       shown.abandon?.();
       forgetLibrary();
       forgetMaps();
