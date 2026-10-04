@@ -2,6 +2,7 @@ import { VIEW_H, VIEW_W } from "../render/camera";
 import { inkLine, inkPath, PAPER, PENCIL } from "../render/paper";
 import type { MenuInput } from "../input/devices";
 import { sfx } from "../audio/audio";
+import { consumeTaps } from "../input/pointer";
 import { library } from "../account";
 import { fighterLoad } from "../gen";
 import { roster } from "../../../shared/fighters/index";
@@ -10,7 +11,7 @@ import type { Release } from "../../../shared/releases";
 import { drawImageIn } from "./images";
 import { drawFighterHop } from "./portrait";
 import { wrapped } from "./text";
-import { card, clicked, hover, label, title, INK } from "./ui";
+import { card, hover, label, title, INK } from "./ui";
 
 const W = 1200, H = 880, X = (VIEW_W - W) / 2, Y = (VIEW_H - H) / 2;
 /** Each fighter gets a SLOT of the line; its sprite cell is drawn ART big, overlapping its neighbours' empty margins. */
@@ -36,7 +37,8 @@ export class UpdateCard {
   /** True once the last card is closed. */
   update(dt: number, m: MenuInput): boolean {
     this.t += dt;
-    if (!(m.confirm || m.start || m.back || clicked(GO.x, GO.y, GO.w, GO.h))) return false;
+    const tapped = consumeTaps().some((t) => t.x >= GO.x && t.x <= GO.x + GO.w && t.y >= GO.y && t.y <= GO.y + GO.h);
+    if (!(m.confirm || m.start || m.back || tapped)) return false;
     sfx.menuConfirm();
     this.releases.shift();
     this.t = 0;
