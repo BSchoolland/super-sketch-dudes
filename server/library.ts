@@ -7,7 +7,9 @@ import { FRESH_MS, compareVersions, releasesSince, type Fresh } from "../shared/
  * Every player's record (who they are, when they last played, their characters and saves), one JSON file per player under
  * <dataDir>/players/. `saved` are other players' characters this player keeps in their library: references by id, like starters.
  */
-interface PlayerRecord { player: Player | null; lastPlayed: LastPlayed | null; news?: News | null; characters: LibraryEntry[]; saved: string[] }
+interface PlayerRecord { player: Player | null; lastPlayed: LastPlayed | null; news?: News | null; characters: LibraryEntry[]; saved: Saved[] }
+/** Someone else's character in this player's library, and when they saved it. */
+interface Saved { id: string; at: number }
 let dir = "";
 const cache = new Map<string, PlayerRecord>();
 /** How many players have each character saved; built by scanAll, kept current by save and unsave. */
@@ -33,9 +35,10 @@ function load(owner: string): PlayerRecord {
     lib = fs.existsSync(f) ? (JSON.parse(fs.readFileSync(f, "utf8")) as PlayerRecord) : { player: null, lastPlayed: null, characters: [], saved: [] };
     if (!("lastPlayed" in lib)) throw new Error(`${f} predates lastPlayed: run scripts/migrate-last-played.mjs on the data dir`);
     lib.saved ??= [];
+    if (lib.saved.some((s) => typeof s === "string")) throw new Error(`${f} has saves without times: run scripts/migrate-saved-at.mjs on the data dir`);
     for (const c of lib.characters) c.public ??= true;
     cache.set(owner, lib);
-    for (const id of lib.saved) saves.set(id, (saves.get(id) ?? 0) + 1);
+    for (const { id } of lib.saved) saves.set(id, (saves.get(id) ?? 0) + 1);
   }
   return lib;
 }
@@ -125,7 +128,10 @@ export function libraryOf(owner: string): LibraryEntry[] {
 
 /** The characters the player saved, marked so the client offers to unsave rather than delete. */
 export function savedOf(owner: string): LibraryEntry[] {
-  return load(owner).saved.map((id) => findCharacter(id)).filter((e): e is LibraryEntry => !!e && e.status === "ready").map((e) => ({ ...e, saved: true }));
+  return load(owner).saved.flatMap(({ id, at }) => {
+    const e = findCharacter(id);
+    return e?.status === "ready" ? [{ ...e, saved: at }] : [];
+  });
 }
 
 export function saveCount(id: string): number {
@@ -137,8 +143,8 @@ export function saveCount(id: string): number {
 export function saveCharacter(owner: string, id: string): boolean {
   scanAll();
   const lib = load(owner);
-  if (lib.saved.includes(id)) return false;
-  lib.saved.push(id);
+  if (lib.saved.some((s) => s.id === id)) return false;
+  lib.saved.push({ id, at: Date.now() });
   saves.set(id, saveCount(id) + 1);
   write(owner);
   return true;
@@ -148,8 +154,8 @@ export function saveCharacter(owner: string, id: string): boolean {
 export function unsaveCharacter(owner: string, id: string): boolean {
   scanAll();
   const lib = load(owner);
-  if (!lib.saved.includes(id)) return false;
-  lib.saved = lib.saved.filter((s) => s !== id);
+  if (!lib.saved.some((s) => s.id === id)) return false;
+  lib.saved = lib.saved.filter((s) => s.id !== id);
   const left = saveCount(id) - 1;
   if (left > 0) saves.set(id, left); else saves.delete(id);
   write(owner);

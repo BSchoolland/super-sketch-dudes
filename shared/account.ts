@@ -41,8 +41,8 @@ export interface LibraryEntry {
   starter?: boolean;
   /** Listed in COMMUNITY for anyone to save. */
   public: boolean;
-  /** In another player's library because they saved it; they can unsave it, not delete it. */
-  saved?: boolean;
+  /** In another player's library because they saved it, at this time; they can unsave it, not delete it. */
+  saved?: number;
   /** Its creator deleted it while others had it saved: gone from theirs and from COMMUNITY, kept for the savers. */
   deleted?: boolean;
 }

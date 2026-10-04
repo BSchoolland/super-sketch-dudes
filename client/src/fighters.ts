@@ -41,7 +41,8 @@ export async function refreshLibrary(): Promise<void> {
   myLibrary.loading = true;
   try {
     const { characters } = await library.list();
-    myLibrary.entries = [...characters].sort((a, b) => b.createdAt - a.createdAt);
+    // newest into the library first: your own by when they were made, saved ones by when you saved them
+    myLibrary.entries = [...characters].sort((a, b) => (b.saved ?? b.createdAt) - (a.saved ?? a.createdAt));
     myLibrary.error = "";
   } catch (error) {
     console.error("library fetch failed", error);

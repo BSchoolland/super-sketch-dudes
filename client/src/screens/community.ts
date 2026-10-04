@@ -57,6 +57,8 @@ export class CommunityScreen implements Screen {
   private selected: CommunityCharacter | null = null;
   private detail: CharacterDetail | null = null;
   private saving = false;
+  /** Where to go once a save lands: MINE, with it at the top. */
+  private next: Screen | null = null;
   private scroll = 0;
   private problem = "";
   private search: TextField | null = null;
@@ -164,6 +166,7 @@ export class CommunityScreen implements Screen {
     const typed = this.search?.value.trim() ?? "";
     if (typed !== this.query && this.t - this.typedAt > 0.3) { this.query = typed; this.reload(); }
     if (this.search) this.search.el.style.display = this.selected ? "none" : "";
+    if (this.next) return this.next;
     const taps = consumeTaps();
     if (this.selected) return this.updateDetail(this.selected, m, taps);
     const buttons = this.gridButtons();
@@ -196,7 +199,12 @@ export class CommunityScreen implements Screen {
   private toggleSave(c: CommunityCharacter): void {
     this.saving = true;
     (c.saved ? library.unsave(c.id) : library.save(c.id)).then(
-      ({ saved }) => { c.saved = saved; this.saving = false; void refreshLibrary(); },
+      async ({ saved }) => {
+        c.saved = saved;
+        await refreshLibrary();
+        this.saving = false;
+        if (saved) { sfx.menuConfirm(); this.next = this.nav.library(); }
+      },
       (error: unknown) => {
         console.error(`save ${c.id} failed`, error);
         this.problem = error instanceof Error ? error.message : String(error);

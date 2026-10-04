@@ -34,7 +34,7 @@ beforeAll(async () => {
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "sb-community-"));
   fs.mkdirSync(path.join(dataDir, "players"));
   const file = (owner: string, name: string, characters: object[], saved?: string[]) =>
-    fs.writeFileSync(path.join(dataDir, "players", `${owner}.json`), JSON.stringify({ player: { id: owner, name, avatar: null }, lastPlayed: null, characters, ...(saved ? { saved } : {}) }));
+    fs.writeFileSync(path.join(dataDir, "players", `${owner}.json`), JSON.stringify({ player: { id: owner, name, avatar: null }, lastPlayed: null, characters, ...(saved ? { saved: saved.map((id) => ({ id, at: 1 })) } : {}) }));
   file("dev-ann", "Ann", [ready("gen-old", "dev-ann", 1), ready("gen-new", "dev-ann", 3), ready("gen-mid", "dev-ann", 2), ready("gen-hidden", "dev-ann", 2, { public: false })]);
   file("dev-cal", "Cal", [], ["gen-old"]);
   app();
@@ -99,12 +99,13 @@ describe("community", () => {
     const lib = await library(bob);
     expect(lib.filter((c) => c.saved).map((c) => c.id).sort()).toEqual(["gen-new", "gen-old"]);
     expect(lib.find((c) => c.id === "gen-new")?.owner).toBe("dev-ann");
+    expect(lib.find((c) => c.id === "gen-new")?.saved).toBeGreaterThan(Date.now() - 60_000);
     expect((await community(bob)).every((c) => c.saved)).toBe(true);
     expect((await community(ann)).every((c) => c.mine && !c.saved)).toBe(true);
     // the reference is all that's stored: Bob's file names the ids, Ann's holds the entries
     const bobFile = JSON.parse(fs.readFileSync(path.join(dataDir, "players", "dev-bob.json"), "utf8"));
     expect(bobFile.characters).toEqual([]);
-    expect(bobFile.saved).toEqual(["gen-new", "gen-old"]);
+    expect(bobFile.saved.map((s: { id: string }) => s.id)).toEqual(["gen-new", "gen-old"]);
 
     expect(await json("/library/saved/gen-new", { method: "DELETE", headers: bob })).toEqual({ saved: false });
     expect((await api("/library/saved/gen-new", { method: "DELETE", headers: bob })).status).toBe(404);
