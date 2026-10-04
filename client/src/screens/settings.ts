@@ -3,10 +3,11 @@ import { PENCIL } from "../render/paper";
 import type { MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
 import { setMusicVolume, setVolume, sfx } from "../audio/audio";
-import { bg, card, hint, label, title, backButton, goTo, type Screen, INK, MAYHEM, settings, saveSettings } from "./ui";
+import { bg, card, hint, label, backButton, goTo, type Screen, INK, MAYHEM, settings, saveSettings } from "./ui";
 import { account } from "../account";
 import { ButtonMenu, type Button } from "./buttons";
 import { drawTabs, otherTabButton, type Tabs } from "./tabs";
+import { ControlsPage } from "./controls";
 
 type SettingsTab = "general" | "controls";
 const TABS: Tabs<SettingsTab> = { left: { id: "general", text: "GENERAL" }, right: { id: "controls", text: "CONTROLS" } };
@@ -21,6 +22,7 @@ export class SettingsScreen implements Screen {
   t = 0;
   private tab: SettingsTab = "general";
   private menu = new ButtonMenu();
+  private controls = new ControlsPage();
   private rows: Row[] = [
     { id: "sound", name: "SOUND VOLUME", get: () => `${Math.round(settings.volume * 100)}%`, step: (d) => { settings.volume = clamp01(settings.volume + d * 0.1); setVolume(settings.volume); } },
     { id: "music", name: "MUSIC VOLUME", get: () => `${Math.round(settings.music * 100)}%`, step: (d) => { settings.music = clamp01(settings.music + d * 0.1); setMusicVolume(settings.music); } },
@@ -29,33 +31,41 @@ export class SettingsScreen implements Screen {
   constructor(private onBack: () => Screen, private onSignOut: () => Screen) {}
 
   private buttons(): Button[] {
-    const b: Button[] = [];
-    if (this.tab === "general") {
-      this.rows.forEach((r, i) => b.push({
-        id: r.id, x: ROW.x, y: ROW.top + i * ROW.gap, w: ROW.w, h: ROW.h, text: r.name, custom: true,
-        step: (d) => { r.step(d); saveSettings(); },
-      }));
-      b.push({ id: "signout", x: VIEW_W / 2 - SIGN_OUT.w / 2, y: SIGN_OUT.y, w: SIGN_OUT.w, h: SIGN_OUT.h, text: "SIGN OUT", size: 32 });
-    }
+    const b: Button[] = this.rows.map((r, i) => ({
+      id: r.id, x: ROW.x, y: ROW.top + i * ROW.gap, w: ROW.w, h: ROW.h, text: r.name, custom: true,
+      step: (d) => { r.step(d); saveSettings(); },
+    }));
+    b.push({ id: "signout", x: VIEW_W / 2 - SIGN_OUT.w / 2, y: SIGN_OUT.y, w: SIGN_OUT.w, h: SIGN_OUT.h, text: "SIGN OUT", size: 32 });
     b.push(otherTabButton(TABS, this.tab));
     return b;
   }
 
   update(dt: number, m: MenuInput): Screen | null {
     this.t += dt;
-    const pressed = this.menu.update(this.buttons(), m, consumeTaps());
-    if (pressed === "tab") { sfx.menuConfirm(); this.tab = this.tab === "general" ? "controls" : "general"; this.menu.focus = 0; }
+    const taps = consumeTaps();
+    if (this.tab === "controls") {
+      const done = this.controls.update(m, taps, otherTabButton(TABS, this.tab));
+      if (done === "tab") { sfx.menuConfirm(); this.tab = "general"; this.menu.focus = 0; }
+      if (done === "back") { sfx.menuBack(); return this.onBack(); }
+      return null;
+    }
+    const pressed = this.menu.update(this.buttons(), m, taps);
+    if (pressed === "tab") { sfx.menuConfirm(); this.tab = "controls"; this.controls.show(taps.length ? null : m.from); }
     if (pressed === "signout") { sfx.menuBack(); return this.onSignOut(); }
-    if (m.back || m.start) { sfx.menuBack(); return this.onBack(); }
+    if (m.back) { sfx.menuBack(); return this.onBack(); }
     return null;
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
     bg(ctx, this.t);
-    const buttons = this.buttons();
-    const focused = this.menu.focused(buttons);
-    drawTabs(ctx, TABS, this.tab, focused?.id === "tab");
-    if (this.tab === "general") {
+    const tab = otherTabButton(TABS, this.tab);
+    if (this.tab === "controls") {
+      drawTabs(ctx, TABS, this.tab, this.controls.tabFocused(tab));
+      this.controls.draw(ctx, tab);
+    } else {
+      const buttons = this.buttons();
+      const focused = this.menu.focused(buttons);
+      drawTabs(ctx, TABS, this.tab, focused?.id === "tab");
       this.rows.forEach((r, i) => {
         const y = ROW.top + i * ROW.gap;
         card(ctx, ROW.x, y, ROW.w, ROW.h, INK, focused?.id === r.id);
@@ -63,11 +73,9 @@ export class SettingsScreen implements Screen {
         label(ctx, `◀   ${r.get()}   ▶`, ROW.x + ROW.w - 150, y + 52, 30, INK, "center", 900);
       });
       if (account.player) label(ctx, `signed in as ${account.player.name}`, VIEW_W / 2, SIGN_OUT.y - 24, 26, PENCIL, "center", 600);
-    } else {
-      label(ctx, "the new controls page goes here", VIEW_W / 2, 480, 36, PENCIL, "center", 600);
+      this.menu.draw(ctx, buttons);
     }
-    this.menu.draw(ctx, buttons);
-    if (backButton(ctx)) { sfx.menuBack(); goTo(this.onBack()); }
-    hint(ctx, "click, or arrows: up/down to pick, left/right to change · Esc: back");
+    if (backButton(ctx) && !this.controls.busy) { sfx.menuBack(); goTo(this.onBack()); }
+    hint(ctx, this.tab === "controls" ? this.controls.hint : "click, or arrows: up/down to pick, left/right to change · Esc: back");
   }
 }

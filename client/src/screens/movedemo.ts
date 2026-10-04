@@ -9,7 +9,7 @@ import { PAPER, inkRect, INK } from "../render/paper";
 import { Renderer } from "../render/render";
 import { label } from "./ui";
 import { drawKeyIcons, type KeyIcon } from "./keyicons";
-import { kb1Bindings, keyName } from "../input/devices";
+import { kb1Bindings, keyName } from "../input/bindings";
 
 type Dir = "n" | "f" | "u" | "d";
 /** One button on the detail screen: what's pressed (from the air or not) and the directions the fighter has it in. */

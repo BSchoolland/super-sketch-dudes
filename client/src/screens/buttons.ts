@@ -88,6 +88,29 @@ export class ButtonMenu {
     return { ...m, up: false, down: false };
   }
 
+  /**
+   * Buttons laid out freely: a direction moves to the nearest button that way, off to the side
+   * counting double. Returns the input with the directions spent, for update().
+   */
+  nearest(buttons: Button[], m: MenuInput): MenuInput {
+    const [dx, dy] = m.left ? [-1, 0] : m.right ? [1, 0] : m.up ? [0, -1] : m.down ? [0, 1] : [0, 0];
+    if (!dx && !dy) return m;
+    const from = buttons[this.focus];
+    const mid = (b: Button) => [b.x + b.w / 2, b.y + b.h / 2];
+    if (from) {
+      const [fx, fy] = mid(from);
+      let best = -1, score = Infinity;
+      buttons.forEach((b, i) => {
+        if (i === this.focus || b.disabled) return;
+        const [bx, by] = mid(b);
+        const along = (bx - fx) * dx + (by - fy) * dy, aside = Math.abs((bx - fx) * dy - (by - fy) * dx);
+        if (along > 0 && along + aside * 2 < score) { score = along + aside * 2; best = i; }
+      });
+      if (best >= 0) { this.focus = best; sfx.menuMove(); }
+    }
+    return { ...m, left: false, right: false, up: false, down: false };
+  }
+
   focused(buttons: Button[]): Button | null {
     return buttons[this.focus] ?? null;
   }

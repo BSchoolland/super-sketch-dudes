@@ -2,7 +2,8 @@ import { DEFAULT_TIER } from "../../../shared/cpu-skill";
 import { drawPaper, paperCard, INK, FONT } from "../render/paper";
 export { INK, FONT } from "../render/paper";
 import { VIEW_H, VIEW_W } from "../render/camera";
-import { kb1Bindings, kb1OverridesOf, setKb1Overrides, type KeyBindings, type MenuInput } from "../input/devices";
+import type { MenuInput } from "../input/devices";
+import { kb1Bindings, kb1OverridesOf, setKb1Overrides, type KeyBindings } from "../input/bindings";
 import { noteControls } from "../telemetry/events";
 import { pointer } from "../input/pointer";
 
