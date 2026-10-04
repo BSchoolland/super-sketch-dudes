@@ -68,6 +68,14 @@ describe("community", () => {
     expect((await api("/characters/community?sort=weird")).status).toBe(400);
   });
 
+  it("q keeps the characters whose name has it in, any case; not the creator's name", async () => {
+    const H = await signIn("Cal");
+    const named = async (q: string) => (await json<{ characters: CommunityCharacter[] }>(`/characters/community?q=${q}`, { headers: H })).characters.map((c) => c.id).sort();
+    expect(await named("gen-m")).toEqual(["gen-mid"]);
+    expect(await named("GEN-O")).toEqual(["gen-old"]);
+    expect(await named("ann")).toEqual([]);
+  });
+
   it("equal saves rank by online plays, then newest", async () => {
     const bob = await signIn("Bob");
     recordPlays(["gen-mid", "gen-mid", "gen-new", "wizard"]);

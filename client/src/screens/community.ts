@@ -11,11 +11,14 @@ import { ButtonMenu, type Button } from "./buttons";
 import { drawCharacterCell, RED } from "./character";
 import { CharacterDetail, moveRows, type MoveRow } from "./charcard";
 import type { Nav } from "./nav";
+import { TextField } from "./textfield";
 import { drawCharTabs, otherTabButton } from "./chartabs";
 
-const COLS = 6, ROWS = 2, ART = 250, GAP = 50, ROW_H = 350, TOP = 160;
+const COLS = 6, ROWS = 2, ART = 250, GAP = 50, ROW_H = 350, TOP = 270;
 const X0 = (VIEW_W - (COLS * ART + (COLS - 1) * GAP)) / 2;
-const TAB = { w: 210, h: 72, y: 46, gap: 14 };
+/** The search box, under the tabs on the left; the sorts are words on the right of the same row. */
+const SEARCH = { x: X0, y: 150, w: 720, h: 76 };
+const SORT_W = 190, SORT_Y = SEARCH.y;
 const SORTS: CommunitySort[] = ["popular", "new"];
 const SORT_NAME: Record<CommunitySort, string> = { popular: "POPULAR", new: "NEWEST" };
 
@@ -51,10 +54,20 @@ export class CommunityScreen implements Screen {
   private saving = false;
   private scroll = 0;
   private problem = "";
+  private search: TextField | null = null;
+  /** What the list was last fetched for; the box is refetched once typing stops. */
+  private query = "";
+  private typedAt = 0;
 
   constructor(private nav: Nav) {}
 
   enter(): void {
+    this.search = new TextField({
+      maxLength: 40, quiet: true,
+      onSubmit: () => this.search?.el.blur(),
+      onCancel: () => { this.search!.value = ""; this.search!.el.blur(); },
+    });
+    this.search.el.addEventListener("input", () => { this.typedAt = this.t; });
     seeNews("community");
     void refreshDummy();
     this.load(0);
@@ -63,7 +76,7 @@ export class CommunityScreen implements Screen {
   private load(page: number): void {
     const id = ++this.fetchId;
     this.loading = true;
-    library.community(this.sort, page).then(
+    library.community(this.sort, page, this.query).then(
       ({ characters, pages }) => {
         if (id !== this.fetchId) return;
         this.items = page ? [...(this.items ?? []), ...characters] : characters;
@@ -83,6 +96,10 @@ export class CommunityScreen implements Screen {
   private resort(sort: CommunitySort): void {
     if (sort === this.sort) return;
     this.sort = sort;
+    this.reload();
+  }
+
+  private reload(): void {
     this.items = null;
     this.scroll = 0;
     this.menu.focus = 0;
@@ -103,7 +120,9 @@ export class CommunityScreen implements Screen {
     });
     if (this.scroll > 0) b.push({ id: "up", x: VIEW_W - 110, y: TOP, w: 80, h: 80, text: "▲", size: 40 });
     if (this.scroll + ROWS < rows) b.push({ id: "down", x: VIEW_W - 110, y: TOP + ROWS * ROW_H - 150, w: 80, h: 80, text: "▼", size: 40 });
-    SORTS.forEach((s, i) => b.push({ id: s, x: VIEW_W - 40 - (SORTS.length - i) * (TAB.w + TAB.gap) + TAB.gap, y: TAB.y, w: TAB.w, h: TAB.h, text: SORT_NAME[s], custom: true }));
+    b.push({ id: "search", ...SEARCH, text: "", custom: true });
+    const right = X0 + COLS * ART + (COLS - 1) * GAP;
+    SORTS.forEach((s, i) => b.push({ id: s, x: right - (SORTS.length - i) * SORT_W, y: SORT_Y, w: SORT_W, h: SEARCH.h, text: SORT_NAME[s], custom: true }));
     b.push({ id: "back", x: 40, y: VIEW_H - 130, w: 240, h: 90, text: "BACK", size: 40 });
     b.push(otherTabButton("community"));
     return b;
@@ -126,7 +145,20 @@ export class CommunityScreen implements Screen {
   }
 
   update(dt: number, m: MenuInput): Screen | null {
+    const next = this.step(dt, m);
+    if (next) { this.search?.remove(); this.search = null; }
+    return next;
+  }
+
+  abandon(): void {
+    this.search?.remove();
+  }
+
+  private step(dt: number, m: MenuInput): Screen | null {
     this.t += dt;
+    const typed = this.search?.value.trim() ?? "";
+    if (typed !== this.query && this.t - this.typedAt > 0.3) { this.query = typed; this.reload(); }
+    if (this.search) this.search.el.style.display = this.selected ? "none" : "";
     const taps = consumeTaps();
     if (this.selected) return this.updateDetail(this.selected, m, taps);
     const buttons = this.gridButtons();
@@ -137,6 +169,7 @@ export class CommunityScreen implements Screen {
     if (pressed === "up") this.scroll--;
     if (pressed === "down") this.scroll++;
     if (pressed === "popular" || pressed === "new") this.resort(pressed);
+    if (pressed === "search") this.search?.el.focus();
     if (pressed?.startsWith("c")) {
       const c = this.entries[Number(pressed.slice(1))];
       this.selected = c;
@@ -187,7 +220,7 @@ export class CommunityScreen implements Screen {
     const buttons = this.gridButtons();
     drawCharTabs(ctx, "community", buttons[this.menu.focus]?.id === "tab");
     if (!this.items) label(ctx, "…", VIEW_W / 2, 500, 60, PENCIL);
-    else if (!this.items.length) label(ctx, "nobody has shared a character yet", VIEW_W / 2, 480, 40, PENCIL);
+    else if (!this.items.length) label(ctx, this.query ? `no characters called “${this.query}”` : "nobody has shared a character yet", VIEW_W / 2, 560, 40, PENCIL);
     const focus = this.menu.focus;
     this.entries.forEach((c, i) => {
       const b = buttons[i];
@@ -196,13 +229,28 @@ export class CommunityScreen implements Screen {
       drawRibbon(ctx, b.x + ART - 70, b.y - 12, c.saves, c.saved);
     });
     for (const b of buttons) {
+      const focused = buttons[focus] === b;
+      if (b.id === "search") this.drawSearch(ctx, focused);
       if (b.id !== "popular" && b.id !== "new") continue;
-      const on = b.id === this.sort, focused = buttons[focus] === b;
-      card(ctx, b.x, b.y, b.w, b.h, INK, focused, on || focused ? 1 : 0.55);
-      title(ctx, b.text, b.x + b.w / 2, b.y + b.h / 2 + 11, 30, INK);
-      if (on) inkLine(ctx, b.x + 30, b.y + b.h - 14, b.x + b.w - 30, b.y + b.h - 17, INK, 4);
+      const on = b.id === this.sort;
+      title(ctx, b.text, b.x + b.w / 2, b.y + b.h / 2 + 12, on ? 36 : 32, on || focused ? INK : PENCIL);
+      if (on || focused) inkLine(ctx, b.x + 40, b.y + b.h - 8, b.x + b.w - 40, b.y + b.h - 11, INK, on ? 4 : 2.4);
     }
     this.menu.draw(ctx, buttons);
+  }
+
+  private drawSearch(ctx: CanvasRenderingContext2D, focused: boolean): void {
+    const typing = document.activeElement === this.search?.el;
+    card(ctx, SEARCH.x, SEARCH.y, SEARCH.w, SEARCH.h, INK, focused || typing);
+    // a pencilled magnifying glass
+    const gx = SEARCH.x + 40, gy = SEARCH.y + SEARCH.h / 2 - 4;
+    ctx.save(); ctx.strokeStyle = PENCIL; ctx.lineWidth = 3.5;
+    ctx.beginPath(); ctx.arc(gx, gy, 13, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+    inkLine(ctx, gx + 9, gy + 9, gx + 20, gy + 20, PENCIL, 4);
+    if (!this.search?.value && !typing) label(ctx, "search by name", SEARCH.x + 80, SEARCH.y + SEARCH.h / 2 + 10, 30, PENCIL, "left", 600);
+    this.search?.place(SEARCH.x + 76, SEARCH.y + 12, SEARCH.w - 100, SEARCH.h - 24, 34);
+    if (this.search) this.search.el.style.textAlign = "left";
   }
 
   private drawDetail(ctx: CanvasRenderingContext2D, c: CommunityCharacter, dt: number): void {
