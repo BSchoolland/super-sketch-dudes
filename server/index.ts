@@ -1,4 +1,5 @@
 import express from "express";
+import { attachSchool } from "./school";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -55,6 +56,7 @@ app.use("/gen", express.static(genDir, { maxAge: "1y", immutable: true }));
 
 attachEvents(api);
 attachBrawlStats(api, DATA_DIR);
+attachSchool(api, DATA_DIR);
 // the one-line log that builds from before wide events still post to
 const LOG = path.join(DATA_DIR, "client-log.jsonl");
 const LOG_MAX = 8 * 1024 * 1024;

@@ -13,6 +13,8 @@ import { SignInScreen } from "./screens/signin";
 import { menus, signInScreen } from "./screens/flow";
 import { loadSettings, settings, takeHandoff, type Screen } from "./screens/ui";
 import { music, setMusicVolume, setVolume } from "./audio/audio";
+import { classTime, watchClassTime } from "./classtime";
+import { ClassScreen, FeedbackScreen } from "./screens/classtime";
 import { everywhere, noteScreen, noteView, sessionTrace, startTelemetry } from "./telemetry/events";
 import { loadGeneratedFighter } from "./gen";
 import { devSignIn, finishSignIn, loadAccount, signedIn, unfinishedSignIn } from "./account";
@@ -50,6 +52,7 @@ export async function mount(opts: MountOptions): Promise<AppController> {
   if (shellSwap) swap.request = (hash, handoff) => shellSwap(hash, { ...handoff, session: sessionTrace() });
   const canvas = opts.canvas;
   const stopTelemetry = startTelemetry({ canvas, bundle: swap.hash, continues: opts.resume?.session });
+  const stopClassTime = watchClassTime();
   loadSettings();
   setVolume(settings.volume);
   setMusicVolume(settings.music);
@@ -128,8 +131,14 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     let next = screen.update(dt, menu) ?? takeHandoff();
     // signed out (a 401 anywhere, or SIGN OUT): back to the door, except mid-match or on a no-account page
     const current = next ?? screen;
-    if (!signedIn() && !(current instanceof SignInScreen || current instanceof VersusScreen || current instanceof SheetScreen)) {
+    // class time takes over anywhere but a match in progress
+    if (classTime.blocked && !(current instanceof VersusScreen || current instanceof ClassScreen || current instanceof FeedbackScreen)) {
       current.abandon?.();
+      next = new ClassScreen(() => nav.title());
+    }
+    const shown = next ?? screen;
+    if (!signedIn() && !(shown instanceof SignInScreen || shown instanceof VersusScreen || shown instanceof SheetScreen || shown instanceof ClassScreen || shown instanceof FeedbackScreen)) {
+      shown.abandon?.();
       forgetLibrary();
       forgetMaps();
       next = signInScreen(nav);
@@ -196,6 +205,7 @@ export async function mount(opts: MountOptions): Promise<AppController> {
       window.removeEventListener("pageshow", onPageShow);
       detachPointer();
       stopTelemetry();
+      stopClassTime();
     },
   };
   (window as any).sketchbattle = { get screen() { return screen; }, get preview() { return (screen as VersusScreen).preview ?? null; }, build: site.build, hash: swap.hash };
