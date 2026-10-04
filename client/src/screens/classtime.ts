@@ -44,7 +44,7 @@ export class ClassScreen implements Screen {
 
   draw(ctx: CanvasRenderingContext2D): void {
     bg(ctx, this.t);
-    title(ctx, "CLASS IS IN SESSION", VIEW_W / 2, 100, 60);
+    title(ctx, "To keep this site from getting banned…", VIEW_W / 2, 100, 56);
     let y = 170;
     for (const para of note(classTime.characters)) {
       const lines = wrapLines(ctx, para, NOTE_W, SIZE, 6, 600);
