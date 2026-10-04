@@ -10,14 +10,12 @@ import { tallyKo } from "./brawl-tally";
 const STEP = 1000 / 60;
 /** Contenders asked for at a time, when fewer than LOW loaded ones are waiting to drop in. */
 const BATCH = 8, LOW = 4;
-/** Loaded contenders kept around; past this the oldest not in the fight is unloaded. */
-const MAX_LOADED = 24;
 /** Seconds between asks: the usual, and after the server had nobody new to offer. */
 const ASK_EVERY = 2, ASK_AGAIN = 10;
 
 /**
  * The fight under the title screen (shared/brawl.ts), with contenders sampled from the server a few at
- * a time and unloaded again once they've had their turn, so any number of characters costs the same.
+ * a time and unloaded once they're KO'd and out of the arena, back into the pool the next asks draw from.
  * No sound and no HUD; draws through the normal renderer with a fixed camera, and tallies every KO.
  */
 export class MenuBrawl {
@@ -28,6 +26,8 @@ export class MenuBrawl {
   private asking = false;
   /** In the order they arrived, so the oldest is first. */
   private loads = new Map<string, { url: string; load: FighterLoad }>();
+  /** KO'd, to unload once their slot is taken. */
+  private fallen = new Set<string>();
 
   private ready(): string[] {
     return [...this.loads.entries()].filter(([id, l]) => l.load.state === "ready" && roster[id]).map(([id]) => id);
@@ -58,11 +58,11 @@ export class MenuBrawl {
 
   private unload(): void {
     const fighting = this.fighting();
-    for (const [id, l] of this.loads) {
-      if (this.loads.size <= MAX_LOADED) return;
-      if (fighting.has(id) || l.load.state === "loading") continue;
-      unloadFighter(l.url, id);
+    for (const id of this.fallen) {
+      if (fighting.has(id)) continue;
+      unloadFighter(this.loads.get(id)!.url, id);
       this.loads.delete(id);
+      this.fallen.delete(id);
     }
   }
 
@@ -87,7 +87,7 @@ export class MenuBrawl {
         this.renderer.snapshot(st);
         this.renderer.fx.consume(st, events, this.renderer.cam);
       }
-      for (const k of kos) tallyKo(k.victim, k.killer, k.survivedSec, k.dealt);
+      for (const k of kos) { tallyKo(k.victim, k.killer, k.survivedSec, k.dealt); this.fallen.add(k.victim); }
       this.acc -= STEP;
       n++;
     }
