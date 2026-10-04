@@ -81,9 +81,10 @@ describe("news", () => {
 });
 
 describe("featured", () => {
-  it("is the most played public characters, at most two from one creator", async () => {
+  it("is the most played public characters, at most two from one creator, and how many players have made, private ones too", async () => {
     recordPlays(["a1", "a1", "a1", "a2", "a2", "a3", "a3", "a4", "a4", "a4", "a4", "b1"]);
-    const { characters } = await json<{ characters: FeaturedCharacter[] }>("/characters/featured");
+    const { characters, made } = await json<{ characters: FeaturedCharacter[]; made: number }>("/characters/featured");
     expect(characters.map((c) => c.id)).toEqual(["a1", "a2", "b1"]);
+    expect(made).toBe(5);
   });
 });

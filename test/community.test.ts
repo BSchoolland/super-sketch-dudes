@@ -59,11 +59,12 @@ beforeAll(async () => {
 afterAll(() => { server.close(); fs.rmSync(dataDir, { recursive: true, force: true }); });
 
 describe("community", () => {
-  it("lists public ready characters, with creator and save count, popular or new first", async () => {
+  it("lists public ready characters, with the creator's name only, popular or new first", async () => {
     const bob = await signIn("Bob");
     const pop = await community(bob);
-    expect(pop.map((c) => c.id)).toEqual(["gen-old", "gen-new", "gen-mid"]);
-    expect(pop[0]).toMatchObject({ saves: 1, plays: 0, saved: false, mine: false, creator: { name: "Ann", avatar: null } });
+    expect(pop.map((c) => c.id)).toEqual(["gen-new", "gen-mid", "gen-old"]);
+    expect(pop[0]).toMatchObject({ plays: 0, saved: false, mine: false, creator: { name: "Ann" } });
+    expect(pop[0].creator).toEqual({ name: "Ann" });
     expect((await community(bob, "new")).map((c) => c.id)).toEqual(["gen-new", "gen-mid", "gen-old"]);
     expect((await api("/characters/community?sort=weird")).status).toBe(400);
   });
@@ -76,22 +77,22 @@ describe("community", () => {
     expect(await named("ann")).toEqual([]);
   });
 
-  it("equal saves rank by online plays, then newest", async () => {
+  it("popular ranks by online plays, not saves, then newest", async () => {
     const bob = await signIn("Bob");
     recordPlays(["gen-mid", "gen-mid", "gen-new", "wizard"]);
     const pop = await community(bob);
-    expect(pop.map((c) => [c.id, c.plays])).toEqual([["gen-old", 0], ["gen-mid", 2], ["gen-new", 1]]);
+    expect(pop.map((c) => [c.id, c.plays])).toEqual([["gen-mid", 2], ["gen-new", 1], ["gen-old", 0]]);
     expect((await community(bob, "new")).map((c) => c.id)).toEqual(["gen-new", "gen-mid", "gen-old"]);
     expect((await api("/library/gen-mid", { method: "DELETE", headers: await signIn("Ann") })).status).toBe(204);
-    expect((await community(bob)).map((c) => c.id)).toEqual(["gen-old", "gen-new"]);
+    expect((await community(bob)).map((c) => c.id)).toEqual(["gen-new", "gen-old"]);
   });
 
   it("saving is a reference: it shows up in the saver's library, counts, and can't be doubled, made of your own, or of a private one", async () => {
     const bob = await signIn("Bob"), ann = await signIn("Ann");
     expect((await api("/library/saved/gen-new", { method: "POST" })).status).toBe(401);
-    expect(await json("/library/saved/gen-new", { method: "POST", headers: bob })).toEqual({ saves: 1, saved: true });
-    expect(await json("/library/saved/gen-new", { method: "POST", headers: bob })).toEqual({ saves: 1, saved: true });
-    expect(await json("/library/saved/gen-old", { method: "POST", headers: bob })).toEqual({ saves: 2, saved: true });
+    expect(await json("/library/saved/gen-new", { method: "POST", headers: bob })).toEqual({ saved: true });
+    expect(await json("/library/saved/gen-new", { method: "POST", headers: bob })).toEqual({ saved: true });
+    expect(await json("/library/saved/gen-old", { method: "POST", headers: bob })).toEqual({ saved: true });
     expect((await api("/library/saved/gen-new", { method: "POST", headers: ann })).status).toBe(400);
     expect((await api("/library/saved/gen-hidden", { method: "POST", headers: bob })).status).toBe(404);
     expect((await api("/library/saved/gen-nope", { method: "POST", headers: bob })).status).toBe(404);
@@ -105,7 +106,7 @@ describe("community", () => {
     expect(bobFile.characters).toEqual([]);
     expect(bobFile.saved).toEqual(["gen-new", "gen-old"]);
 
-    expect(await json("/library/saved/gen-new", { method: "DELETE", headers: bob })).toEqual({ saves: 0, saved: false });
+    expect(await json("/library/saved/gen-new", { method: "DELETE", headers: bob })).toEqual({ saved: false });
     expect((await api("/library/saved/gen-new", { method: "DELETE", headers: bob })).status).toBe(404);
     expect((await library(bob)).map((c) => c.id)).toEqual(["gen-old"]);
     // a saved character isn't Bob's to delete
@@ -127,7 +128,6 @@ describe("community", () => {
   it("a creator deleting a saved character only hides it: savers keep it until the last one lets go", async () => {
     const ann = await signIn("Ann"), bob = await signIn("Bob");
     // Cal (from his file) and Bob both have gen-old
-    expect((await community(bob)).find((c) => c.id === "gen-old")?.saves).toBe(2);
     expect((await api("/library/gen-old", { method: "DELETE", headers: ann })).status).toBe(204);
     expect((await library(ann)).map((c) => c.id)).not.toContain("gen-old");
     expect((await community(bob)).map((c) => c.id)).not.toContain("gen-old");
@@ -166,6 +166,6 @@ describe("community", () => {
     app();
     await new Promise<void>((r) => server.once("listening", () => r()));
     port = (server.address() as { port: number }).port;
-    expect((await community(await signIn("Bob"))).find((c) => c.id === shown)).toMatchObject({ saves: 1, saved: true });
+    expect((await community(await signIn("Bob"))).find((c) => c.id === shown)).toMatchObject({ saved: true });
   });
 });

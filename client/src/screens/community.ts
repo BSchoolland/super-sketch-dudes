@@ -22,22 +22,27 @@ const SORT_W = 190, SORT_Y = SEARCH.y;
 const SORTS: CommunitySort[] = ["popular", "new"];
 const SORT_NAME: Record<CommunitySort, string> = { popular: "POPULAR", new: "NEWEST" };
 
-/** A bookmark ribbon hanging off a cell's top-right corner with the save count on it: red once you've saved it. */
-function drawRibbon(ctx: CanvasRenderingContext2D, x: number, y: number, n: number, saved: boolean): void {
-  const w = 52, h = 70, notch = 14;
+/** A comic-book burst on a cell's top-right corner with how many online matches the character has been in. */
+function drawPlays(ctx: CanvasRenderingContext2D, x: number, y: number, n: number): void {
+  const spikes = 9, outer = 40, inner = 29;
+  const pts: [number, number][] = [];
+  for (let i = 0; i < spikes * 2; i++) {
+    const a = (i / (spikes * 2)) * Math.PI * 2 - Math.PI / 2, r = i % 2 ? inner : outer;
+    pts.push([Math.cos(a) * r, Math.sin(a) * r]);
+  }
   ctx.save();
   ctx.translate(x, y);
-  ctx.rotate(0.03);
-  inkPath(ctx, [[0, 0], [w, 0], [w, h], [w / 2, h - notch], [0, h]], true, Math.round(x));
-  ctx.fillStyle = saved ? RED : PAPER;
+  ctx.rotate(0.12);
+  inkPath(ctx, pts, true, Math.round(x));
+  ctx.fillStyle = PAPER;
   ctx.fill();
   ctx.lineWidth = 2.4; ctx.lineJoin = "round"; ctx.strokeStyle = INK;
   ctx.stroke();
   ctx.restore();
-  label(ctx, String(n), x + w / 2, y + 36, 28, saved ? PAPER : INK, "center", 900, w - 8);
+  label(ctx, String(n), x, y + 10, 28, INK, "center", 900, inner * 2 - 6);
 }
 
-/** CHARACTERS, COMMUNITY tab: everyone's public characters, most saved or newest first; one big with SAVE. */
+/** CHARACTERS, COMMUNITY tab: everyone's public characters, most played online or newest first; one big with SAVE. */
 export class CommunityScreen implements Screen {
   t = 0;
   private menu = new ButtonMenu();
@@ -191,7 +196,7 @@ export class CommunityScreen implements Screen {
   private toggleSave(c: CommunityCharacter): void {
     this.saving = true;
     (c.saved ? library.unsave(c.id) : library.save(c.id)).then(
-      ({ saves, saved }) => { c.saves = saves; c.saved = saved; this.saving = false; void refreshLibrary(); },
+      ({ saved }) => { c.saved = saved; this.saving = false; void refreshLibrary(); },
       (error: unknown) => {
         console.error(`save ${c.id} failed`, error);
         this.problem = error instanceof Error ? error.message : String(error);
@@ -226,7 +231,7 @@ export class CommunityScreen implements Screen {
       const b = buttons[i];
       if (b.y < 0) return;
       drawCharacterCell(ctx, { ...c, status: "ready", stage: "", error: null }, b.x, b.y, ART, this.t + i * 0.2, i === focus);
-      drawRibbon(ctx, b.x + ART - 70, b.y - 12, c.saves, c.saved);
+      if (c.plays) drawPlays(ctx, b.x + ART - 30, b.y + 18, c.plays);
     });
     for (const b of buttons) {
       const focused = buttons[focus] === b;

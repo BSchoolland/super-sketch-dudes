@@ -4,7 +4,7 @@ import type { LibraryEntry, Player } from "../../../shared/account";
 import { practiceDummy } from "../fighters";
 import { fighterLoad } from "../gen";
 import { card, label, title, INK } from "./ui";
-import { drawAvatar, drawImageIn } from "./images";
+import { drawImageIn } from "./images";
 import { inkRect } from "../render/paper";
 import { wrapped } from "./text";
 import { MoveDemo, demoMoves, type DemoMove } from "./movedemo";
@@ -24,10 +24,8 @@ export function moveRows(e: Pick<LibraryEntry, "id">, top: number): MoveRow[] {
 }
 
 export type DetailSource = Pick<LibraryEntry, "id" | "name" | "tagline" | "bundleUrl" | "drawingUrl">;
-/** Who made someone else's character, and how many players have it saved; read every frame, so it can change. */
-export interface Credit { creator: Pick<Player, "name" | "avatar">; saves: number }
-
-export const savesWords = (n: number): string => `${n} ${n === 1 ? "save" : "saves"}`;
+/** Who made someone else's character, and how many online matches it has been in. */
+export interface Credit { creator: Pick<Player, "name">; plays: number }
 
 /**
  * A ready library character big: a live preview of it (against the practice dummy) on the left,
@@ -80,10 +78,9 @@ export class CharacterDetail {
     title(ctx, e.name ?? "?", COL_X, DEMO.y + 70, 80, INK, "left", COL_W);
     let ty = DEMO.y + 130;
     if (this.credit) {
-      const r = 22, cy = ty - 10;
-      drawAvatar(ctx, this.credit.creator, COL_X + r, cy, r);
-      label(ctx, this.credit.creator.name, COL_X + r * 2 + 14, cy + 10, 28, INK, "left", 800, COL_W - 260);
-      label(ctx, savesWords(this.credit.saves), COL_X + COL_W, cy + 10, 28, PENCIL, "right", 800);
+      const cy = ty - 10, plays = this.credit.plays;
+      label(ctx, `by ${this.credit.creator.name}`, COL_X, cy + 10, 28, INK, "left", 800, COL_W - 260);
+      label(ctx, `${plays} online ${plays === 1 ? "game" : "games"}`, COL_X + COL_W, cy + 10, 28, PENCIL, "right", 800);
       ty += 64;
     }
     if (e.tagline) ty += wrapped(ctx, e.tagline, COL_X, ty, COL_W, 30, INK, 3, "left") + 24;

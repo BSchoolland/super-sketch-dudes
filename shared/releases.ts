@@ -5,7 +5,7 @@ export type Fresh = "characters" | "community";
 export interface Release {
   version: string;
   title: string;
-  /** Ben's note, one paragraph per entry. */
+  /** Ben's note, one paragraph per entry; {made} becomes how many characters players have made. */
   note: string[];
   fresh: Fresh[];
 }
@@ -15,7 +15,12 @@ export const RELEASES: Release[] = [
   {
     version: "0.2.0",
     title: "COMMUNITY CHARACTERS UPDATE",
-    note: ["TODO(Ben): the update note."],
+    note: [
+      "Hey Dudes!",
+      "This is the first big update to the game! You've all been hard at work making characters, and there are now {made} player-made characters in the game. That's a lot!",
+      "To let you try them all, there's now a community characters page where you can see what other people have made and do battle with those characters as well as your own.",
+      "The more people who save a character and play matches with it, the higher it will appear on the list!",
+    ],
     fresh: ["characters", "community"],
   },
 ];

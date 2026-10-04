@@ -167,11 +167,11 @@ export function setPublic(owner: string, id: string, pub: boolean): LibraryEntry
 }
 
 /** Ready characters anyone can find and save: public, not deleted, not a starter (everyone has those). */
-export function communityCharacters(): { entry: LibraryEntry; creator: Player | null; saves: number; plays: number }[] {
+export function communityCharacters(): { entry: LibraryEntry; creator: Player | null; plays: number }[] {
   scanAll();
   return [...cache.values()].flatMap((lib) => lib.characters
     .filter((c) => c.status === "ready" && c.bundleUrl && c.public && !c.deleted && !starters.includes(c.id))
-    .map((entry) => ({ entry, creator: lib.player, saves: saves.get(entry.id) ?? 0, plays: playCount(entry.id) })));
+    .map((entry) => ({ entry, creator: lib.player, plays: playCount(entry.id) })));
 }
 
 /** Every library into the cache, once; from then on every owner is in it (new ones arrive through upsertCharacter). */

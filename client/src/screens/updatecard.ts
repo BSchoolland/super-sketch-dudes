@@ -23,10 +23,12 @@ const GO = { w: 340, h: 96, x: VIEW_W / 2 - 170, y: Y + H - 130 };
 export class UpdateCard {
   private t = 0;
   private lineup: FeaturedCharacter[] = [];
+  /** How many characters players have made, for a note's {made}; null until it's fetched. */
+  private made: number | null = null;
 
   constructor(private releases: Release[]) {
     library.featured().then(
-      ({ characters }) => { this.lineup = characters; for (const c of characters) fighterLoad(c.bundleUrl); },
+      ({ characters, made }) => { this.lineup = characters; this.made = made; for (const c of characters) fighterLoad(c.bundleUrl); },
       (error: unknown) => console.error("featured characters failed", error),
     );
   }
@@ -71,7 +73,7 @@ export class UpdateCard {
     }
 
     let y = Y + 410;
-    for (const p of r.note) y += wrapped(ctx, p, VIEW_W / 2, y, W - 200, 28, INK, 4, "center", 600) + 12;
+    for (const p of r.note) y += wrapped(ctx, p.replace("{made}", this.made === null ? "…" : String(this.made)), VIEW_W / 2, y, W - 200, 28, INK, 4, "center", 600) + 12;
 
     const over = hover(GO.x, GO.y, GO.w, GO.h);
     if (over) document.body.style.cursor = "pointer";

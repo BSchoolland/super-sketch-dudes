@@ -6,7 +6,7 @@ import { playerOf } from "./auth";
 import type { WideEvent } from "../shared/wide";
 import type { LibraryEntry } from "../shared/account";
 import { drawingUrlOf, enqueueJob, entryOf, jobOf, newFighterId, reviseCharacter, storeCharacter } from "./forge";
-import { communityCharacters, dummyEntry, everyCharacter, findCharacter, libraryOf, removeCharacter, saveCharacter, saveCount, savedOf, setDummy, setPublic, setStarters, starterEntries, starterIds, unsaveCharacter, upsertCharacter } from "./library";
+import { communityCharacters, dummyEntry, everyCharacter, findCharacter, libraryOf, removeCharacter, saveCharacter, savedOf, setDummy, setPublic, setStarters, starterEntries, starterIds, unsaveCharacter, upsertCharacter } from "./library";
 import { HOUSE_ROSTER } from "../shared/house";
 
 /** The character creator and the library, over HTTP, for signed-in players. */
@@ -26,13 +26,13 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
     if (!listed) return res.status(404).json({ error: "no such public character" });
     if (listed.entry.owner === player.id) return res.status(400).json({ error: "that one's yours" });
     saveCharacter(player.id, id);
-    res.json({ saves: saveCount(id), saved: true });
+    res.json({ saved: true });
   });
   api.delete("/library/saved/:id", (req, res) => {
     const player = playerOf(req);
     if (!player) return res.status(401).json({ error: "not signed in" });
     if (!unsaveCharacter(player.id, req.params.id)) return res.status(404).json({ error: "not saved" });
-    res.json({ saves: saveCount(req.params.id), saved: false });
+    res.json({ saved: false });
   });
 
   // { public } on one of your own characters
@@ -45,7 +45,7 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
     res.json({ character: entry });
   });
 
-  // everyone's public characters, a page at a time: most saved (ties to the most played online) or newest first; `q` keeps the ones whose name has it in
+  // everyone's public characters, a page at a time: most played online or newest first; `q` keeps the ones whose name has it in
   api.get("/characters/community", (req, res) => {
     const sort = req.query.sort === "new" ? "new" : req.query.sort === "popular" || req.query.sort === undefined ? "popular" : null;
     if (!sort) return res.status(400).json({ error: "sort is popular or new" });
@@ -53,26 +53,26 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
     const caller = playerOf(req)?.id ?? "";
     const saved = new Set(caller ? savedOf(caller).map((e) => e.id) : []);
     const q = typeof req.query.q === "string" ? req.query.q.trim().toLowerCase() : "";
-    const all = communityCharacters().filter(({ entry }) => !q || (entry.name ?? "").toLowerCase().includes(q)).sort((a, b) => (sort === "popular" ? b.saves - a.saves || b.plays - a.plays : 0) || b.entry.createdAt - a.entry.createdAt);
-    const characters: CommunityCharacter[] = all.slice(page * COMMUNITY_PAGE, (page + 1) * COMMUNITY_PAGE).map(({ entry: e, creator, saves, plays }) => ({
+    const all = communityCharacters().filter(({ entry }) => !q || (entry.name ?? "").toLowerCase().includes(q)).sort((a, b) => (sort === "popular" ? b.plays - a.plays : 0) || b.entry.createdAt - a.entry.createdAt);
+    const characters: CommunityCharacter[] = all.slice(page * COMMUNITY_PAGE, (page + 1) * COMMUNITY_PAGE).map(({ entry: e, creator, plays }) => ({
       id: e.id, name: e.name, tagline: e.tagline, drawingUrl: e.drawingUrl, bundleUrl: e.bundleUrl!, createdAt: e.createdAt,
-      creator: { name: creator?.name ?? "?", avatar: creator?.avatar ?? null }, saves, plays, saved: saved.has(e.id), mine: e.owner === caller,
+      creator: { name: creator?.name ?? "?" }, plays, saved: saved.has(e.id), mine: e.owner === caller,
     }));
     res.json({ characters, pages: Math.ceil(all.length / COMMUNITY_PAGE) });
   });
 
-  // the most played community characters, at most FEATURED_PER_CREATOR from any one player: the release card's lineup
+  // the most played community characters, at most FEATURED_PER_CREATOR from any one player, and how many players have made: the release card
   api.get("/characters/featured", (_req, res) => {
     const perCreator = new Map<string, number>();
     const characters: FeaturedCharacter[] = [];
-    for (const { entry: e } of communityCharacters().sort((a, b) => b.plays - a.plays || b.saves - a.saves)) {
+    for (const { entry: e } of communityCharacters().sort((a, b) => b.plays - a.plays)) {
       const n = perCreator.get(e.owner) ?? 0;
       if (n >= FEATURED_PER_CREATOR) continue;
       perCreator.set(e.owner, n + 1);
       characters.push({ id: e.id, drawingUrl: e.drawingUrl, bundleUrl: e.bundleUrl! });
       if (characters.length === FEATURED) break;
     }
-    res.json({ characters });
+    res.json({ characters, made: everyCharacter().filter((c) => !starterIds().includes(c.id)).length });
   });
 
   // reference fighters every player starts with; the forge token sets the list

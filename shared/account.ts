@@ -50,9 +50,8 @@ export interface LibraryEntry {
 /** A character in COMMUNITY, as the caller sees it. */
 export interface CommunityCharacter extends Pick<LibraryEntry, "id" | "name" | "tagline" | "drawingUrl" | "createdAt"> {
   bundleUrl: string;
-  creator: Pick<Player, "name" | "avatar">;
-  saves: number;
-  /** Online matches it was picked for; breaks ties in POPULAR. */
+  creator: Pick<Player, "name">;
+  /** Online matches it was picked for: what POPULAR sorts by. */
   plays: number;
   /** In the caller's library by reference. */
   saved: boolean;
