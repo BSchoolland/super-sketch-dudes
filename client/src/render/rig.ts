@@ -34,7 +34,7 @@ export function animFor(f: Fighter, def: FighterDef): AnimPick {
       const mv = currentMove(f);
       return mv ? { keys: mv.poses, frame: f.frame, name: mv.id } : pick("idle");
     }
-    case "smashCharge": {
+    case "attackHold": case "smashCharge": {
       const mv = f.move ? def.moves[f.move] : null;
       return mv ? { keys: mv.poses.slice(0, 1), frame: 0, name: mv.id } : pick("idle");
     }

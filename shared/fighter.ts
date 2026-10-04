@@ -113,29 +113,43 @@ function consume(f: Fighter, bit: number): void {
 }
 
 function smashFromAttack(f: Fighter, input: InputFrame, e: Edges): string | null {
+  // the c-stick counts every frame it's flicked; the client sends it as a pulse
   const c = cstickDir(f, input);
-  const cFlick = c !== "n" && (Math.abs(input.cx) >= STICK_RUN || Math.abs(input.cy) >= STICK_RUN) &&
-    Math.abs(f.slot >= 0 ? 0 : 0) === 0; // c-stick counts every frame it's flicked; the client sends it as a pulse
-  if (cFlick) {
+  if (c !== "n") {
     if (c === "u") return "usmash";
     if (c === "d") return "dsmash";
-    f.facing = c === "b" ? (-f.facing as 1 | -1) : f.facing;
+    if (c === "b") f.facing = -f.facing as 1 | -1;
     return "fsmash";
   }
-  if (!buffered(f, e, B.ATTACK)) return null;
-  const mod = (e.held & B.SMASH) !== 0;
-  const flick = f.flickT > 0 && !(input.b & B.DIGITAL);
-  const d = stickDir(f, input);
-  if (flick || mod) {
-    if ((flick && f.flickY < 0) || (mod && d === "u")) return "usmash";
-    if ((flick && f.flickY > 0) || (mod && d === "d")) return "dsmash";
-    if ((flick && f.flickX !== 0) || mod) {
-      const dir = flick && f.flickX !== 0 ? f.flickX : sign(input.x);
-      if (dir !== 0) f.facing = dir as 1 | -1;
-      return "fsmash";
-    }
+  // every key press is a flick, so on a keyboard holding attack makes the smash instead (attackHold)
+  if (!buffered(f, e, B.ATTACK) || f.flickT === 0 || (input.b & B.DIGITAL)) return null;
+  if (f.flickY < 0) return "usmash";
+  if (f.flickY > 0) return "dsmash";
+  if (f.flickX !== 0) {
+    f.facing = f.flickX as 1 | -1;
+    return "fsmash";
   }
   return null;
+}
+
+/** Keyboard: the smash a tilt turns into when attack is held. */
+const SMASH_OF: Readonly<Record<string, string>> = { ftilt: "fsmash", utilt: "usmash", dtilt: "dsmash" };
+
+/** A ground attack from standing: a smash charges, a keyboard tilt waits to see if attack is held, anything else starts. */
+function startGroundAttack(state: State, f: Fighter, def: FighterDef, mv: string, input: InputFrame): void {
+  const smash = input.b & B.DIGITAL ? SMASH_OF[mv] : undefined;
+  if (smash && def.moves[smash] && def.moves[mv]) {
+    setAction(f, "attackHold");
+    f.move = mv;
+    return;
+  }
+  if (def.moves[mv]?.smash) {
+    setAction(f, "smashCharge");
+    f.move = mv;
+    f.charge = 0;
+    return;
+  }
+  startMove(state, f, mv);
 }
 
 function groundAttackFromInput(f: Fighter, input: InputFrame, e: Edges): string | null {
@@ -217,10 +231,12 @@ function tryGroundActions(state: State, f: Fighter, def: FighterDef, input: Inpu
     return true;
   }
   if (allowMoves) {
-    const running = f.action === "run" || f.action === "dash";
+    // keyboard: attack with the key that started the dash is an attack from standing, not the dash attack
+    const keysTogether = f.action === "dash" && (input.b & B.DIGITAL) !== 0 && f.frame <= C.KEYS_TOGETHER;
+    const running = (f.action === "run" || f.action === "dash") && !keysTogether;
     if (running) {
       const c = cstickDir(f, input);
-      const upSmash = (e.held & B.SMASH) !== 0 ? stickDir(f, input) === "u" : f.flickT > 0 && f.flickY < 0 && !(input.b & B.DIGITAL);
+      const upSmash = f.flickT > 0 && f.flickY < 0 && !(input.b & B.DIGITAL);
       if (c === "u" || (upSmash && buffered(f, e, B.ATTACK))) {
         consume(f, B.ATTACK);
         startMove(state, f, "usmash", { keepVel: true });
@@ -235,13 +251,8 @@ function tryGroundActions(state: State, f: Fighter, def: FighterDef, input: Inpu
       const mv = groundAttackFromInput(f, input, e);
       if (mv) {
         consume(f, B.ATTACK);
-        if (def.moves[mv]?.smash) {
-          setAction(f, "smashCharge");
-          f.move = mv;
-          f.charge = 0;
-          return true;
-        }
-        startMove(state, f, mv);
+        if (keysTogether) f.vx = 0;
+        startGroundAttack(state, f, def, mv, input);
         return true;
       }
     }
@@ -562,6 +573,19 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
     case "land": {
       groundFriction(f, def, 1.5);
       if (f.frame >= C.LAND_LAG) setAction(f, "idle");
+      break;
+    }
+    case "attackHold": {
+      // keyboard: let go in time and it's the tilt; still holding and it's the smash, charged from the press
+      groundFriction(f, def, 2);
+      if (!(e.held & B.ATTACK)) { startMove(state, f, f.move!); break; }
+      if (f.frame >= C.SMASH_HOLD) {
+        const held = f.frame, smash = SMASH_OF[f.move!];
+        if (!def.moves[smash].smash) { startMove(state, f, smash); break; }
+        setAction(f, "smashCharge");
+        f.move = smash;
+        f.charge = held;
+      }
       break;
     }
     case "smashCharge": {

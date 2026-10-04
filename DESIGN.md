@@ -111,17 +111,19 @@ character select screen by pressing a button on it.
 | Action | Keyboard P1 | Keyboard P2 | Gamepad |
 |---|---|---|---|
 | Move | WASD | Arrows | Left stick / d-pad |
-| Jump | W / Space | Up / Numpad 0 | X, Y (or stick up, toggle) |
+| Jump | Space | Numpad 0 | X, Y (or stick up, toggle) |
 | Attack | Left click | Numpad 1 | A |
-| Special | Right click | Numpad 2 | B |
-| Shield | Shift | Numpad 3 / Right Shift | LB, RB, LT |
+| Special | E / right click | Numpad 2 | B |
+| Shield | Shift | Numpad 3 / Right Shift | LB, RB, LT, RT |
 | Smash (c-stick) | — | — | Right stick |
-| Taunt | T | Numpad 5 | d-pad down |
+| Taunt | T | Numpad 5 | Back |
 | Pause | Esc | Esc | Start |
 
 Tilts are attack with a direction held; smashes are a direction tapped (flicked) within 4 frames
-of attack, or the c-stick. Keyboard players get a smash modifier too (hold Shift+direction+attack,
-since flicks on keys are unreliable): P1 uses U, P2 uses Numpad 6.
+of attack, or the c-stick. A key goes 0 to 100 in one frame, so keys never flick: on a keyboard a
+tap of attack with a direction is the tilt, and holding it past `SMASH_HOLD` frames turns it into the
+smash, charged from the press. The key that starts a dash and attack pressed together are an attack
+in place rather than the dash attack.
 
 ## Online
 

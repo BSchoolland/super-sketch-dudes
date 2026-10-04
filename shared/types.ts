@@ -323,7 +323,7 @@ export interface Stage {
 export type Action =
   | "idle" | "walk" | "dash" | "run" | "runTurn" | "skid" | "crouch" | "crouchStart"
   | "jumpSquat" | "air" | "land" | "helpless"
-  | "attack" | "smashCharge"
+  | "attack" | "attackHold" | "smashCharge"
   | "shield" | "shieldStun" | "shieldBreak" | "parry" | "spotDodge" | "roll" | "airDodge"
   | "hitstun" | "tumble" | "knockdown" | "getup" | "getupRoll" | "tech" | "techRoll" | "wallTech"
   | "ledgeGrab" | "ledgeHang" | "ledgeClimb" | "ledgeRoll" | "ledgeJump" | "ledgeAttack" | "ledgeDrop"

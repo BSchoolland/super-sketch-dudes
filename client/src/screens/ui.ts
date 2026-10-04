@@ -2,7 +2,7 @@ import { DEFAULT_TIER } from "../../../shared/cpu-skill";
 import { drawPaper, paperCard, INK, FONT } from "../render/paper";
 export { INK, FONT } from "../render/paper";
 import { VIEW_H, VIEW_W } from "../render/camera";
-import { setKb1Overrides, type KeyBindings, type MenuInput } from "../input/devices";
+import { kb1Bindings, kb1OverridesOf, setKb1Overrides, type KeyBindings, type MenuInput } from "../input/devices";
 import { noteControls } from "../telemetry/events";
 import { pointer } from "../input/pointer";
 
@@ -82,6 +82,8 @@ export function saveSettings(): void {
 }
 function applyKeys(): void {
   setKb1Overrides(settings.keys);
+  // drops keys saved for actions that are gone
+  settings.keys = kb1OverridesOf(kb1Bindings());
   noteControls(settings.keys);
 }
 

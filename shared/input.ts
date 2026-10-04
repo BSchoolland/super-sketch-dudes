@@ -12,11 +12,10 @@ export const B = {
   ATTACK: 2,
   SPECIAL: 4,
   SHIELD: 8,
-  /** Keyboard: directions are on/off, so a key press is never a smash flick. */
+  /** Keyboard: directions are on/off, so a key press is never a smash flick; holding attack makes the smash instead. */
   DIGITAL: 16,
   TAUNT: 32,
   PAUSE: 64,
-  SMASH: 128, // keyboard smash key: an attack that is always a smash
 } as const;
 
 export const EMPTY_INPUT: InputFrame = { x: 0, y: 0, cx: 0, cy: 0, b: 0 };

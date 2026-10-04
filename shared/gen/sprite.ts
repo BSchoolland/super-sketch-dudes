@@ -28,7 +28,7 @@ export function cellForAnim(def: FighterDef, anim: string): SpriteCell {
 
 /** The cell and mirroring a sprite fighter shows for its current sim state, given the animation name the renderer picked. */
 export function cellFor(f: Fighter, def: FighterDef, anim: string): { cell: SpriteCell; flip: boolean } {
-  if (f.action === "attack" || f.action === "smashCharge") {
+  if (f.action === "attack" || f.action === "attackHold" || f.action === "smashCharge") {
     const mv = f.move ? def.moves[f.move] : null;
     if (mv) {
       let cell = (mv.cell as SpriteCell) ?? defaultCellForMove(mv.id);
