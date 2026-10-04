@@ -1,12 +1,13 @@
 import { VIEW_W } from "../render/camera";
-import { CPU_TIERS, tierName } from "../../../shared/cpu-skill";
-import { kb1Bindings, keyName, type MenuInput } from "../input/devices";
+import { PENCIL } from "../render/paper";
+import type { MenuInput } from "../input/devices";
 import { setMusicVolume, setVolume, sfx } from "../audio/audio";
-import { bg, card, hint, label, title, hover, clicked, arrows, backButton, goTo, type Screen, INK, settings, saveSettings } from "./ui";
+import { bg, card, hint, label, title, hover, clicked, arrows, backButton, goTo, type Screen, INK, MAYHEM, settings, saveSettings } from "./ui";
 import { account } from "../account";
 import { ControlsScreen } from "./controls";
 
-interface Row { name: string; get: () => string; adj: (d: number) => void; act?: () => Screen }
+/** `small`: tucked under the rest in pencil, for the ones few players should touch. */
+interface Row { name: string; get: () => string; adj: (d: number) => void; act?: () => Screen; small?: boolean }
 
 export class SettingsScreen implements Screen {
   t = 0;
@@ -14,12 +15,10 @@ export class SettingsScreen implements Screen {
   rows: Row[] = [
     { name: "SOUND", get: () => `${Math.round(settings.volume * 100)}%`, adj: (d) => { settings.volume = Math.max(0, Math.min(1, settings.volume + d * 0.1)); setVolume(settings.volume); } },
     { name: "MUSIC", get: () => `${Math.round(settings.music * 100)}%`, adj: (d) => { settings.music = Math.max(0, Math.min(1, settings.music + d * 0.1)); setMusicVolume(settings.music); } },
-    { name: "SCREEN SHAKE", get: () => `${Math.round(settings.shake * 100)}%`, adj: (d) => { settings.shake = Math.max(0, Math.min(1.5, settings.shake + d * 0.25)); } },
-    { name: "TAP JUMP (stick up)", get: () => (settings.tapJump ? "on" : "off"), adj: () => { settings.tapJump = !settings.tapJump; } },
-    { name: "RUMBLE", get: () => (settings.rumble ? "on" : "off"), adj: () => { settings.rumble = !settings.rumble; } },
-    { name: "DEFAULT CPU", get: () => tierName(settings.cpuTier), adj: (d) => { settings.cpuTier = Math.max(1, Math.min(CPU_TIERS.length, settings.cpuTier + d)); } },
-    { name: "CONTROLS", get: () => "keyboard ▶", adj: () => {}, act: () => new ControlsScreen(() => this) },
+    { name: "MENU MAYHEM", get: () => MAYHEM[settings.mayhem].name, adj: (d) => { settings.mayhem = Math.max(0, Math.min(MAYHEM.length - 1, settings.mayhem + d)); } },
+    { name: "CONTROLS", get: () => "▶", adj: () => {}, act: () => new ControlsScreen(() => this) },
     { name: "SIGN OUT", get: () => account.player?.name ?? "", adj: () => {}, act: () => this.onSignOut() },
+    { name: "screen shake", get: () => `${Math.round(settings.shake * 100)}%`, adj: (d) => { settings.shake = Math.max(0, Math.min(1.5, settings.shake + d * 0.25)); }, small: true },
   ];
   constructor(private onBack: () => Screen, private onSignOut: () => Screen) {}
   update(dt: number, m: MenuInput): Screen | null {
@@ -36,10 +35,20 @@ export class SettingsScreen implements Screen {
     bg(ctx, this.t);
     title(ctx, "SETTINGS", VIEW_W / 2, 90, 64);
     this.rows.forEach((r, i) => {
-      const y = 150 + i * 86;
       const sel = i === this.sel;
+      if (r.small) {
+        const y = 170 + i * 96 + 30, w = 520;
+        if (hover(VIEW_W / 2 - w / 2, y, w, 56)) this.sel = i;
+        if (sel) card(ctx, VIEW_W / 2 - w / 2, y, w, 56, INK, true);
+        const d = arrows(ctx, VIEW_W / 2 + 130, y + 36, 60, 20);
+        if (d) { r.adj(d); saveSettings(); sfx.menuMove(); }
+        label(ctx, r.name, VIEW_W / 2 - w / 2 + 30, y + 36, 24, PENCIL, "left", 700);
+        label(ctx, r.get(), VIEW_W / 2 + 130, y + 36, 24, PENCIL, "center", 700);
+        return;
+      }
+      const y = 170 + i * 96;
       if (hover(VIEW_W / 2 - 400, y, 800, 76)) this.sel = i;
-      card(ctx, VIEW_W / 2 - 400, y, 800, 76, sel ? INK : "rgba(18,16,26,0.6)", sel);
+      card(ctx, VIEW_W / 2 - 400, y, 800, 76, INK, sel);
       if (r.act) {
         if (clicked(VIEW_W / 2 - 400, y, 800, 76)) { sfx.menuBack(); goTo(r.act()); }
         label(ctx, r.name, VIEW_W / 2 - 370, y + 50, 28, INK, "left", 900);
@@ -51,20 +60,7 @@ export class SettingsScreen implements Screen {
       label(ctx, r.name, VIEW_W / 2 - 370, y + 50, 28, INK, "left", 900);
       label(ctx, r.get(), VIEW_W / 2 + 280, y + 50, 28, INK, "center", 900);
     });
-    const y = 150 + this.rows.length * 86 + 26;
-    label(ctx, `KEYBOARD 1: ${kb1Summary()}`, VIEW_W / 2, y, 18, INK, "center", 600);
-    label(ctx, "KEYBOARD 2: arrows move · Numpad0 jump · Numpad1 attack · 6 smash · 2 special · 3/RShift shield · 5 taunt", VIEW_W / 2, y + 30, 18, INK, "center", 600);
-    label(ctx, "GAMEPAD: left stick move · X/Y jump · A attack · B special · LB/RB/LT shield · right stick smash · Start pause", VIEW_W / 2, y + 60, 18, INK, "center", 600);
-    label(ctx, "tilts: hold a direction then attack · smashes: flick a direction with attack, or the modifier, or the right stick", VIEW_W / 2, y + 100, 18, INK, "center", 600);
     if (backButton(ctx)) { sfx.menuBack(); goTo(this.onBack()); }
     hint(ctx, "click the arrows, or up/down + left/right · Esc: back");
   }
-}
-
-function kb1Summary(): string {
-  const b = kb1Bindings();
-  const k = (keys: string[]) => keys.map(keyName).join("/") || "—";
-  const parts = [`${k(b.up)} ${k(b.left)} ${k(b.down)} ${k(b.right)} move`, `${k(b.jump)} jump`, `${k(b.attack)} attack`, `${k(b.special)} special`, `${k(b.smash)} smash`, `${k(b.shield)} shield`, `${k(b.taunt)} taunt`];
-  if (b.cUp.length || b.cDown.length || b.cLeft.length || b.cRight.length) parts.push(`${k(b.cUp)} ${k(b.cLeft)} ${k(b.cDown)} ${k(b.cRight)} directional attacks`);
-  return parts.join(" · ");
 }

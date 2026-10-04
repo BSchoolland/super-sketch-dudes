@@ -27,10 +27,12 @@ export class Brawl {
   /** Sim frame each slot's fighter dropped in on. */
   private born: number[] = [];
   private inputs: InputFrame[] = [];
-  private spawnT = SPAWN_EVERY;
+  private spawnT: number;
 
-  /** `ready` lists every fighter id that could drop in right now (registered in the roster). */
-  constructor(private ready: () => string[], private rng: number) {}
+  /** `ready` lists every fighter id that could drop in right now (registered in the roster); `spawnEvery` is in frames and may change. */
+  constructor(private ready: () => string[], private rng: number, private spawnEvery: () => number = () => SPAWN_EVERY) {
+    this.spawnT = spawnEvery();
+  }
 
   rand(n: number): number {
     this.rng = (this.rng * 1103515245 + 12345) & 0x7fffffff;
@@ -55,7 +57,7 @@ export class Brawl {
     const st = this.state;
     if (--this.spawnT <= 0) {
       const id = this.full() ? null : this.pick();
-      if (id) { this.spawn(id); this.spawnT = SPAWN_EVERY; }
+      if (id) { this.spawn(id); this.spawnT = this.spawnEvery(); }
       else this.spawnT = RETRY;
     }
     for (let i = 0; i < st.fighters.length; i++) this.inputs[i] = cpuInput(st, i, this.cpus[i]);

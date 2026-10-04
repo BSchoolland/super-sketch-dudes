@@ -6,6 +6,8 @@ import { library } from "../account";
 import { fighterLoad, unloadFighter, type FighterLoad } from "../gen";
 import { houseChoice } from "../fighters";
 import { tallyKo } from "./brawl-tally";
+import { MAYHEM, settings } from "./ui";
+import { C } from "../../../shared/config";
 
 const STEP = 1000 / 60;
 /** Contenders asked for at a time, when fewer than LOW loaded ones are waiting to drop in. */
@@ -21,7 +23,7 @@ const ASK_EVERY = 2, ASK_AGAIN = 10;
  * No sound and no HUD; draws through the normal renderer with a fixed camera, and tallies every KO.
  */
 export class MenuBrawl {
-  private brawl = new Brawl(() => this.ready(), (Math.random() * 0x7fffffff) | 0);
+  private brawl = new Brawl(() => this.ready(), (Math.random() * 0x7fffffff) | 0, () => MAYHEM[settings.mayhem].seconds * C.FPS);
   private renderer: Renderer | null = null;
   private acc = 0;
   private askT = 0;
