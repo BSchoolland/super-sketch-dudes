@@ -1,5 +1,5 @@
 import { site } from "./base";
-import { GOOGLE_CLIENT_ID, SESSION_HEADER, type CommunityCharacter, type CommunitySort, type Player, type LibraryEntry } from "../../shared/account";
+import { GOOGLE_CLIENT_ID, SESSION_HEADER, type CommunityCharacter, type CommunitySort, type LastPlayed, type Player, type LibraryEntry } from "../../shared/account";
 import { sessionTrace } from "./telemetry/events";
 
 /**
@@ -9,16 +9,23 @@ import { sessionTrace } from "./telemetry/events";
  * with an ID token instead. Or an email and password.
  */
 export const account: { session: string | null; player: Player | null } = { session: null, player: null };
+/**
+ * When this player last played before now, and on which version: null for a brand-new player,
+ * undefined until the server has been told they're here. Compare with GAME_VERSION for "what's new".
+ */
+export let lastPlayed: LastPlayed | null | undefined;
 const KEY = "sketchbattle.account";
 const NONCE_KEY = "sketchbattle.googleNonce";
 const PENDING_KEY = "sketchbattle.signingIn";
 export const DISCORD_APP_ID = "1506034935838937201";
 
-export function loadAccount(): void {
+/** True when a saved session was restored. */
+export function loadAccount(): boolean {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? "null");
     if (saved?.session && saved?.player) { account.session = saved.session; account.player = saved.player; }
   } catch { /* ignore a bad value */ }
+  return signedIn();
 }
 function save(): void {
   localStorage.setItem(KEY, JSON.stringify({ session: account.session, player: account.player }));
@@ -65,9 +72,15 @@ async function authenticate(path: string, body: object): Promise<void> {
     const text = await res.text();
     throw new Error(text.startsWith("{") ? (JSON.parse(text) as { error: string }).error : `sign-in failed: HTTP ${res.status}`);
   }
-  const { session, player } = (await res.json()) as { session: string; player: Player };
-  account.session = session; account.player = player;
+  const signedInAs = (await res.json()) as { session: string; player: Player; lastPlayed: LastPlayed | null };
+  account.session = signedInAs.session; account.player = signedInAs.player;
+  lastPlayed = signedInAs.lastPlayed;
   save();
+}
+
+/** A restored session opening the game: the server notes this visit and says when the last one was. */
+export async function markPlayed(): Promise<void> {
+  lastPlayed = (await api<{ lastPlayed: LastPlayed | null }>("/me/played", { method: "POST" })).lastPlayed;
 }
 
 /**
@@ -104,6 +117,7 @@ export const devSignIn = (name: string): Promise<void> => authenticate("dev", { 
 export function signOut(): void {
   if (account.session) void fetch(`${site.base}api/auth/logout`, { method: "POST", headers: { [SESSION_HEADER]: account.session, "x-trace-id": sessionTrace() } }).catch((error: unknown) => console.error("sign-out request failed", error));
   account.session = null; account.player = null;
+  lastPlayed = undefined;
   localStorage.removeItem(KEY);
 }
 

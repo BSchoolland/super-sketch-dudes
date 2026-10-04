@@ -1,4 +1,5 @@
 import express from "express";
+import { attachSchool } from "./school";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,7 +26,7 @@ watchProcess({ port: PORT, base: BASE, node: process.version });
 
 const app = express();
 // forge completions carry nine PNG cells + a sheet as base64; a new character carries its drawing
-app.use((req, res, next) => express.json({ limit: req.path.includes("/forge/") || req.path.endsWith("/characters/import") || req.path.endsWith("/cells") ? "12mb" : req.path.endsWith("/cpu") ? "4mb" : req.path.includes("/games") ? "40mb" : req.path.endsWith("/events") ? "256kb" : req.path.endsWith("/source") ? "4mb" : req.path.endsWith("/characters") ? "2mb" : req.path.includes("/maps") ? "80kb" : "8kb" })(req, res, next));
+app.use((req, res, next) => express.json({ limit: req.path.includes("/forge/") || req.path.endsWith("/characters/import") || req.path.endsWith("/cells") ? "12mb" : req.path.endsWith("/cpu") ? "4mb" : req.path.includes("/games") ? "40mb" : req.path.endsWith("/events") ? "256kb" : req.path.endsWith("/source") ? "4mb" : req.path.endsWith("/characters") || req.path.endsWith("/feedback") ? "2mb" : req.path.includes("/maps") ? "80kb" : "8kb" })(req, res, next));
 const api = express.Router();
 // Apache proxies /sketch-battle/* to / here; when hit directly the prefix is still present, so mount both.
 app.use("/api", api);
@@ -55,6 +56,7 @@ app.use("/gen", express.static(genDir, { maxAge: "1y", immutable: true }));
 
 attachEvents(api);
 attachBrawlStats(api, DATA_DIR);
+attachSchool(api, DATA_DIR);
 // the one-line log that builds from before wide events still post to
 const LOG = path.join(DATA_DIR, "client-log.jsonl");
 const LOG_MAX = 8 * 1024 * 1024;

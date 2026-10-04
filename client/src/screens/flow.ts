@@ -10,6 +10,7 @@ import type { Screen } from "./ui";
 import { TitleScreen } from "./title";
 import { SignInScreen } from "./signin";
 import { SettingsScreen } from "./settings";
+import { FeedbackScreen } from "./classtime";
 import { CreateScreen } from "./create";
 import { DescribeScreen } from "./describe";
 import { ForgeScreen } from "./forging";
@@ -46,6 +47,7 @@ export function menus(): Nav {
       if (mode === "library") return nav.library();
       if (mode === "community") return nav.community();
       if (mode === "maps") return nav.maps();
+      if (mode === "feedback") return new FeedbackScreen(() => nav.title());
       return new SettingsScreen(() => nav.title(), () => { signOut(); forgetLibrary(); forgetMaps(); return signInScreen(nav); });
     }),
     create: (pad, hint) => new CreateScreen(nav, pad, hint),

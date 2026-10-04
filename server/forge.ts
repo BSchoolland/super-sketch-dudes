@@ -214,6 +214,13 @@ export async function reviseCharacter(entry: LibraryEntry, change: { source?: st
   return { bundleUrl: `${base}/bundle.json`, sheetUrl: sheet ? `${base}/sheet.png` : null };
 }
 
+/** Characters the forge has finished, for the count players see. */
+export function charactersMade(): number {
+  let n = 0;
+  for (const job of jobs.values()) if (job.status === "done") n++;
+  return n;
+}
+
 export function newFighterId(prefix: string): string {
   return `gen-${prefix}-${crypto.randomBytes(3).toString("hex")}`;
 }

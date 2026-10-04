@@ -12,7 +12,7 @@ import { MENU_CARD } from "../../../shared/stages/menu";
 
 const MENU_Y = MENU_CARD.y0, MENU_STEP = MENU_CARD.step;
 
-export type Mode = "battle" | "library" | "create" | "community" | "maps" | "settings";
+export type Mode = "battle" | "library" | "create" | "community" | "maps" | "settings" | "feedback";
 
 export function drawLogo(ctx: CanvasRenderingContext2D, y: number): void {
   ctx.save();
@@ -46,6 +46,7 @@ export class TitleScreen implements Screen {
       { id: "community", name: "COMMUNITY", desc: "Find and save other players' characters" },
       ...(myMaps.canCreate ? [{ id: "maps" as const, name: "MAPS", desc: "Build a stage to fight on" }] : []),
       { id: "settings", name: "SETTINGS", desc: "Change settings" },
+      { id: "feedback", name: "FEEDBACK", desc: "Ideas, bugs, anything: Ben reads these" },
     ];
   }
   brawl: MenuBrawl | null = null;

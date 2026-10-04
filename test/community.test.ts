@@ -34,7 +34,7 @@ beforeAll(async () => {
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "sb-community-"));
   fs.mkdirSync(path.join(dataDir, "players"));
   const file = (owner: string, name: string, characters: object[], saved?: string[]) =>
-    fs.writeFileSync(path.join(dataDir, "players", `${owner}.json`), JSON.stringify({ player: { id: owner, name, avatar: null }, characters, ...(saved ? { saved } : {}) }));
+    fs.writeFileSync(path.join(dataDir, "players", `${owner}.json`), JSON.stringify({ player: { id: owner, name, avatar: null }, lastPlayed: null, characters, ...(saved ? { saved } : {}) }));
   file("dev-ann", "Ann", [ready("gen-old", "dev-ann", 1), ready("gen-new", "dev-ann", 3), ready("gen-mid", "dev-ann", 2), ready("gen-hidden", "dev-ann", 2, { public: false })]);
   file("dev-cal", "Cal", [], ["gen-old"]);
   app();

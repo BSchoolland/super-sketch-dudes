@@ -1,12 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { LibraryEntry, Player } from "../shared/account";
+import { GAME_VERSION, type LastPlayed, type LibraryEntry, type Player } from "../shared/account";
 
-/** Every player's characters, one JSON file per player under <dataDir>/players/. */
+/**
+ * Every player's record (who they are, when they last played, their characters and saves), one JSON file per player under
+ * <dataDir>/players/. `saved` are other players' characters this player keeps in their library: references by id, like starters.
+ */
+interface PlayerRecord { player: Player | null; lastPlayed: LastPlayed | null; characters: LibraryEntry[]; saved: string[] }
 let dir = "";
-/** `saved` are other players' characters this player keeps in their library: references by id, like starters. */
-interface PlayerFile { player: Player | null; characters: LibraryEntry[]; saved: string[] }
-const cache = new Map<string, PlayerFile>();
+const cache = new Map<string, PlayerRecord>();
 /** How many players have each character saved; built by scanAll, kept current by save and unsave. */
 const saves = new Map<string, number>();
 let scanned = false;
@@ -23,11 +25,12 @@ let playsFile = "";
 function fileOf(owner: string): string {
   return path.join(dir, `${owner.replace(/[^\w-]/g, "_")}.json`);
 }
-function load(owner: string): PlayerFile {
+function load(owner: string): PlayerRecord {
   let lib = cache.get(owner);
   if (!lib) {
     const f = fileOf(owner);
-    lib = fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, "utf8")) as PlayerFile : { player: null, characters: [], saved: [] };
+    lib = fs.existsSync(f) ? (JSON.parse(fs.readFileSync(f, "utf8")) as PlayerRecord) : { player: null, lastPlayed: null, characters: [], saved: [] };
+    if (!("lastPlayed" in lib)) throw new Error(`${f} predates lastPlayed: run scripts/migrate-last-played.mjs on the data dir`);
     lib.saved ??= [];
     for (const c of lib.characters) c.public ??= true;
     cache.set(owner, lib);
@@ -84,6 +87,16 @@ export function setStarters(ids: string[]): string[] {
 /** The starters as library entries, marked so the client won't offer to delete them. */
 export function starterEntries(): LibraryEntry[] {
   return starters.map((id) => findCharacter(id)).filter((e): e is LibraryEntry => !!e && e.status === "ready").map((e) => ({ ...e, starter: true }));
+}
+
+/** The player is playing now, on this version. Returns when they last played before, or null for a new player. */
+export function markPlayed(player: Player): LastPlayed | null {
+  const lib = load(player.id);
+  const previous = lib.lastPlayed;
+  lib.player = player;
+  lib.lastPlayed = { version: GAME_VERSION, at: Date.now() };
+  write(player.id);
+  return previous;
 }
 
 /** The player's own characters, without the ones they deleted that others still have saved. */
