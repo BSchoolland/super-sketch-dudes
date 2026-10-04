@@ -3,7 +3,7 @@ import { inkLine, inkPath, PAPER, PENCIL } from "../render/paper";
 import type { MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
 import { sfx } from "../audio/audio";
-import { library } from "../account";
+import { library, seeNews } from "../account";
 import { refreshDummy, refreshLibrary } from "../fighters";
 import type { CommunityCharacter, CommunitySort } from "../../../shared/account";
 import { bg, card, hover, label, title, type Screen, INK } from "./ui";
@@ -11,11 +11,13 @@ import { ButtonMenu, type Button } from "./buttons";
 import { drawCharacterCell, RED } from "./character";
 import { CharacterDetail, moveRows, type MoveRow } from "./charcard";
 import type { Nav } from "./nav";
+import { drawCharTabs, otherTabButton } from "./chartabs";
 
 const COLS = 6, ROWS = 2, ART = 250, GAP = 50, ROW_H = 350, TOP = 160;
 const X0 = (VIEW_W - (COLS * ART + (COLS - 1) * GAP)) / 2;
 const TAB = { w: 210, h: 72, y: 46, gap: 14 };
 const SORTS: CommunitySort[] = ["popular", "new"];
+const SORT_NAME: Record<CommunitySort, string> = { popular: "POPULAR", new: "NEWEST" };
 
 /** A bookmark ribbon hanging off a cell's top-right corner with the save count on it: red once you've saved it. */
 function drawRibbon(ctx: CanvasRenderingContext2D, x: number, y: number, n: number, saved: boolean): void {
@@ -32,7 +34,7 @@ function drawRibbon(ctx: CanvasRenderingContext2D, x: number, y: number, n: numb
   label(ctx, String(n), x + w / 2, y + 36, 28, saved ? PAPER : INK, "center", 900, w - 8);
 }
 
-/** COMMUNITY: everyone's public characters, most saved or newest first; one big with SAVE. */
+/** CHARACTERS, COMMUNITY tab: everyone's public characters, most saved or newest first; one big with SAVE. */
 export class CommunityScreen implements Screen {
   t = 0;
   private menu = new ButtonMenu();
@@ -53,6 +55,7 @@ export class CommunityScreen implements Screen {
   constructor(private nav: Nav) {}
 
   enter(): void {
+    seeNews("community");
     void refreshDummy();
     this.load(0);
   }
@@ -100,8 +103,9 @@ export class CommunityScreen implements Screen {
     });
     if (this.scroll > 0) b.push({ id: "up", x: VIEW_W - 110, y: TOP, w: 80, h: 80, text: "▲", size: 40 });
     if (this.scroll + ROWS < rows) b.push({ id: "down", x: VIEW_W - 110, y: TOP + ROWS * ROW_H - 150, w: 80, h: 80, text: "▼", size: 40 });
-    SORTS.forEach((s, i) => b.push({ id: s, x: VIEW_W - 40 - (SORTS.length - i) * (TAB.w + TAB.gap) + TAB.gap, y: TAB.y, w: TAB.w, h: TAB.h, text: s.toUpperCase(), custom: true }));
+    SORTS.forEach((s, i) => b.push({ id: s, x: VIEW_W - 40 - (SORTS.length - i) * (TAB.w + TAB.gap) + TAB.gap, y: TAB.y, w: TAB.w, h: TAB.h, text: SORT_NAME[s], custom: true }));
     b.push({ id: "back", x: 40, y: VIEW_H - 130, w: 240, h: 90, text: "BACK", size: 40 });
+    b.push(otherTabButton("community"));
     return b;
   }
 
@@ -129,6 +133,7 @@ export class CommunityScreen implements Screen {
     const pressed = this.menu.update(buttons, this.menu.grid(m, COLS, this.entries.length, buttons.length), taps);
     this.follow();
     if (pressed === "back" || m.back) { sfx.menuBack(); return this.nav.title(); }
+    if (pressed === "tab") { sfx.menuConfirm(); return this.nav.library(); }
     if (pressed === "up") this.scroll--;
     if (pressed === "down") this.scroll++;
     if (pressed === "popular" || pressed === "new") this.resort(pressed);
@@ -179,8 +184,8 @@ export class CommunityScreen implements Screen {
   }
 
   private drawGrid(ctx: CanvasRenderingContext2D): void {
-    title(ctx, "COMMUNITY", VIEW_W / 2, 100, 72);
     const buttons = this.gridButtons();
+    drawCharTabs(ctx, "community", buttons[this.menu.focus]?.id === "tab");
     if (!this.items) label(ctx, "…", VIEW_W / 2, 500, 60, PENCIL);
     else if (!this.items.length) label(ctx, "nobody has shared a character yet", VIEW_W / 2, 480, 40, PENCIL);
     const focus = this.menu.focus;

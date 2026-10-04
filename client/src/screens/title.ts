@@ -1,18 +1,38 @@
-import { inkLine } from "../render/paper";
+import { inkLine, inkPath } from "../render/paper";
 import { VIEW_H, VIEW_W } from "../render/camera";
 import type { MenuInput } from "../input/devices";
 import { sfx } from "../audio/audio";
-import { account } from "../account";
+import { account, isNew, seeNews, unseenReleases } from "../account";
 import { refreshLibrary } from "../fighters";
 import { myMaps, refreshMaps } from "../maps";
 import { bg, card, hint, label, title, hover, clicked, goTo, type Screen, INK } from "./ui";
 import { drawAvatar } from "./images";
 import { MenuBrawl } from "./brawl";
+import { drawNewSticker } from "./sticker";
+import { UpdateCard } from "./updatecard";
 import { MENU_CARD } from "../../../shared/stages/menu";
 
 const MENU_Y = MENU_CARD.y0, MENU_STEP = MENU_CARD.step;
 
-export type Mode = "battle" | "library" | "create" | "community" | "maps" | "settings" | "feedback";
+export type Mode = "battle" | "library" | "create" | "maps" | "settings" | "feedback";
+
+const NOTE = { x: 36, y: 24, w: 290, h: 120 };
+/** `sel` for the FEEDBACK note in the top left, above the menu. */
+const FEEDBACK = -1;
+
+function drawFeedbackNote(ctx: CanvasRenderingContext2D, sel: boolean): void {
+  const { x, y, w, h } = NOTE;
+  ctx.save();
+  ctx.translate(x + w / 2, y + h / 2);
+  ctx.rotate(-0.05);
+  ctx.translate(-w / 2, -h / 2);
+  inkPath(ctx, [[0, 0], [w, 0], [w, h - 22], [w - 22, h], [0, h]], true, 7);
+  ctx.fillStyle = "#f6e27a";
+  ctx.fill();
+  ctx.lineWidth = sel ? 4.5 : 2.4; ctx.strokeStyle = INK; ctx.stroke();
+  title(ctx, "FEEDBACK", w / 2, h / 2 + 16, 46, INK);
+  ctx.restore();
+}
 
 export function drawLogo(ctx: CanvasRenderingContext2D, y: number): void {
   ctx.save();
@@ -36,50 +56,67 @@ export function drawPlayerBadge(ctx: CanvasRenderingContext2D): void {
 
 export class TitleScreen implements Screen {
   t = 0;
+  /** A menu row, or FEEDBACK. */
   sel = 0;
   /** MAPS is only offered to accounts that may make them. */
   get items(): { id: Mode; name: string; desc: string }[] {
     return [
       { id: "battle", name: "BATTLE", desc: "Fight the CPU, a friend here, or someone online" },
-      { id: "library", name: "MY CHARACTERS", desc: "View characters you've drawn" },
       { id: "create", name: "NEW CHARACTER", desc: "Draw a new character" },
-      { id: "community", name: "COMMUNITY", desc: "Find and save other players' characters" },
+      { id: "library", name: "CHARACTERS", desc: "Yours, and everyone else's to save" },
       ...(myMaps.canCreate ? [{ id: "maps" as const, name: "MAPS", desc: "Build a stage to fight on" }] : []),
       { id: "settings", name: "SETTINGS", desc: "Change settings" },
-      { id: "feedback", name: "FEEDBACK", desc: "Ideas, bugs, anything: Ben reads these" },
     ];
   }
   brawl: MenuBrawl | null = null;
+  /** What's new since this player last played, over the menu until they close it. */
+  private whatsNew: UpdateCard | null = unseenReleases.length ? new UpdateCard(unseenReleases.splice(0)) : null;
   constructor(private onPick: (m: Mode) => Screen) {}
   enter(): void {
     void refreshLibrary();
     void refreshMaps();
     this.brawl = new MenuBrawl();
   }
-  update(_dt: number, m: MenuInput): Screen | null {
-    if (m.up) { this.sel = (this.sel + this.items.length - 1) % this.items.length; sfx.menuMove(); }
-    if (m.down) { this.sel = (this.sel + 1) % this.items.length; sfx.menuMove(); }
-    if (m.confirm || m.start) { sfx.menuConfirm(); return this.onPick(this.items[this.sel].id); }
+  private pick(mode: Mode): Screen {
+    sfx.menuConfirm();
+    if (mode === "library") seeNews("characters");
+    return this.onPick(mode);
+  }
+  update(dt: number, m: MenuInput): Screen | null {
+    if (this.whatsNew) {
+      if (this.whatsNew.update(dt, m)) this.whatsNew = null;
+      return null;
+    }
+    const n = this.items.length;
+    if (m.up) { this.sel = this.sel === FEEDBACK ? n - 1 : this.sel === 0 ? FEEDBACK : this.sel - 1; sfx.menuMove(); }
+    if (m.down) { this.sel = this.sel === FEEDBACK ? 0 : (this.sel + 1) % n; sfx.menuMove(); }
+    if (m.confirm || m.start) return this.pick(this.sel === FEEDBACK ? "feedback" : this.items[this.sel].id);
     return null;
   }
   draw(ctx: CanvasRenderingContext2D, dt: number): void {
     this.t += dt;
     bg(ctx, this.t);
     drawLogo(ctx, 170);
+    const live = !this.whatsNew;
     const x = MENU_CARD.x, w = MENU_CARD.w, h = MENU_CARD.h;
     this.items.forEach((it, i) => {
       const y = MENU_Y + i * MENU_STEP;
-      const sel = i === this.sel;
-      if (hover(x, y, w, h)) { this.sel = i; document.body.style.cursor = "pointer"; }
-      if (clicked(x, y, w, h)) { sfx.menuConfirm(); goTo(this.onPick(it.id)); }
-      card(ctx, x, y, w, h, "", sel);
+      if (live && hover(x, y, w, h)) { this.sel = i; document.body.style.cursor = "pointer"; }
+      if (live && clicked(x, y, w, h)) goTo(this.pick(it.id));
+      card(ctx, x, y, w, h, "", i === this.sel);
       title(ctx, it.name, x + w / 2, y + 60, 42, INK);
+      if (it.id === "library" && isNew("characters")) drawNewSticker(ctx, x + w - 20, y + 8);
     });
     // the brawl plays over the menu: fighters stand on the cards and the logo
     if (this.brawl) { this.brawl.update(dt); this.brawl.draw(ctx, dt); }
+    if (live && hover(NOTE.x, NOTE.y, NOTE.w, NOTE.h)) { this.sel = FEEDBACK; document.body.style.cursor = "pointer"; }
+    if (live && clicked(NOTE.x, NOTE.y, NOTE.w, NOTE.h)) goTo(this.pick("feedback"));
+    drawFeedbackNote(ctx, this.sel === FEEDBACK);
     drawPlayerBadge(ctx);
-    label(ctx, this.items[this.sel].desc, VIEW_W / 2, MENU_Y + this.items.length * MENU_STEP + 30, 26, INK, "center");
+    const desc = this.sel === FEEDBACK ? "Ideas, bugs, anything: Ben reads these" : this.items[this.sel].desc;
+    label(ctx, desc, VIEW_W / 2, MENU_Y + this.items.length * MENU_STEP + 30, 26, INK, "center");
     hint(ctx, "click, or arrows + Enter · gamepad: stick + A");
     label(ctx, `build ${__BUILD__}`, VIEW_W - 20, VIEW_H - 16, 14, "rgba(41,39,34,0.5)", "right", 400);
+    this.whatsNew?.draw(ctx, dt);
   }
 }

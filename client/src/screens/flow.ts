@@ -45,7 +45,6 @@ export function menus(): Nav {
       if (mode === "battle") return nav.battle();
       if (mode === "create") return nav.create();
       if (mode === "library") return nav.library();
-      if (mode === "community") return nav.community();
       if (mode === "maps") return nav.maps();
       if (mode === "feedback") return new FeedbackScreen(() => nav.title());
       return new SettingsScreen(() => nav.title(), () => { signOut(); forgetLibrary(); forgetMaps(); return signInScreen(nav); });

@@ -46,7 +46,7 @@ export class DescribeScreen implements Screen {
 
   private buttons(): Button[] {
     return [
-      { id: "public", x: FORM_X, y: 690, w: 400, h: 80, text: this.pub ? "PUBLIC: ON" : "PUBLIC: OFF", size: 32, disabled: this.sending },
+      { id: "public", x: FORM_X, y: 690, w: 480, h: 80, text: "SHARE WITH EVERYONE", size: 32, checked: this.pub, disabled: this.sending },
       { id: "send", x: FORM_X, y: 800, w: 400, h: 110, text: this.sending ? "…" : "CREATE CHARACTER", size: 34, disabled: this.sending },
       { id: "back", x: FORM_X + 440, y: 800, w: 400, h: 110, text: "KEEP DRAWING", size: 34, disabled: this.sending },
     ];

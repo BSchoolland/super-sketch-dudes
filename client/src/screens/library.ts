@@ -10,15 +10,16 @@ import { bg, hover, label, title, type Screen } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
 import { drawCharacterArt, drawCharacterCell, RED } from "./character";
 import { wrapped } from "./text";
-import { CharacterDetail, moveRows, type MoveRow } from "./charcard";
+import { CharacterDetail, COL_W, COL_X, moveRows, type MoveRow } from "./charcard";
 import { DrawPad } from "./pad";
 import { PAD } from "./create";
 import type { Nav } from "./nav";
+import { drawCharTabs, otherTabButton } from "./chartabs";
 
 const COLS = 6, ROWS = 2, ART = 250, GAP = 50, ROW_H = 350, TOP = 160;
 const X0 = (VIEW_W - (COLS * ART + (COLS - 1) * GAP)) / 2;
 
-/** MY CHARACTERS: the library as a grid (yours, the ones you saved, the starters); one of them big, with PRACTICE and DELETE. */
+/** CHARACTERS, MINE tab: the library as a grid (yours, the ones you saved, the starters); one of them big, with PRACTICE and DELETE. */
 export class LibraryScreen implements Screen {
   t = 0;
   private menu = new ButtonMenu();
@@ -56,6 +57,7 @@ export class LibraryScreen implements Screen {
     if (this.scroll + ROWS < rows) b.push({ id: "down", x: VIEW_W - 110, y: TOP + ROWS * ROW_H - 150, w: 80, h: 80, text: "▼", size: 40 });
     b.push({ id: "new", x: VIEW_W / 2 - 250, y: VIEW_H - 150, w: 500, h: 110, text: "NEW CHARACTER", size: 44 });
     b.push({ id: "back", x: 40, y: VIEW_H - 130, w: 240, h: 90, text: "BACK", size: 40 });
+    b.push(otherTabButton("mine"));
     return b;
   }
 
@@ -65,12 +67,13 @@ export class LibraryScreen implements Screen {
     const b: Button[] = [];
     if (e.status === "ready") b.push({ id: "practice", x: 0, y, w, h: 110, text: "PRACTICE", size: 44, disabled: !practiceDummy.choice });
     b.push({ id: "copy", x: 0, y, w, h: 110, text: "COPY DRAWING", size: 34 });
-    const own = !e.starter && !e.saved;
-    if (own && e.status === "ready") b.push({ id: "public", x: 0, y, w, h: 110, text: e.public ? "PUBLIC: ON" : "PUBLIC: OFF", size: 38 });
     if (!e.starter) b.push({ id: "delete", x: 0, y, w, h: 110, text: armed ? "SURE?" : e.saved ? "UNSAVE" : "DELETE", size: 44 });
     b.push({ id: "back", x: 0, y, w, h: 110, text: "BACK", size: 44 });
     const x0 = (VIEW_W - (b.length * w + (b.length - 1) * gap)) / 2;
     b.forEach((btn, i) => { btn.x = x0 + i * (w + gap); });
+    // your own character's sharing sits under its moves, in the right column
+    const rows = this.rows(e), last = rows[rows.length - 1];
+    if (!e.starter && !e.saved && e.status === "ready" && last) b.push({ id: "public", x: COL_X, y: last.y + last.h + 36, w: COL_W, h: 80, text: "SHARE WITH EVERYONE", size: 32, checked: !!e.public });
     // the moves come after the row, so focus starts on it and the preview starts out standing still
     for (const r of this.rows(e)) b.push({ id: `m${r.i}`, x: r.x, y: r.y, w: r.w, h: r.h, text: "", custom: true });
     return b;
@@ -108,6 +111,7 @@ export class LibraryScreen implements Screen {
     const pressed = this.menu.update(buttons, this.menu.grid(m, COLS, count, buttons.length), taps);
     this.follow();
     if (pressed === "new") return this.nav.create();
+    if (pressed === "tab") { sfx.menuConfirm(); return this.nav.community(); }
     if (pressed === "back" || m.back) { sfx.menuBack(); return this.nav.title(); }
     if (pressed === "up") this.scroll--;
     if (pressed === "down") this.scroll++;
@@ -174,8 +178,8 @@ export class LibraryScreen implements Screen {
   }
 
   private drawGrid(ctx: CanvasRenderingContext2D): void {
-    title(ctx, "MY CHARACTERS", VIEW_W / 2, 100, 72);
     const buttons = this.gridButtons();
+    drawCharTabs(ctx, "mine", buttons[this.menu.focus]?.id === "tab");
     if (!myLibrary.entries) label(ctx, "…", VIEW_W / 2, 500, 60, PENCIL);
     else if (!this.entries.length) label(ctx, "nothing here yet: draw your first fighter", VIEW_W / 2, 480, 40, PENCIL);
     const focus = this.menu.focus;

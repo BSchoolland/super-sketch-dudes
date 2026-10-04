@@ -11,7 +11,7 @@ import { MoveDemo, demoMoves, type DemoMove } from "./movedemo";
 import { roster } from "../../../shared/fighters/index";
 
 const DEMO = { x: 90, y: 100, w: 1060 };
-const COL_X = 1210, COL_W = 620, ROW_H = 56, ROW_GAP = 10;
+export const COL_X = 1210, COL_W = 620, ROW_H = 56, ROW_GAP = 10;
 
 /** One of the fighter's moves as a button in the right-hand column. */
 export interface MoveRow { i: number; head: string; move: DemoMove; x: number; y: number; w: number; h: number }

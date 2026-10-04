@@ -2,8 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import type express from "express";
-import { GOOGLE_CLIENT_ID, SESSION_HEADER, type LastPlayed, type Player } from "../shared/account";
-import { markPlayed } from "./library";
+import { GOOGLE_CLIENT_ID, SESSION_HEADER, type LastPlayed, type News, type Player } from "../shared/account";
+import { markPlayed, seeNews } from "./library";
 
 /**
  * Sign-in: the browser does Discord's implicit OAuth grant (no client secret), gets an access
@@ -54,12 +54,12 @@ export function playerOf(req: express.Request): Player | null {
   return playerFromSession(req.get(SESSION_HEADER) ?? req.query.session);
 }
 
-/** A signed-in player and when they last played before this sign-in (null: never). */
-function issue(player: Player): { session: string; player: Player; lastPlayed: LastPlayed | null } {
+/** A signed-in player, when they last played before this sign-in (null: never) and their NEW stickers. */
+function issue(player: Player): { session: string; player: Player; lastPlayed: LastPlayed | null; news: News | null } {
   const token = crypto.randomBytes(24).toString("base64url");
   sessions.set(token, { player, at: Date.now() });
   save();
-  return { session: token, player, lastPlayed: markPlayed(player) };
+  return { session: token, player, ...markPlayed(player) };
 }
 
 const cleanName = (s: unknown): string => String(s ?? "").replace(/[^\w \-.!?]/g, "").slice(0, 14) || "someone";
@@ -145,7 +145,16 @@ export function attachAuth(api: express.Router, opts: AuthOptions): void {
   api.post("/me/played", (req, res) => {
     const player = playerOf(req);
     if (!player) return res.status(401).json({ error: "not signed in" });
-    res.json({ lastPlayed: markPlayed(player) });
+    res.json(markPlayed(player));
+  });
+
+  // they opened something with a NEW sticker on it
+  api.post("/me/news/:what", (req, res) => {
+    const player = playerOf(req);
+    if (!player) return res.status(401).json({ error: "not signed in" });
+    const what = req.params.what;
+    if (what !== "characters" && what !== "community") return res.status(400).json({ error: `no such news: ${what}` });
+    res.json({ news: seeNews(player.id, what) });
   });
 
   api.post("/auth/logout", (req, res) => {

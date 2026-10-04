@@ -99,3 +99,35 @@ export function drawFighterPortrait(ctx: CanvasRenderingContext2D, def: FighterD
   drawSprite(ctx, def, cell, pose, { flip: p.facing < 0 });
   ctx.restore();
 }
+
+/**
+ * The fighter jumping on the spot, over and over: crouch, spring up in its jump pose, land with a squash, stand.
+ * `phase` (0..1) is where in the cycle it is; feet on the bottom of the box.
+ */
+export function drawFighterHop(ctx: CanvasRenderingContext2D, def: FighterDef, b: PortraitBounds, phase: number): void {
+  const sp = def.sprite;
+  if (!sp) throw new Error(`${def.id} has no sprite`);
+  const h = def.stats.height;
+  const pose: Pose = {};
+  let cell = cellForAnim(def, "idle");
+  if (phase < 0.12) {
+    const k = phase / 0.12;
+    cell = sp.cells.block ? "block" : cell;
+    pose.sy = 1 - 0.12 * k; pose.sx = 1 + 0.06 * k;
+  } else if (phase < 0.62) {
+    const k = (phase - 0.12) / 0.5;
+    cell = sp.cells.jump ? "jump" : cell;
+    pose.dy = -Math.sin(Math.PI * k) * h * 0.55;
+    pose.sy = 1 + 0.06 * Math.cos(Math.PI * k); pose.sx = 1 - 0.03 * Math.cos(Math.PI * k);
+  } else if (phase < 0.72) {
+    const k = 1 - (phase - 0.62) / 0.1;
+    pose.sy = 1 - 0.1 * k; pose.sx = 1 + 0.06 * k;
+  }
+  const u = h / sp.heightPx;
+  const k = Math.min(b.w, b.h) / (sp.px * u);
+  ctx.save();
+  ctx.translate(b.x + b.w / 2, b.y + b.h);
+  ctx.scale(k, k);
+  drawSprite(ctx, def, cell, pose, { flip: false });
+  ctx.restore();
+}

@@ -1,9 +1,14 @@
+import type { Fresh } from "./releases";
+
 /** The game's version. Each player's record keeps the last one they played. */
-export const GAME_VERSION = "0.1.2";
+export const GAME_VERSION = "0.2.0";
 export const GAME_STAGE = "Alpha";
 
 /** When a player last played, and which version. */
 export interface LastPlayed { version: string; at: number }
+
+/** NEW stickers for what changed since a returning player's last visit: `since` is when they first played this version; `seen` are the ones they've opened. */
+export interface News { since: number; fresh: Fresh[]; seen: Fresh[] }
 
 export type CharStatus = "queued" | "generating" | "ready" | "failed";
 
@@ -56,6 +61,10 @@ export interface CommunityCharacter extends Pick<LibraryEntry, "id" | "name" | "
 }
 export type CommunitySort = "popular" | "new";
 export const COMMUNITY_PAGE = 36;
+
+/** A fighter in the release card's lineup. */
+export type FeaturedCharacter = Pick<LibraryEntry, "id" | "drawingUrl"> & { bundleUrl: string };
+export const FEATURED = 8, FEATURED_PER_CREATOR = 2;
 
 /** Longest side of the drawing the client uploads; the server rejects bigger. */
 export const DRAW_PNG_MAX_BYTES = 900_000;

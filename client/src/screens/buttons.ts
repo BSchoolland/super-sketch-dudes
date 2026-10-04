@@ -2,6 +2,7 @@ import type { MenuInput } from "../input/devices";
 import type { ViewPoint } from "../input/pointer";
 import { sfx } from "../audio/audio";
 import { card, label, title, INK } from "./ui";
+import { inkLine, inkRect } from "../render/paper";
 
 export interface Button {
   id: string;
@@ -13,6 +14,8 @@ export interface Button {
   /** Drawn by the caller; the menu only focuses and hit-tests it. */
   custom?: boolean;
   disabled?: boolean;
+  /** A checkbox: a box ticked or not, with the text beside it. */
+  checked?: boolean;
 }
 
 export const inside = (p: ViewPoint, b: { x: number; y: number; w: number; h: number }): boolean => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
@@ -54,6 +57,16 @@ export class ButtonMenu {
       const selected = i === this.focus;
       card(ctx, b.x, b.y, b.w, b.h, INK, selected && !b.disabled, b.disabled ? 0.45 : 1);
       const size = b.size ?? Math.min(40, b.h * 0.5);
+      if (b.checked !== undefined) {
+        const box = Math.round(b.h * 0.5), bx = b.x + 24, by = b.y + (b.h - box) / 2;
+        inkRect(ctx, bx, by, box, box, INK, 3);
+        if (b.checked) {
+          inkLine(ctx, bx + box * 0.18, by + box * 0.52, bx + box * 0.42, by + box * 0.8, INK, 5);
+          inkLine(ctx, bx + box * 0.42, by + box * 0.8, bx + box * 0.92, by + box * 0.1, INK, 5);
+        }
+        title(ctx, b.text, bx + box + 22, b.y + b.h / 2 + size * 0.36, size, INK, "left", b.x + b.w - (bx + box + 22) - 16);
+        return;
+      }
       if (b.step) label(ctx, `◀  ${b.text}  ▶`, b.x + b.w / 2, b.y + b.h / 2 + size * 0.36, size, INK, "center", 800);
       else title(ctx, b.text, b.x + b.w / 2, b.y + b.h / 2 + size * 0.36, size, INK);
     });

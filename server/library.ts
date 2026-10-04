@@ -1,12 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
-import { GAME_VERSION, type LastPlayed, type LibraryEntry, type Player } from "../shared/account";
+import { GAME_VERSION, type LastPlayed, type LibraryEntry, type News, type Player } from "../shared/account";
+import { FRESH_MS, compareVersions, releasesSince, type Fresh } from "../shared/releases";
 
 /**
  * Every player's record (who they are, when they last played, their characters and saves), one JSON file per player under
  * <dataDir>/players/. `saved` are other players' characters this player keeps in their library: references by id, like starters.
  */
-interface PlayerRecord { player: Player | null; lastPlayed: LastPlayed | null; characters: LibraryEntry[]; saved: string[] }
+interface PlayerRecord { player: Player | null; lastPlayed: LastPlayed | null; news?: News | null; characters: LibraryEntry[]; saved: string[] }
 let dir = "";
 const cache = new Map<string, PlayerRecord>();
 /** How many players have each character saved; built by scanAll, kept current by save and unsave. */
@@ -89,14 +90,32 @@ export function starterEntries(): LibraryEntry[] {
   return starters.map((id) => findCharacter(id)).filter((e): e is LibraryEntry => !!e && e.status === "ready").map((e) => ({ ...e, starter: true }));
 }
 
-/** The player is playing now, on this version. Returns when they last played before, or null for a new player. */
-export function markPlayed(player: Player): LastPlayed | null {
+/**
+ * The player is playing now, on this version. Returns when they last played before (null for a new player) and their
+ * NEW stickers: a returning player's first visit on a newer version starts them, for FRESH_MS.
+ */
+export function markPlayed(player: Player): { lastPlayed: LastPlayed | null; news: News | null } {
   const lib = load(player.id);
-  const previous = lib.lastPlayed;
+  const previous = lib.lastPlayed, now = Date.now();
+  if (previous && compareVersions(previous.version, GAME_VERSION) < 0) {
+    const fresh = [...new Set(releasesSince(previous.version, GAME_VERSION).flatMap((r) => r.fresh))];
+    lib.news = fresh.length ? { since: now, fresh, seen: [] } : null;
+  }
+  if (lib.news && now - lib.news.since >= FRESH_MS) lib.news = null;
   lib.player = player;
-  lib.lastPlayed = { version: GAME_VERSION, at: Date.now() };
+  lib.lastPlayed = { version: GAME_VERSION, at: now };
   write(player.id);
-  return previous;
+  return { lastPlayed: previous, news: lib.news ?? null };
+}
+
+/** The player opened something that had a NEW sticker. */
+export function seeNews(owner: string, what: Fresh): News | null {
+  const lib = load(owner);
+  if (lib.news && !lib.news.seen.includes(what)) {
+    lib.news.seen.push(what);
+    write(owner);
+  }
+  return lib.news ?? null;
 }
 
 /** The player's own characters, without the ones they deleted that others still have saved. */

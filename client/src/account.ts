@@ -1,5 +1,6 @@
 import { site } from "./base";
-import { GOOGLE_CLIENT_ID, SESSION_HEADER, type CommunityCharacter, type CommunitySort, type LastPlayed, type Player, type LibraryEntry } from "../../shared/account";
+import { GAME_VERSION, GOOGLE_CLIENT_ID, SESSION_HEADER, type CommunityCharacter, type CommunitySort, type FeaturedCharacter, type LastPlayed, type News, type Player, type LibraryEntry } from "../../shared/account";
+import { FRESH_MS, releasesSince, type Fresh, type Release } from "../../shared/releases";
 import { sessionTrace } from "./telemetry/events";
 
 /**
@@ -14,6 +15,27 @@ export const account: { session: string | null; player: Player | null } = { sess
  * undefined until the server has been told they're here. Compare with GAME_VERSION for "what's new".
  */
 export let lastPlayed: LastPlayed | null | undefined;
+let news: News | null = null;
+/** Release cards still to show this visit, oldest first: what came out since a returning player last played. */
+export let unseenReleases: Release[] = [];
+
+function played(r: { lastPlayed: LastPlayed | null; news: News | null }): void {
+  lastPlayed = r.lastPlayed;
+  news = r.news;
+  unseenReleases = r.lastPlayed ? releasesSince(r.lastPlayed.version, GAME_VERSION) : [];
+}
+
+/** Whether `what` wears a NEW sticker: added since this player's last visit, under FRESH_MS ago, and not opened yet. */
+export function isNew(what: Fresh): boolean {
+  return !!news && news.fresh.includes(what) && !news.seen.includes(what) && Date.now() - news.since < FRESH_MS;
+}
+
+/** They opened `what`: its sticker comes off. */
+export function seeNews(what: Fresh): void {
+  if (!isNew(what)) return;
+  news!.seen.push(what);
+  void api<{ news: News | null }>(`/me/news/${what}`, { method: "POST" }).catch((error: unknown) => console.error(`marking ${what} seen failed`, error));
+}
 const KEY = "sketchbattle.account";
 const NONCE_KEY = "sketchbattle.googleNonce";
 const PENDING_KEY = "sketchbattle.signingIn";
@@ -72,15 +94,15 @@ async function authenticate(path: string, body: object): Promise<void> {
     const text = await res.text();
     throw new Error(text.startsWith("{") ? (JSON.parse(text) as { error: string }).error : `sign-in failed: HTTP ${res.status}`);
   }
-  const signedInAs = (await res.json()) as { session: string; player: Player; lastPlayed: LastPlayed | null };
+  const signedInAs = (await res.json()) as { session: string; player: Player; lastPlayed: LastPlayed | null; news: News | null };
   account.session = signedInAs.session; account.player = signedInAs.player;
-  lastPlayed = signedInAs.lastPlayed;
+  played(signedInAs);
   save();
 }
 
 /** A restored session opening the game: the server notes this visit and says when the last one was. */
 export async function markPlayed(): Promise<void> {
-  lastPlayed = (await api<{ lastPlayed: LastPlayed | null }>("/me/played", { method: "POST" })).lastPlayed;
+  played(await api<{ lastPlayed: LastPlayed | null; news: News | null }>("/me/played", { method: "POST" }));
 }
 
 /**
@@ -117,7 +139,7 @@ export const devSignIn = (name: string): Promise<void> => authenticate("dev", { 
 export function signOut(): void {
   if (account.session) void fetch(`${site.base}api/auth/logout`, { method: "POST", headers: { [SESSION_HEADER]: account.session, "x-trace-id": sessionTrace() } }).catch((error: unknown) => console.error("sign-out request failed", error));
   account.session = null; account.player = null;
-  lastPlayed = undefined;
+  lastPlayed = undefined; news = null; unseenReleases = [];
   localStorage.removeItem(KEY);
 }
 
@@ -142,6 +164,7 @@ export const library = {
   save: (id: string) => api<{ saves: number; saved: boolean }>(`/library/saved/${id}`, { method: "POST" }),
   unsave: (id: string) => api<{ saves: number; saved: boolean }>(`/library/saved/${id}`, { method: "DELETE" }),
   community: (sort: CommunitySort, page: number) => api<{ characters: CommunityCharacter[]; pages: number }>(`/characters/community?sort=${sort}&page=${page}`),
+  featured: () => api<{ characters: FeaturedCharacter[] }>("/characters/featured"),
   /** `hint` is what the player typed on the describe page; the forge's design pass reads it. */
   create: (png: string, hint: { name: string; description: string }, pub: boolean) => api<{ character: LibraryEntry }>("/characters", { method: "POST", body: JSON.stringify({ png, ...hint, public: pub }) }),
   get: (id: string) => api<{ character: LibraryEntry }>(`/characters/${id}`),

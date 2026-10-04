@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type express from "express";
-import { COMMUNITY_PAGE, DRAW_PNG_MAX_BYTES, type CommunityCharacter } from "../shared/account";
+import { COMMUNITY_PAGE, DRAW_PNG_MAX_BYTES, FEATURED, FEATURED_PER_CREATOR, type CommunityCharacter, type FeaturedCharacter } from "../shared/account";
 import { playerOf } from "./auth";
 import type { WideEvent } from "../shared/wide";
 import type { LibraryEntry } from "../shared/account";
@@ -58,6 +58,20 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
       creator: { name: creator?.name ?? "?", avatar: creator?.avatar ?? null }, saves, plays, saved: saved.has(e.id), mine: e.owner === caller,
     }));
     res.json({ characters, pages: Math.ceil(all.length / COMMUNITY_PAGE) });
+  });
+
+  // the most played community characters, at most FEATURED_PER_CREATOR from any one player: the release card's lineup
+  api.get("/characters/featured", (_req, res) => {
+    const perCreator = new Map<string, number>();
+    const characters: FeaturedCharacter[] = [];
+    for (const { entry: e } of communityCharacters().sort((a, b) => b.plays - a.plays || b.saves - a.saves)) {
+      const n = perCreator.get(e.owner) ?? 0;
+      if (n >= FEATURED_PER_CREATOR) continue;
+      perCreator.set(e.owner, n + 1);
+      characters.push({ id: e.id, drawingUrl: e.drawingUrl, bundleUrl: e.bundleUrl! });
+      if (characters.length === FEATURED) break;
+    }
+    res.json({ characters });
   });
 
   // reference fighters every player starts with; the forge token sets the list
