@@ -1,5 +1,5 @@
 /** The game's version. Each player's record keeps the last one they played. */
-export const GAME_VERSION = "0.1.0";
+export const GAME_VERSION = "0.1.2";
 export const GAME_STAGE = "Alpha";
 
 /** When a player last played, and which version. */
