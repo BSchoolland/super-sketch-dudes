@@ -415,7 +415,7 @@ export function attachLobby(wss: WebSocketServer): void {
             if (s) {
               // frames already decided away are gone for good: only what's past the fill goes on
               inputs = inputs.slice(Math.max(0, inputs.length - (frame - s.filled)));
-              if (!inputs.length) break;
+              if (!inputs.length && msg.inputs.length) break;
               s.forwarded = Math.max(s.forwarded, frame);
               if (s.forwarded - s.finalSent >= 6) { s.finalSent = s.forwarded; send(c, { t: "final", frame: s.forwarded }); }
             }
