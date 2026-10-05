@@ -6,11 +6,11 @@ const input = (x: number, b = 0): InputFrame => ({ x, y: 50 - Math.trunc(x / 2),
 
 describe("peer-to-peer wire format", () => {
   it("round-trips a run of inputs with leads and acks", () => {
-    const inputs = [input(0), input(0), input(0), input(-100, 2), input(-100, 2), input(-28, 255), input(37, 64)];
+    const inputs = [input(0), input(0), input(0), input(-100, 2), input(-100, 2), input(-28, 255), input(37, 256 | 64)];
     const p = { slot: 3, first: 123456, inputs, ahead: [0, -2.5, 12.3, 0], acks: [123000, 0, 99999, 123462] };
     const buf = encodeInputs(p);
-    // a 9-byte header, 6 bytes per slot, 6 per run of equal inputs
-    expect(buf.byteLength).toBe(9 + 4 * 6 + 4 * 6);
+    // a 9-byte header, 6 bytes per slot, 7 per run of equal inputs
+    expect(buf.byteLength).toBe(9 + 4 * 6 + 4 * 7);
     expect(decodeInputs(buf)).toEqual(p);
   });
 

@@ -40,9 +40,17 @@ export interface Room {
   match: RelayMatch | null;
 }
 /** What the relay sees of one match: per slot, how inputs and hashes flowed. */
-interface SlotRelay { inputs: number; newest: number; hashes: number; lastHashFrame: number; maxGapMs: number; stalls: number; lastAt: number }
-/** `loaded`: members whose match screen is up; `go` is sent once they all are, and starts everyone's countdown together. */
-export interface RelayMatch { event: WideEvent; slots: SlotRelay[]; hashes: Map<number, { hash: number; slot: number }>; loaded: Set<Client>; goAt: number }
+/**
+ * `forwarded`: the newest real input frame passed on; `filled`: the frames the relay decided away (see checkFills),
+ * through this one; `finalSent`: what the player was last told the relay has of theirs.
+ */
+interface SlotRelay { inputs: number; newest: number; hashes: number; lastHashFrame: number; maxGapMs: number; stalls: number; lastAt: number; forwarded: number; filled: number; fills: number; filledFrames: number; finalSent: number }
+/**
+ * `loaded`: members whose match screen is up; `go` is sent once they all are, and starts everyone's countdown together.
+ * `fills`: whether the relay may decide a silent player away (every member said it understands fills, and no bundle
+ * swap is under way: a bundle from before fills would desync on one); `fillers` the members that said so.
+ */
+export interface RelayMatch { event: WideEvent; slots: SlotRelay[]; hashes: Map<number, { hash: number; slot: number }>; loaded: Set<Client>; goAt: number; fillers: Set<Client>; fills: boolean }
 
 let nextId = 1;
 export const rooms = new Map<string, Room>();
@@ -133,12 +141,12 @@ export function newRoom(host: Client, isPublic: boolean): Room {
 export function startRelayMatch(room: Room, seed: number, config: unknown, members: Client[]): void {
   if (room.match) endRelayMatch(room, "replaced by the next start");
   const trace = matchTrace(room.code, seed);
-  const slots: SlotRelay[] = members.map(() => ({ inputs: 0, newest: 0, hashes: 0, lastHashFrame: 0, maxGapMs: 0, stalls: 0, lastAt: 0 }));
+  const slots: SlotRelay[] = members.map(() => ({ inputs: 0, newest: 0, hashes: 0, lastHashFrame: 0, maxGapMs: 0, stalls: 0, lastAt: 0, forwarded: 0, filled: 0, fills: 0, filledFrames: 0, finalSent: 0 }));
   const event = openEvent("match", trace, room.trace)
     .set("match", { room: room.code, seed, config })
     .set("members", members.map((m) => ({ id: m.id, name: m.name, slot: m.slot, session: m.event.trace, fighter: m.fighter, bundleUrl: m.bundleUrl })))
     .set("relay", slots);
-  room.match = { event, slots, hashes: new Map(), loaded: new Set(), goAt: 0 };
+  room.match = { event, slots, hashes: new Map(), loaded: new Set(), goAt: 0, fillers: new Set(), fills: false };
   pushCapped(room.event.business, "matches", trace, 200);
 }
 export function endRelayMatch(room: Room, exit: string): void {
@@ -167,8 +175,38 @@ function checkGo(room: Room): void {
   const m = room.match;
   if (!m || m.goAt || !room.started || !room.members.every((c) => m.loaded.has(c))) return;
   m.goAt = Date.now();
-  m.event.set("goMs", since(m.event));
+  m.fills = room.members.every((c) => m.fillers.has(c));
+  m.event.set("goMs", since(m.event)).set("fills", m.fills);
   broadcast(room, { t: "go" });
+}
+/** How far behind the second most advanced other player (in input frames at the relay) a player may fall before the relay decides their frames away. */
+export const FILL_BEHIND = 24;
+const frontier = (s: SlotRelay): number => Math.max(s.forwarded, s.filled);
+
+/**
+ * A player whose inputs stop reaching the relay (their uplink is down) would freeze everyone. Once they are
+ * FILL_BEHIND frames behind the second most advanced other player, the relay decides their frames away up to there
+ * and tells everyone, them included: every client plays those frames as AWAY (the fighter stands, untouchable) and
+ * ignores whatever real inputs come later for them. The relay is the one place that sees every player's inputs in
+ * one order, so the decision is the same everywhere; inputs that came over a peer-to-peer link are provisional
+ * until the relay's copy (or its fill) confirms them.
+ */
+export function checkFills(room: Room): void {
+  const m = room.match;
+  if (!m || !m.fills || !m.goAt) return;
+  const live = room.members.filter((c) => m.slots[c.slot]);
+  if (live.length < 2) return;
+  for (const c of live) {
+    const s = m.slots[c.slot];
+    const others = live.filter((o) => o !== c).map((o) => frontier(m.slots[o.slot])).sort((a, b) => b - a);
+    const through = others[Math.min(1, others.length - 1)] - FILL_BEHIND;
+    const from = frontier(s) + 1;
+    if (through < from) continue;
+    s.filled = through;
+    s.fills++;
+    s.filledFrames += through - from + 1;
+    broadcast(room, { t: "fill", slot: c.slot, from, through });
+  }
 }
 function relayHash(m: RelayMatch, slot: number, frame: number, hash: number): void {
   const s = m.slots[slot];
@@ -233,7 +271,7 @@ export function leaveRoom(c: Client): void {
   room.members = room.members.filter((m) => m !== c);
   pushCapped(room.event.business, "leaves", { id: c.id, name: c.name, at: since(room.event), duringMatch });
   // the last input frame the relay has from the leaver: everyone has every input up to it, delivered before this message
-  const frame = room.match?.slots[slot]?.newest ?? 0;
+  const frame = room.match?.slots[slot] ? frontier(room.match.slots[slot]) : 0;
   if (room.match && duringMatch) {
     room.match.event.issue("warn", "left", `${c.name} (slot ${slot}) left mid-match at relay frame ${frame}`);
     pushCapped(room.match.event.business, "left", { id: c.id, name: c.name, slot, at: since(room.match.event), newest: frame });
@@ -364,22 +402,36 @@ export function attachLobby(wss: WebSocketServer): void {
           broadcast(room, { t: "start", seed: room.seed, config: room.config, members: room.members.map((m) => ({ id: m.id, name: m.name, slot: m.slot })) });
           break;
         }
-        case "inputs":
-          if (!c.room?.started || c.slot < 0) break;
-          if (c.room.match) {
-            relayInput(c.room.match, c.slot, msg.frame | 0);
+        case "inputs": {
+          if (!c.room?.started || c.slot < 0 || !Array.isArray(msg.inputs)) break;
+          const m = c.room.match;
+          const frame = msg.frame | 0;
+          let inputs: unknown[] = msg.inputs;
+          if (m) {
+            relayInput(m, c.slot, frame);
             // a client from before the start barrier never says it loaded: its first inputs say it
-            if (!c.room.match.loaded.has(c)) { c.room.match.loaded.add(c); checkGo(c.room); }
+            if (!m.loaded.has(c)) { m.loaded.add(c); checkGo(c.room); }
+            const s = m.slots[c.slot];
+            if (s) {
+              // frames already decided away are gone for good: only what's past the fill goes on
+              inputs = inputs.slice(Math.max(0, inputs.length - (frame - s.filled)));
+              if (!inputs.length) break;
+              s.forwarded = Math.max(s.forwarded, frame);
+              if (s.forwarded - s.finalSent >= 6) { s.finalSent = s.forwarded; send(c, { t: "final", frame: s.forwarded }); }
+            }
           }
           broadcast(c.room, {
-            t: "inputs", slot: c.slot, frame: msg.frame | 0, inputs: msg.inputs,
+            t: "inputs", slot: c.slot, frame, inputs,
             ...(Array.isArray(msg.ahead) && msg.ahead.length <= ROOM_SIZE ? { ahead: msg.ahead.map((a: unknown) => Number(a) || 0) } : {}),
             ...(Array.isArray(msg.acks) && msg.acks.length <= ROOM_SIZE ? { acks: msg.acks.map((a: unknown) => Number(a) | 0) } : {}),
           }, c);
+          checkFills(c.room);
           break;
+        }
         case "loaded":
           if (!c.room?.match || !c.room.started) break;
           c.room.match.loaded.add(c);
+          if (msg.fills === true) c.room.match.fillers.add(c);
           checkGo(c.room);
           break;
         // peer-to-peer signaling: offers, answers and ICE candidates between two members of one room
@@ -408,7 +460,10 @@ export function attachLobby(wss: WebSocketServer): void {
         // the host picks the frame everyone swaps bundles at; relayed to the whole room, host included
         case "gameAt":
           if (!c.room || c.room.host !== c || typeof msg.hash !== "string") break;
-          if (c.room.match) pushCapped(c.room.match.event.business, "swaps", { hash: msg.hash, frame: msg.frame | 0 });
+          if (c.room.match) {
+            pushCapped(c.room.match.event.business, "swaps", { hash: msg.hash, frame: msg.frame | 0 });
+            c.room.match.fills = false;
+          }
           broadcast(c.room, { t: "gameAt", hash: msg.hash, frame: msg.frame | 0 });
           break;
         case "end": if (c.room && c.room.host === c) { endRelayMatch(c.room, "host ended"); c.room.started = false; c.room.members.forEach((m, i) => { m.ready = false; m.slot = i; }); broadcast(c.room, roomInfo(c.room)); } break;

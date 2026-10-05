@@ -158,7 +158,8 @@ export class NetVersusScreen extends VersusScreen {
         this.session.waiting = true;
       }),
     );
-    if (!this.go) opts.transport.sendLobby({ t: "loaded" });
+    // `fills`: this client plays the relay's away decisions (see checkFills on the server)
+    if (!this.go) opts.transport.sendLobby({ t: "loaded", fills: true });
     this.cleanupMatch = (exit) => {
       telemetry.finish(exit);
       this.session.close();

@@ -1,6 +1,7 @@
 import { FONT, INK, PAPER, PENCIL, inkArc, inkLine } from "./paper";
 import type { Fighter, State } from "../../../shared/types";
 import { defOf, currentMove } from "../../../shared/fighter";
+import { B } from "../../../shared/input";
 import { hitboxWorld, hurtbox, shieldCircle } from "../../../shared/hits";
 import { stageOf } from "../../../shared/sim";
 import { Camera, VIEW_H, VIEW_W } from "./camera";
@@ -182,7 +183,9 @@ export class Renderer {
     }
     const dodging = f.action === "airDodge" || f.action === "spotDodge" || f.action === "roll" || f.action === "getupRoll" || f.action === "techRoll" || f.action === "ledgeRoll";
     const blink = f.invuln > 0 && !dodging && f.action !== "respawn" && (state.frame >> 2) % 2 === 0;
-    const alpha = f.action === "respawn" ? 0.8 : dodging && f.invuln > 0 ? 0.45 : blink ? 0.7 : 1;
+    // away: their connection dropped and the relay plays them as standing still (see B.AWAY)
+    const away = ((state.inputs[f.slot]?.b ?? 0) & B.AWAY) !== 0;
+    const alpha = away ? 0.35 : f.action === "respawn" ? 0.8 : dodging && f.invuln > 0 ? 0.45 : blink ? 0.7 : 1;
     const still = stillSprites.has(def.id);
     const c = still ? { cell: "idle", flip: false } : cellFor(f, def, a.name);
     const seated = FLOOR_ANIMS.has(a.name) ? restOnFloor(def, c.cell, pose) : pose;
@@ -224,6 +227,7 @@ export class Renderer {
     ctx.beginPath(); ctx.moveTo(pos.x - 9, my - 12); ctx.lineTo(pos.x + 9, my - 12); ctx.lineTo(pos.x, my); ctx.closePath(); ctx.fill(); ctx.stroke();
     ctx.font = `900 18px ${FONT}`; ctx.textAlign = "center"; ctx.lineWidth = 3;
     ctx.fillText(`P${f.slot + 1}`, pos.x, my - 18);
+    if (away) { ctx.fillStyle = INK; ctx.font = `900 16px ${FONT}`; ctx.fillText("RECONNECTING", pos.x, my - 40); }
     ctx.restore();
   }
 

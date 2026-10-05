@@ -4,31 +4,45 @@ import { hashState, type MatchConfig } from "../shared/sim";
 import { RollbackSession } from "../client/src/net/rollback";
 import { NetLink, type RelayInputs } from "../client/src/net/link";
 import type { PeerMesh } from "../client/src/net/mesh";
-import type { HashCallback, InputsCallback, Unsubscribe } from "../client/src/net/transport";
+import type { HashCallback, InputsCallback, RelayMessage, Unsubscribe } from "../client/src/net/transport";
 import { loadAllHouse } from "./house";
 
 /**
- * A room on a simulated network, one tick per sim frame: a relay (reliable, in order per sender, `relayLatency`
- * ticks) and a peer-to-peer link per pair (unordered: each packet takes `linkLatency` ticks plus jitter, and a
- * share of them is lost). Every endpoint runs the real NetLink over it. Member ids are slot + 1.
+ * A room on a simulated network, one tick per sim frame. The relay works like the real one: each player's stream
+ * reaches it in order (uplink), it trims frames it decided away, decides silent players away (fills), acknowledges
+ * each player's own frames, and every receiver gets one ordered stream from it (downlink). Each pair also has a
+ * peer-to-peer link: unordered, each packet `linkLatency` ticks plus jitter, a share of them lost. Every endpoint
+ * runs the real NetLink. Member ids are slot + 1.
  */
-interface Delivery { at: number; seq: number; run: () => void; heldFor?: number }
+interface Delivery { at: number; seq: number; run: () => void; hold?: () => boolean }
 /** The network's clock in ms: NetLink's stale-ack timer and the session's step timing read performance.now. */
 let now = 0;
+const FILL_BEHIND = 24;
 
 class Room {
   clock = 0;
   linkLoss = 0;
   /** Links that are down: `a-b` with a < b. */
   down = new Set<string>();
-  /** Endpoints that hear nothing (a downlink blackout); what they would have received is lost on links and held on the relay. */
+  /** Endpoints that hear nothing (a downlink blackout): link packets to them are lost, the relay's wait (TCP). */
   deaf = new Set<number>();
+  /** Endpoints whose uplink is dead: their link packets are lost, their relay stream waits. */
+  mute = new Set<number>();
+  /** Endpoints whose relay connection alone is stalled (their links still work). */
+  relayMute = new Set<number>();
+  fills = true;
   private queue: Delivery[] = [];
   private seq = 0;
   private seed: number;
-  private relayLast = new Map<string, number>();
+  private upLast = new Map<number, number>();
+  private downLast = new Map<number, number>();
   readonly relays: FakeRelay[] = [];
   readonly meshes: FakeMesh[] = [];
+  /** The relay's per-slot bookkeeping: newest frame passed on, frames decided away through, what each was told is final. */
+  forwarded: number[] = [];
+  filled: number[] = [];
+  finalSent: number[] = [];
+  gone = new Set<number>();
 
   constructor(seed: number, public relayLatency: [number, number], public linkLatency: [number, number]) {
     this.seed = seed >>> 0;
@@ -45,20 +59,28 @@ class Room {
     return lo + Math.floor(this.random() * (hi - lo + 1));
   }
 
-  schedule(at: number, run: () => void, heldFor?: number): void {
-    this.queue.push({ at, seq: this.seq++, run, heldFor });
+  schedule(at: number, run: () => void, hold?: () => boolean): void {
+    this.queue.push({ at, seq: this.seq++, run, hold });
   }
 
-  /** Relay: in order from each sender to each receiver. A deaf receiver gets it when it can hear again (TCP). */
-  relayed(from: number, to: number, run: () => void): void {
-    const key = `${from}>${to}`;
-    const at = Math.max(this.relayLast.get(key) ?? 0, this.clock + this.between(this.relayLatency));
-    this.relayLast.set(key, at);
-    this.schedule(at, run, to);
+  /** A message from `from` reaching the relay: in order, half the relay latency, held while its uplink is dead. */
+  up(from: number, run: () => void): void {
+    const half: [number, number] = [Math.floor(this.relayLatency[0] / 2), Math.ceil(this.relayLatency[1] / 2)];
+    const at = Math.max(this.upLast.get(from) ?? 0, this.clock + this.between(half));
+    this.upLast.set(from, at);
+    this.schedule(at, run, () => this.mute.has(from) || this.relayMute.has(from));
+  }
+
+  /** The relay's one ordered stream to `to`. */
+  downTo(to: number, run: () => void): void {
+    const half: [number, number] = [Math.floor(this.relayLatency[0] / 2), Math.ceil(this.relayLatency[1] / 2)];
+    const at = Math.max(this.downLast.get(to) ?? 0, this.clock + this.between(half));
+    this.downLast.set(to, at);
+    this.schedule(at, run, () => this.deaf.has(to) || this.relayMute.has(to));
   }
 
   linked(from: number, to: number, run: () => void): void {
-    if (this.random() < this.linkLoss) return;
+    if (this.random() < this.linkLoss || this.mute.has(from)) return;
     this.schedule(this.clock + this.between(this.linkLatency), () => { if (!this.deaf.has(to)) run(); });
   }
 
@@ -66,10 +88,45 @@ class Room {
     return this.down.has(`${Math.min(a, b)}-${Math.max(a, b)}`);
   }
 
+  /** The relay, as it handles a player's inputs (see server/lobby.ts). */
+  relayInputs(slot: number, frame: number, inputs: InputFrame[], ahead: number[], acks?: number[]): void {
+    const kept = inputs.slice(Math.max(0, inputs.length - (frame - this.filled[slot])));
+    if (!kept.length) return;
+    this.forwarded[slot] = Math.max(this.forwarded[slot], frame);
+    for (const r of this.relays) {
+      if (r.slot === slot) continue;
+      this.downTo(r.slot, () => { for (const l of r.inputListeners) l(slot, frame, kept.map(cloneInput), [...ahead], acks ? [...acks] : undefined); });
+    }
+    if (this.forwarded[slot] - this.finalSent[slot] >= 6) {
+      const final = this.finalSent[slot] = this.forwarded[slot];
+      this.downTo(slot, () => { for (const l of this.relays[slot].lobbyListeners) l({ t: "final", frame: final }); });
+    }
+    this.checkFills();
+  }
+
+  checkFills(): void {
+    if (!this.fills) return;
+    const live = this.relays.filter((r) => !this.gone.has(r.slot)).map((r) => r.slot);
+    if (live.length < 2) return;
+    const frontier = (s: number) => Math.max(this.forwarded[s], this.filled[s]);
+    for (const slot of live) {
+      const others = live.filter((o) => o !== slot).map(frontier).sort((a, b) => b - a);
+      const through = others[Math.min(1, others.length - 1)] - FILL_BEHIND;
+      const from = frontier(slot) + 1;
+      if (through < from) continue;
+      this.filled[slot] = through;
+      for (const r of this.relays) this.downTo(r.slot, () => { for (const l of r.lobbyListeners) l({ t: "fill", slot, from, through }); });
+    }
+  }
+
+  frontier(slot: number): number {
+    return Math.max(this.forwarded[slot], this.filled[slot]);
+  }
+
   tick(): void {
     this.clock++;
     now = this.clock * (1000 / 60);
-    const due = (d: Delivery) => d.at <= this.clock && !(d.heldFor !== undefined && this.deaf.has(d.heldFor));
+    const due = (d: Delivery) => d.at <= this.clock && !d.hold?.();
     const ready = this.queue.filter(due).sort((a, b) => a.at - b.at || a.seq - b.seq);
     this.queue = this.queue.filter((d) => !due(d));
     for (const d of ready) d.run();
@@ -80,10 +137,11 @@ class Room {
   }
 
   endpoint(slot: number, members: number): { link: NetLink; relay: FakeRelay; mesh: FakeMesh } {
-    const relay = new FakeRelay(this, slot, members);
+    const relay = new FakeRelay(this, slot);
     const mesh = new FakeMesh(this, slot);
     this.relays[slot] = relay;
     this.meshes[slot] = mesh;
+    this.forwarded[slot] ??= 0; this.filled[slot] ??= 0; this.finalSent[slot] ??= 0;
     const roster = Array.from({ length: members }, (_, s) => ({ id: s + 1, name: `P${s + 1}`, slot: s }));
     return { link: new NetLink(relay as unknown as RelayInputs, mesh as unknown as PeerMesh, roster, slot), relay, mesh };
   }
@@ -92,23 +150,18 @@ class Room {
 class FakeRelay {
   inputListeners = new Set<InputsCallback>();
   hashListeners = new Set<HashCallback>();
-  /** Per sender: the newest input frame the relay has seen (what its `left` message carries). */
-  static newest = new Map<number, number>();
-  constructor(private room: Room, private slot: number, private members: number) {}
+  lobbyListeners = new Set<(m: RelayMessage) => void>();
+  constructor(private room: Room, readonly slot: number) {}
   send(frame: number, inputs: InputFrame[], ahead: number[], acks?: number[]): void {
-    FakeRelay.newest.set(this.slot, Math.max(FakeRelay.newest.get(this.slot) ?? 0, frame));
     const copy = inputs.map(cloneInput), a = [...ahead], k = acks ? [...acks] : undefined;
-    for (let to = 0; to < this.members; to++) {
-      if (to === this.slot) continue;
-      this.room.relayed(this.slot, to, () => { for (const l of this.room.relays[to]?.inputListeners ?? []) l(this.slot, frame, copy.map(cloneInput), a, k); });
-    }
+    this.room.up(this.slot, () => this.room.relayInputs(this.slot, frame, copy, a, k));
   }
   onInputs(cb: InputsCallback): Unsubscribe { this.inputListeners.add(cb); return () => this.inputListeners.delete(cb); }
+  onLobby(cb: (m: RelayMessage) => void): Unsubscribe { this.lobbyListeners.add(cb); return () => this.lobbyListeners.delete(cb); }
   sendHash(frame: number, hash: number): void {
-    for (let to = 0; to < this.members; to++) {
-      if (to === this.slot) continue;
-      this.room.relayed(this.slot, to, () => { for (const l of this.room.relays[to]?.hashListeners ?? []) l(this.slot, frame, hash); });
-    }
+    this.room.up(this.slot, () => {
+      for (const r of this.room.relays) if (r.slot !== this.slot) this.room.downTo(r.slot, () => { for (const l of r.hashListeners) l(this.slot, frame, hash); });
+    });
   }
   onHash(cb: HashCallback): Unsubscribe { this.hashListeners.add(cb); return () => this.hashListeners.delete(cb); }
   rtt(): number { return 50; }
@@ -116,14 +169,12 @@ class FakeRelay {
 
 class FakeMesh {
   listeners = new Set<(id: number, data: ArrayBuffer) => void>();
-  sent = 0;
   constructor(private room: Room, private slot: number) {}
   link(id: number) { return { open: !this.room.isDown(this.slot, id - 1), route: "direct" as const, rtt: 40, heardMsAgo: 0 }; }
   stats() { return null; }
   send(id: number, data: ArrayBuffer): boolean {
     const to = id - 1;
     if (this.room.isDown(this.slot, to)) return false;
-    this.sent++;
     const copy = data.slice(0);
     this.room.linked(this.slot, to, () => { for (const l of this.room.meshes[to]?.listeners ?? []) l(this.slot + 1, copy); });
     return true;
@@ -157,7 +208,6 @@ interface Peer { session: RollbackSession; link: NetLink; relay: FakeRelay; mesh
 function room(config: MatchConfig, seed: number, opts: { relay?: [number, number]; link?: [number, number]; loss?: number } = {}): { net: Room; peers: Peer[] } {
   const net = new Room(seed, opts.relay ?? [3, 7], opts.link ?? [2, 6]);
   net.linkLoss = opts.loss ?? 0;
-  FakeRelay.newest.clear();
   const humans = config.players.map((p, slot) => (p.cpu ? -1 : slot)).filter((s) => s >= 0);
   const peers = humans.map((slot) => {
     const { link, relay, mesh } = net.endpoint(slot, config.players.length);
@@ -279,7 +329,8 @@ describe("rollback session over links and the relay", () => {
     const [a, b, leaver] = peers;
     play(net, peers, 1, (p) => p === leaver);
     net.drain();
-    const frame = FakeRelay.newest.get(2)!;
+    const frame = net.frontier(2);
+    net.gone.add(2);
     a.session.drop(2, frame);
     b.session.drop(2, frame);
     playTo(net, [a, b], 900);
@@ -341,6 +392,8 @@ describe("rollback session over links and the relay", () => {
   it("resumes from a handoff even when the swap lost what crossed the relay meanwhile (no links)", () => {
     const config = makeConfig();
     const { net, peers } = room(config, 0x5a4b);
+    // the relay stops deciding anyone away once a swap is scheduled
+    net.fills = false;
     net.down.add("0-1");
     play(net, peers, 300);
     const swapAt = 330;
@@ -363,6 +416,97 @@ describe("rollback session over links and the relay", () => {
     play(net, resumed, 30, (p) => p.session.localSlot === 0);
     playTo(net, resumed, 900, 6000);
     sameAt(resumed, 900);
+  });
+});
+
+describe("players whose inputs stop reaching the relay", () => {
+  beforeAll(async () => {
+    await loadAllHouse();
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+  });
+  afterAll(() => vi.restoreAllMocks());
+
+  it("a player whose uplink dies for three seconds is played away; the others never freeze, and he comes back", () => {
+    const { net, peers } = room(makeConfig(3), 0xaa11, { relay: [4, 8], link: [2, 5] });
+    play(net, peers, 300);
+    const [a, b, c] = peers;
+    const before = [a, b].map((p) => p.session.stats.stalls);
+    net.mute.add(2);
+    play(net, peers, 180);
+    net.mute.delete(2);
+    // the others stall at most while the first fill is on its way
+    expect([a, b].map((p, i) => p.session.stats.stalls - before[i]).every((n) => n < 20)).toBe(true);
+    expect(a.session.stats.awayFrames[2]).toBeGreaterThan(120);
+    expect(c.session.stats.awayFrames[2]).toBe(a.session.stats.awayFrames[2]);
+    play(net, peers, 120);
+    // back: his own inputs count again
+    const filledBefore = a.session.stats.awayFrames[2];
+    play(net, peers, 120);
+    expect(a.session.stats.awayFrames[2]).toBe(filledBefore);
+    playTo(net, peers, 1200);
+    sameAt(peers, 1200);
+  });
+
+  it("a fill overrules inputs that already came over a link (his relay connection stalled, his links didn't)", () => {
+    const { net, peers } = room(makeConfig(3), 0xbb22, { relay: [6, 10], link: [1, 3] });
+    play(net, peers, 300);
+    net.relayMute.add(1);
+    play(net, peers, 90);
+    net.relayMute.delete(1);
+    const [a, b, c] = peers;
+    expect(a.session.stats.awayFrames[1]).toBeGreaterThan(0);
+    expect(c.session.stats.awayFrames[1]).toBe(a.session.stats.awayFrames[1]);
+    // the others had his real inputs over the link and rolled back past the window to play the fill
+    expect(c.session.stats.tooDeep + a.session.stats.tooDeep).toBeGreaterThan(0);
+    playTo(net, peers, 900);
+    sameAt(peers, 900);
+    expect(b.session.stats.awayFrames[1]).toBe(a.session.stats.awayFrames[1]);
+  });
+
+  it("one on one, the player left alone plays on against a fighter standing still", () => {
+    const { net, peers } = room(makeConfig(2), 0xcc33, { relay: [4, 8], link: [2, 5] });
+    play(net, peers, 200);
+    net.mute.add(1);
+    const stalls = peers[0].session.stats.stalls;
+    play(net, peers, 240);
+    net.mute.delete(1);
+    expect(peers[0].session.stats.stalls - stalls).toBeLessThan(20);
+    playTo(net, peers, 900);
+    sameAt(peers, 900);
+  });
+});
+
+describe("fuzz", () => {
+  beforeAll(async () => {
+    await loadAllHouse();
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+  });
+  afterAll(() => vi.restoreAllMocks());
+
+  it("stays identical through random blackouts, relay stalls, dead links and loss", () => {
+    for (let seed = 1; seed <= 8; seed++) {
+      const players = 2 + (seed % 3);
+      const { net, peers } = room(makeConfig(players), 0xf00d + seed * 7919, { relay: [3, 12], link: [1, 8], loss: (seed % 4) * 0.1 });
+      for (let t = 0; t < 1500; t++) {
+        // every 60 ticks something changes for someone
+        if (t % 60 === 0) {
+          const who = Math.floor(net.random() * players);
+          const what = Math.floor(net.random() * 6);
+          net.mute.clear(); net.deaf.clear(); net.relayMute.clear(); net.down.clear();
+          if (what === 0) net.mute.add(who);
+          if (what === 1) net.deaf.add(who);
+          if (what === 2) net.relayMute.add(who);
+          if (what === 3) net.down.add(`${Math.min(who, (who + 1) % players)}-${Math.max(who, (who + 1) % players)}`);
+        }
+        play(net, peers, 1);
+      }
+      net.mute.clear(); net.deaf.clear(); net.relayMute.clear(); net.down.clear();
+      playTo(net, peers, Math.max(...peers.map((p) => p.session.clock)) + 60, 6000);
+      const f = Math.min(...peers.map((p) => p.session.state.frame));
+      for (const p of peers) expect(p.session.desync, `seed ${seed}`).toBeNull();
+      const hashes = peers.map((p) => p.session.stateHashAt(f));
+      for (const h of hashes) expect(h, `seed ${seed} frame ${f}`).toBe(hashes[0]);
+    }
   });
 });
 

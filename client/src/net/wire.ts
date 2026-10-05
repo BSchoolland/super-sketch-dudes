@@ -6,7 +6,7 @@ import type { InputFrame } from "../../../shared/input";
  * leads and acknowledgements. Little endian:
  *   u8 kind=1, u8 slot, u32 first frame, u16 frame count, u8 slots,
  *   per slot: i16 ahead*10, u32 ack,
- *   runs until count frames: u8 length, i8 x, i8 y, i8 cx, i8 cy, u8 buttons
+ *   runs until count frames: u8 length, i8 x, i8 y, i8 cx, i8 cy, u16 buttons
  * Pings carry the sender's clock and come back unchanged: u8 kind=2|3, f64 ms.
  */
 export const KIND_INPUTS = 1, KIND_PING = 2, KIND_PONG = 3;
@@ -19,7 +19,7 @@ export interface InputPacket {
   acks: number[];
 }
 
-const HEADER = 9, PER_SLOT = 6, RUN = 6;
+const HEADER = 9, PER_SLOT = 6, RUN = 7;
 /** Frames per packet; past this a packet could outgrow one UDP datagram, and a fragment lost is the whole packet lost. */
 export const MAX_FRAMES = 120;
 
@@ -53,7 +53,7 @@ export function encodeInputs(p: InputPacket): ArrayBuffer {
     v.setInt8(o + 2, input.y);
     v.setInt8(o + 3, input.cx);
     v.setInt8(o + 4, input.cy);
-    v.setUint8(o + 5, input.b);
+    v.setUint16(o + 5, input.b, true);
     o += RUN;
   }
   return buf;
@@ -76,7 +76,7 @@ export function decodeInputs(buf: ArrayBuffer): InputPacket {
     if (o + RUN > buf.byteLength) throw new Error("input packet cut short");
     const n = v.getUint8(o);
     if (n < 1 || inputs.length + n > count) throw new Error("input packet run overflows its frame count");
-    const input = { x: v.getInt8(o + 1), y: v.getInt8(o + 2), cx: v.getInt8(o + 3), cy: v.getInt8(o + 4), b: v.getUint8(o + 5) };
+    const input = { x: v.getInt8(o + 1), y: v.getInt8(o + 2), cx: v.getInt8(o + 3), cy: v.getInt8(o + 4), b: v.getUint16(o + 5, true) };
     for (let k = 0; k < n; k++) inputs.push({ ...input });
     o += RUN;
   }

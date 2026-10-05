@@ -1,10 +1,10 @@
 import type { InputFrame } from "../../../shared/input";
 import type { LinkStats, PeerMesh, Route } from "./mesh";
-import type { HashCallback, InputsCallback, LocalInputs, Transport, Unsubscribe, WebSocketTransport } from "./transport";
+import type { HashCallback, InputsCallback, LocalInputs, RelayVerdicts, Transport, Unsubscribe, WebSocketTransport } from "./transport";
 import { decodeInputs, encodeInputs, KIND_INPUTS, MAX_FRAMES } from "./wire";
 
 /** What NetLink needs of the relay connection (any bundle's: see WebSocketTransport). */
-export type RelayInputs = Pick<WebSocketTransport, "send" | "onInputs" | "sendHash" | "onHash" | "rtt">;
+export type RelayInputs = Pick<WebSocketTransport, "send" | "onInputs" | "sendHash" | "onHash" | "onLobby" | "rtt">;
 
 /** How one remote player's inputs reached us, and how long a peer-to-peer link to them was up. */
 export interface PathStats {
@@ -34,6 +34,7 @@ const STALE_ACK_MS = 1000;
  */
 export class NetLink implements Transport {
   private listeners = new Set<InputsCallback>();
+  private verdicts = new Set<RelayVerdicts>();
   private slotOf = new Map<number, number>();
   private idOf = new Map<number, number>();
   private relaySent: number | null = null;
@@ -54,8 +55,12 @@ export class NetLink implements Transport {
     this.unsubscribers = [
       relay.onInputs((slot, frame, inputs, ahead, acks) => {
         const path = this.paths.get(slot);
-        const fresh = this.emit(slot, frame, inputs, ahead, acks);
+        const fresh = this.emit(slot, frame, inputs, ahead, acks, true);
         if (path) { path.packetsViaRelay++; path.framesViaRelay += fresh; }
+      }),
+      relay.onLobby((m) => {
+        if (m.t === "fill") for (const v of this.verdicts) v.fill(m.slot, m.from, m.through);
+        if (m.t === "final") for (const v of this.verdicts) v.final(m.frame);
       }),
     ];
     if (mesh) this.unsubscribers.push(mesh.onPacket((id, data) => this.fromLink(id, data)));
@@ -104,6 +109,11 @@ export class NetLink implements Transport {
     return this.relay.onHash(cb);
   }
 
+  onVerdicts(cb: RelayVerdicts): Unsubscribe {
+    this.verdicts.add(cb);
+    return () => this.verdicts.delete(cb);
+  }
+
   /** The slowest player's round trip: over their link when it's open, else our own to the relay. */
   rtt(): number {
     let worst = 0;
@@ -136,6 +146,7 @@ export class NetLink implements Transport {
     for (const unsubscribe of this.unsubscribers) unsubscribe();
     this.unsubscribers.length = 0;
     this.listeners.clear();
+    this.verdicts.clear();
   }
 
   private linkTo(slot: number) {
@@ -176,12 +187,12 @@ export class NetLink implements Transport {
     if (p.slot !== slot) throw new Error(`member ${id} plays slot ${slot} but sent inputs for slot ${p.slot}`);
     const path = this.paths.get(slot)!;
     path.packetsViaLink++;
-    path.framesViaLink += this.emit(slot, p.first + p.inputs.length - 1, p.inputs, p.ahead, p.acks);
+    path.framesViaLink += this.emit(slot, p.first + p.inputs.length - 1, p.inputs, p.ahead, p.acks, false);
   }
 
-  private emit(slot: number, frame: number, inputs: InputFrame[], ahead?: number[], acks?: number[]): number {
+  private emit(slot: number, frame: number, inputs: InputFrame[], ahead: number[] | undefined, acks: number[] | undefined, final: boolean): number {
     let fresh = 0;
-    for (const listener of this.listeners) fresh += listener(slot, frame, inputs, ahead, acks) ?? 0;
+    for (const listener of this.listeners) fresh += listener(slot, frame, inputs, ahead, acks, final) ?? 0;
     return fresh;
   }
 

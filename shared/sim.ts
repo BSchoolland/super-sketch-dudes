@@ -4,7 +4,7 @@ import { hashNumbers } from "./fixed";
 import { stepFighter } from "./fighter";
 import { roster } from "./fighters/index";
 import { resolveHits } from "./hits";
-import { EMPTY_INPUT, cloneInput, type InputFrame } from "./input";
+import { B, EMPTY_INPUT, cloneInput, type InputFrame } from "./input";
 import { stepPhysics, stepProjectiles, updatePlatforms } from "./physics";
 import { stepRules } from "./rules";
 import { registerStage, stages } from "./stages/index";
@@ -87,15 +87,18 @@ export function step(state: State, inputs: InputFrame[]): State {
   state.frame++;
   if (state.slowmo > 0) state.slowmo--;
   updatePlatforms(state, stage);
-  // an eliminated fighter's input is nothing, so a player who leaves after going out can drop at any frame (see RollbackSession.drop)
-  const input = (slot: number): InputFrame => (state.fighters[slot] && state.fighters[slot].stocks <= 0 ? EMPTY_INPUT : inputs[slot] ?? EMPTY_INPUT);
+  // an eliminated fighter's input is nothing, so a player who leaves after going out can drop at any frame (see RollbackSession.drop);
+  // a player away (B.AWAY: their connection is down) presses nothing and can't be hit until they're back
+  const away = (slot: number): boolean => ((inputs[slot]?.b ?? 0) & B.AWAY) !== 0;
+  const input = (slot: number): InputFrame => (state.fighters[slot] && state.fighters[slot].stocks <= 0) || away(slot) ? EMPTY_INPUT : inputs[slot] ?? EMPTY_INPUT;
+  for (const f of state.fighters) if (away(f.slot)) f.invuln = Math.max(f.invuln, 2);
   for (const f of state.fighters) stepFighter(state, f, input(f.slot), state.inputs[f.slot], stage);
   for (const f of state.fighters) stepPhysics(state, f, input(f.slot), stage);
   stepProjectiles(state, stage);
   resolveHits(state);
   for (const f of state.fighters) settleBars(f);
   stepRules(state, stage);
-  for (let i = 0; i < state.inputs.length; i++) state.inputs[i] = cloneInput(input(i));
+  for (let i = 0; i < state.inputs.length; i++) state.inputs[i] = away(i) ? { ...EMPTY_INPUT, b: B.AWAY } : cloneInput(input(i));
   state.seen.unshift(state.fighters.map(glimpse));
   if (state.seen.length > SEEN_FRAMES) state.seen.pop();
   return state;

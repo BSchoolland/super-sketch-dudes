@@ -1,5 +1,5 @@
 import { cpuInput } from "../../../shared/cpu";
-import { EMPTY_INPUT, cloneInput, inputEquals, type InputFrame } from "../../../shared/input";
+import { B, EMPTY_INPUT, cloneInput, inputEquals, type InputFrame } from "../../../shared/input";
 import { cloneState, createMatch, hashState, step, type MatchConfig } from "../../../shared/sim";
 import type { GameEvent, State } from "../../../shared/types";
 import type { Transport, Unsubscribe } from "./transport";
@@ -77,16 +77,22 @@ export class RollbackSession {
   /**
    * Counted for the match's wide event: `stalls` are ticks frozen waiting on remote inputs; `catchupFrames` frames
    * stepped beyond one a tick to get back to the clock after one (fast-forward); `maxBehind` the furthest the sim
-   * fell behind the clock; `clockHolds` ticks the clock waited for a sim frozen a second behind it; `window` the prediction window now and `minWindow` its lowest; `stepUs` the measured cost
+   * fell behind the clock; `clockHolds` ticks the clock waited for a sim frozen a second behind it; `awayFrames` per
+   * slot, frames the relay decided that player away (ours: inputs of ours that never counted), in `fills` decisions;
+   * `tooDeep` rollbacks past the prediction window (a fill overruling provisional inputs); `window` the prediction window now and `minWindow` its lowest; `stepUs` the measured cost
    * of one sim step plus its snapshot.
    */
-  readonly stats = { rollbacks: 0, resimFrames: 0, maxDepth: 0, tooDeep: 0, stalls: 0, timeSyncSkips: 0, catchupFrames: 0, maxBehind: 0, clockHolds: 0, window: 0, minWindow: 0, stepUs: 0 };
+  readonly stats = { rollbacks: 0, resimFrames: 0, maxDepth: 0, tooDeep: 0, stalls: 0, timeSyncSkips: 0, catchupFrames: 0, maxBehind: 0, clockHolds: 0, window: 0, minWindow: 0, stepUs: 0, awayFrames: [] as number[], fills: 0 };
 
   private humanSlots: number[];
   private cpuLevels: number[];
   private realInputs: Map<number, InputFrame>[];
   /** Per slot, the frame through which every input is in hand: sent to the others as acknowledgements. */
   private held: number[];
+  /** Per slot, the frame through which its inputs are final: the relay delivered them (or decided them away). */
+  private final: number[];
+  /** Per slot, the frame through which the relay decided that player away (0: never). */
+  private filled: number[];
   /** Per remote slot still playing, the frame through which it holds every input of ours. */
   private peerAcks = new Map<number, number>();
   private localOldest = 1;
@@ -134,6 +140,9 @@ export class RollbackSession {
       for (let frame = 1; frame <= this.inputDelay; frame++) this.realInputs[slot].set(frame, cloneInput(EMPTY_INPUT));
     }
     this.held = this.cpuLevels.map((level) => level > 0 ? 0 : this.inputDelay);
+    this.final = this.held.map((held) => held);
+    this.filled = this.cpuLevels.map(() => 0);
+    this.stats.awayFrames = this.cpuLevels.map(() => 0);
     for (const slot of this.humanSlots) if (slot !== this.localSlot) this.peerAcks.set(slot, this.inputDelay);
     this.confirmedThrough = this.inputDelay;
     this.snapshots.set(0, cloneState(this.state));
@@ -141,6 +150,7 @@ export class RollbackSession {
     this.unsubscribers = [
       this.transport.onInputs((slot, frame, inputs, ahead, acks) => this.receiveInputs(slot, frame, inputs, ahead, acks)),
       this.transport.onHash((slot, frame, hash) => this.receiveHash(slot, frame, hash)),
+      this.transport.onVerdicts({ fill: (slot, from, through) => this.fill(slot, from, through), final: (frame) => this.finalOwn(frame) }),
     ];
   }
 
@@ -227,6 +237,7 @@ export class RollbackSession {
       let held = h.frame;
       while (this.realInputs[slot].has(held + 1)) held++;
       this.held[slot] = held;
+      this.final[slot] = h.frame;
       if (slot !== this.localSlot) this.peerAcks.set(slot, h.frame);
     }
     this.localOldest = Math.min(h.frame + 1, ...this.realInputs[this.localSlot].keys());
@@ -242,7 +253,7 @@ export class RollbackSession {
    */
   handoff(frame: number): SessionHandoff | null {
     if (this.desync) return null;
-    if (this.confirmedThrough < frame || this.state.frame < frame) return null;
+    if (this.finalThrough() < frame || this.confirmedThrough < frame || this.state.frame < frame) return null;
     if (this.pendingRollback !== null && this.pendingRollback <= frame) return null;
     const snapshot = this.snapshots.get(frame);
     if (!snapshot) throw new Error(`no snapshot for handoff frame ${frame}; keepFrom was ${this.keepFrom}`);
@@ -270,9 +281,9 @@ export class RollbackSession {
     this.sendConfirmedHashes();
   }
 
-  /** The newest state built only from real inputs; null while a pending rollback still has to rewrite it. */
+  /** The newest state built only from final inputs; null while a pending rollback still has to rewrite it. */
   confirmedState(): State | null {
-    const frame = Math.min(this.confirmedThrough, this.state.frame);
+    const frame = Math.min(this.finalThrough(), this.confirmedThrough, this.state.frame);
     if (this.pendingRollback !== null && this.pendingRollback <= frame) return null;
     return this.snapshots.get(frame) ?? null;
   }
@@ -388,19 +399,55 @@ export class RollbackSession {
     this.advanceConfirmation();
   }
 
+  /**
+   * The relay decided a player away from `from` through `through`: those frames play as AWAY whatever arrived for them
+   * (a provisional input over a link is overruled, and rolled back if it was used). When it's us, our clock jumps past
+   * the fill, so our next inputs are ones the relay will take.
+   */
+  private fill(slot: number, from: number, through: number): void {
+    if (!this.humanSlots.includes(slot) || this.gone.has(slot) || through <= this.filled[slot]) return;
+    const away: InputFrame = { ...EMPTY_INPUT, b: B.AWAY };
+    for (let frame = Math.max(1, from, this.filled[slot] + 1); frame <= through; frame++) {
+      this.realInputs[slot].set(frame, cloneInput(away));
+      const used = this.usedInputs.get(frame)?.[slot];
+      if (used && !inputEquals(used, away)) this.pendingRollback = Math.min(this.pendingRollback ?? frame, frame);
+    }
+    this.stats.fills++;
+    this.stats.awayFrames[slot] += through - Math.max(from, this.filled[slot] + 1) + 1;
+    this.filled[slot] = through;
+    this.final[slot] = Math.max(this.final[slot], through);
+    while (this.realInputs[slot].has(this.held[slot] + 1)) this.held[slot]++;
+    if (slot === this.localSlot && this.clock + this.inputDelay < through) this.clock = through - this.inputDelay;
+    this.advanceConfirmation();
+  }
+
+  /** The relay has every input of ours through `frame`. */
+  private finalOwn(frame: number): void {
+    this.final[this.localSlot] = Math.max(this.final[this.localSlot], frame);
+  }
+
+  /** The frame through which every player's inputs are final: what hashes and handoffs stand on. */
+  finalThrough(): number {
+    let through = Infinity;
+    for (const slot of this.humanSlots) if (!this.gone.has(slot)) through = Math.min(through, this.final[slot]);
+    return through;
+  }
+
   /** Stores a run of a remote's inputs ending at `newestFrame`; returns how many frames were new. */
-  private receiveInputs(slot: number, newestFrame: number, inputs: InputFrame[], ahead?: number[], acks?: number[]): number {
+  private receiveInputs(slot: number, newestFrame: number, inputs: InputFrame[], ahead?: number[], acks?: number[], final?: boolean): number {
     if (!this.humanSlots.includes(slot) || slot === this.localSlot || this.gone.has(slot)) return 0;
     if (newestFrame > (this.remoteNewest.get(slot) ?? 0)) { this.remoteNewest.set(slot, newestFrame); this.heardAt.set(slot, this.ticks); }
     if (ahead && Number.isFinite(ahead[this.localSlot])) this.remoteAhead.set(slot, ahead[this.localSlot]);
     const ack = acks?.[this.localSlot];
     if (ack !== undefined && Number.isFinite(ack)) this.peerAcks.set(slot, Math.max(this.peerAcks.get(slot) ?? 0, ack));
     const firstFrame = newestFrame - inputs.length + 1;
+    // the relay's copy comes in order, so it makes everything up to its newest frame final
+    if (final && firstFrame <= this.final[slot] + 1) this.final[slot] = Math.max(this.final[slot], newestFrame);
     let fresh = 0;
     for (let i = 0; i < inputs.length; i++) {
       const frame = firstFrame + i;
-      // everything up to `held` is in hand or already applied and pruned
-      if (frame <= this.held[slot] || this.realInputs[slot].has(frame)) continue;
+      // everything up to `held` is in hand or already applied and pruned; frames decided away stay away
+      if (frame <= this.held[slot] || frame <= this.filled[slot] || this.realInputs[slot].has(frame)) continue;
       const input = cloneInput(inputs[i]);
       input.b &= ~64;
       this.realInputs[slot].set(frame, input);
@@ -428,11 +475,7 @@ export class RollbackSession {
     const firstFrame = this.pendingRollback;
     if (firstFrame === null || firstFrame > this.state.frame) return;
     const depth = this.state.frame - firstFrame + 1;
-    if (depth > this.maxRollback) {
-      this.waiting = true;
-      this.stats.tooDeep++;
-      return;
-    }
+    if (depth > this.maxRollback) this.stats.tooDeep++;
     const snapshot = this.snapshots.get(firstFrame - 1);
     if (!snapshot) throw new Error(`missing rollback snapshot for frame ${firstFrame - 1}`);
     const head = this.state.frame;
@@ -494,7 +537,7 @@ export class RollbackSession {
   }
 
   private sendConfirmedHashes(): void {
-    while (this.nextHashFrame <= Math.min(this.confirmedThrough, this.state.frame)) {
+    while (this.nextHashFrame <= Math.min(this.finalThrough(), this.confirmedThrough, this.state.frame) && (this.pendingRollback === null || this.pendingRollback > this.nextHashFrame)) {
       const snapshot = this.snapshots.get(this.nextHashFrame);
       if (!snapshot) throw new Error(`missing confirmed snapshot for hash frame ${this.nextHashFrame}`);
       // hashes stop with the match: a player leaving the result screen drops at a frame the clients needn't agree on
@@ -523,7 +566,8 @@ export class RollbackSession {
   }
 
   private pruneHistory(): void {
-    const oldest = this.keepFrom === null ? this.state.frame - this.maxRollback : Math.min(this.keepFrom, this.state.frame - this.maxRollback);
+    // snapshots go back to the last final frame: a fill can overrule provisional inputs anywhere after it
+    const oldest = Math.min(this.keepFrom ?? Infinity, this.state.frame - this.maxRollback, this.finalThrough());
     for (const frame of this.snapshots.keys()) if (frame < oldest) this.snapshots.delete(frame);
     for (const frame of this.usedInputs.keys()) if (frame < oldest + 1) this.usedInputs.delete(frame);
     // our own inputs stay until every remote has them (and long enough back for a handoff's resends)

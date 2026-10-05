@@ -9,7 +9,16 @@ export type Unsubscribe = () => void;
  * sync (see RollbackSession); `acks`: per slot, the frame through which the sender holds every input. Either is
  * absent from clients that don't send it. Returns how many of the frames were new to the session.
  */
-export type InputsCallback = (slot: number, frame: number, inputs: InputFrame[], ahead?: number[], acks?: number[]) => number | void;
+export type InputsCallback = (slot: number, frame: number, inputs: InputFrame[], ahead?: number[], acks?: number[], final?: boolean) => number | void;
+/**
+ * The relay's word on the match, final everywhere: `fill`, the frames it decided a player away (their inputs had
+ * stopped reaching it); `final`, the frame through which it has every input of ours. Inputs that arrive over the
+ * relay are final too (`final` on InputsCallback); inputs over a peer-to-peer link are provisional until then.
+ */
+export interface RelayVerdicts {
+  fill(slot: number, from: number, through: number): void;
+  final(frame: number): void;
+}
 export type HashCallback = (slot: number, frame: number, hash: number) => void;
 
 /** What a rollback session hands its transport every tick: its own inputs, and what it knows of everyone's. */
@@ -33,6 +42,7 @@ export interface Transport {
   onInputs(cb: InputsCallback): Unsubscribe;
   sendHash(frame: number, hash: number): void;
   onHash(cb: HashCallback): Unsubscribe;
+  onVerdicts(cb: RelayVerdicts): Unsubscribe;
   /** Round trip to the players, for the connection indicator. */
   rtt(): number;
 }
@@ -58,6 +68,9 @@ export type RelayMessage =
   | { t: "left"; id: number; slot: number; duringMatch: boolean; frame: number }
   /** Every member's match screen is up: the countdown starts. */
   | { t: "go" }
+  /** See RelayVerdicts. */
+  | { t: "fill"; slot: number; from: number; through: number }
+  | { t: "final"; frame: number }
   /** ICE servers for peer-to-peer links, and the links' signaling (see PeerMesh). */
   | { t: "ice"; servers: unknown[] }
   | { t: "rtc"; from: number; gen: number }

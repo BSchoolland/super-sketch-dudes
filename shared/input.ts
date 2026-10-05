@@ -17,6 +17,8 @@ export const B = {
   TAUNT: 32,
   PAUSE: 64,
   SMASH: 128, // keyboard smash key: an attack that is always a smash
+  /** Online only: the relay decided this player away for the frame (their inputs stopped reaching it). Never a button. */
+  AWAY: 256,
 } as const;
 
 export const EMPTY_INPUT: InputFrame = { x: 0, y: 0, cx: 0, cy: 0, b: 0 };
