@@ -57,7 +57,11 @@ const MAX_CLOCK_LEAD = 60;
 /** Local inputs kept for resends, at least: a remote that acknowledged nothing for longer than this has been dropped. */
 const LOCAL_HISTORY = 150;
 
+/** How far a rollback moved a fighter from where the screen had it (predicted minus corrected). */
+export interface Correction { slot: number; dx: number; dy: number }
+
 export class RollbackSession {
+  private corrections: Correction[] = [];
   state: State;
   readonly localSlot: number;
   readonly inputDelay: number;
@@ -488,6 +492,13 @@ export class RollbackSession {
     this.compareHashes(frame);
   }
 
+  /** How far rollbacks moved fighters from where the screen had them, since the last call (the renderer eases them out). */
+  takeCorrections(): Correction[] {
+    const corrections = this.corrections;
+    this.corrections = [];
+    return corrections;
+  }
+
   private applyRollback(): void {
     const firstFrame = this.pendingRollback;
     if (firstFrame === null || firstFrame > this.state.frame) return;
@@ -496,6 +507,7 @@ export class RollbackSession {
     const snapshot = this.snapshots.get(firstFrame - 1);
     if (!snapshot) throw new Error(`missing rollback snapshot for frame ${firstFrame - 1}`);
     const head = this.state.frame;
+    const before = this.state.fighters.map((f) => ({ x: f.x, y: f.y }));
     this.state = cloneState(snapshot);
     for (let frame = firstFrame; frame <= head; frame++) {
       const inputs = this.inputsForFrame(frame);
@@ -504,6 +516,10 @@ export class RollbackSession {
       this.usedInputs.set(frame, inputs.map(cloneInput));
       this.snapshots.set(frame, cloneState(this.state));
     }
+    this.state.fighters.forEach((f, slot) => {
+      const dx = before[slot].x - f.x, dy = before[slot].y - f.y;
+      if (dx || dy) this.corrections.push({ slot, dx, dy });
+    });
     this.rollbackSamples.push({ at: Date.now(), frames: depth });
     this.stats.rollbacks++;
     this.stats.resimFrames += depth;

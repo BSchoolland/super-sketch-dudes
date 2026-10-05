@@ -149,9 +149,12 @@ describe("relay link resume", () => {
     await b2.open();
     await b2.expect("hello");
     b2.send({ t: "resume", id: b.id, token: b.token, final: [12, 6] });
+    // the client drops anything on a fresh socket before "resumed": it has to come first
+    await until(() => b2.inbox.some((m) => m.t === "inputs") || undefined, "the catch-up");
+    expect(b2.inbox.filter((m) => m.t !== "hello").map((m) => m.t)[0]).toBe("resumed");
+    expect((await b2.expect("resumed")).ack).toBe(6);
     const caught = await b2.expect("inputs", (m) => m.slot === 0);
     expect([caught.frame, caught.inputs.length, caught.inputs[0][0]]).toEqual([20, 8, 13]);
-    expect((await b2.expect("resumed")).ack).toBe(6);
     // b2 is the guest now: its inputs reach the host, the host's reach it
     b2.send({ t: "inputs", frame: 9, inputs: run(7, 9) });
     expect((await a.expect("inputs", (m) => m.slot === 1)).frame).toBe(9);

@@ -17,6 +17,8 @@ export interface MatchDriver {
   lastInputs: InputFrame[];
   tick(): boolean;
   takeEvents(): GameEvent[];
+  /** Online: how far rollbacks moved fighters under the renderer since the last call. */
+  takeCorrections?(): { slot: number; dx: number; dy: number }[];
 }
 
 /** Drives a local match: input sampling, fixed-step sim, events out. Online swaps the input source. */

@@ -433,10 +433,11 @@ export function attachLobby(wss: WebSocketServer): void {
           c = old;
           event = old.event;
           if (previous.readyState === previous.OPEN || previous.readyState === previous.CONNECTING) previous.close(CLOSE_SUPERSEDED, "resumed on another socket");
+          // "resumed" first: the client only takes messages on this socket once it knows it's the link now
+          send(c, { t: "resumed", ack: frontier(s) });
           for (const message of missed) send(c, message);
           s.finalSent = s.forwarded;
           send(c, { t: "final", frame: s.forwarded });
-          send(c, { t: "resumed", ack: frontier(s) });
           break;
         }
         case "create": joinRoom(c, newRoom(c, !!msg.public)); break;

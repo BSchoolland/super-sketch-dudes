@@ -3,7 +3,7 @@ import type { GameEvent, State } from "../../../shared/types";
 import { readDevice } from "../input/devices";
 import { settings } from "../screens/ui";
 import type { MatchDriver, SlotSource } from "../match";
-import type { RollbackSession } from "./rollback";
+import type { Correction, RollbackSession } from "./rollback";
 
 export class RollbackMatch implements MatchDriver {
   readonly sources: SlotSource[];
@@ -32,6 +32,10 @@ export class RollbackMatch implements MatchDriver {
     const input = source.device ? readDevice(source.device, { tapJump: settings.tapJump }) : cloneInput(EMPTY_INPUT);
     this.lastInputs[this.session.localSlot] = input;
     return this.session.advance(input);
+  }
+
+  takeCorrections(): Correction[] {
+    return this.session.takeCorrections();
   }
 
   takeEvents(): GameEvent[] {

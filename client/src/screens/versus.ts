@@ -73,7 +73,10 @@ export class VersusScreen implements Screen {
     let n = 0;
     // after a hitch the sim catches up, to a quarter second: dropped sim time would put an online client behind the match
     while (!this.frozen && this.acc >= STEP && n < 15) {
-      if (this.match.tick()) {
+      const ticked = this.match.tick();
+      const corrections = this.match.takeCorrections?.();
+      if (corrections?.length) this.renderer.correct(corrections);
+      if (ticked) {
         this.renderer.snapshot(this.match.state);
         this.acc -= STEP;
         n++;

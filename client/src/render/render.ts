@@ -16,6 +16,10 @@ import { drawStrikes, inWindup } from "./strikes";
 import { drawLook, lookColor, lookOf, type LookAt } from "./looks";
 import type { Projectile } from "../../../shared/types";
 
+/** Rollback smoothing: the time constant a correction eases out with, and the biggest jump that eases rather than snaps. */
+const SMOOTH_S = 0.05;
+const SMOOTH_MAX = 300;
+
 interface Ghost { x: number; y: number; facing: number; age: number; def: FighterDef; cell: string; flip: boolean; pose: Pose; spinAround: "feet" | "middle" }
 interface ProjGhost { def: FighterDef; look: Look; at: LookAt; age: number }
 
@@ -33,6 +37,8 @@ export class Renderer {
   /** Runs once the world layer is on the canvas, before screen effects and the HUD. */
   afterWorld: ((ctx: CanvasRenderingContext2D) => void) | null = null;
   private prevPos: { x: number; y: number }[] = [];
+  /** Per fighter: how far from the sim's position it's drawn, easing to zero after a rollback moved it. */
+  private smoothing: { x: number; y: number }[] = [];
   private curPos: { x: number; y: number }[] = [];
   private prevProj: Map<number, { x: number; y: number }> = new Map();
   private curProj: Map<number, { x: number; y: number }> = new Map();
@@ -43,6 +49,19 @@ export class Renderer {
     this.names = names;
     this.snapshot(state);
     this.prevPos = this.curPos.map((p) => ({ ...p }));
+  }
+
+  /**
+   * A rollback moved fighters under the renderer: the drawn positions shift with the sim, and the jump eases out over
+   * about a tenth of a second instead of popping. Jumps too big to be motion (a KO that didn't happen) snap.
+   */
+  correct(corrections: { slot: number; dx: number; dy: number }[]): void {
+    for (const { slot, dx, dy } of corrections) {
+      if (Math.hypot(dx, dy) > SMOOTH_MAX) continue;
+      for (const p of [this.prevPos[slot], this.curPos[slot]]) if (p) { p.x -= dx; p.y -= dy; }
+      const s = (this.smoothing[slot] ??= { x: 0, y: 0 });
+      s.x += dx; s.y += dy;
+    }
   }
 
   /** Call after every sim step. */
@@ -85,9 +104,12 @@ export class Renderer {
     const stage = stageOf(state);
     const interp = state.fighters.map((f, i) => {
       const a = this.prevPos[i] ?? f, b = this.curPos[i] ?? f;
+      const s = this.smoothing[i];
+      if (s) { const k = Math.exp(-dt / SMOOTH_S); s.x *= k; s.y *= k; }
+      const ox = s?.x ?? 0, oy = s?.y ?? 0;
       // don't interpolate across respawn teleports
-      if (Math.abs(b.x - a.x) > 400 || Math.abs(b.y - a.y) > 400) return { x: b.x, y: b.y };
-      return { x: a.x + (b.x - a.x) * alpha, y: a.y + (b.y - a.y) * alpha };
+      if (Math.abs(b.x - a.x) > 400 || Math.abs(b.y - a.y) > 400) return { x: b.x + ox, y: b.y + oy };
+      return { x: a.x + (b.x - a.x) * alpha + ox, y: a.y + (b.y - a.y) * alpha + oy };
     });
     this.cam.solve(state, stage, interp);
     this.cam.update(dt);
