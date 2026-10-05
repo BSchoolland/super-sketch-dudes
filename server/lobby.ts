@@ -180,7 +180,7 @@ function checkGo(room: Room): void {
   broadcast(room, { t: "go" });
 }
 /** How far behind the second most advanced other player (in input frames at the relay) a player may fall before the relay decides their frames away. */
-export const FILL_BEHIND = 24;
+export const FILL_BEHIND = 18;
 const frontier = (s: SlotRelay): number => Math.max(s.forwarded, s.filled);
 
 /**

@@ -126,12 +126,12 @@ since flicks on keys are unreliable): P1 uses U, P2 uses Numpad 6.
 ## Online
 
 Rollback netcode: every client runs the full deterministic sim, predicts remote inputs (repeat
-last), and rolls back to re-simulate when real inputs arrive. Inputs are relayed through the
-game server over a websocket (one transport, works behind every NAT, nothing to configure).
-Input delay 2 frames by default, adjustable; a connection indicator shows ping and rollback
-frames. The server also runs the lobby: quick match queue and 4-character room codes.
-Peer-to-peer WebRTC is a later upgrade for lower latency; the netcode layer is built so the
-transport is swappable.
+last), and rolls back to re-simulate when real inputs arrive. Inputs go peer to peer over WebRTC
+data channels (direct, or through TURN) and through the game server's websocket relay at once, so
+a pair that can't link still plays. A player whose connection drops stands still, untouchable,
+while the others play on. Input delay 2 frames by default, adjustable; a connection indicator
+shows ping, rollback frames and how many players are linked. The server also runs the lobby:
+quick match queue and 4-character room codes.
 
 ## Not in v1
 

@@ -26,7 +26,7 @@ sketch-battle/
     src/render/      canvas renderer: camera, rigs, effects, particles, stages, hud
     src/input/       keyboard + gamepad -> input records per slot; device assignment
     src/screens/     title, character select, stage select, versus, online lobby, training, settings, maps + map editor
-    src/net/         rollback session (predict / snapshot / resimulate) + websocket transport
+    src/net/         rollback session (predict / snapshot / resimulate), peer-to-peer links + the relay connection
     src/audio/       procedural WebAudio sfx + music
     src/telemetry/   wide events: the page session, each online match's view, sent to /api/events
   server/index.ts    static files, /api/health, /api/events, lobby + input relay over /ws
@@ -167,29 +167,51 @@ loop per stage with an intensity input tied to the highest percent on screen.
 
 ## Online
 
-`client/src/net/rollback.ts` implements: a ring buffer of confirmed frames (state snapshots
-every frame, up to 8 frames of rollback), local input delay (default 2), remote input
-prediction (repeat last), rollback-and-resimulate on late inputs, and a state hash exchanged
-every 30 frames for desync detection (a desync is fatal and loud: the match ends with a
-message and both clients log the frame). `transport.ts` is a small interface (`send(frame,
-inputs, ahead)`, `onInputs`, `ping`) with one implementation over the websocket relay; a WebRTC one
-can be added later without touching the rollback code.
+Every input travels two ways at once. Each pair of players in a room has a WebRTC data channel
+(`client/src/net/mesh.ts`: one RTCPeerConnection per pair, unordered with no retransmits, signaled over the relay
+WebSocket; ICE tries a direct route through STUN first and the TURN server second). Each tick the client sends every
+linked player the run of its inputs that player hasn't acknowledged, run-length encoded (`net/wire.ts`), so a lost
+packet is covered by the next one. Every input also goes to the relay once, in order (`net/link.ts`), and the relay
+forwards it to everyone. That copy is reliable, so a pair without a link (blocked UDP, ICE failure, a dead link, an
+older bundle) still plays, and a mixed room needs nothing special. Whichever copy arrives first counts.
+docs/webrtc-deploy.md has the coturn setup.
 
-Time sync is GGPO's frame advantage. Every client measures how far ahead of each remote it
-looks (its frame minus the remote's frame as of the remote's newest input, averaged over 12
-ticks) and sends that with its inputs as `ahead`. Both measures include the one-way latency, so
-half their difference is the real clock lead: equal clocks over any latency give zero, and only
-a client that is genuinely ahead gives up ticks, in proportion (gain 1/12, dead zone 1.5 frames,
-at most every other tick). The slower client never skips. A stall past the rollback window shows
-WAITING with the name of who it is waiting on; the relay drops any mid-match player it has not
-heard inputs from for 20 s, which the others see as a leave.
+`client/src/net/rollback.ts`: the match clock ticks with real time, and every tick it takes the local input for
+clock + input delay (default 2) and sends it, whatever the sim is doing, so a client frozen on one player keeps
+feeding the others. The sim follows the clock, predicting missing remote inputs (repeat last), and rolls back and
+re-simulates when real ones arrive. It runs at most a prediction window past the newest frame it has every input
+for: 30 frames, less on a machine where re-simulating that many would cost more than 10 ms (step cost is measured).
+Past the window it freezes (WAITING, with the name of who it waits on). It catches up to the clock afterwards at up
+to 8 frames a tick, and the clock runs at most a second ahead of a frozen sim. A state hash goes out every 30
+frames for desync detection (a desync is fatal and loud).
 
-Server: `/ws` upgrade. Messages: `hello`, `queue` (quick match), `room create/join <code>`,
-`start` (host sets rules; the server picks the seed and slot order), `inputs` (frame, bits),
-`hash`, `leave`. The server never simulates; it relays and keeps the lobby. Rooms die when
-empty. Quick match pairs the two oldest queued clients. The host's `end` (leaving the result
-screen, or quitting) reopens the room and takes everyone back to it; a guest quitting mid-match
-closes their connection, so the others see them leave rather than wait on them.
+The relay decides one thing: a player whose inputs stop reaching it (a dead uplink) is played away once they are 18
+frames behind the second most advanced other player. It sends `fill` to everyone, and those frames play as
+`B.AWAY`: no input, can't be hit, drawn faded with RECONNECTING. The others play on, and the late inputs are
+dropped. Inputs that came over a link are provisional until the relay's copy or its fill confirms them, so every
+client plays the same frames. Hashes, bundle handoffs and snapshot pruning stand on final frames, and a fill rolls
+back as far as it must. Fills need every member to say it understands them (`loaded` with `fills`), and stop once
+a bundle swap is scheduled.
+
+Time sync is GGPO's frame advantage, on the clocks. Every client measures how far ahead of each remote it looks
+(its clock minus the remote's clock as of the remote's newest input, averaged over 12 ticks) and sends that with
+its inputs as `ahead`. A remote not heard from for 20 ticks drops out of it. Both measures include the one-way
+latency, so half their difference is the real clock lead: equal clocks over any latency give zero, and only a client
+that is genuinely ahead gives up ticks, in proportion (gain 1/12, dead zone 1.5 frames, at most every other tick).
+The slower client never skips.
+
+Server: `/ws` upgrade. Messages: `hello`, `queue` (quick match), `room create/join <code>`, `start` (host sets
+rules; the server picks the seed and slot order), `loaded` (a client's match screen is up) and `go` (everyone's is:
+the countdowns start together), `inputs` (frame, run of inputs, `ahead`, `acks`), `fill` and `final` (the relay's
+decisions, and how far it has each player's own inputs), `hash`, `rtc` (signaling, between members of one room),
+`ice` (STUN/TURN servers, with TURN credentials minted per connection: server/ice.ts), `peers` (each client's link
+round trips, which auto input delay uses for linked pairs), `leave`. The server never simulates; it relays, keeps
+the lobby and makes the away call. A mid-match leave carries the relay's last frame for the leaver; a leaver is out
+of stocks (the sim ignores an eliminated fighter's input) or the match is over (hashes stop at the end), so clients
+needn't agree on it exactly. Rooms die when empty. Quick match pairs the two oldest queued clients. The host's `end`
+reopens the room and takes everyone back to it; a guest quitting mid-match closes their connection, so the others
+see them leave rather than wait on them. The relay drops a player it has not heard inputs from for 20 s after the
+go, or who hasn't loaded 20 s after the start.
 
 ## Wide events
 

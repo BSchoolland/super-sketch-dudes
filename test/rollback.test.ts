@@ -17,7 +17,7 @@ import { loadAllHouse } from "./house";
 interface Delivery { at: number; seq: number; run: () => void; hold?: () => boolean }
 /** The network's clock in ms: NetLink's stale-ack timer and the session's step timing read performance.now. */
 let now = 0;
-const FILL_BEHIND = 24;
+const FILL_BEHIND = 18;
 
 class Room {
   clock = 0;
@@ -456,8 +456,8 @@ describe("players whose inputs stop reaching the relay", () => {
     const [a, b, c] = peers;
     expect(a.session.stats.awayFrames[1]).toBeGreaterThan(0);
     expect(c.session.stats.awayFrames[1]).toBe(a.session.stats.awayFrames[1]);
-    // the others had his real inputs over the link and rolled back past the window to play the fill
-    expect(c.session.stats.tooDeep + a.session.stats.tooDeep).toBeGreaterThan(0);
+    // the others had his real inputs over the link, and rolled back at least to the fill to play it
+    expect(Math.min(a.session.stats.maxDepth, c.session.stats.maxDepth)).toBeGreaterThan(FILL_BEHIND);
     playTo(net, peers, 900);
     sameAt(peers, 900);
     expect(b.session.stats.awayFrames[1]).toBe(a.session.stats.awayFrames[1]);

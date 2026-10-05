@@ -2,12 +2,14 @@
 // shaped connection to a relay running this checkout, then reports it with the same numbers production logs.
 // Usage: node netlab/run.mjs <scenario> [--minutes 3] [--seed 1] [--video <player>] [--post <discord thread id>]
 //        [--net Name=profile ...] [--block Name=p2p|webrtc ...] [--at "<sec>:<action> <Name> [mode]" ...]
-//        [--stocks 99] [--leave-out] [--no-build] [--keep]
+//        [--stocks 99] [--leave-out] [--shell] [--no-build] [--keep]
 //   --block: `p2p` drops UDP between that player and the others (their links must go through TURN); `webrtc` drops
 //            all UDP and TURN's TCP port too (no links at all: everything rides the relay).
 //   --at: mid-match events: `block <Name> <mode>`, `unblock <Name>`, `cut <Name>` (all of its game traffic dropped:
 //         the connection is gone), `leave <Name>` (closes the page, like quitting the tab).
 //   --leave-out: a player whose fighter is out of stocks closes its page (the others carry on without them).
+//   --shell: players load the swappable page (shell.html) on a game bundle built from this checkout; `--at <sec>:swap`
+//            switches the room to a second copy of it mid-match, the way scripts/push-game.sh --room does.
 // Needs Docker (the sketchbattle-netlab image builds itself) and production's event log + fighters cached:
 // run `node netlab/prod.mjs events` once (fighters sync on demand). Output lands in netlab/runs/<stamp>-<scenario>/.
 import { execFileSync, spawnSync } from "node:child_process";
@@ -44,12 +46,15 @@ const postTo = opt("--post");
 const netOverrides = Object.fromEntries(opts("--net").map((kv) => kv.split("=")));
 const blockOverrides = Object.fromEntries(opts("--block").map((kv) => kv.split("=")));
 const atEvents = opts("--at").map((spec) => {
+  const swapAt = /^(\d+(?:\.\d+)?):swap$/.exec(spec);
+  if (swapAt) return { atMs: Number(swapAt[1]) * 1000, action: "swap", name: null, mode: null };
   const m = /^(\d+(?:\.\d+)?):(block|unblock|cut|leave) (\S+)(?: (p2p|webrtc))?$/.exec(spec);
-  if (!m || (m[2] === "block") !== !!m[4]) throw new Error(`--at "${spec}": want "<sec>:block <Name> p2p|webrtc", "<sec>:unblock|cut|leave <Name>"`);
+  if (!m || (m[2] === "block") !== !!m[4]) throw new Error(`--at "${spec}": want "<sec>:block <Name> p2p|webrtc", "<sec>:unblock|cut|leave <Name>", "<sec>:swap"`);
   return { atMs: Number(m[1]) * 1000, action: m[2], name: m[3], mode: m[4] ?? null };
 });
 const stocks = Number(opt("--stocks", "99"));
 const leaveOut = has("--leave-out");
+const shell = has("--shell");
 const noBuild = has("--no-build"), keep = has("--keep");
 const [scenarioName, ...rest] = argv;
 if (!scenarioName || rest.length) throw new Error(`usage: node netlab/run.mjs <scenario> [--minutes 3] [--seed 1] [--video <player>] [--post <thread>] [--net Name=profile] [--no-build] [--keep]`);
@@ -77,7 +82,8 @@ const players = replay.business.members.sort((a, b) => a.slot - b.slot).map((m) 
   return p;
 });
 if (videoOf && !players.some((p) => p.name === videoOf)) throw new Error(`--video ${videoOf}: no such player (${players.map((p) => p.name).join(", ")})`);
-for (const e of atEvents) if (!players.some((p) => p.name === e.name)) throw new Error(`--at: no player ${e.name}`);
+for (const e of atEvents) if (e.name && !players.some((p) => p.name === e.name)) throw new Error(`--at: no player ${e.name}`);
+if (atEvents.some((e) => e.action === "swap") && !shell) throw new Error("--at swap needs --shell");
 
 const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
 const runDir = path.join(HERE, "runs", `${stamp}-${scenarioName}`);
@@ -93,6 +99,14 @@ for (const p of players) {
 const commit = sh("git", ["-C", REPO, "rev-parse", "--short", "HEAD"]);
 if (!noBuild) { log("building the client and server"); execFileSync("npm", ["run", "build"], { cwd: REPO, stdio: ["ignore", "ignore", "inherit"] }); }
 if (!fs.existsSync(path.join(REPO, "dist", "server.mjs"))) throw new Error("no dist/server.mjs: run without --no-build");
+// two game bundles of this checkout for the shell: the second differs by a comment, so the room has something to swap to
+const BUNDLES = ["lab-a", "lab-b"];
+if (shell) {
+  log("building the game bundle");
+  execFileSync("npx", ["vite", "build", "--config", "client/vite.app.config.ts", "--logLevel", "warn"], { cwd: REPO, stdio: ["ignore", "ignore", "inherit"] });
+  for (const name of BUNDLES) fs.cpSync(path.join(REPO, "dist", "game"), path.join(dataDir, "games", name), { recursive: true });
+  fs.appendFileSync(path.join(dataDir, "games", BUNDLES[1], "app.js"), "\n// lab-b\n");
+}
 if (spawnSync("docker", ["image", "inspect", IMAGE], { stdio: "ignore" }).status !== 0) {
   log("building the netlab image");
   execFileSync("docker", ["build", "-q", "-t", IMAGE, HERE], { stdio: "inherit" });
@@ -124,7 +138,7 @@ try {
   created.containers.push(turnName);
   docker("run", "-d", "--name", relayName, "--network", `${id}-game`, ...mounts, "-v", `${dataDir}:/data`,
     "-e", `PORT=${PORT}`, "-e", "DEV_LOGIN=1", "-e", "SKETCHBATTLE_DATA=/data", "-e", `BUILD=netlab-${commit}`, "-e", `SKETCHBATTLE_BASE=${BASE}`,
-    "-e", `RTC_STUN=stun:${turnName}:3478`, "-e", `RTC_TURN=turn:${turnName}:3478?transport=udp,turn:${turnName}:3478?transport=tcp`, "-e", `RTC_TURN_SECRET=${TURN_SECRET}`,
+    "-e", `RTC_STUN=stun:${turnName}:3478`, "-e", `RTC_TURN=turn:${turnName}:3478?transport=udp,turn:${turnName}:3478?transport=tcp`, "-e", `RTC_TURN_SECRET=${TURN_SECRET}`, "-e", `FORGE_TOKEN=${TURN_SECRET}`,
     "--user", `${process.getuid()}:${process.getgid()}`, IMAGE, "node", "dist/server.mjs");
   created.containers.push(relayName);
 
@@ -177,7 +191,7 @@ try {
     if (throttle) await (await ctx.newCDPSession(page)).send("Emulation.setCPUThrottlingRate", { rate: throttle });
     pages.push(page);
   }
-  const url = `${origin}${BASE}`;
+  const url = shell ? `${origin}${BASE}shell.html?game=${BUNDLES[0]}` : `${origin}${BASE}`;
   const press = async (page, k) => { await page.keyboard.press(k); await page.waitForTimeout(100); };
   const [host, ...guests] = pages;
   // menus by keyboard like a player; the create and join prompts by their methods (private room, typed code)
@@ -238,8 +252,13 @@ try {
   for (const e of atEvents) {
     timers.push(setTimeout(() => {
       const i = players.findIndex((p) => p.name === e.name);
-      log(`${e.action} ${e.name}${e.mode ? ` ${e.mode}` : ""}`);
-      if (e.action === "leave") pending.push(leave(i, "left the page"));
+      log(`${e.action}${e.name ? ` ${e.name}` : ""}${e.mode ? ` ${e.mode}` : ""}`);
+      if (e.action === "swap") {
+        const body = JSON.stringify({ hash: BUNDLES[1] });
+        const out = docker("exec", relayName, "node", "-e", `fetch("http://localhost:${PORT}${BASE}api/rooms/${code}/game",{method:"POST",headers:{"content-type":"application/json","x-forge-token":"${TURN_SECRET}"},body:${JSON.stringify(body)}}).then(async r=>{console.log(r.status, await r.text())})`);
+        report.swap = { atMs: Date.now() - startedAt, relay: out };
+        log(`swap: ${out}`);
+      } else if (e.action === "leave") pending.push(leave(i, "left the page"));
       else {
         if (e.action === "cut") cut.add(i);
         if (e.action === "unblock") cut.delete(i);
@@ -277,6 +296,10 @@ try {
   }
   timers.forEach(clearTimeout);
   await Promise.all(pending.splice(0));
+  if (shell) {
+    report.bundles = await Promise.all(pages.map((page, i) => (gone.has(i) ? null : page.evaluate(() => ({ hash: window.sketchbattle.hash, frame: window.sketchbattle.screen.session?.state.frame ?? -1, resumedAt: window.sketchbattle.screen.opts?.resume?.frame ?? null })))));
+    log(`bundles: ${JSON.stringify(report.bundles)}`);
+  }
   for (const p of players) { const steady = netemArgs(p.profile.base, []); p.shaper.set("up", steady); p.shaper.set("down", steady); }
 
   // ---- finish like a real match end, so every client sends its final event
