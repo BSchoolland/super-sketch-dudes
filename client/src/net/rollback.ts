@@ -420,7 +420,16 @@ export class RollbackSession {
     this.filled[slot] = through;
     this.final[slot] = Math.max(this.final[slot], through);
     while (this.realInputs[slot].has(this.held[slot] + 1)) this.held[slot]++;
-    if (slot === this.localSlot && this.clock + this.inputDelay < through) this.clock = through - this.inputDelay;
+    // our own frames decided away: we were cut off. Our next inputs go where everyone's clock is now (their newest
+    // inputs say), not just past the fill, so we catch up ourselves rather than the room slowing down for us
+    if (slot === this.localSlot) {
+      let others = through;
+      for (const [remote, newest] of this.remoteNewest) if (!this.gone.has(remote)) others = Math.max(others, newest);
+      this.clock = Math.max(this.clock, others - this.inputDelay);
+      // the frames jumped over were never sampled: we sat them out
+      for (let frame = this.held[slot] + 1; frame <= this.clock + this.inputDelay; frame++) this.realInputs[slot].set(frame, cloneInput(away));
+      this.held[slot] = Math.max(this.held[slot], this.clock + this.inputDelay);
+    }
     this.advanceConfirmation();
   }
 
@@ -503,6 +512,8 @@ export class RollbackSession {
       if (frame > (this.gone.get(slot) ?? Infinity)) return cloneInput(EMPTY_INPUT);
       const real = this.realInputs[slot].get(frame);
       if (real) return cloneInput(real);
+      // our own input is taken before its frame can be simulated and kept as far back as a rollback reaches
+      if (slot === this.localSlot) throw new Error(`no local input for frame ${frame} (held through ${this.held[slot]})`);
       return this.predictedInput(slot, frame);
     });
   }
@@ -573,8 +584,8 @@ export class RollbackSession {
     const oldest = Math.min(this.keepFrom ?? Infinity, this.state.frame - this.maxRollback, this.finalThrough());
     for (const frame of this.snapshots.keys()) if (frame < oldest) this.snapshots.delete(frame);
     for (const frame of this.usedInputs.keys()) if (frame < oldest + 1) this.usedInputs.delete(frame);
-    // our own inputs stay until every remote has them (and long enough back for a handoff's resends)
-    let localKeep = this.state.frame - LOCAL_HISTORY;
+    // our own inputs stay until every remote has them, as far back as a rollback can reach, and long enough back for a handoff's resends
+    let localKeep = Math.min(this.state.frame - LOCAL_HISTORY, oldest);
     for (const ack of this.peerAcks.values()) localKeep = Math.min(localKeep, ack + 1);
     this.realInputs.forEach((inputs, slot) => {
       const keep = slot === this.localSlot ? localKeep : oldest;

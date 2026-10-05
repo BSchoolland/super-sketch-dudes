@@ -209,7 +209,9 @@ export function checkFills(room: Room): void {
     // frames between what the relay has and what others vouch for are real, coming late: only past them is away
     if (through < from) continue;
     s.filled = through;
-    s.fillRanges.push([from, through]);
+    const last = s.fillRanges[s.fillRanges.length - 1];
+    if (last && last[1] === from - 1) last[1] = through;
+    else s.fillRanges.push([from, through]);
     s.fills++;
     s.filledFrames += through - from + 1;
     broadcast(room, { t: "fill", slot: c.slot, from, through });

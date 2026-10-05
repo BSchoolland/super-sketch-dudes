@@ -121,7 +121,9 @@ class Room {
       const from = vouched(slot) + 1;
       if (through < from) continue;
       this.filled[slot] = through;
-      this.fillRanges[slot].push([from, through]);
+      const last = this.fillRanges[slot][this.fillRanges[slot].length - 1];
+      if (last && last[1] === from - 1) last[1] = through;
+      else this.fillRanges[slot].push([from, through]);
       for (const r of this.relays) this.downTo(r.slot, () => { for (const l of r.lobbyListeners) l({ t: "fill", slot, from, through }); });
     }
   }
@@ -236,8 +238,8 @@ function playTo(net: Room, peers: Peer[], frame: number, limit = frame * 4): voi
   let ticks = 0;
   while (peers.some((p) => p.session.state.frame < frame) && ticks < limit) {
     net.tick();
-    for (const p of peers) if (p.session.clock < frame) p.session.advance(scriptedInput(p.session.localSlot, p.session.clock + p.session.inputDelay + 1));
-      else p.session.synchronize();
+    // everyone keeps ticking (and resending) until every sim is there: a peer that stopped would strand lost packets
+    for (const p of peers) p.session.advance(scriptedInput(p.session.localSlot, p.session.clock + p.session.inputDelay + 1));
     ticks++;
   }
   expect(ticks, "ticks to reach the frame").toBeLessThan(limit);
@@ -492,7 +494,7 @@ describe("fuzz", () => {
 
   it("stays identical through random blackouts, relay stalls, dead links and loss", () => {
     let fills = 0;
-    for (let seed = 1; seed <= 8; seed++) {
+    for (let seed = 1; seed <= 24; seed++) {
       const players = 2 + (seed % 3);
       const { net, peers } = room(makeConfig(players), 0xf00d + seed * 7919, { relay: [3, 12], link: [1, 8], loss: (seed % 4) * 0.1 });
       for (let t = 0; t < 1500; t++) {

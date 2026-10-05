@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { autoInputDelay } from "../server/lobby";
+import { autoInputDelay, liveRuns } from "../server/lobby";
 
 describe("auto input delay", () => {
   it("keeps the minimum on a normal ping", () => {
@@ -22,5 +22,14 @@ describe("auto input delay", () => {
   it("stays in bounds", () => {
     expect(autoInputDelay([0, 0]).delay).toBe(2);
     expect(autoInputDelay([900, 900]).delay).toBe(6);
+  });
+});
+
+describe("relay fill ranges", () => {
+  it("passes on only the frames outside them, as contiguous runs", () => {
+    // frames 11..20, with 13-14 and 18 decided away
+    const runs = liveRuns(20, [11, 12, 13, 14, 15, 16, 17, 18, 19, 20], [[13, 14], [18, 18]]);
+    expect(runs).toEqual([{ frame: 12, inputs: [11, 12] }, { frame: 17, inputs: [15, 16, 17] }, { frame: 20, inputs: [19, 20] }]);
+    expect(liveRuns(5, [3, 4, 5], [[1, 10]])).toEqual([]);
   });
 });
