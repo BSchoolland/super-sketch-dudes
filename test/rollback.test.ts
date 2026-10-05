@@ -6,6 +6,7 @@ import { NetLink, type RelayInputs } from "../client/src/net/link";
 import type { PeerMesh } from "../client/src/net/mesh";
 import type { HashCallback, InputsCallback, RelayMessage, Unsubscribe } from "../client/src/net/transport";
 import { loadAllHouse } from "./house";
+import { liveRuns } from "../server/lobby";
 
 /**
  * A room on a simulated network, one tick per sim frame. The relay works like the real one: each player's stream
@@ -41,6 +42,9 @@ class Room {
   /** The relay's per-slot bookkeeping: newest frame passed on, frames decided away through, what each was told is final. */
   forwarded: number[] = [];
   filled: number[] = [];
+  fillRanges: [number, number][][] = [];
+  /** Per slot, what each player said it holds of every slot. */
+  acks: number[][] = [];
   finalSent: number[] = [];
   gone = new Set<number>();
 
@@ -90,12 +94,14 @@ class Room {
 
   /** The relay, as it handles a player's inputs (see server/lobby.ts). */
   relayInputs(slot: number, frame: number, inputs: InputFrame[], ahead: number[], acks?: number[]): void {
-    const kept = inputs.slice(Math.max(0, inputs.length - (frame - this.filled[slot])));
-    if (!kept.length) return;
-    this.forwarded[slot] = Math.max(this.forwarded[slot], frame);
-    for (const r of this.relays) {
-      if (r.slot === slot) continue;
-      this.downTo(r.slot, () => { for (const l of r.inputListeners) l(slot, frame, kept.map(cloneInput), [...ahead], acks ? [...acks] : undefined); });
+    if (acks) acks.forEach((a, s) => { this.acks[slot][s] = Math.max(this.acks[slot][s] ?? 0, a); });
+    const runs = liveRuns(frame, inputs, this.fillRanges[slot]) as { frame: number; inputs: InputFrame[] }[];
+    if (runs.length) this.forwarded[slot] = Math.max(this.forwarded[slot], runs[runs.length - 1].frame);
+    for (const run of runs) {
+      for (const r of this.relays) {
+        if (r.slot === slot) continue;
+        this.downTo(r.slot, () => { for (const l of r.inputListeners) l(slot, run.frame, run.inputs.map(cloneInput), [...ahead], acks ? [...acks] : undefined); });
+      }
     }
     if (this.forwarded[slot] - this.finalSent[slot] >= 6) {
       const final = this.finalSent[slot] = this.forwarded[slot];
@@ -108,13 +114,14 @@ class Room {
     if (!this.fills) return;
     const live = this.relays.filter((r) => !this.gone.has(r.slot)).map((r) => r.slot);
     if (live.length < 2) return;
-    const frontier = (s: number) => Math.max(this.forwarded[s], this.filled[s]);
+    const vouched = (s: number) => Math.max(this.forwarded[s], this.filled[s], ...live.map((o) => this.acks[o][s] ?? 0));
     for (const slot of live) {
-      const others = live.filter((o) => o !== slot).map(frontier).sort((a, b) => b - a);
+      const others = live.filter((o) => o !== slot).map(vouched).sort((a, b) => b - a);
       const through = others[Math.min(1, others.length - 1)] - FILL_BEHIND;
-      const from = frontier(slot) + 1;
+      const from = vouched(slot) + 1;
       if (through < from) continue;
       this.filled[slot] = through;
+      this.fillRanges[slot].push([from, through]);
       for (const r of this.relays) this.downTo(r.slot, () => { for (const l of r.lobbyListeners) l({ t: "fill", slot, from, through }); });
     }
   }
@@ -141,7 +148,7 @@ class Room {
     const mesh = new FakeMesh(this, slot);
     this.relays[slot] = relay;
     this.meshes[slot] = mesh;
-    this.forwarded[slot] ??= 0; this.filled[slot] ??= 0; this.finalSent[slot] ??= 0;
+    this.forwarded[slot] ??= 0; this.filled[slot] ??= 0; this.finalSent[slot] ??= 0; this.fillRanges[slot] ??= []; this.acks[slot] ??= [];
     const roster = Array.from({ length: members }, (_, s) => ({ id: s + 1, name: `P${s + 1}`, slot: s }));
     return { link: new NetLink(relay as unknown as RelayInputs, mesh as unknown as PeerMesh, roster, slot), relay, mesh };
   }
@@ -437,8 +444,8 @@ describe("players whose inputs stop reaching the relay", () => {
     // the others stall at most while the first fill is on its way
     expect([a, b].map((p, i) => p.session.stats.stalls - before[i]).every((n) => n < 20)).toBe(true);
     expect(a.session.stats.awayFrames[2]).toBeGreaterThan(120);
-    expect(c.session.stats.awayFrames[2]).toBe(a.session.stats.awayFrames[2]);
     play(net, peers, 120);
+    expect(c.session.stats.awayFrames[2]).toBe(a.session.stats.awayFrames[2]);
     // back: his own inputs count again
     const filledBefore = a.session.stats.awayFrames[2];
     play(net, peers, 120);
@@ -447,20 +454,17 @@ describe("players whose inputs stop reaching the relay", () => {
     sameAt(peers, 1200);
   });
 
-  it("a fill overrules inputs that already came over a link (his relay connection stalled, his links didn't)", () => {
+  it("a player whose relay connection alone stalls is vouched for by the others over their links: nobody is played away or freezes", () => {
     const { net, peers } = room(makeConfig(3), 0xbb22, { relay: [6, 10], link: [1, 3] });
     play(net, peers, 300);
+    const stalls = peers.map((p) => p.session.stats.stalls);
     net.relayMute.add(1);
-    play(net, peers, 90);
+    play(net, peers, 180);
     net.relayMute.delete(1);
-    const [a, b, c] = peers;
-    expect(a.session.stats.awayFrames[1]).toBeGreaterThan(0);
-    expect(c.session.stats.awayFrames[1]).toBe(a.session.stats.awayFrames[1]);
-    // the others had his real inputs over the link, and rolled back at least to the fill to play it
-    expect(Math.min(a.session.stats.maxDepth, c.session.stats.maxDepth)).toBeGreaterThan(FILL_BEHIND);
+    expect(peers.map((p) => p.session.stats.awayFrames[1])).toEqual([0, 0, 0]);
+    expect(peers[0].session.stats.stalls - stalls[0] + peers[2].session.stats.stalls - stalls[2]).toBe(0);
     playTo(net, peers, 900);
     sameAt(peers, 900);
-    expect(b.session.stats.awayFrames[1]).toBe(a.session.stats.awayFrames[1]);
   });
 
   it("one on one, the player left alone plays on against a fighter standing still", () => {
@@ -484,6 +488,7 @@ describe("fuzz", () => {
   afterAll(() => vi.restoreAllMocks());
 
   it("stays identical through random blackouts, relay stalls, dead links and loss", () => {
+    let fills = 0;
     for (let seed = 1; seed <= 8; seed++) {
       const players = 2 + (seed % 3);
       const { net, peers } = room(makeConfig(players), 0xf00d + seed * 7919, { relay: [3, 12], link: [1, 8], loss: (seed % 4) * 0.1 });
@@ -504,9 +509,11 @@ describe("fuzz", () => {
       playTo(net, peers, Math.max(...peers.map((p) => p.session.clock)) + 60, 6000);
       const f = Math.min(...peers.map((p) => p.session.state.frame));
       for (const p of peers) expect(p.session.desync, `seed ${seed}`).toBeNull();
+      fills += peers[0].session.stats.fills;
       const hashes = peers.map((p) => p.session.stateHashAt(f));
       for (const h of hashes) expect(h, `seed ${seed} frame ${f}`).toBe(hashes[0]);
     }
+    expect(fills).toBeGreaterThan(0);
   });
 });
 

@@ -446,8 +446,8 @@ export class RollbackSession {
     let fresh = 0;
     for (let i = 0; i < inputs.length; i++) {
       const frame = firstFrame + i;
-      // everything up to `held` is in hand or already applied and pruned; frames decided away stay away
-      if (frame <= this.held[slot] || frame <= this.filled[slot] || this.realInputs[slot].has(frame)) continue;
+      // everything up to `held` is in hand or already applied and pruned; frames decided away hold their AWAY input
+      if (frame <= this.held[slot] || this.realInputs[slot].has(frame)) continue;
       const input = cloneInput(inputs[i]);
       input.b &= ~64;
       this.realInputs[slot].set(frame, input);

@@ -42,9 +42,11 @@ export interface Room {
 /** What the relay sees of one match: per slot, how inputs and hashes flowed. */
 /**
  * `forwarded`: the newest real input frame passed on; `filled`: the frames the relay decided away (see checkFills),
- * through this one; `finalSent`: what the player was last told the relay has of theirs.
+ * through this one; `finalSent`: what the player was last told the relay has of theirs; `acks`: per slot, the frame
+ * through which this player said it holds that slot's inputs; `fillRanges` the frames decided away (below a fill
+ * there can be real frames the relay doesn't have yet, vouched for by a player who got them over a link).
  */
-interface SlotRelay { inputs: number; newest: number; hashes: number; lastHashFrame: number; maxGapMs: number; stalls: number; lastAt: number; forwarded: number; filled: number; fills: number; filledFrames: number; finalSent: number }
+interface SlotRelay { inputs: number; newest: number; hashes: number; lastHashFrame: number; maxGapMs: number; stalls: number; lastAt: number; forwarded: number; filled: number; fills: number; filledFrames: number; finalSent: number; acks: number[]; fillRanges: [number, number][] }
 /**
  * `loaded`: members whose match screen is up; `go` is sent once they all are, and starts everyone's countdown together.
  * `fills`: whether the relay may decide a silent player away (every member said it understands fills, and no bundle
@@ -141,7 +143,7 @@ export function newRoom(host: Client, isPublic: boolean): Room {
 export function startRelayMatch(room: Room, seed: number, config: unknown, members: Client[]): void {
   if (room.match) endRelayMatch(room, "replaced by the next start");
   const trace = matchTrace(room.code, seed);
-  const slots: SlotRelay[] = members.map(() => ({ inputs: 0, newest: 0, hashes: 0, lastHashFrame: 0, maxGapMs: 0, stalls: 0, lastAt: 0, forwarded: 0, filled: 0, fills: 0, filledFrames: 0, finalSent: 0 }));
+  const slots: SlotRelay[] = members.map(() => ({ inputs: 0, newest: 0, hashes: 0, lastHashFrame: 0, maxGapMs: 0, stalls: 0, lastAt: 0, forwarded: 0, filled: 0, fills: 0, filledFrames: 0, finalSent: 0, acks: members.map(() => 0), fillRanges: [] }));
   const event = openEvent("match", trace, room.trace)
     .set("match", { room: room.code, seed, config })
     .set("members", members.map((m) => ({ id: m.id, name: m.name, slot: m.slot, session: m.event.trace, fighter: m.fighter, bundleUrl: m.bundleUrl })))
@@ -182,10 +184,13 @@ function checkGo(room: Room): void {
 /** How far behind the second most advanced other player (in input frames at the relay) a player may fall before the relay decides their frames away. */
 export const FILL_BEHIND = 18;
 const frontier = (s: SlotRelay): number => Math.max(s.forwarded, s.filled);
+/** What's known of a player: their frames the relay has or decided, or that another player holds (over a link). */
+const vouched = (m: RelayMatch, slot: number, live: Client[]): number => Math.max(frontier(m.slots[slot]), ...live.map((c) => m.slots[c.slot]?.acks[slot] ?? 0));
 
 /**
  * A player whose inputs stop reaching the relay (their uplink is down) would freeze everyone. Once they are
- * FILL_BEHIND frames behind the second most advanced other player, the relay decides their frames away up to there
+ * FILL_BEHIND frames behind the second most advanced other player (counting frames another player holds of theirs
+ * over a link: a stalled connection to the relay alone isn't a dead player), the relay decides their frames away up to there
  * and tells everyone, them included: every client plays those frames as AWAY (the fighter stands, untouchable) and
  * ignores whatever real inputs come later for them. The relay is the one place that sees every player's inputs in
  * one order, so the decision is the same everywhere; inputs that came over a peer-to-peer link are provisional
@@ -198,15 +203,30 @@ export function checkFills(room: Room): void {
   if (live.length < 2) return;
   for (const c of live) {
     const s = m.slots[c.slot];
-    const others = live.filter((o) => o !== c).map((o) => frontier(m.slots[o.slot])).sort((a, b) => b - a);
+    const others = live.filter((o) => o !== c).map((o) => vouched(m, o.slot, live)).sort((a, b) => b - a);
     const through = others[Math.min(1, others.length - 1)] - FILL_BEHIND;
-    const from = frontier(s) + 1;
+    const from = vouched(m, c.slot, live) + 1;
+    // frames between what the relay has and what others vouch for are real, coming late: only past them is away
     if (through < from) continue;
     s.filled = through;
+    s.fillRanges.push([from, through]);
     s.fills++;
     s.filledFrames += through - from + 1;
     broadcast(room, { t: "fill", slot: c.slot, from, through });
   }
+}
+/** A run of inputs ending at `frame`, less the frames in `ranges`: the contiguous runs left, oldest first. */
+export function liveRuns(frame: number, inputs: unknown[], ranges: [number, number][]): { frame: number; inputs: unknown[] }[] {
+  const first = frame - inputs.length + 1;
+  const runs: { frame: number; inputs: unknown[] }[] = [];
+  let run: unknown[] = [];
+  for (let i = 0; i < inputs.length; i++) {
+    const f = first + i;
+    if (ranges.some(([a, b]) => f >= a && f <= b)) { if (run.length) runs.push({ frame: f - 1, inputs: run }); run = []; continue; }
+    run.push(inputs[i]);
+  }
+  if (run.length) runs.push({ frame, inputs: run });
+  return runs;
 }
 function relayHash(m: RelayMatch, slot: number, frame: number, hash: number): void {
   const s = m.slots[slot];
@@ -406,25 +426,26 @@ export function attachLobby(wss: WebSocketServer): void {
           if (!c.room?.started || c.slot < 0 || !Array.isArray(msg.inputs)) break;
           const m = c.room.match;
           const frame = msg.frame | 0;
-          let inputs: unknown[] = msg.inputs;
+          const inputs: unknown[] = msg.inputs;
           if (m) {
             relayInput(m, c.slot, frame);
             // a client from before the start barrier never says it loaded: its first inputs say it
             if (!m.loaded.has(c)) { m.loaded.add(c); checkGo(c.room); }
-            const s = m.slots[c.slot];
-            if (s) {
-              // frames already decided away are gone for good: only what's past the fill goes on
-              inputs = inputs.slice(Math.max(0, inputs.length - (frame - s.filled)));
-              if (!inputs.length && msg.inputs.length) break;
-              s.forwarded = Math.max(s.forwarded, frame);
-              if (s.forwarded - s.finalSent >= 6) { s.finalSent = s.forwarded; send(c, { t: "final", frame: s.forwarded }); }
-            }
           }
-          broadcast(c.room, {
-            t: "inputs", slot: c.slot, frame, inputs,
-            ...(Array.isArray(msg.ahead) && msg.ahead.length <= ROOM_SIZE ? { ahead: msg.ahead.map((a: unknown) => Number(a) || 0) } : {}),
-            ...(Array.isArray(msg.acks) && msg.acks.length <= ROOM_SIZE ? { acks: msg.acks.map((a: unknown) => Number(a) | 0) } : {}),
-          }, c);
+          const ahead = Array.isArray(msg.ahead) && msg.ahead.length <= ROOM_SIZE ? { ahead: msg.ahead.map((a: unknown) => Number(a) || 0) } : {};
+          const acks: number[] | null = Array.isArray(msg.acks) && msg.acks.length <= ROOM_SIZE ? msg.acks.map((a: unknown) => Number(a) | 0) : null;
+          // the runs of frames that go on: frames decided away are gone for good
+          let runs: { frame: number; inputs: unknown[] }[] = [{ frame, inputs }];
+          const s = m?.slots[c.slot];
+          if (s) {
+            if (acks) acks.forEach((a, slot) => { if (slot < s.acks.length) s.acks[slot] = Math.max(s.acks[slot], a); });
+            runs = liveRuns(frame, inputs, s.fillRanges);
+            if (runs.length) s.forwarded = Math.max(s.forwarded, runs[runs.length - 1].frame);
+            if (s.forwarded - s.finalSent >= 6) { s.finalSent = s.forwarded; send(c, { t: "final", frame: s.forwarded }); }
+          }
+          // an empty run (a keepalive) goes on as it came
+          if (!inputs.length) runs = [{ frame, inputs }];
+          for (const run of runs) broadcast(c.room, { t: "inputs", slot: c.slot, frame: run.frame, inputs: run.inputs, ...ahead, ...(acks ? { acks } : {}) }, c);
           checkFills(c.room);
           break;
         }
