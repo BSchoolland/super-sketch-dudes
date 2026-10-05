@@ -8,13 +8,16 @@ Nothing changes in Apache: signaling rides the existing `/sketch-battle/ws` WebS
 
 ## 1. Install and configure coturn
 
+personal-server is AlmaLinux 8 with firewalld; coturn 4.18 is in EPEL. The `gf` repo's mirrors are dead, so leave it
+out of the transaction:
+
 ```sh
-sudo apt-get install coturn
+sudo dnf --disablerepo=gf install coturn
 openssl rand -hex 32        # the shared secret: goes in turnserver.conf and in ~/sketch-battle/.env
 ```
 
-`/etc/turnserver.conf` (replace `<SECRET>`; if the box sits behind 1:1 NAT, which `ip -4 addr` shows as a private
-address only, add `external-ip=<public ip>/<private ip>`):
+`/etc/coturn/turnserver.conf` (replace `<SECRET>`). The server's public IPv4, 89.116.157.62, sits on eth0 itself (no
+NAT), so no `external-ip` line is needed:
 
 ```
 listening-port=3478
@@ -53,21 +56,22 @@ log-file=/var/log/turnserver/turn.log
 simple-log
 ```
 
-The Let's Encrypt key has to be readable by coturn (it runs as `turnserver`):
+The Let's Encrypt key has to be readable by coturn (the EPEL package runs it as `coturn`; check with
+`systemctl cat coturn`):
 
 ```sh
-sudo mkdir -p /var/log/turnserver && sudo chown turnserver: /var/log/turnserver
-sudo setfacl -R -m u:turnserver:rX /etc/letsencrypt/live /etc/letsencrypt/archive
+sudo mkdir -p /var/log/turnserver && sudo chown coturn: /var/log/turnserver
+sudo setfacl -R -m u:coturn:rX /etc/letsencrypt/live /etc/letsencrypt/archive
 # reload coturn when the certificate renews
 echo -e '#!/bin/sh\nsystemctl restart coturn' | sudo tee /etc/letsencrypt/renewal-hooks/deploy/coturn && sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/coturn
-sudo sed -i 's/^#\?TURNSERVER_ENABLED=.*/TURNSERVER_ENABLED=1/' /etc/default/coturn
 sudo systemctl enable --now coturn
 ```
 
-Firewall (ufw shown; do the same in the hosting provider's firewall if there is one):
+Firewall (firewalld; do the same in the hosting provider's panel if it has a firewall):
 
 ```sh
-sudo ufw allow 3478/udp && sudo ufw allow 3478/tcp && sudo ufw allow 5349/tcp && sudo ufw allow 49152:49999/udp
+sudo firewall-cmd --permanent --add-port=3478/udp --add-port=3478/tcp --add-port=5349/tcp --add-port=49152-49999/udp
+sudo firewall-cmd --reload
 ```
 
 ## 2. Point the game at it
