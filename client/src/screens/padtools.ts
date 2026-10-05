@@ -1,5 +1,5 @@
 import { DRAW_PNG_MAX_BYTES } from "../../../shared/account";
-import { card, label, title, INK, settings } from "./ui";
+import { card, label, title, INK, settings, saveSettings } from "./ui";
 import { PENCIL } from "../render/paper";
 import { onPointer, type PointerStroke } from "../input/pointer";
 import type { Button } from "./buttons";
@@ -12,7 +12,7 @@ const swatchW = () => (settings.advanced ? 37 : 42);
 
 /**
  * The tool column left of a draw pad: colours, a custom colour, pencil, eraser, fill, sizes, undo, clear.
- * In advanced mode a custom swatch opens a colour wheel over the tools and sizes. Ctrl+Z undoes while attached.
+ * The ADVANCED toggle adds a custom swatch that opens a colour wheel over the tools and sizes. Ctrl+Z undoes while attached.
  */
 export class PadTools {
   private readonly onKey = (e: KeyboardEvent) => {
@@ -62,6 +62,7 @@ export class PadTools {
     }
     b.push({ id: "undo", x: LEFT, y: 590, w: COL_W, h: 84, text: "UNDO", size: 36, disabled: !this.pad.canUndo });
     b.push({ id: "clear", x: LEFT, y: 700, w: COL_W, h: 84, text: "CLEAR", size: 36, disabled: this.pad.blank });
+    b.push({ id: "advanced", x: LEFT, y: 810, w: COL_W, h: 70, text: "ADVANCED", size: 30, checked: settings.advanced });
     return b;
   }
 
@@ -76,11 +77,12 @@ export class PadTools {
     else if (id.startsWith("size")) pad.size = Number(id.slice(4));
     else if (id === "undo") pad.undo();
     else if (id === "clear") pad.clear();
+    else if (id === "advanced") { settings.advanced = !settings.advanced; this.wheelOpen = false; saveSettings(); }
     else return false;
     return true;
   }
 
-  /** Draws the custom tool cards; the caller's ButtonMenu draws UNDO and CLEAR. */
+  /** Draws the custom tool cards; the caller's ButtonMenu draws UNDO, CLEAR and ADVANCED. */
   draw(ctx: CanvasRenderingContext2D, buttons: Button[], focus: string | undefined): void {
     const tool = this.pad.tool;
     const at = (id: string) => buttons.find((candidate) => candidate.id === id)!;
@@ -104,7 +106,7 @@ export class PadTools {
       });
     }
     if (performance.now() - this.pad.leakedAt < 1800) {
-      const b = at("clear");
+      const b = at("advanced");
       label(ctx, "fill leaks to the edge", b.x + b.w / 2, b.y + b.h + 44, 28, "#c0392b");
     }
     COLORS.forEach((color, i) => {

@@ -16,7 +16,6 @@ export class SettingsScreen implements Screen {
     { name: "SCREEN SHAKE", get: () => `${Math.round(settings.shake * 100)}%`, adj: (d) => { settings.shake = Math.max(0, Math.min(1.5, settings.shake + d * 0.25)); } },
     { name: "TAP JUMP (stick up)", get: () => (settings.tapJump ? "on" : "off"), adj: () => { settings.tapJump = !settings.tapJump; } },
     { name: "RUMBLE", get: () => (settings.rumble ? "on" : "off"), adj: () => { settings.rumble = !settings.rumble; } },
-    { name: "ADVANCED MODE (color wheel)", get: () => (settings.advanced ? "on" : "off"), adj: () => { settings.advanced = !settings.advanced; } },
     { name: "DEFAULT CPU", get: () => tierName(settings.cpuTier), adj: (d) => { settings.cpuTier = Math.max(1, Math.min(CPU_TIERS.length, settings.cpuTier + d)); } },
     { name: "SIGN OUT", get: () => account.player?.name ?? "", adj: () => {}, act: () => this.onSignOut() },
   ];
@@ -35,7 +34,7 @@ export class SettingsScreen implements Screen {
     bg(ctx, this.t);
     title(ctx, "SETTINGS", VIEW_W / 2, 90, 64);
     this.rows.forEach((r, i) => {
-      const y = 150 + i * 80;
+      const y = 150 + i * 86;
       const sel = i === this.sel;
       if (hover(VIEW_W / 2 - 400, y, 800, 76)) this.sel = i;
       card(ctx, VIEW_W / 2 - 400, y, 800, 76, sel ? INK : "rgba(18,16,26,0.6)", sel);
@@ -50,7 +49,7 @@ export class SettingsScreen implements Screen {
       label(ctx, r.name, VIEW_W / 2 - 370, y + 50, 28, INK, "left", 900);
       label(ctx, r.get(), VIEW_W / 2 + 280, y + 50, 28, INK, "center", 900);
     });
-    const y = 150 + this.rows.length * 80 + 26;
+    const y = 150 + this.rows.length * 86 + 26;
     label(ctx, `KEYBOARD 1: ${kb1Summary()}`, VIEW_W / 2, y, 18, INK, "center", 600);
     label(ctx, "KEYBOARD 2: arrows move · Numpad0 jump · Numpad1 attack · 6 smash · 2 special · 3/RShift shield · 5 taunt", VIEW_W / 2, y + 30, 18, INK, "center", 600);
     label(ctx, "GAMEPAD: left stick move · X/Y jump · A attack · B special · LB/RB/LT shield · right stick smash · Start pause", VIEW_W / 2, y + 60, 18, INK, "center", 600);

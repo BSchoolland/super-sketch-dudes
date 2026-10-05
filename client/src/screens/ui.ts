@@ -62,7 +62,7 @@ export function hint(ctx: CanvasRenderingContext2D, text: string): void {
 
 export interface Settings {
   volume: number; music: number; shake: number; tapJump: boolean; rumble: boolean; stocks: number; time: number; cpuTier: number;
-  /** Extra creator tools: the colour wheel. */
+  /** The draw pad's ADVANCED toggle: the colour wheel. */
   advanced: boolean;
   /** Keyboard player 1's rebound actions; everything else keeps its default key. */
   keys: Partial<KeyBindings>;
