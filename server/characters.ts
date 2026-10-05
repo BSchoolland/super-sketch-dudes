@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type express from "express";
-import { COMMUNITY_PAGE, DRAW_PNG_MAX_BYTES, FEATURED, FEATURED_PER_CREATOR, type CommunityCharacter, type FeaturedCharacter } from "../shared/account";
+import { COMMUNITY_PAGE, DRAW_PNG_MAX_BYTES, HINT_DESCRIPTION_MAX, HINT_NAME_MAX, FEATURED, FEATURED_PER_CREATOR, type CommunityCharacter, type FeaturedCharacter } from "../shared/account";
 import { playerOf } from "./auth";
 import type { WideEvent } from "../shared/wide";
 import type { LibraryEntry } from "../shared/account";
@@ -107,8 +107,8 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
     const png = typeof req.body?.png === "string" ? decodePng(req.body.png) : null;
     if (!png) return res.status(400).json({ error: "drawing must be a PNG data URL" });
     if (png.length > DRAW_PNG_MAX_BYTES) return res.status(400).json({ error: "drawing too large" });
-    const name = String(req.body?.name ?? "").replace(/[^\w .'!?-]/g, "").trim().slice(0, 28).toUpperCase();
-    const description = String(req.body?.description ?? "").replace(/\s+/g, " ").trim().slice(0, 240);
+    const name = String(req.body?.name ?? "").replace(/[^\w .'!?-]/g, "").trim().slice(0, HINT_NAME_MAX).toUpperCase();
+    const description = String(req.body?.description ?? "").replace(/\s+/g, " ").trim().slice(0, HINT_DESCRIPTION_MAX);
     const hint = name || description ? { name, description } : null;
     if (req.body?.public !== undefined && typeof req.body.public !== "boolean") return res.status(400).json({ error: "public must be true or false" });
     const event = res.locals.event as WideEvent | undefined;

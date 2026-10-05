@@ -3,6 +3,7 @@ import { PENCIL } from "../render/paper";
 import type { MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
 import { sfx } from "../audio/audio";
+import { HINT_DESCRIPTION_MAX, HINT_NAME_MAX } from "../../../shared/account";
 import { library } from "../account";
 import { bg, card, label, title, type Screen, INK } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
@@ -14,9 +15,8 @@ import type { CharacterHint, Nav } from "./nav";
 
 const ART = { x: 120, y: 150, w: 720, h: 720 };
 const FORM_X = 960, FORM_W = 840;
-const NAME = { x: FORM_X, y: 240, w: FORM_W, h: 96 };
-const DESC = { x: FORM_X, y: 440, w: FORM_W, h: 190 };
-export const NAME_MAX = 28, DESCRIPTION_MAX = 240;
+const NAME = { x: FORM_X, y: 200, w: FORM_W, h: 96 };
+const DESC = { x: FORM_X, y: 380, w: FORM_W, h: 250 };
 
 /**
  * Between the pad and creation: an optional name and a line or two about the character, so the
@@ -35,8 +35,8 @@ export class DescribeScreen implements Screen {
 
   constructor(private nav: Nav, private pad: DrawPad, hint?: CharacterHint) {
     pad.locked = true;
-    this.name = new TextField({ maxLength: NAME_MAX, upper: true, value: hint?.name, onSubmit: () => this.description.el.focus(), onCancel: () => this.back() });
-    this.description = new TextField({ maxLength: DESCRIPTION_MAX, multiline: true, quiet: true, value: hint?.description, onSubmit: () => this.send(), onCancel: () => this.back() });
+    this.name = new TextField({ maxLength: HINT_NAME_MAX, upper: true, value: hint?.name, onSubmit: () => this.description.el.focus(), onCancel: () => this.back() });
+    this.description = new TextField({ maxLength: HINT_DESCRIPTION_MAX, multiline: true, quiet: true, value: hint?.description, onSubmit: () => this.send(), onCancel: () => this.back() });
     this.menu.focus = 1;
   }
 
@@ -72,7 +72,7 @@ export class DescribeScreen implements Screen {
     this.name.place(NAME.x + 20, NAME.y + 14, NAME.w - 40, NAME.h - 28, 44);
     label(ctx, "WHAT IS IT? WHAT DOES IT DO? (optional)", DESC.x, DESC.y - 22, 26, PENCIL, "left", 800);
     card(ctx, DESC.x, DESC.y, DESC.w, DESC.h, INK, document.activeElement === this.description.el);
-    this.description.place(DESC.x + 20, DESC.y + 16, DESC.w - 40, DESC.h - 32, 28);
+    this.description.place(DESC.x + 20, DESC.y + 16, DESC.w - 40, DESC.h - 32, 26);
     if (!this.name.value && !this.description.value) label(ctx, "leave both empty and it's all read from the drawing", FORM_X, DESC.y + DESC.h + 38, 24, PENCIL, "left");
     const buttons = this.buttons();
     this.menu.draw(ctx, buttons);

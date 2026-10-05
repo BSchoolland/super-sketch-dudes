@@ -67,6 +67,8 @@ export const FEATURED = 8, FEATURED_PER_CREATOR = 2;
 
 /** Longest side of the drawing the client uploads; the server rejects bigger. */
 export const DRAW_PNG_MAX_BYTES = 900_000;
+/** The optional name and description a player gives a new character. */
+export const HINT_NAME_MAX = 28, HINT_DESCRIPTION_MAX = 720;
 
 /** The Google OAuth client (project super-sketch-dudes) whose ID tokens the server accepts. */
 export const GOOGLE_CLIENT_ID = "568376323404-395dbb6rf9c6p8n3mhnd1obh4u4r1gc3.apps.googleusercontent.com";
