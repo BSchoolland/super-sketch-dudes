@@ -47,6 +47,12 @@ export function matchStats(events, { minFrames = 600 } = {}) {
       simRatePct: e.t1 > e.t0 ? round1((100 * net.frames) / (((e.t1 - e.t0) / 1000) * 60)) : null,
       errors: (e.issues ?? []).filter((i) => i.level === "error").map((i) => i.code),
       inputDelay: b.match?.inputDelay, waitedOn: net.waitedOn ?? null, unattributedWaitMs: net.unattributedWaitMs ?? null,
+      // peer-to-peer builds: time this player was played away by the relay (their inputs overruled), the share of remote
+      // input frames that arrived first over a link, fast-forward frames after stalls, rollbacks past the window, load wait
+      awaySPerMin: rb.awayFrames ? round1((rb.awayFrames[b.match?.localSlot] ?? 0) / 60 / minutes) : null,
+      viaLinkPct: linkPct(b.paths), catchupPerMin: rb.catchupFrames !== undefined ? Math.round(rb.catchupFrames / minutes) : null,
+      deepRollbacksPerMin: rb.catchupFrames !== undefined ? round1((rb.tooDeep ?? 0) / minutes) : null, loadWaitMs: b.loadWaitMs ?? null,
+      routes: b.paths ? Object.values(b.paths).map((p) => p.route ?? "relay").join(",") : null,
       relayGapMs: relayIndex >= 0 ? relay.relay?.[relayIndex]?.maxGapMs : null, relayStalls: relayIndex >= 0 ? relay.relay?.[relayIndex]?.stalls : null,
       exit: b.exit,
     };
@@ -66,6 +72,13 @@ export function matchStats(events, { minFrames = 600 } = {}) {
   return matches;
 }
 
+function linkPct(paths) {
+  if (!paths) return null;
+  let link = 0, all = 0;
+  for (const p of Object.values(paths)) { link += p.framesViaLink; all += p.framesViaLink + p.framesViaRelay; }
+  return all ? Math.round((100 * link) / all) : 0;
+}
+
 function uaShort(ua) {
   const os = /Windows/.test(ua) ? "win" : /Mac OS/.test(ua) ? "mac" : /CrOS/.test(ua) ? "chromeos" : /Android/.test(ua) ? "android" : /iPhone|iPad/.test(ua) ? "ios" : /Linux/.test(ua) ? "linux" : "?";
   const headless = /Headless/.test(ua) ? " headless" : "";
@@ -78,7 +91,7 @@ export function formatMatches(matches) {
     out.push(`${m.at.slice(0, 16).replace("T", " ")}  ${m.trace}  ${m.size}p ${m.stage}  frozen ${m.waitSPerMin} s/min · ${m.waitsPerMin} waits/min · longest ${m.longestWaitMs} ms`);
     for (const r of m.players) {
       const on = r.waitedOn ? Object.values(r.waitedOn).map((w) => `${w.name} ${round1(w.waitingMs / 1000)}s/${w.waits}`).join(", ") : "";
-      out.push(`    ${r.name.padEnd(12)} ${r.ua.padEnd(9)} ${String(r.minutes).padStart(4)}m  wait ${String(r.waitSPerMin).padStart(4)} s/min ${String(r.waitsPerMin).padStart(3)}/min longest ${String(r.longestWaitMs).padStart(5)}  rtt ${r.rttAvg}/${r.rttMax}  rb ${r.rollbacksPerMin}/min  slow frames ${r.slowFramePct}% (max ${r.maxFrameMs})  relay gap ${r.relayGapMs ?? "-"} stalls ${r.relayStalls ?? "-"}  delay ${r.inputDelay}  speed ${r.simRatePct}%${r.errors.length ? `  ERRORS ${r.errors.join(",")}` : ""}${on ? `  waited on: ${on}` : ""}`);
+      out.push(`    ${r.name.padEnd(12)} ${r.ua.padEnd(9)} ${String(r.minutes).padStart(4)}m  wait ${String(r.waitSPerMin).padStart(4)} s/min ${String(r.waitsPerMin).padStart(3)}/min longest ${String(r.longestWaitMs).padStart(5)}  rtt ${r.rttAvg}/${r.rttMax}  rb ${r.rollbacksPerMin}/min  slow frames ${r.slowFramePct}% (max ${r.maxFrameMs})  relay gap ${r.relayGapMs ?? "-"} stalls ${r.relayStalls ?? "-"}  delay ${r.inputDelay}  speed ${r.simRatePct}%${r.viaLinkPct !== null ? `  links ${r.routes} (${r.viaLinkPct}% of inputs first)  away ${r.awaySPerMin} s/min  ff ${r.catchupPerMin}/min  deep rb ${r.deepRollbacksPerMin}/min  load wait ${r.loadWaitMs} ms` : ""}${r.errors.length ? `  ERRORS ${r.errors.join(",")}` : ""}${on ? `  waited on: ${on}` : ""}`);
     }
   }
   return out.join("\n");

@@ -56,13 +56,17 @@ for (const { scenario, tier } of suite) {
       speedPct: mean(p.map((r) => r.simRatePct)), inputDelay: Math.max(...p.map((r) => r.inputDelay ?? 0)),
       rollbacksPerMin: mean(p.map((r) => r.rollbacksPerMin)), maxRollback: Math.max(...p.map((r) => r.maxDepth ?? 0)),
       slowFramePct: mean(p.map((r) => r.slowFramePct)), errors: p.flatMap((r) => r.errors),
+      // what a peer-to-peer build trades (null on builds before it): away time, fast-forward, rollbacks past the window,
+      // the wait for everyone to load before the countdown, and how much of the input traffic the links carried first
+      awaySPerMin: mean(p.map((r) => r.awaySPerMin ?? 0)), catchupPerMin: mean(p.map((r) => r.catchupPerMin ?? 0)),
+      deepRollbacksPerMin: mean(p.map((r) => r.deepRollbacksPerMin ?? 0)), loadWaitS: mean(p.map((r) => (r.loadWaitMs ?? 0) / 1000)), viaLinkPct: mean(p.map((r) => r.viaLinkPct ?? 0)),
     });
     fs.mkdirSync(path.dirname(partialFile), { recursive: true });
     fs.writeFileSync(partialFile, JSON.stringify({ commit: commitNow, dirty, runs }));
   }
 }
 
-const METRICS = ["freezesPerMin", "frozenSPerMin", "longestFreezeMs", "speedPct", "inputDelay", "rollbacksPerMin", "maxRollback", "slowFramePct"];
+const METRICS = ["freezesPerMin", "frozenSPerMin", "longestFreezeMs", "speedPct", "inputDelay", "rollbacksPerMin", "maxRollback", "slowFramePct", "awaySPerMin", "catchupPerMin", "deepRollbacksPerMin", "loadWaitS", "viaLinkPct"];
 const summarize = (rs) => Object.fromEntries([...METRICS.map((k) => [k, mean(rs.map((r) => r[k]))]), ["errors", rs.flatMap((r) => r.errors)]]);
 const byScenario = Object.fromEntries(suite.map(({ scenario }) => [scenario, summarize(runs.filter((r) => r.scenario === scenario))]));
 const byTier = Object.fromEntries([...new Set(suite.map((s) => s.tier))].map((t) => [t, summarize(runs.filter((r) => r.tier === t))]));
@@ -71,10 +75,10 @@ const result = { label, at: new Date().toISOString(), commit: runs[0]?.commit, s
 const baseline = baselineFile ? JSON.parse(fs.readFileSync(baselineFile, "utf8")) : null;
 const ratio = (b, n) => (b == null || n == null ? "" : n === 0 ? (b === 0 ? " (=)" : " (∞× fewer)") : ` (${Math.round((b / n) * 10) / 10}× ${b >= n ? "fewer" : "MORE"})`);
 const table = (title, rows, base) => {
-  const out = [`## ${title}`, "", `| | freezes/min | frozen s/min | longest ms | speed % | input delay | rollbacks/min | max rollback | slow frames % | errors |`, "|---|---|---|---|---|---|---|---|---|---|"];
+  const out = [`## ${title}`, "", `| | freezes/min | frozen s/min | longest ms | speed % | input delay | rollbacks/min | max rollback | slow frames % | errors | away s/min | fast-forward frames/min | rollbacks past window/min | load wait s | inputs first over a link % |`, "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"];
   for (const [name, s] of Object.entries(rows)) {
     const b = base?.[name];
-    out.push(`| ${name} | ${s.freezesPerMin}${ratio(b?.freezesPerMin, s.freezesPerMin)} | ${s.frozenSPerMin}${ratio(b?.frozenSPerMin, s.frozenSPerMin)} | ${s.longestFreezeMs} | ${s.speedPct}${b ? ` (was ${b.speedPct})` : ""} | ${s.inputDelay}${b ? ` (was ${b.inputDelay})` : ""} | ${s.rollbacksPerMin} | ${s.maxRollback} | ${s.slowFramePct} | ${s.errors.length ? s.errors.join(", ") : "none"} |`);
+    out.push(`| ${name} | ${s.freezesPerMin}${ratio(b?.freezesPerMin, s.freezesPerMin)} | ${s.frozenSPerMin}${ratio(b?.frozenSPerMin, s.frozenSPerMin)} | ${s.longestFreezeMs} | ${s.speedPct}${b ? ` (was ${b.speedPct})` : ""} | ${s.inputDelay}${b ? ` (was ${b.inputDelay})` : ""} | ${s.rollbacksPerMin} | ${s.maxRollback} | ${s.slowFramePct} | ${s.errors.length ? s.errors.join(", ") : "none"} | ${s.awaySPerMin ?? "-"} | ${s.catchupPerMin ?? "-"} | ${s.deepRollbacksPerMin ?? "-"} | ${s.loadWaitS ?? "-"} | ${s.viaLinkPct ?? "-"} |`);
   }
   return out.join("\n");
 };

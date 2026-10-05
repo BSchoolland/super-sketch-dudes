@@ -45,8 +45,8 @@ const SYNC_STALE_TICKS = 20;
  * buys on this machine, between MIN_WINDOW and the session's ceiling.
  */
 const MAX_WINDOW = 30;
-const MIN_WINDOW = 8;
-const RESIM_BUDGET_MS = 6;
+const MIN_WINDOW = 12;
+const RESIM_BUDGET_MS = 10;
 /** Step timings before this many are JIT warm-up and don't count. */
 const COST_WARMUP = 120;
 /**
