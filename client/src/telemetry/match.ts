@@ -19,6 +19,7 @@ export interface MatchStart {
   /** The frame a bundle swap handed this match over at. */
   resumedAt?: number;
 }
+interface PeerWaits { name: string; waitingMs: number; waits: number; longestWaitMs: number }
 export interface LoadOutcome { url: string; state: string; error: string; ms: number }
 
 const FRAME_BUCKETS = [17, 25, 34, 50, 100, 1000];
@@ -37,7 +38,13 @@ export class MatchTelemetry {
   readonly event: WideEvent;
   private session: RollbackSession | null = null;
   private renderer: Renderer | null = null;
-  private readonly net = { frames: 0, confirmed: 0, maxLead: 0, waitingMs: 0, waits: 0, longestWaitMs: 0, rtt: { min: 0, max: 0, avg: 0, n: 0 } };
+  private readonly net = {
+    frames: 0, confirmed: 0, maxLead: 0, waitingMs: 0, waits: 0, longestWaitMs: 0, rtt: { min: 0, max: 0, avg: 0, n: 0 },
+    /** Per remote slot: WAITING time spent missing that player's input. Overlaps when two are missing at once. */
+    waitedOn: {} as Record<number, PeerWaits>,
+    /** WAITING time with every input in hand (a rollback deeper than the window). */
+    unattributedWaitMs: 0,
+  };
   private readonly render = {
     draws: 0, frameMs: {} as Record<string, number>, maxFrameMs: 0, badCamera: 0, badView: 0, offscreenDraws: 0,
     sprites: 0, spriteLoading: 0, spriteFailed: 0, failedCells: [] as string[], probes: [] as { frame: number; ink: number }[], minInk: 1,
@@ -46,6 +53,8 @@ export class MatchTelemetry {
   private lastTick = 0;
   private lastDraw = 0;
   private waitMs = 0;
+  /** The current WAITING stall, per remote slot it has been missing. */
+  private waitBySlot = new Map<number, number>();
   private rttSum = 0;
   private secondAt = 0;
   private offscreenRun = 0;
@@ -113,8 +122,12 @@ export class MatchTelemetry {
     this.net.frames = s.state.frame;
     this.net.confirmed = s.confirmedThrough;
     this.net.maxLead = Math.max(this.net.maxLead, s.frameLead());
-    if (stalled) this.waitMs += ms;
-    else if (this.waitMs > 0) this.endWait();
+    if (stalled) {
+      this.waitMs += ms;
+      const missing = s.waitingOn();
+      if (!missing.length) this.net.unattributedWaitMs = Math.round(this.net.unattributedWaitMs + ms);
+      for (const slot of missing) this.waitBySlot.set(slot, (this.waitBySlot.get(slot) ?? 0) + ms);
+    } else if (this.waitMs > 0) this.endWait();
     if (now - this.secondAt < 1000) return;
     this.secondAt = now;
     this.summarize(s.state.ended ? "ended" : "playing");
@@ -132,8 +145,18 @@ export class MatchTelemetry {
     this.net.waits++;
     this.net.waitingMs = Math.round(this.net.waitingMs + this.waitMs);
     this.net.longestWaitMs = Math.max(this.net.longestWaitMs, Math.round(this.waitMs));
-    if (this.waitMs > 3000) this.issue("warn", "waiting", "a WAITING stall longer than 3 s");
+    const names: string[] = [];
+    for (const [slot, ms] of this.waitBySlot) {
+      const name = this.start.members.find((m) => m.slot === slot)?.name ?? `P${slot + 1}`;
+      const peer = (this.net.waitedOn[slot] ??= { name, waitingMs: 0, waits: 0, longestWaitMs: 0 });
+      peer.waits++;
+      peer.waitingMs = Math.round(peer.waitingMs + ms);
+      peer.longestWaitMs = Math.max(peer.longestWaitMs, Math.round(ms));
+      names.push(name);
+    }
+    if (this.waitMs > 3000) this.issue("warn", "waiting", `a WAITING stall longer than 3 s${names.length ? `, waiting on ${names.join(" + ")}` : ""}`);
     this.waitMs = 0;
+    this.waitBySlot.clear();
   }
 
   /** Every draw: frame time, whether the camera and canvas can show anything, what the sprites drew. */
@@ -227,7 +250,9 @@ export class MatchTelemetry {
   }
 
   private summarize(state: string): void {
-    const waited = this.net.waitingMs ? ` · waited ${(this.net.waitingMs / 1000).toFixed(1)} s` : "";
+    const worst = Object.values(this.net.waitedOn).sort((a, b) => b.waitingMs - a.waitingMs)[0];
+    const on = worst ? ` (most on ${worst.name}, ${(worst.waitingMs / 1000).toFixed(1)} s)` : "";
+    const waited = this.net.waitingMs ? ` · waited ${(this.net.waitingMs / 1000).toFixed(1)} s${on}` : "";
     this.event.set("summary", { message: `${this.start.config.players.length}p ${this.start.config.stage} · slot ${this.start.localSlot} · ${this.net.frames} frames · ${state}${waited}` });
   }
 }

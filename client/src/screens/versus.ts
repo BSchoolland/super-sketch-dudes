@@ -111,7 +111,13 @@ export class VersusScreen implements Screen {
     playEvents(st, events);
     if (!this.match.paused) this.stateSounds.update(dt, st);
     if (settings.rumble) for (const e of events) {
-      if (e.t === "hit") { const s = this.match.sources[e.victim]; if (s.device) rumble(s.device, Math.min(1, e.damage / 20), 0.5, 80 + e.damage * 8); const a = this.match.sources[e.attacker]; if (a.device) rumble(a.device, 0.2, 0.6, 60); }
+      if (e.t === "hit") {
+        // victim -1: the attacker batted a projectile back
+        const v = e.victim >= 0 ? this.match.sources[e.victim] : null;
+        if (v?.device) rumble(v.device, Math.min(1, e.damage / 20), 0.5, 80 + e.damage * 8);
+        const a = this.match.sources[e.attacker];
+        if (a.device) rumble(a.device, 0.2, 0.6, 60);
+      }
       if (e.t === "ko") for (const s of this.match.sources) if (s.device) rumble(s.device, 1, 1, 400);
     }
     music.muffle(this.match.paused || st.ended);
