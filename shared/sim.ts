@@ -87,16 +87,15 @@ export function step(state: State, inputs: InputFrame[]): State {
   state.frame++;
   if (state.slowmo > 0) state.slowmo--;
   updatePlatforms(state, stage);
-  for (const f of state.fighters) {
-    const inp = inputs[f.slot] ?? EMPTY_INPUT;
-    stepFighter(state, f, inp, state.inputs[f.slot], stage);
-  }
-  for (const f of state.fighters) stepPhysics(state, f, inputs[f.slot] ?? EMPTY_INPUT, stage);
+  // an eliminated fighter's input is nothing, so a player who leaves after going out can drop at any frame (see RollbackSession.drop)
+  const input = (slot: number): InputFrame => (state.fighters[slot] && state.fighters[slot].stocks <= 0 ? EMPTY_INPUT : inputs[slot] ?? EMPTY_INPUT);
+  for (const f of state.fighters) stepFighter(state, f, input(f.slot), state.inputs[f.slot], stage);
+  for (const f of state.fighters) stepPhysics(state, f, input(f.slot), stage);
   stepProjectiles(state, stage);
   resolveHits(state);
   for (const f of state.fighters) settleBars(f);
   stepRules(state, stage);
-  for (let i = 0; i < state.inputs.length; i++) state.inputs[i] = cloneInput(inputs[i] ?? EMPTY_INPUT);
+  for (let i = 0; i < state.inputs.length; i++) state.inputs[i] = cloneInput(input(i));
   state.seen.unshift(state.fighters.map(glimpse));
   if (state.seen.length > SEEN_FRAMES) state.seen.pop();
   return state;

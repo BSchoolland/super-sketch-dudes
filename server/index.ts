@@ -14,6 +14,7 @@ import { attachCharacters } from "./characters";
 import { attachMaps, initMaps } from "./maps";
 import { attachBrawlStats } from "./brawl-stats";
 import { attachEvents, initEvents, requestErrors, requestEvents, watchProcess } from "./events";
+import { iceConfigured } from "./ice";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
@@ -37,6 +38,8 @@ api.get("/health", (_req, res) => res.json({ ok: true, build: process.env.BUILD 
 
 const FORGE_TOKEN = process.env.FORGE_TOKEN ?? "";
 if (!FORGE_TOKEN) console.warn("FORGE_TOKEN unset: the forge and game bundle uploads are disabled");
+const ice = iceConfigured();
+if (!ice.stun || !ice.turn) console.warn(`peer-to-peer: ${ice.stun} STUN and ${ice.turn} TURN servers (RTC_STUN, RTC_TURN, RTC_TURN_SECRET); pairs that can't connect directly play over the relay`);
 // sign-in, libraries, the forge queue, the creator
 initLibrary(DATA_DIR);
 attachAuth(api, { dataDir: DATA_DIR, devLogin: process.env.DEV_LOGIN === "1", botKey: process.env.BOT_LOGIN_KEY || null });

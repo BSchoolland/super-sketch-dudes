@@ -2,6 +2,7 @@ import { matchTrace, type Issue, type WideEvent } from "../../../shared/wide";
 import type { MatchConfig } from "../../../shared/sim";
 import { roster } from "../../../shared/fighters/index";
 import type { RollbackSession } from "../net/rollback";
+import type { NetLink } from "../net/link";
 import type { Renderer } from "../render/render";
 import { VIEW_H, VIEW_W } from "../render/camera";
 import { PAPER } from "../render/paper";
@@ -37,6 +38,7 @@ const PAPER_RGB = [1, 3, 5].map((i) => parseInt(PAPER.slice(i, i + 2), 16));
 export class MatchTelemetry {
   readonly event: WideEvent;
   private session: RollbackSession | null = null;
+  private link: NetLink | null = null;
   private renderer: Renderer | null = null;
   private readonly net = {
     frames: 0, confirmed: 0, maxLead: 0, waitingMs: 0, waits: 0, longestWaitMs: 0, rtt: { min: 0, max: 0, avg: 0, n: 0 },
@@ -87,6 +89,11 @@ export class MatchTelemetry {
     if (!dropped) this.issue("warn", "left", `slot ${slot} left mid-fight at frame ${frame}: match over`);
   }
 
+  /** The relay's go: everyone loaded, the countdown starts. `waitMs`: how long this client waited on the others. */
+  started(waitMs: number): void {
+    this.event.set("loadWaitMs", waitMs);
+  }
+
   loading(urls: string[]): void {
     this.event.set("loads", urls.map((url) => ({ url, state: "loading" })));
   }
@@ -96,9 +103,10 @@ export class MatchTelemetry {
     for (const o of outcomes) if (o.state === "failed") this.issue("error", "load", `fighter bundle didn't load: ${o.url}: ${o.error}`);
   }
 
-  /** The match screen is up: from here on the session and renderer are watched. */
-  attach(session: RollbackSession, renderer: Renderer): void {
+  /** The match screen is up: from here on the session, its links and the renderer are watched. */
+  attach(session: RollbackSession, renderer: Renderer, link: NetLink): void {
     this.session = session;
+    this.link = link;
     this.renderer = renderer;
     this.attachedAt = performance.now();
     this.probeAt = this.attachedAt + PROBE_FIRST_MS;
@@ -130,6 +138,7 @@ export class MatchTelemetry {
     } else if (this.waitMs > 0) this.endWait();
     if (now - this.secondAt < 1000) return;
     this.secondAt = now;
+    if (this.link) this.event.set("paths", this.link.pathStats());
     this.summarize(s.state.ended ? "ended" : "playing");
     if (rtt > 0) {
       const r = this.net.rtt;
@@ -245,6 +254,7 @@ export class MatchTelemetry {
     if (this.renderer) this.renderer.afterWorld = null;
     const st = this.session?.state;
     if (st?.ended) this.event.set("result", { winner: st.winner, stocks: st.fighters.map((f) => f.stocks) });
+    if (this.link) this.event.set("paths", this.link.pathStats());
     this.summarize(exit);
     finishEvent(this.event, exit);
   }
@@ -253,6 +263,8 @@ export class MatchTelemetry {
     const worst = Object.values(this.net.waitedOn).sort((a, b) => b.waitingMs - a.waitingMs)[0];
     const on = worst ? ` (most on ${worst.name}, ${(worst.waitingMs / 1000).toFixed(1)} s)` : "";
     const waited = this.net.waitingMs ? ` · waited ${(this.net.waitingMs / 1000).toFixed(1)} s${on}` : "";
-    this.event.set("summary", { message: `${this.start.config.players.length}p ${this.start.config.stage} · slot ${this.start.localSlot} · ${this.net.frames} frames · ${state}${waited}` });
+    const linked = this.link?.linked();
+    const p2p = linked ? ` · p2p ${linked.open}/${linked.of}` : "";
+    this.event.set("summary", { message: `${this.start.config.players.length}p ${this.start.config.stage} · slot ${this.start.localSlot} · ${this.net.frames} frames · ${state}${p2p}${waited}` });
   }
 }

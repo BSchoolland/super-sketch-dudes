@@ -2,13 +2,16 @@ import type { DeviceId } from "./input/devices";
 import type { MatchConfig } from "../../shared/sim";
 import type { SessionHandoff } from "./net/rollback";
 import type { RelayMessage, RoomMember, WebSocketTransport } from "./net/transport";
+import type { PeerMesh } from "./net/mesh";
 
 /**
  * What one game bundle hands the next when the room switches bundles: the live relay
- * connection (the socket stays open across the swap), the room, and the match in flight.
+ * connection (the socket stays open across the swap), the peer links, the room, and the match in flight.
  */
 export interface Handoff {
   transport: WebSocketTransport;
+  /** The room's peer-to-peer links, kept open across the swap; a bundle that doesn't know this version makes its own. */
+  mesh?: PeerMesh | null;
   id: number;
   room: Extract<RelayMessage, { t: "room" }> | null;
   /** The page session's wide-event trace, so the next bundle's events file under the same session. */

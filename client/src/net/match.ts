@@ -22,8 +22,9 @@ export class RollbackMatch implements MatchDriver {
     return this.session.state;
   }
 
+  /** Never: the session's clock moves every tick, frozen or not, and the sim catches up by itself. */
   get stalled(): boolean {
-    return this.session.waiting;
+    return false;
   }
 
   tick(): boolean {

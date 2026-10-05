@@ -11,6 +11,8 @@ import { RollbackMatch } from "../net/match";
 import { RollbackSession, type SessionHandoff } from "../net/rollback";
 import { swap } from "../handoff";
 import type { RelayMessage, RoomMember, Unsubscribe, WebSocketTransport } from "../net/transport";
+import type { PeerMesh } from "../net/mesh";
+import { NetLink } from "../net/link";
 import { VersusScreen } from "./versus";
 import { label, type Screen, INK } from "./ui";
 import { site } from "../base";
@@ -58,6 +60,8 @@ export type NetExit = "done" | "quit" | "left" | "failure" | "closed";
 
 export interface NetVersusOptions {
   transport: WebSocketTransport;
+  /** Peer-to-peer links to the room; null without WebRTC. */
+  mesh: PeerMesh | null;
   config: MatchConfig;
   members: Pick<RoomMember, "id" | "name" | "slot">[];
   localSlot: number;
@@ -80,9 +84,13 @@ export interface NetVersusOptions {
   telemetry: MatchTelemetry;
 }
 
-/** A rollback match over the relay. */
+/** A rollback match over peer-to-peer links and the relay. */
 export class NetVersusScreen extends VersusScreen {
   readonly session: RollbackSession;
+  readonly link: NetLink;
+  /** The relay's go: every member's match screen is up. The countdown waits for it (a resumed match has it). */
+  private go: boolean;
+  private loadWait = 0;
   protected failure: { title: string; detail: string; automatic: boolean } | null = null;
   private failureTime = 0;
   private pingTime = 0;
@@ -102,10 +110,11 @@ export class NetVersusScreen extends VersusScreen {
     const done = () => leave("done");
     const exit = () => leave(ended() ? "done" : "quit");
     const telemetry = opts.telemetry;
+    const link = new NetLink(opts.transport, opts.mesh, opts.members, opts.localSlot);
     const session = new RollbackSession({
       config: opts.config,
       localSlot: opts.localSlot,
-      transport: opts.transport,
+      transport: link,
       inputDelay: opts.inputDelay,
       resume: opts.resume,
       onDesync: (info) => telemetry.issue("error", "desync", `frame ${info.frame}: local ${info.localHash} ≠ slot ${info.remoteSlot} ${info.remoteHash}`),
@@ -118,10 +127,12 @@ export class NetVersusScreen extends VersusScreen {
     });
     super(opts.config, driver.sources, exit, done, false, driver);
     this.session = session;
+    this.link = link;
+    this.go = !!opts.resume;
     ended = () => session.state.ended;
     this.renderer.names = names;
     if (opts.resume) this.countdown = 0;
-    telemetry.attach(session, this.renderer);
+    telemetry.attach(session, this.renderer, link);
     this.unsubscribers.push(
       opts.transport.onLobby((message) => {
         opts.onLobby?.(message);
@@ -130,7 +141,7 @@ export class NetVersusScreen extends VersusScreen {
           const out = (this.session.state.fighters[message.slot]?.stocks ?? 0) <= 0;
           const dropped = out || this.session.state.ended;
           telemetry.left(message.slot, dropped);
-          if (dropped) this.session.drop(message.slot);
+          if (dropped) this.session.drop(message.slot, message.frame);
           else {
             this.failure = { title: "PLAYER DISCONNECTED", detail: "Returning to the room", automatic: true };
             this.session.waiting = true;
@@ -139,6 +150,7 @@ export class NetVersusScreen extends VersusScreen {
         // a bundle switch: the host names a frame far enough ahead that everyone can confirm it
         if (message.t === "game" && opts.isHost()) opts.transport.sendLobby({ t: "gameAt", hash: message.hash, frame: this.session.state.frame + 90 });
         if (message.t === "gameAt" && message.hash !== swap.hash) { this.swapAt = { hash: message.hash, frame: message.frame }; this.session.keepFrom = message.frame; }
+        if (message.t === "go" && !this.go) { this.go = true; telemetry.started(Math.round(this.loadWait * 1000)); }
       }),
       opts.transport.onClose(() => {
         telemetry.issue("warn", "closed", `the relay connection closed at frame ${this.session.state.frame}`);
@@ -146,9 +158,11 @@ export class NetVersusScreen extends VersusScreen {
         this.session.waiting = true;
       }),
     );
+    if (!this.go) opts.transport.sendLobby({ t: "loaded" });
     this.cleanupMatch = (exit) => {
       telemetry.finish(exit);
       this.session.close();
+      this.link.close();
       for (const unsubscribe of this.unsubscribers) unsubscribe();
       this.unsubscribers.length = 0;
     };
@@ -185,6 +199,11 @@ export class NetVersusScreen extends VersusScreen {
       this.cleanupMatch("done");
       return this.opts.exit("done");
     }
+    if (!this.go) {
+      this.loadWait += dt;
+      this.renderer.fx.update(dt);
+      return null;
+    }
     if (this.swapAt) {
       this.session.synchronize();
       const handoff = this.session.handoff(this.swapAt.frame);
@@ -192,8 +211,9 @@ export class NetVersusScreen extends VersusScreen {
         const { hash } = this.swapAt;
         this.swapAt = null;
         this.cleanupMatch("swap");
+        this.opts.mesh?.release();
         swap.request(hash, {
-          transport: this.opts.transport, id: this.opts.localId(), room: this.opts.roomState(),
+          transport: this.opts.transport, mesh: this.opts.mesh, id: this.opts.localId(), room: this.opts.roomState(),
           match: { config: this.opts.config, bundles: this.opts.bundles ?? [], members: this.opts.members, localSlot: this.opts.localSlot, device: this.opts.device, inputDelay: this.opts.inputDelay, session: handoff },
         });
         return null;
@@ -208,10 +228,12 @@ export class NetVersusScreen extends VersusScreen {
     const rollback = this.session.rollbackFramesPerSecond();
     const quality = this.session.connectionQuality();
     const color = quality > 0.72 ? "#4dff88" : quality > 0.38 ? INK : "#ff6b5c";
-    const status = this.session.waiting ? "WAITING" : `${Math.round(this.opts.transport.rtt())} ms · ${rollback} rb/s`;
+    const linked = this.link.linked();
+    const status = this.session.waiting ? "WAITING" : `${Math.round(this.link.rtt())} ms · ${rollback} rb/s · p2p ${linked.open}/${linked.of}`;
     label(ctx, status, VIEW_W - 24, 34, 17, color, "right", 700);
     label(ctx, swap.hash ? `bundle ${swap.hash}` : `build ${site.build}`, VIEW_W - 24, 56, 15, "rgba(41,39,34,0.55)", "right", 400);
     if (this.swapAt) label(ctx, `switching at frame ${this.swapAt.frame}`, VIEW_W - 24, 78, 15, "#c8402c", "right", 700);
+    if (!this.go && !this.failure) label(ctx, "waiting for everyone to load", VIEW_W / 2, 140, 26, INK, "center", 700);
     if (this.failure) drawBanner(ctx, this.failure.title, this.failure.detail, "#ff4d2e", this.failureTime);
     else if (this.waitingFor > 0.5) drawBanner(ctx, "WAITING", this.waitingLine(), INK, 1);
   }

@@ -4,18 +4,37 @@ import { sessionTrace } from "../telemetry/events";
 import type { MapDoc } from "../../../shared/maps";
 
 export type Unsubscribe = () => void;
-/** `ahead`: the sender's averaged frame lead over each slot, for time sync (see RollbackSession); absent from clients that don't send it. */
-export type InputsCallback = (slot: number, frame: number, inputs: InputFrame[], ahead?: number[]) => void;
+/**
+ * A run of one slot's inputs ending at `frame`. `ahead`: the sender's averaged frame lead over each slot, for time
+ * sync (see RollbackSession); `acks`: per slot, the frame through which the sender holds every input. Either is
+ * absent from clients that don't send it. Returns how many of the frames were new to the session.
+ */
+export type InputsCallback = (slot: number, frame: number, inputs: InputFrame[], ahead?: number[], acks?: number[]) => number | void;
 export type HashCallback = (slot: number, frame: number, hash: number) => void;
 
+/** What a rollback session hands its transport every tick: its own inputs, and what it knows of everyone's. */
+export interface LocalInputs {
+  slot: number;
+  /** Newest frame with a local input. */
+  newest: number;
+  /** Oldest frame whose local input is still held. */
+  oldest: number;
+  input(frame: number): InputFrame;
+  ahead: number[];
+  /** Per slot, the frame through which this session holds every input (its own slot: `newest`). */
+  acks: number[];
+  /** Per remote slot still playing: the frame through which it has acknowledged every input of ours. */
+  peerAcks: Map<number, number>;
+}
+
+/** How a rollback session reaches the other players. */
 export interface Transport {
-  send(frame: number, inputs: InputFrame[], ahead: number[]): void;
+  sendInputs(local: LocalInputs): void;
   onInputs(cb: InputsCallback): Unsubscribe;
   sendHash(frame: number, hash: number): void;
   onHash(cb: HashCallback): Unsubscribe;
-  ping(): void;
+  /** Round trip to the players, for the connection indicator. */
   rtt(): number;
-  close(): void;
 }
 
 export interface RoomMember {
@@ -35,7 +54,13 @@ export type RelayMessage =
   /** `trace` is the room's wide-event trace; absent from servers older than wide events. */
   | { t: "room"; code: string; trace?: string; host: number; started: boolean; public: boolean; picking: { stage: string; stocks: number; time: number; map?: MapDoc } | null; members: RoomMember[]; game: string | null }
   | { t: "start"; seed: number; config: unknown; members: Pick<RoomMember, "id" | "name" | "slot">[] }
-  | { t: "left"; id: number; slot: number; duringMatch: boolean }
+  /** `frame`: the leaver's last input frame at the relay; every client has every input up to it, and drops the slot after it. */
+  | { t: "left"; id: number; slot: number; duringMatch: boolean; frame: number }
+  /** Every member's match screen is up: the countdown starts. */
+  | { t: "go" }
+  /** ICE servers for peer-to-peer links, and the links' signaling (see PeerMesh). */
+  | { t: "ice"; servers: unknown[] }
+  | { t: "rtc"; from: number; gen: number }
   /** The room's game bundle changed; the host answers with gameAt. */
   | { t: "game"; hash: string }
   /** Everyone swaps to the bundle at this sim frame (or now, outside a match). */
@@ -53,7 +78,11 @@ export function relayWebSocketUrl(): string {
   return `${protocol}//${location.host}${site.base}ws?trace=${sessionTrace()}`;
 }
 
-export class WebSocketTransport implements Transport {
+/**
+ * The relay connection: the lobby, hashes, and a reliable copy of every input. Its methods keep the shape older
+ * bundles call (a bundle swap hands this object across builds both ways), so `send` and `onInputs` stay as they were.
+ */
+export class WebSocketTransport {
   readonly ready: Promise<void>;
   private ws: WebSocket;
   private queued: string[] = [];
@@ -79,8 +108,8 @@ export class WebSocketTransport implements Transport {
     });
   }
 
-  send(frame: number, inputs: InputFrame[], ahead: number[]): void {
-    this.sendMessage({ t: "inputs", frame, inputs: inputs.map(packInput), ahead });
+  send(frame: number, inputs: InputFrame[], ahead: number[], acks?: number[]): void {
+    this.sendMessage({ t: "inputs", frame, inputs: inputs.map(packInput), ahead, ...(acks ? { acks } : {}) });
   }
 
   onInputs(cb: InputsCallback): Unsubscribe {
@@ -156,7 +185,8 @@ export class WebSocketTransport implements Transport {
       }
       const inputs = message.inputs.map((input: number[]) => unpackInput(input));
       const ahead = Array.isArray(message.ahead) ? message.ahead.map(Number) : undefined;
-      for (const listener of this.inputListeners) listener(message.slot | 0, message.frame | 0, inputs, ahead);
+      const acks = Array.isArray(message.acks) ? message.acks.map((a: unknown) => Number(a) | 0) : undefined;
+      for (const listener of this.inputListeners) listener(message.slot | 0, message.frame | 0, inputs, ahead, acks);
       return;
     }
     if (message.t === "hash") {

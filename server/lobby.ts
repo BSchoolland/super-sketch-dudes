@@ -5,6 +5,7 @@ import { checkMap, MAP_JSON_MAX, type MapDoc } from "../shared/maps";
 import { matchTrace, TRACE_RE, type WideEvent } from "../shared/wide";
 import { finish, newTrace, openEvent } from "./events";
 import { recordPlays } from "./library";
+import { iceServers } from "./ice";
 
 /**
  * Lobby and input relay. The server never simulates: it pairs clients into rooms,
@@ -27,6 +28,8 @@ export interface Client {
   ready: boolean;
   /** This connection's wide event, traced by the page session that opened it. */
   event: WideEvent;
+  /** Round trips this client measured over its peer-to-peer links, by member id: what auto input delay uses for those pairs. */
+  peerRtt: Map<number, number>;
 }
 export interface Room {
   code: string; trace: string; members: Client[]; started: boolean; host: Client; seed: number; config: unknown;
@@ -38,7 +41,8 @@ export interface Room {
 }
 /** What the relay sees of one match: per slot, how inputs and hashes flowed. */
 interface SlotRelay { inputs: number; newest: number; hashes: number; lastHashFrame: number; maxGapMs: number; stalls: number; lastAt: number }
-export interface RelayMatch { event: WideEvent; slots: SlotRelay[]; hashes: Map<number, { hash: number; slot: number }> }
+/** `loaded`: members whose match screen is up; `go` is sent once they all are, and starts everyone's countdown together. */
+export interface RelayMatch { event: WideEvent; slots: SlotRelay[]; hashes: Map<number, { hash: number; slot: number }>; loaded: Set<Client>; goAt: number }
 
 let nextId = 1;
 export const rooms = new Map<string, Room>();
@@ -64,20 +68,37 @@ function mapInMessage(v: unknown): MapDoc | null {
 }
 
 const RTT_PING_MS = 1000;
+/** An SDP offer with every candidate is a few kB. */
+const RTC_MAX = 16_000;
 const FRAME_MS = 1000 / 60;
 /** Rollback covers this many frames of latency; input delay covers the rest, so rollbacks stay shallow at any ping. */
 const ROLLBACK_BUDGET = 4;
 const MIN_DELAY = 2, MAX_DELAY = 6;
 
 /**
- * The input delay for a match from each member's round trip to the relay. Inputs between two players cross
- * the relay, so their one-way latency is half the sum of their round trips; the worst pair decides.
+ * The input delay for a match from each member's round trip to the relay, or for a pair with a peer-to-peer link,
+ * that link's round trip (`peerRtt`). Inputs crossing the relay take half the sum of the two round trips one way,
+ * inputs on a direct link half its round trip; the worst pair decides.
  */
-export function autoInputDelay(rtts: number[]): { delay: number; oneWayMs: number; rtts: number[] } {
-  let oneWayMs = 0;
-  for (let i = 0; i < rtts.length; i++) for (let j = i + 1; j < rtts.length; j++) oneWayMs = Math.max(oneWayMs, (rtts[i] + rtts[j]) / 2);
+export function autoInputDelay(rtts: number[], peerRtt: (i: number, j: number) => number | null = () => null): { delay: number; oneWayMs: number; rtts: number[]; direct: number } {
+  let oneWayMs = 0, direct = 0;
+  for (let i = 0; i < rtts.length; i++) {
+    for (let j = i + 1; j < rtts.length; j++) {
+      const p2p = peerRtt(i, j);
+      if (p2p !== null) direct++;
+      oneWayMs = Math.max(oneWayMs, p2p !== null ? p2p / 2 : (rtts[i] + rtts[j]) / 2);
+    }
+  }
   const delay = Math.max(MIN_DELAY, Math.min(MAX_DELAY, Math.round(oneWayMs / FRAME_MS) - ROLLBACK_BUDGET));
-  return { delay, oneWayMs: Math.round(oneWayMs), rtts: rtts.map(Math.round) };
+  return { delay, oneWayMs: Math.round(oneWayMs), rtts: rtts.map(Math.round), direct };
+}
+/** The pair's direct-link round trip as both ends measured it (their mean), or null without one. */
+function peerRoundTrip(a: Client, b: Client): number | null {
+  const ab = a.peerRtt.get(b.id), ba = b.peerRtt.get(a.id);
+  if (ab === undefined && ba === undefined) return null;
+  if (ab === undefined) return ba!;
+  if (ba === undefined) return ab;
+  return (ab + ba) / 2;
 }
 
 /** Mid-match, a player whose inputs stop for this long is dropped: the others would otherwise wait on them forever. */
@@ -117,7 +138,7 @@ export function startRelayMatch(room: Room, seed: number, config: unknown, membe
     .set("match", { room: room.code, seed, config })
     .set("members", members.map((m) => ({ id: m.id, name: m.name, slot: m.slot, session: m.event.trace, fighter: m.fighter, bundleUrl: m.bundleUrl })))
     .set("relay", slots);
-  room.match = { event, slots, hashes: new Map() };
+  room.match = { event, slots, hashes: new Map(), loaded: new Set(), goAt: 0 };
   pushCapped(room.event.business, "matches", trace, 200);
 }
 export function endRelayMatch(room: Room, exit: string): void {
@@ -141,6 +162,14 @@ function relayInput(m: RelayMatch, slot: number, frame: number): void {
   s.inputs++;
   s.newest = Math.max(s.newest, frame);
 }
+/** Everyone's match screen is up (or they're gone): the countdown starts for all at once. */
+function checkGo(room: Room): void {
+  const m = room.match;
+  if (!m || m.goAt || !room.started || !room.members.every((c) => m.loaded.has(c))) return;
+  m.goAt = Date.now();
+  m.event.set("goMs", since(m.event));
+  broadcast(room, { t: "go" });
+}
 function relayHash(m: RelayMatch, slot: number, frame: number, hash: number): void {
   const s = m.slots[slot];
   if (s) { s.hashes++; s.lastHashFrame = Math.max(s.lastHashFrame, frame); }
@@ -149,15 +178,24 @@ function relayHash(m: RelayMatch, slot: number, frame: number, hash: number): vo
   else if (seen.hash !== hash) m.event.issue("error", "desync", `frame ${frame}: slot ${seen.slot} hashed ${seen.hash}, slot ${slot} hashed ${hash}`);
   for (const f of m.hashes.keys()) if (f < frame - 900) m.hashes.delete(f);
 }
-/** Closes the socket of every mid-match player the relay hasn't heard inputs from in INPUT_TIMEOUT_MS; the close handler drops them. */
+/**
+ * Closes the socket of every mid-match player the relay hasn't heard inputs from in INPUT_TIMEOUT_MS since the go, or
+ * who still hasn't loaded INPUT_TIMEOUT_MS after the start; the close handler drops them.
+ */
 export function dropSilentPlayers(now = Date.now()): void {
   for (const room of rooms.values()) {
     const m = room.match;
     if (!m || !room.started) continue;
     for (const c of room.members) {
+      if (!m.goAt) {
+        if (m.loaded.has(c) || now - m.event.t0 < INPUT_TIMEOUT_MS) continue;
+        m.event.issue("warn", "timeout", `${c.name} (slot ${c.slot}) still loading after ${Math.round((now - m.event.t0) / 1000)} s: dropped`);
+        c.ws.close(4001, "not loaded after 20 s");
+        continue;
+      }
       const s = m.slots[c.slot];
       if (!s) continue;
-      const silentMs = now - (s.lastAt || m.event.t0);
+      const silentMs = now - (s.lastAt || m.goAt);
       if (silentMs < INPUT_TIMEOUT_MS) continue;
       m.event.issue("warn", "timeout", `${c.name} (slot ${c.slot}) sent no inputs for ${Math.round(silentMs / 1000)} s: dropped`);
       c.ws.close(4001, "no inputs for 20 s");
@@ -194,9 +232,11 @@ export function leaveRoom(c: Client): void {
   c.ready = false;
   room.members = room.members.filter((m) => m !== c);
   pushCapped(room.event.business, "leaves", { id: c.id, name: c.name, at: since(room.event), duringMatch });
+  // the last input frame the relay has from the leaver: everyone has every input up to it, delivered before this message
+  const frame = room.match?.slots[slot]?.newest ?? 0;
   if (room.match && duringMatch) {
-    room.match.event.issue("warn", "left", `${c.name} (slot ${slot}) left mid-match at relay frame ${room.match.slots[slot]?.newest ?? "?"}`);
-    pushCapped(room.match.event.business, "left", { id: c.id, name: c.name, slot, at: since(room.match.event), newest: room.match.slots[slot]?.newest ?? null });
+    room.match.event.issue("warn", "left", `${c.name} (slot ${slot}) left mid-match at relay frame ${frame}`);
+    pushCapped(room.match.event.business, "left", { id: c.id, name: c.name, slot, at: since(room.match.event), newest: frame });
   }
   if (!room.members.length) {
     rooms.delete(room.code);
@@ -211,8 +251,9 @@ export function leaveRoom(c: Client): void {
   if (room.members.length < 2) room.picking = null;
   // mid-match the relay keeps everyone's slot: the clients carry on without an eliminated player, and the host's "end" reopens the room
   if (!duringMatch) room.members.forEach((m, i) => (m.slot = i));
-  broadcast(room, { t: "left", id: c.id, slot, duringMatch });
+  broadcast(room, { t: "left", id: c.id, slot, duringMatch, frame });
   broadcast(room, roomInfo(room));
+  if (duringMatch) checkGo(room);
 }
 export function joinRoom(c: Client, room: Room): void {
   leaveRoom(c);
@@ -236,7 +277,7 @@ export function attachLobby(wss: WebSocketServer): void {
     const event = openEvent("connection", session && TRACE_RE.test(session) ? session : newTrace("c"));
     const msgs: Record<string, number> = {};
     event.set("connection", { id, ua: String(req.headers["user-agent"] ?? "").slice(0, 200) }).set("msgs", msgs);
-    const c: Client = { ws, id, name: `guest${id}`, room: null, slot: 0, lastPing: Date.now(), rtt: null, fighter: "", bundleUrl: "", ready: false, event };
+    const c: Client = { ws, id, name: `guest${id}`, room: null, slot: 0, lastPing: Date.now(), rtt: null, fighter: "", bundleUrl: "", ready: false, event, peerRtt: new Map() };
     let pingAt = 0;
     ws.on("pong", () => {
       const sample = Date.now() - pingAt;
@@ -311,7 +352,8 @@ export function attachLobby(wss: WebSocketServer): void {
           room.started = true;
           room.picking = null;
           room.seed = (Math.random() * 0xffffffff) >>> 0;
-          const auto = requested.inputDelay === "auto" ? autoInputDelay(room.members.map((m) => m.rtt ?? 0)) : null;
+          const members = room.members;
+          const auto = requested.inputDelay === "auto" ? autoInputDelay(members.map((m) => m.rtt ?? 0), (i, j) => peerRoundTrip(members[i], members[j])) : null;
           if (auto) requested.inputDelay = auto.delay;
           const unmeasured = auto ? room.members.filter((m) => m.rtt === null).map((m) => m.name) : [];
           room.config = { ...requested, players: room.members.map((m) => ({ fighter: m.fighter, bundleUrl: m.bundleUrl })) };
@@ -324,9 +366,40 @@ export function attachLobby(wss: WebSocketServer): void {
         }
         case "inputs":
           if (!c.room?.started || c.slot < 0) break;
-          if (c.room.match) relayInput(c.room.match, c.slot, msg.frame | 0);
-          broadcast(c.room, { t: "inputs", slot: c.slot, frame: msg.frame | 0, inputs: msg.inputs, ...(Array.isArray(msg.ahead) && msg.ahead.length <= ROOM_SIZE ? { ahead: msg.ahead.map((a: unknown) => Number(a) || 0) } : {}) }, c);
+          if (c.room.match) {
+            relayInput(c.room.match, c.slot, msg.frame | 0);
+            // a client from before the start barrier never says it loaded: its first inputs say it
+            if (!c.room.match.loaded.has(c)) { c.room.match.loaded.add(c); checkGo(c.room); }
+          }
+          broadcast(c.room, {
+            t: "inputs", slot: c.slot, frame: msg.frame | 0, inputs: msg.inputs,
+            ...(Array.isArray(msg.ahead) && msg.ahead.length <= ROOM_SIZE ? { ahead: msg.ahead.map((a: unknown) => Number(a) || 0) } : {}),
+            ...(Array.isArray(msg.acks) && msg.acks.length <= ROOM_SIZE ? { acks: msg.acks.map((a: unknown) => Number(a) | 0) } : {}),
+          }, c);
           break;
+        case "loaded":
+          if (!c.room?.match || !c.room.started) break;
+          c.room.match.loaded.add(c);
+          checkGo(c.room);
+          break;
+        // peer-to-peer signaling: offers, answers and ICE candidates between two members of one room
+        case "rtc": {
+          const to = c.room?.members.find((m) => m.id === msg.to);
+          if (!to || to === c) break;
+          if (String(raw).length > RTC_MAX) { event.issue("warn", "protocol", "an rtc message over the size limit"); break; }
+          send(to, { ...msg, from: c.id });
+          break;
+        }
+        case "ice": send(c, { t: "ice", servers: iceServers(String(c.id)) }); break;
+        case "peers": {
+          if (!msg.rtt || typeof msg.rtt !== "object") break;
+          c.peerRtt.clear();
+          for (const [id, ms] of Object.entries(msg.rtt as Record<string, unknown>).slice(0, ROOM_SIZE)) {
+            if (typeof ms === "number" && Number.isFinite(ms) && ms >= 0 && ms < 10_000) c.peerRtt.set(Number(id), ms);
+          }
+          event.set("peerRtt", Object.fromEntries(c.peerRtt));
+          break;
+        }
         case "hash":
           if (!c.room?.started || c.slot < 0) break;
           if (c.room.match) relayHash(c.room.match, c.slot, msg.frame | 0, msg.hash >>> 0);

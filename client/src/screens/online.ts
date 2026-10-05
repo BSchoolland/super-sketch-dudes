@@ -16,6 +16,7 @@ import { WebSocketTransport, type PublicRoom, type RelayMessage, type RoomMember
 import { NetVersusScreen, startConfig } from "./netversus";
 import { MatchTelemetry } from "../telemetry/match";
 import { swap, type Handoff } from "../handoff";
+import { MESH_VERSION, PeerMesh } from "../net/mesh";
 import { bg, card, hint, label, title, hover, clicked, arrows, button, backButton, goTo, type Screen, INK } from "./ui";
 
 /** The host's input delay choice: auto, then 1 to 6 frames. */
@@ -34,8 +35,23 @@ export type OnlineEntry = "quick" | "create" | "join";
 type RoomState = Extract<RelayMessage, { t: "room" }>;
 interface OnlineContext {
   transport: WebSocketTransport;
+  /** Peer-to-peer links to the room's members; null where the browser has no WebRTC (everything goes by the relay). */
+  mesh: PeerMesh | null;
   id: number;
   room: RoomState | null;
+}
+
+function newMesh(context: OnlineContext): PeerMesh | null {
+  if (typeof RTCPeerConnection === "undefined") return null;
+  return new PeerMesh(context.transport, () => context.id);
+}
+
+/** The links a swap handed over, if this bundle speaks their version; else fresh ones (the old ones close). */
+function adoptMesh(h: Handoff, context: OnlineContext): PeerMesh | null {
+  const handed = h.mesh;
+  if (handed && handed.version === MESH_VERSION) { handed.adopt(); return handed; }
+  handed?.close();
+  return newMesh(context);
 }
 
 export class OnlineScreen implements Screen {
@@ -64,7 +80,8 @@ export class OnlineScreen implements Screen {
 
   /** Pick up where another bundle left off: back in its room, and in its match if there was one. */
   static resume(onExit: () => Screen, h: Handoff): Screen {
-    const context: OnlineContext = { transport: h.transport, id: h.id, room: h.room };
+    const context: OnlineContext = { transport: h.transport, mesh: null, id: h.id, room: h.room };
+    context.mesh = adoptMesh(h, context);
     const screen = new OnlineScreen(onExit, null, null, context);
     if (!h.match) return screen;
     const m = h.match;
@@ -79,6 +96,7 @@ export class OnlineScreen implements Screen {
     let over = false;
     return new NetVersusScreen({
       transport: context.transport,
+      mesh: context.mesh,
       config: m.config,
       bundles: m.bundles,
       members: m.members,
@@ -90,14 +108,14 @@ export class OnlineScreen implements Screen {
       isHost: () => context.room?.host === context.id,
       roomState: () => context.room,
       localId: () => context.id,
-      onLobby: (lobby) => { if (lobby.t === "room") { context.room = lobby; if (!lobby.started) over = true; } },
+      onLobby: (lobby) => { if (lobby.t === "room") { context.room = lobby; context.mesh?.members(lobby.members.map((m) => m.id)); if (!lobby.started) over = true; } },
       // the host ending the match (leaving the result screen or quitting) reopens the room, and that takes everyone back to it
       finished: () => over,
       exit: (reason) => {
-        if (reason === "closed") return onExit();
+        if (reason === "closed") { context.mesh?.close(); return onExit(); }
         const host = context.room?.host === context.id;
         // a guest quitting mid-match leaves the relay: the others see them drop instead of waiting on inputs that never come
-        if (reason === "quit" && !host) { context.transport.close(); return onExit(); }
+        if (reason === "quit" && !host) { context.mesh?.close(); context.transport.close(); return onExit(); }
         if (host) context.transport.sendLobby({ t: "end" });
         return new OnlineScreen(onExit, null, null, context);
       },
@@ -109,7 +127,11 @@ export class OnlineScreen implements Screen {
     this.shelf = new CharacterShelf(SETUP.shelfY);
     this.mine = this.shelf.choices.find((c) => c.id === fighter?.id) ?? null;
     if (this.mine) this.shelf.show(this.mine.id);
-    this.context = context ?? { transport: new WebSocketTransport(), id: 0, room: null };
+    if (context) this.context = context;
+    else {
+      this.context = { transport: new WebSocketTransport(), mesh: null, id: 0, room: null };
+      this.context.mesh = newMesh(this.context);
+    }
     if (this.context.room) this.phase = "lobby";
     else if (entry === "quick") { this.context.transport.sendLobby({ t: "quick" }); this.phase = "waiting"; }
     else if (entry === "create") this.phase = "create";
@@ -316,6 +338,7 @@ export class OnlineScreen implements Screen {
     if (message.t === "hello") this.context.id = message.id;
     if (message.t === "room") {
       this.context.room = message;
+      this.context.mesh?.members(message.members.map((m) => m.id));
       if (this.phase !== "loading") this.phase = "lobby";
       this.followPicking(message);
       this.bringFighter();
@@ -353,7 +376,8 @@ export class OnlineScreen implements Screen {
     if (message.t === "game" && this.context.room?.host === this.context.id) this.context.transport.sendLobby({ t: "gameAt", hash: message.hash, frame: 0 });
     if (message.t === "gameAt" && message.hash !== swap.hash) {
       this.dispose();
-      swap.request(message.hash, { transport: this.context.transport, id: this.context.id, room: this.context.room });
+      this.context.mesh?.release();
+      swap.request(message.hash, { transport: this.context.transport, mesh: this.context.mesh, id: this.context.id, room: this.context.room });
     }
   }
 
@@ -458,11 +482,13 @@ export class OnlineScreen implements Screen {
 
   abandon(): void {
     this.dispose();
+    this.context.mesh?.close();
     this.context.transport.close();
   }
 
   private exit(): Screen {
     this.dispose();
+    this.context.mesh?.close();
     this.context.transport.close();
     return this.onExit();
   }
