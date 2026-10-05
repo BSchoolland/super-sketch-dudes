@@ -51,6 +51,8 @@ interface Peer {
   open: boolean;
   heardAt: number;
   rtt: number;
+  /** The last few round trips, for the median the relay's auto input delay reads (a spike doesn't move it). */
+  recent: number[];
   retries: number;
   timer: ReturnType<typeof setTimeout> | null;
   firstAttemptAt: number;
@@ -107,7 +109,7 @@ export class PeerMesh {
     for (const id of ids) {
       if (id === self || this.peers.has(id)) continue;
       this.peers.set(id, {
-        id, offerer: self < id, gen: 0, pc: null, dc: null, remoteSet: false, pendingCandidates: [], open: false, heardAt: 0, rtt: 0, retries: 0, timer: null, firstAttemptAt: 0,
+        id, offerer: self < id, gen: 0, pc: null, dc: null, remoteSet: false, pendingCandidates: [], open: false, heardAt: 0, rtt: 0, recent: [], retries: 0, timer: null, firstAttemptAt: 0,
         stats: { attempts: 0, failures: 0, firstOpenMs: null, opens: 0, route: null, candidates: null, rttAvg: 0, rttMax: 0, rttSamples: 0, sent: 0, received: 0, backedUp: 0 },
       });
     }
@@ -313,7 +315,7 @@ export class PeerMesh {
     }
     // the relay picks auto input delay from these for pairs with a link
     const rtt: Record<number, number> = {};
-    for (const peer of this.peers.values()) if (peer.open && peer.stats.rttSamples) rtt[peer.id] = Math.round(peer.rtt);
+    for (const peer of this.peers.values()) if (peer.open && peer.recent.length) rtt[peer.id] = [...peer.recent].sort((a, b) => a - b)[peer.recent.length >> 1];
     if (Object.keys(rtt).length && Math.floor(now / PING_MS) % 4 === 0) this.relay.sendLobby({ t: "peers", rtt });
   }
 
@@ -322,6 +324,8 @@ export class PeerMesh {
     if (!(sample >= 0)) return;
     const s = peer.stats;
     peer.rtt = s.rttSamples ? peer.rtt + (sample - peer.rtt) * 0.2 : sample;
+    peer.recent.push(Math.round(sample));
+    if (peer.recent.length > 10) peer.recent.shift();
     s.rttAvg = Math.round((s.rttAvg * s.rttSamples + sample) / (s.rttSamples + 1));
     s.rttMax = Math.max(s.rttMax, Math.round(sample));
     s.rttSamples++;
