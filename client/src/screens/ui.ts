@@ -62,10 +62,12 @@ export function hint(ctx: CanvasRenderingContext2D, text: string): void {
 
 export interface Settings {
   volume: number; music: number; shake: number; tapJump: boolean; rumble: boolean; stocks: number; time: number; cpuTier: number;
+  /** Extra creator tools: the colour wheel. */
+  advanced: boolean;
   /** Keyboard player 1's rebound actions; everything else keeps its default key. */
   keys: Partial<KeyBindings>;
 }
-export const settings: Settings = { volume: 0.8, music: 0.5, shake: 1, tapJump: true, rumble: true, stocks: 3, time: 0, cpuTier: DEFAULT_TIER, keys: {} };
+export const settings: Settings = { volume: 0.8, music: 0.5, shake: 1, tapJump: true, rumble: true, stocks: 3, time: 0, cpuTier: DEFAULT_TIER, advanced: false, keys: {} };
 export function loadSettings(): void {
   try { Object.assign(settings, JSON.parse(localStorage.getItem("sketchbattle.settings") ?? "{}")); } catch { /* ignore */ }
   applyKeys();

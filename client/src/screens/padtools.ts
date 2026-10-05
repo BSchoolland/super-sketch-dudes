@@ -1,16 +1,18 @@
 import { DRAW_PNG_MAX_BYTES } from "../../../shared/account";
-import { card, label, title, INK } from "./ui";
+import { card, label, title, INK, settings } from "./ui";
 import { PENCIL } from "../render/paper";
 import { onPointer, type PointerStroke } from "../input/pointer";
 import type { Button } from "./buttons";
 import { DrawPad, COLORS, SIZES } from "./pad";
 import { ColorWheel } from "./colorwheel";
 
-const LEFT = 90, COL_W = 340, SWATCH_W = 37;
+const LEFT = 90, COL_W = 340;
+/** Swatch width: the colour wheel takes a ninth slot in advanced mode. */
+const swatchW = () => (settings.advanced ? 37 : 42);
 
 /**
  * The tool column left of a draw pad: colours, a custom colour, pencil, eraser, fill, sizes, undo, clear.
- * The custom swatch opens a colour wheel over the tools and sizes. Ctrl+Z undoes while attached.
+ * In advanced mode a custom swatch opens a colour wheel over the tools and sizes. Ctrl+Z undoes while attached.
  */
 export class PadTools {
   private readonly onKey = (e: KeyboardEvent) => {
@@ -52,8 +54,8 @@ export class PadTools {
 
   buttons(): Button[] {
     const b: Button[] = [];
-    COLORS.forEach((_, i) => b.push({ id: `color${i}`, x: LEFT + i * SWATCH_W, y: 100, w: SWATCH_W, h: 64, text: "", custom: true }));
-    b.push({ id: "wheel", x: LEFT + COLORS.length * SWATCH_W, y: 100, w: SWATCH_W, h: 64, text: "", custom: true });
+    COLORS.forEach((_, i) => b.push({ id: `color${i}`, x: LEFT + i * swatchW(), y: 100, w: swatchW(), h: 64, text: "", custom: true }));
+    if (settings.advanced) b.push({ id: "wheel", x: LEFT + COLORS.length * swatchW(), y: 100, w: swatchW(), h: 64, text: "", custom: true });
     if (!this.wheelOpen) {
       ["pencil", "eraser", "fill"].forEach((id, i) => b.push({ id, x: LEFT + i * 116, y: 214, w: 108, h: 84, text: "", custom: true }));
       SIZES.forEach((_, i) => b.push({ id: `size${i}`, x: LEFT + i * 70, y: 422, w: 60, h: 90, text: "", custom: true }));
@@ -110,11 +112,15 @@ export class PadTools {
       const active = tool.kind !== "eraser" && tool.color === color;
       ctx.save();
       ctx.fillStyle = color;
-      ctx.beginPath(); ctx.arc(b.x + SWATCH_W / 2, b.y + 32, active ? 18 : 14, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(b.x + b.w / 2, b.y + 32, active ? 18 : 14, 0, Math.PI * 2); ctx.fill();
       ctx.lineWidth = active || focus === b.id ? 4 : 1.5; ctx.strokeStyle = INK; ctx.stroke();
       ctx.restore();
     });
-    const w = at("wheel"), wx = w.x + SWATCH_W / 2, wy = w.y + 32;
+    if (settings.advanced) this.drawWheelSwatch(ctx, at("wheel"), focus);
+  }
+
+  private drawWheelSwatch(ctx: CanvasRenderingContext2D, w: Button, focus: string | undefined): void {
+    const tool = this.pad.tool, wx = w.x + w.w / 2, wy = w.y + 32;
     const active = this.wheelOpen || (tool.kind !== "eraser" && tool.color === this.custom && !COLORS.includes(tool.color));
     const rainbow = ctx.createConicGradient(0, wx, wy);
     ["#f00", "#ff0", "#0f0", "#0ff", "#00f", "#f0f", "#f00"].forEach((c, i) => rainbow.addColorStop(i / 6, c));
