@@ -2,6 +2,8 @@
 // same seeds, summarized per tier. Every netcode change is judged on this suite against a saved baseline.
 // Usage: node netlab/bench.mjs <label> [--quick] [--baseline netlab/bench/<file>.json] [--only scenario,...]
 //   --quick: 1 seed per scenario instead of 2. Results: netlab/bench/<stamp>-<label>.json and .md
+//   Finished runs are kept in netlab/bench/.partial-<label>.json, so rerunning the same label at the same commit
+//   resumes where an interrupted bench stopped (delete the file to start over).
 // Headline numbers per tier: freezes/min (WAITING stalls), frozen s/min, game speed (% of real time: freezes and
 // slow-motion both lower it), plus what a fix could trade for them: input delay, rollbacks, deepest rollback,
 // slow frames, errors (desyncs and crashes).
@@ -31,10 +33,16 @@ const seeds = quick ? [1] : [1, 2];
 const suite = SUITE.filter((s) => !only || only.includes(s.scenario));
 
 const mean = (xs) => (xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10 : null);
-const runs = [];
+const commitNow = execFileSync("git", ["-C", path.dirname(HERE), "rev-parse", "--short", "HEAD"], { encoding: "utf8" }).trim();
+const dirty = execFileSync("git", ["-C", path.dirname(HERE), "status", "--porcelain", "--", ".", ":!netlab/bench", ":!netlab/runs"], { encoding: "utf8" }).trim() !== "";
+const partialFile = path.join(HERE, "bench", `.partial-${label}.json`);
+const partial = fs.existsSync(partialFile) ? JSON.parse(fs.readFileSync(partialFile, "utf8")) : null;
+const runs = partial && partial.commit === commitNow && !partial.dirty && !dirty ? partial.runs : [];
+if (runs.length) console.log(`[bench] resuming: ${runs.length} run(s) already done at ${commitNow}`);
 let built = false;
 for (const { scenario, tier } of suite) {
   for (const seed of seeds) {
+    if (runs.some((r) => r.scenario === scenario && r.seed === seed)) continue;
     console.log(`[bench] ${scenario} seed ${seed}`);
     const out = execFileSync("node", [path.join(HERE, "run.mjs"), scenario, "--minutes", String(MINUTES), "--seed", String(seed), ...(built ? ["--no-build"] : [])], { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"], maxBuffer: 64 << 20 });
     built = true;
@@ -49,6 +57,8 @@ for (const { scenario, tier } of suite) {
       rollbacksPerMin: mean(p.map((r) => r.rollbacksPerMin)), maxRollback: Math.max(...p.map((r) => r.maxDepth ?? 0)),
       slowFramePct: mean(p.map((r) => r.slowFramePct)), errors: p.flatMap((r) => r.errors),
     });
+    fs.mkdirSync(path.dirname(partialFile), { recursive: true });
+    fs.writeFileSync(partialFile, JSON.stringify({ commit: commitNow, dirty, runs }));
   }
 }
 
@@ -82,4 +92,5 @@ fs.mkdirSync(dir, { recursive: true });
 const base = path.join(dir, `${result.at.slice(0, 16).replace(/[:T]/g, "-")}-${label}`);
 fs.writeFileSync(base + ".json", JSON.stringify(result, null, 1));
 fs.writeFileSync(base + ".md", md + "\n");
+fs.rmSync(partialFile, { force: true });
 console.log("\n" + md + `\n\n${base}.json`);
