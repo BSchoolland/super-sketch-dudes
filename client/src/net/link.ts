@@ -4,7 +4,9 @@ import type { HashCallback, InputsCallback, LocalInputs, RelayVerdicts, Transpor
 import { decodeInputs, encodeInputs, KIND_INPUTS, MAX_FRAMES } from "./wire";
 
 /** What NetLink needs of the relay connection (any bundle's: see WebSocketTransport). */
-export type RelayInputs = Pick<WebSocketTransport, "send" | "onInputs" | "sendHash" | "onHash" | "onLobby" | "rtt">;
+export type RelayInputs = Pick<WebSocketTransport, "send" | "onInputs" | "sendHash" | "onHash" | "onLobby" | "rtt">
+  // an older bundle's relay connection (handed across a swap) can't resume
+  & Partial<Pick<WebSocketTransport, "onResumed" | "linkStats">>;
 
 /** How one remote player's inputs reached us, and how long a peer-to-peer link to them was up. */
 export interface PathStats {
@@ -38,6 +40,8 @@ export class NetLink implements Transport {
   private slotOf = new Map<number, number>();
   private idOf = new Map<number, number>();
   private relaySent: number | null = null;
+  /** The relay link resumed on a fresh socket: own inputs after this frame go to the relay again. */
+  private resumedAt: number | null = null;
   private staleAcks = new Map<number, { ack: number; at: number }>();
   private lastStaleResend = 0;
   private lastTick = 0;
@@ -64,12 +68,19 @@ export class NetLink implements Transport {
       }),
     ];
     if (mesh) this.unsubscribers.push(mesh.onPacket((id, data) => this.fromLink(id, data)));
+    const resumed = relay.onResumed?.((ack) => { this.resumedAt = ack; });
+    if (resumed) this.unsubscribers.push(resumed);
   }
 
   sendInputs(local: LocalInputs): void {
     this.account(local);
     const { newest } = local;
     if (this.relaySent === null) this.relaySent = Math.max(local.oldest, Math.min(newest, ...local.peerAcks.values())) - 1;
+    if (this.resumedAt !== null) {
+      // frames older than what's still held were played away by the relay meanwhile (it fills a silent player)
+      this.relaySent = Math.min(this.relaySent, Math.max(this.resumedAt, local.oldest - 1));
+      this.resumedAt = null;
+    }
     if (newest > this.relaySent) {
       for (let from = this.relaySent + 1; from <= newest; from += MAX_FRAMES) this.toRelay(local, from, Math.min(newest, from + MAX_FRAMES - 1));
       this.relaySent = newest;
@@ -122,6 +133,11 @@ export class NetLink implements Transport {
       worst = Math.max(worst, link?.open && link.rtt > 0 ? link.rtt : this.relay.rtt());
     }
     return worst;
+  }
+
+  /** How the relay connection healed itself this match (null from an older bundle's connection). */
+  relayLink(): WebSocketTransport["linkStats"] | null {
+    return this.relay.linkStats ? { ...this.relay.linkStats } : null;
   }
 
   /** Remote slots with an open link, out of all remote slots. */

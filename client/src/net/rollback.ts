@@ -438,6 +438,11 @@ export class RollbackSession {
     this.final[this.localSlot] = Math.max(this.final[this.localSlot], frame);
   }
 
+  /** Per slot, the frame through which its inputs are final here: what a resumed relay link has to resend after. */
+  finalFrames(): number[] {
+    return [...this.final];
+  }
+
   /** The frame through which every player's inputs are final: what hashes and handoffs stand on. */
   finalThrough(): number {
     let through = Infinity;

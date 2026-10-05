@@ -34,10 +34,10 @@ function record(id: string, seq: number, business: Record<string, unknown> = {})
 const post = (body: string, type = "text/plain", trace?: string) => fetch(url("/events"), { method: "POST", headers: { "content-type": type, ...(trace ? { "x-trace-id": trace } : {}) }, body });
 
 class Peer {
-  ws: WebSocket; inbox: any[] = []; id = 0;
+  ws: WebSocket; inbox: any[] = []; id = 0; token = "";
   constructor(trace: string) {
     this.ws = new WebSocket(`ws://127.0.0.1:${port}/ws?trace=${trace}`);
-    this.ws.on("message", (m) => { const j = JSON.parse(String(m)); if (j.t === "hello") this.id = j.id; this.inbox.push(j); });
+    this.ws.on("message", (m) => { const j = JSON.parse(String(m)); if (j.t === "hello") { this.id = j.id; this.token = j.token; } this.inbox.push(j); });
   }
   open(): Promise<void> { return this.ws.readyState === WebSocket.OPEN ? Promise.resolve() : new Promise((r) => this.ws.once("open", () => r())); }
   send(m: unknown): void { this.ws.send(JSON.stringify(m)); }
@@ -113,6 +113,65 @@ describe("request events", () => {
     const boom = all.find((e) => e.trace === "s-boom")!;
     expect(boom.level).toBe("error");
     expect(boom.issues[0]).toMatchObject({ code: "Error", message: "kaboom" });
+  });
+});
+
+describe("relay link resume", () => {
+  async function started() {
+    const a = new Peer("s-resume-host"), b = new Peer("s-resume-guest");
+    await a.open(); await b.open();
+    await a.expect("hello"); await b.expect("hello");
+    a.send({ t: "create" });
+    const room = await a.expect("room");
+    b.send({ t: "join", code: room.code });
+    await a.expect("room", (m) => m.members.length === 2);
+    a.send({ t: "pick", fighter: "slugbert", bundleUrl: "/house/slugbert/bundle.json", ready: true });
+    b.send({ t: "pick", fighter: "woodstove", bundleUrl: "/house/woodstove/bundle.json", ready: true });
+    await a.expect("room", (m) => m.members.every((x: any) => x.ready));
+    a.send({ t: "start", config: { stage: "proving", rules: { stocks: 3, time: 0 }, inputDelay: 2 } });
+    await b.expect("start");
+    a.send({ t: "loaded", fills: true }); b.send({ t: "loaded", fills: true });
+    await a.expect("go"); await b.expect("go");
+    return { a, b };
+  }
+  const run = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => [from + i, 0, 0, 0]);
+
+  it("a fresh socket takes over a broken one mid-match, gets what it missed in order, and the others never see a leave", async () => {
+    const { a, b } = await started();
+    a.send({ t: "inputs", frame: 12, inputs: run(3, 12) });
+    await b.expect("inputs", (m) => m.slot === 0 && m.frame === 12);
+    b.send({ t: "inputs", frame: 6, inputs: run(3, 6) });
+    await a.expect("inputs", (m) => m.slot === 1 && m.frame === 6);
+    b.ws.terminate();
+    await wait(50);
+    a.send({ t: "inputs", frame: 20, inputs: run(13, 20) });
+    const b2 = new Peer("s-resume-guest");
+    await b2.open();
+    await b2.expect("hello");
+    b2.send({ t: "resume", id: b.id, token: b.token, final: [12, 6] });
+    const caught = await b2.expect("inputs", (m) => m.slot === 0);
+    expect([caught.frame, caught.inputs.length, caught.inputs[0][0]]).toEqual([20, 8, 13]);
+    expect((await b2.expect("resumed")).ack).toBe(6);
+    // b2 is the guest now: its inputs reach the host, the host's reach it
+    b2.send({ t: "inputs", frame: 9, inputs: run(7, 9) });
+    expect((await a.expect("inputs", (m) => m.slot === 1)).frame).toBe(9);
+    a.send({ t: "inputs", frame: 21, inputs: run(21, 21) });
+    expect((await b2.expect("inputs", (m) => m.slot === 0)).frame).toBe(21);
+    await wait(50);
+    expect(a.inbox.some((m) => m.t === "left")).toBe(false);
+    a.ws.close(1000); b2.ws.close(1000);
+  });
+
+  it("refuses a resume with the wrong token", async () => {
+    const { a, b } = await started();
+    b.ws.terminate();
+    const b2 = new Peer("s-resume-thief");
+    await b2.open();
+    await b2.expect("hello");
+    b2.send({ t: "resume", id: b.id, token: "nope", final: [0, 0] });
+    const code = await new Promise<number>((r) => b2.ws.once("close", (c) => r(c)));
+    expect(code).toBe(4003);
+    a.ws.close(1000);
   });
 });
 

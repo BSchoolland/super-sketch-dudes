@@ -2,6 +2,15 @@ import { packInput, unpackInput, type InputFrame } from "../../../shared/input";
 import { site } from "../base";
 import { sessionTrace } from "../telemetry/events";
 import type { MapDoc } from "../../../shared/maps";
+import { CLOSE_CANNOT_RESUME, CLOSE_SUPERSEDED, RESUME_GRACE_MS } from "../../../shared/resume";
+
+/** Mid-match, own inputs the relay hasn't confirmed (`final`) for this long mean the link is stuck: a fresh socket takes over. */
+const STUCK_MS = 600;
+/** While no attempt has connected, another starts this often: TCP backs its retries off, a fresh socket doesn't. */
+const RETRY_MS = 1000;
+const MAX_CONNECTING = 4;
+/** An attempt that connected but got no answer to its resume this long after starting is dropped. */
+const RESUME_WAIT_MS = 3000;
 
 export type Unsubscribe = () => void;
 /**
@@ -80,7 +89,9 @@ export type RelayMessage =
   | { t: "gameAt"; hash: string; frame: number }
   /** Public rooms with a free slot, for JOIN ROOM. */
   | { t: "rooms"; rooms: PublicRoom[] }
-  | { t: "error"; error: string };
+  | { t: "error"; error: string }
+  /** A fresh socket took this client over mid-match; the relay has every input of ours through `ack`. */
+  | { t: "resumed"; ack: number };
 
 function removeListener<T>(listeners: Set<T>, listener: T): Unsubscribe {
   return () => listeners.delete(listener);
@@ -97,15 +108,29 @@ export function relayWebSocketUrl(): string {
  */
 export class WebSocketTransport {
   readonly ready: Promise<void>;
+  /** Mid-match: how often a fresh socket took over, how many were tried, and the longest the link was stuck first. */
+  readonly linkStats = { resumes: 0, attempts: 0, longestStuckMs: 0 };
   private ws: WebSocket;
   private queued: string[] = [];
   private inputListeners = new Set<InputsCallback>();
   private hashListeners = new Set<HashCallback>();
   private lobbyListeners = new Set<(message: RelayMessage) => void>();
   private closeListeners = new Set<() => void>();
+  private resumeListeners = new Set<(ack: number) => void>();
   private roundTrip = 0;
+  private id = 0;
+  private token = "";
+  /** Set while a match runs: per slot, the frame through which this client holds the relay's final inputs. */
+  private match: (() => number[]) | null = null;
+  /** Own input sends the relay hasn't confirmed yet: [frame, sent at]. */
+  private unconfirmed: [number, number][] = [];
+  /** Fresh sockets still connecting, and the one that connected and asked to resume (only ever one). */
+  private connecting: { ws: WebSocket; at: number }[] = [];
+  private resuming: { ws: WebSocket; at: number } | null = null;
+  private stuckAt: number | null = null;
+  private closed = false;
 
-  constructor(url = relayWebSocketUrl()) {
+  constructor(private url = relayWebSocketUrl()) {
     this.ws = new WebSocket(url);
     this.ready = new Promise((resolve, reject) => {
       this.ws.addEventListener("open", () => {
@@ -115,14 +140,62 @@ export class WebSocketTransport {
       }, { once: true });
       this.ws.addEventListener("error", () => reject(new Error(`websocket connection failed: ${url}`)), { once: true });
     });
-    this.ws.addEventListener("message", (event) => this.receive(String(event.data)));
-    this.ws.addEventListener("close", () => {
-      for (const listener of this.closeListeners) listener();
-    });
+    this.listen(this.ws);
   }
 
   send(frame: number, inputs: InputFrame[], ahead: number[], acks?: number[]): void {
+    if (this.match) this.unconfirmed.push([frame, performance.now()]);
     this.sendMessage({ t: "inputs", frame, inputs: inputs.map(packInput), ahead, ...(acks ? { acks } : {}) });
+  }
+
+  /**
+   * Mid-match the link heals itself: TCP backs off for seconds after a wifi dropout, so a stuck link is replaced by a
+   * fresh socket that resumes this client (the relay resends what it missed) instead of being waited out. `final`
+   * says what the relay must resend; null ends the watch.
+   */
+  watchMatch(final: (() => number[]) | null): void {
+    this.match = final;
+    this.unconfirmed.length = 0;
+    if (final) Object.assign(this.linkStats, { resumes: 0, attempts: 0, longestStuckMs: 0 });
+  }
+
+  /** A fresh socket took over: every own input after `ack` has to go to the relay again. */
+  onResumed(cb: (ack: number) => void): Unsubscribe {
+    this.resumeListeners.add(cb);
+    return removeListener(this.resumeListeners, cb);
+  }
+
+  /** Every tick mid-match: a stuck or broken link gets fresh sockets, one more each RETRY_MS until one connects. */
+  watch(now = performance.now()): void {
+    if (!this.match || this.closed || !this.id) return;
+    const oldest = this.unconfirmed.length ? now - this.unconfirmed[0][1] : 0;
+    if (this.stuckAt === null) {
+      if (oldest < STUCK_MS && this.ws.readyState === WebSocket.OPEN) return;
+      this.stuckAt = now - Math.max(0, oldest);
+    }
+    if (now - this.stuckAt > RESUME_GRACE_MS) { this.fail(); return; }
+    if (this.resuming) {
+      if (now - this.resuming.at < RESUME_WAIT_MS) return;
+      this.resuming.ws.close(1000);
+      this.resuming = null;
+    }
+    const newest = this.connecting.reduce((at, a) => Math.max(at, a.at), -Infinity);
+    if (now - newest < RETRY_MS) return;
+    // a long dropout piles attempts up: the oldest goes (its SYNs are the furthest backed off)
+    if (this.connecting.length >= MAX_CONNECTING) this.connecting.shift()?.ws.close(1000);
+    const ws = new WebSocket(this.url);
+    const attempt = { ws, at: now };
+    this.linkStats.attempts++;
+    this.connecting.push(attempt);
+    ws.addEventListener("open", () => {
+      this.connecting = this.connecting.filter((a) => a !== attempt);
+      if (this.resuming || this.closed || !this.match) { ws.close(1000); return; }
+      for (const a of this.connecting) a.ws.close(1000);
+      this.connecting = [];
+      this.resuming = { ws, at: performance.now() };
+      ws.send(JSON.stringify({ t: "resume", id: this.id, token: this.token, final: this.match() }));
+    }, { once: true });
+    this.listen(ws);
   }
 
   onInputs(cb: InputsCallback): Unsubscribe {
@@ -162,8 +235,41 @@ export class WebSocketTransport {
   }
 
   close(): void {
+    this.closed = true;
     this.queued.length = 0;
+    this.dropAttempts();
     this.ws.close();
+  }
+
+  private dropAttempts(): void {
+    for (const a of this.connecting) a.ws.close(1000);
+    this.connecting = [];
+    this.resuming?.ws.close(1000);
+    this.resuming = null;
+  }
+
+  private fail(): void {
+    if (this.closed) return;
+    this.closed = true;
+    this.dropAttempts();
+    for (const listener of this.closeListeners) listener();
+  }
+
+  private listen(ws: WebSocket): void {
+    ws.addEventListener("message", (event) => this.receive(ws, String(event.data)));
+    ws.addEventListener("close", (event) => {
+      this.connecting = this.connecting.filter((a) => a.ws !== ws);
+      if (this.resuming?.ws === ws) {
+        this.resuming = null;
+        if (event.code === CLOSE_CANNOT_RESUME) { console.error("the relay can no longer catch this client up"); this.fail(); }
+        return;
+      }
+      if (ws !== this.ws || this.closed || event.code === CLOSE_SUPERSEDED) return;
+      // mid-match a broken socket is replaced (see watch); the relay's own verdicts and a clean close end it
+      if (this.match && event.code !== 1000 && event.code !== 4001) { this.stuckAt ??= performance.now(); return; }
+      this.closed = true;
+      for (const listener of this.closeListeners) listener();
+    });
   }
 
   private sendMessage(message: Record<string, unknown>): void {
@@ -176,10 +282,12 @@ export class WebSocketTransport {
       this.queued.push(encoded);
       return;
     }
+    // a broken link mid-match: inputs go again after the resume; hashes and pings are only missed
+    if (this.match && !this.closed) return;
     throw new Error("cannot send on a closed websocket");
   }
 
-  private receive(encoded: string): void {
+  private receive(ws: WebSocket, encoded: string): void {
     let message: any;
     try {
       message = JSON.parse(encoded);
@@ -191,6 +299,15 @@ export class WebSocketTransport {
       console.error("invalid websocket message shape", message);
       return;
     }
+    if (ws !== this.ws) {
+      // a fresh socket: its own hello (it's about to become this client), then the relay's answer to the resume
+      if (message.t === "resumed") this.resumed(ws, message.ack | 0);
+      else if (message.t === "error") { console.error(`resuming the relay link failed: ${message.error}`); this.fail(); }
+      else if (message.t !== "hello") console.error(`a ${message.t} message on a socket that hasn't resumed`);
+      return;
+    }
+    if (message.t === "hello") { this.id = message.id | 0; this.token = String(message.token ?? ""); }
+    if (message.t === "final") this.confirmed(message.frame | 0);
     if (message.t === "inputs") {
       if (!Array.isArray(message.inputs)) {
         console.error("invalid input relay message", message);
@@ -211,5 +328,22 @@ export class WebSocketTransport {
       return;
     }
     for (const listener of this.lobbyListeners) listener(message as RelayMessage);
+  }
+
+  private confirmed(frame: number): void {
+    while (this.unconfirmed.length && this.unconfirmed[0][0] <= frame) this.unconfirmed.shift();
+  }
+
+  private resumed(ws: WebSocket, ack: number): void {
+    const old = this.ws;
+    this.ws = ws;
+    if (this.resuming?.ws === ws) this.resuming = null;
+    old.close(1000);
+    const now = performance.now();
+    this.linkStats.resumes++;
+    if (this.stuckAt !== null) this.linkStats.longestStuckMs = Math.max(this.linkStats.longestStuckMs, Math.round(now - this.stuckAt));
+    this.stuckAt = null;
+    this.unconfirmed.length = 0;
+    for (const listener of this.resumeListeners) listener(ack);
   }
 }

@@ -160,9 +160,12 @@ export class NetVersusScreen extends VersusScreen {
         this.session.waiting = true;
       }),
     );
+    // the relay link heals itself mid-match (an older bundle's connection, handed across a swap, can't)
+    opts.transport.watchMatch?.(() => this.session.finalFrames());
     // `fills`: this client plays the relay's away decisions (see checkFills on the server)
     if (!this.go) opts.transport.sendLobby({ t: "loaded", fills: true });
     this.cleanupMatch = (exit) => {
+      opts.transport.watchMatch?.(null);
       telemetry.finish(exit);
       this.session.close();
       this.link.close();
@@ -174,6 +177,7 @@ export class NetVersusScreen extends VersusScreen {
 
   override update(dt: number, menu: MenuInput): Screen | null {
     if (this.handedOff) return null;
+    this.opts.transport.watch?.();
     this.opts.telemetry.tick(this.opts.transport.rtt(), this.session.waiting && !this.failure);
     this.pingTime += dt;
     if (this.pingTime >= 1 && !this.failure) {

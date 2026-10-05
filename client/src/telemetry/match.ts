@@ -138,7 +138,7 @@ export class MatchTelemetry {
     } else if (this.waitMs > 0) this.endWait();
     if (now - this.secondAt < 1000) return;
     this.secondAt = now;
-    if (this.link) this.event.set("paths", this.link.pathStats());
+    if (this.link) this.event.set("paths", this.link.pathStats()).set("relayLink", this.link.relayLink());
     this.summarize(s.state.ended ? "ended" : "playing");
     if (rtt > 0) {
       const r = this.net.rtt;
@@ -254,7 +254,7 @@ export class MatchTelemetry {
     if (this.renderer) this.renderer.afterWorld = null;
     const st = this.session?.state;
     if (st?.ended) this.event.set("result", { winner: st.winner, stocks: st.fighters.map((f) => f.stocks) });
-    if (this.link) this.event.set("paths", this.link.pathStats());
+    if (this.link) this.event.set("paths", this.link.pathStats()).set("relayLink", this.link.relayLink());
     this.summarize(exit);
     finishEvent(this.event, exit);
   }
