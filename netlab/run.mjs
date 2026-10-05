@@ -42,6 +42,8 @@ const has = (name) => { const i = argv.indexOf(name); if (i >= 0) argv.splice(i,
 const minutes = Number(opt("--minutes", "3"));
 const seed = Number(opt("--seed", "1"));
 const videoOf = opt("--video");
+// --profile <player>: a CPU profile of that client over the fight (netlab/runs/<run>/<player>.cpuprofile, top functions in the report)
+const profileOf = opt("--profile");
 const postTo = opt("--post");
 const netOverrides = Object.fromEntries(opts("--net").map((kv) => kv.split("=")));
 const blockOverrides = Object.fromEntries(opts("--block").map((kv) => kv.split("=")));
@@ -81,6 +83,7 @@ const players = replay.business.members.sort((a, b) => a.slot - b.slot).map((m) 
   if (sc.cpu) for (const name of Object.keys(sc.cpu)) if (!all.some((q) => q.name === name)) throw new Error(`cpu throttle for ${name}, who isn't in ${sc.replay}`);
   return p;
 });
+if (profileOf && !players.some((p) => p.name === profileOf)) throw new Error(`--profile ${profileOf}: no such player (${players.map((p) => p.name).join(", ")})`);
 if (videoOf && !players.some((p) => p.name === videoOf)) throw new Error(`--video ${videoOf}: no such player (${players.map((p) => p.name).join(", ")})`);
 for (const e of atEvents) if (e.name && !players.some((p) => p.name === e.name)) throw new Error(`--at: no player ${e.name}`);
 if (atEvents.some((e) => e.action === "swap") && !shell) throw new Error("--at swap needs --shell");
@@ -194,7 +197,9 @@ try {
       page.on("response", (r) => { if (r.status() >= 400) log(`${p.name} HTTP ${r.status()} ${r.url()}`); });
     }
     const throttle = sc.cpu?.[p.name];
-    if (throttle) await (await ctx.newCDPSession(page)).send("Emulation.setCPUThrottlingRate", { rate: throttle });
+    const cdp = throttle || p.name === profileOf ? await ctx.newCDPSession(page) : null;
+    if (throttle) await cdp.send("Emulation.setCPUThrottlingRate", { rate: throttle });
+    if (p.name === profileOf) p.cdp = cdp;
     pages.push(page);
   }
   const url = shell ? `${origin}${BASE}shell.html?game=${BUNDLES[0]}` : `${origin}${BASE}`;
@@ -233,6 +238,8 @@ try {
 
   // ---- episodes: each player's up and downlink on its own seeded schedule
   const seconds = minutes * 60;
+  const profiled = players.find((p) => p.cdp);
+  if (profiled) { await profiled.cdp.send("Profiler.enable"); await profiled.cdp.send("Profiler.setSamplingInterval", { interval: 1000 }); await profiled.cdp.send("Profiler.start"); }
   const startedAt = Date.now();
   const timers = [];
   for (const [i, p] of players.entries()) {
@@ -317,6 +324,11 @@ try {
   for (const [i, page] of pages.entries()) {
     if (gone.has(i)) continue;
     report.timeline[players[i].name] = await page.evaluate(() => { window.__netlab.stop(); return window.__netlab.samples; });
+    if (players[i].cdp && profiled === players[i]) {
+      const { profile } = await players[i].cdp.send("Profiler.stop");
+      fs.writeFileSync(path.join(runDir, `${players[i].name}.cpuprofile`), JSON.stringify(profile));
+      report.profile = { player: players[i].name, top: topSelfTime(profile, 30) };
+    }
   }
   await Promise.all(pages.map((page, i) => (gone.has(i) ? null : page.evaluate(() => { const s = window.sketchbattle.screen; if (s.session && s.cleanupMatch) s.cleanupMatch("done"); }))));
   await sleep(3000);
@@ -364,6 +376,7 @@ const text = [
   "## lab",
   formatMatches(lab),
   ...(targets.length ? ["", "## lab vs production (↑/↓: outside production's range)", "```", compareToProduction(lab[0], targets), "```", "", "## production", formatMatches(targets)] : []),
+  ...(report.profile ? ["", `## CPU profile: ${report.profile.player} (self time)`, ...report.profile.top.slice(0, 20).map(([pct, fn]) => `${String(pct).padStart(5)}%  ${fn}`)] : []),
 ].join("\n");
 fs.writeFileSync(path.join(runDir, "report.md"), text + "\n");
 const timeline = await renderTimeline(runDir);
@@ -398,4 +411,19 @@ async function selectedPairs() {
     out.push({ peer: peer.id, route: peer.stats.route, local: local ? `${local.candidateType} ${local.address}:${local.port} ${local.protocol}` : null, remote: remote ? `${remote.candidateType} ${remote.address}:${remote.port}` : null });
   }
   return out;
+}
+
+/** The functions a CPU profile spent the most self time in: [share %, "name file:line"]. */
+function topSelfTime(profile, n) {
+  const byId = new Map(profile.nodes.map((node) => [node.id, node]));
+  const self = new Map();
+  let total = 0;
+  profile.samples.forEach((id, i) => {
+    const { callFrame: f } = byId.get(id);
+    const key = `${f.functionName || "(anonymous)"} ${f.url.split("/").pop().split("?")[0]}:${f.lineNumber + 1}`;
+    const dt = profile.timeDeltas[i] ?? 0;
+    self.set(key, (self.get(key) ?? 0) + dt);
+    total += dt;
+  });
+  return [...self].sort((a, b) => b[1] - a[1]).slice(0, n).map(([key, us]) => [Math.round((1000 * us) / total) / 10, key]);
 }
