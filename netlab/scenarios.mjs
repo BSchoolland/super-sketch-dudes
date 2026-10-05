@@ -1,7 +1,10 @@
 // Scenarios recreate real sessions: `replay` is a production match whose stage, slots and fighters the lab reuses,
 // `targets` the production matches the lab's numbers are compared against, `net` each player's network profile.
 
-/** @typedef {{ about: string, replay: string, targets: string[], net: Record<string, string> }} Scenario */
+/**
+ * @typedef {{ about: string, replay: string, targets: string[], net: Record<string, string>, cpu?: Record<string, number> }} Scenario
+ *   `cpu`: Chrome CPU throttling per player (4 = a quarter of this machine's speed), for players on slow Chromebooks.
+ */
 
 /** @type {Record<string, Scenario>} */
 export const SCENARIOS = {
@@ -29,11 +32,18 @@ export const SCENARIOS = {
     targets: ["m-ZND3-f6949129", "m-ZND3-e993bbd3"],
     net: { Charlie: "school-wifi", Delta: "school-wifi", Echo: "school-wifi" },
   },
-  "school-4p": {
-    about: "Foxtrot, Golf, Hotel, India, 4 players on the proving map, 10/2 evening: 2-4 s/min frozen in 35-60 short waits a minute.",
+  "evening-4p": {
+    about: "Foxtrot, Golf, Hotel, India, 4 players on the proving map from home, 10/2 evening: 2-4 s/min frozen in 35-60 short waits a minute on ordinary connections.",
     replay: "m-AT3G-98f131bc",
     targets: ["m-AT3G-98f131bc"],
-    net: { Foxtrot: "school-wifi", Golf: "school-wifi", Hotel: "school-wifi", India: "school-wifi" },
+    net: { Foxtrot: "jittery-wifi@24", Golf: "jittery-wifi@32", Hotel: "jittery-wifi", India: "jittery-wifi" },
+  },
+  "awful-3p": {
+    about: "Kilo, Lima, Juliet, 10/2 night: Juliet's connection barely there, and Lima's Chromebook too slow to hold 60 fps (99% slow frames): 40 s/min frozen.",
+    replay: "m-G9LY-0c849785",
+    targets: ["m-G9LY-0c849785"],
+    net: { Kilo: "busy-wifi", Lima: "school-wifi", Juliet: "awful-wifi" },
+    cpu: { Lima: 4 },
   },
 };
 

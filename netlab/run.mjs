@@ -53,6 +53,9 @@ const players = replay.business.members.sort((a, b) => a.slot - b.slot).map((m) 
   const net = netOverrides[m.name] ?? sc.net[m.name];
   if (!net) throw new Error(`scenario ${scenarioName} has no network profile for ${m.name}`);
   return { name: m.name, fighter: m.fighter, bundleUrl: m.bundleUrl, net, profile: profile(net) };
+}).map((p, _, all) => {
+  if (sc.cpu) for (const name of Object.keys(sc.cpu)) if (!all.some((q) => q.name === name)) throw new Error(`cpu throttle for ${name}, who isn't in ${sc.replay}`);
+  return p;
 });
 if (videoOf && !players.some((p) => p.name === videoOf)) throw new Error(`--video ${videoOf}: no such player (${players.map((p) => p.name).join(", ")})`);
 
@@ -89,7 +92,7 @@ async function teardown() {
 }
 process.on("SIGINT", async () => { await teardown(); process.exit(130); });
 
-const report = { scenario: scenarioName, about: sc.about, commit, seed, minutes, startedAt: new Date().toISOString(), players: players.map(({ profile: _, ...p }) => p), episodes: {}, timeline: {} };
+const report = { scenario: scenarioName, about: sc.about, commit, seed, minutes, cpu: sc.cpu ?? {}, startedAt: new Date().toISOString(), players: players.map(({ profile: _, ...p }) => p), episodes: {}, timeline: {} };
 let browsers = [];
 const pages = [];
 try {
@@ -129,6 +132,8 @@ try {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 }, ...(p.name === videoOf ? { recordVideo: { dir: path.join(runDir, "video-raw"), size: { width: 1280, height: 720 } } } : {}) });
     const page = await ctx.newPage();
     page.on("pageerror", (e) => log(`${p.name} page error: ${e.message}`));
+    const throttle = sc.cpu?.[p.name];
+    if (throttle) await (await ctx.newCDPSession(page)).send("Emulation.setCPUThrottlingRate", { rate: throttle });
     pages.push(page);
   }
   const url = `${origin}${BASE}`;

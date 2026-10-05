@@ -27,17 +27,23 @@ export const PROFILES = {
     base: { delayMs: 22, jitterMs: 6 },
     episodes: [{ type: "spike", everySec: 45, durMs: [150, 400], addMs: [60, 140] }],
   },
+  "jittery-wifi": {
+    about: "Home wifi whose per-packet jitter is invisible in a once-a-second ping: average and max look ordinary, but inputs arrive unevenly (fits the 4-player evening match: rtt 53-79 avg, yet 35-60 short waits a minute).",
+    base: { delayMs: 20, jitterMs: 6 },
+    // per-packet netem jitter can't model this: with packets kept in order it snowballs into seconds of queue
+    episodes: [{ type: "spike", everySec: 6, durMs: [40, 150], addMs: [50, 110] }],
+  },
   "busy-wifi": {
     about: "A Mac laptop on busier wifi (Adrean: rtt ~60-80 avg, max 260-400, relay gaps up to ~800 ms).",
     base: { delayMs: 25, jitterMs: 15, lossPct: 0.1, burstPct: 60 },
     episodes: [{ type: "spike", everySec: 25, durMs: [150, 500], addMs: [80, 220] }],
   },
   "school-wifi": {
-    about: "A Chromebook on school wifi shared by a class (Charlie/Delta/Echo: rtt ~50 avg, max 250-400, a rare multi-second drop).",
-    base: { delayMs: 22, jitterMs: 8, lossPct: 0.2, burstPct: 50 },
+    about: "Chromebooks on school wifi during class (Charlie/Delta/Echo, 10/2: rtt ~48-54 avg, max 80-410, one multi-second drop in 15 min).",
+    base: { delayMs: 18, jitterMs: 4 },
     episodes: [
-      { type: "spike", everySec: 30, durMs: [200, 500], addMs: [100, 250] },
-      { type: "blackout", everySec: 300, durMs: [1500, 5000] },
+      { type: "spike", everySec: 90, durMs: [150, 400], addMs: [60, 180] },
+      { type: "blackout", everySec: 900, durMs: [1500, 4000] },
     ],
   },
   "spiky-wifi": {
@@ -47,6 +53,15 @@ export const PROFILES = {
       { type: "spike", everySec: 8, durMs: [150, 500], addMs: [80, 250] },
       { type: "blackout", everySec: 150, durMs: [800, 2500] },
       { type: "blackout", everySec: 1200, durMs: [4000, 8000] },
+    ],
+  },
+  "awful-wifi": {
+    about: "A connection that's barely there: constant hiccups and multi-second drops (Juliet on 10/2 and 10/4: rtt avg 130-510, max 2.4-6.8 s, relay gaps up to 11 s).",
+    base: { delayMs: 25, jitterMs: 20, lossPct: 0.5, burstPct: 40 },
+    episodes: [
+      { type: "spike", everySec: 6, durMs: [200, 900], addMs: [150, 500] },
+      { type: "blackout", everySec: 90, durMs: [1000, 4000] },
+      { type: "blackout", everySec: 600, durMs: [6000, 10000] },
     ],
   },
 };

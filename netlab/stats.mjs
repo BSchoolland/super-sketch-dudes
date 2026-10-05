@@ -43,6 +43,9 @@ export function matchStats(events, { minFrames = 600 } = {}) {
       minutes: round1(minutes), waitSPerMin: round1(net.waitingMs / 1000 / minutes), waitsPerMin: Math.round(net.waits / minutes),
       longestWaitMs: net.longestWaitMs, rttAvg: net.rtt?.avg, rttMax: net.rtt?.max, rollbacksPerMin: Math.round((rb.rollbacks ?? 0) / minutes),
       maxDepth: rb.maxDepth, slowFramePct: round1((100 * (draws - (fm["17"] ?? 0) - (fm["25"] ?? 0))) / draws), maxFrameMs: b.render?.maxFrameMs,
+      // game speed over the whole fight as a share of real time: freezes and any slow-motion both pull it under 100
+      simRatePct: e.t1 > e.t0 ? round1((100 * net.frames) / (((e.t1 - e.t0) / 1000) * 60)) : null,
+      errors: (e.issues ?? []).filter((i) => i.level === "error").map((i) => i.code),
       inputDelay: b.match?.inputDelay, waitedOn: net.waitedOn ?? null, unattributedWaitMs: net.unattributedWaitMs ?? null,
       relayGapMs: relayIndex >= 0 ? relay.relay?.[relayIndex]?.maxGapMs : null, relayStalls: relayIndex >= 0 ? relay.relay?.[relayIndex]?.stalls : null,
       exit: b.exit,
@@ -75,7 +78,7 @@ export function formatMatches(matches) {
     out.push(`${m.at.slice(0, 16).replace("T", " ")}  ${m.trace}  ${m.size}p ${m.stage}  frozen ${m.waitSPerMin} s/min · ${m.waitsPerMin} waits/min · longest ${m.longestWaitMs} ms`);
     for (const r of m.players) {
       const on = r.waitedOn ? Object.values(r.waitedOn).map((w) => `${w.name} ${round1(w.waitingMs / 1000)}s/${w.waits}`).join(", ") : "";
-      out.push(`    ${r.name.padEnd(12)} ${r.ua.padEnd(9)} ${String(r.minutes).padStart(4)}m  wait ${String(r.waitSPerMin).padStart(4)} s/min ${String(r.waitsPerMin).padStart(3)}/min longest ${String(r.longestWaitMs).padStart(5)}  rtt ${r.rttAvg}/${r.rttMax}  rb ${r.rollbacksPerMin}/min  slow frames ${r.slowFramePct}% (max ${r.maxFrameMs})  relay gap ${r.relayGapMs ?? "-"} stalls ${r.relayStalls ?? "-"}  delay ${r.inputDelay}${on ? `  waited on: ${on}` : ""}`);
+      out.push(`    ${r.name.padEnd(12)} ${r.ua.padEnd(9)} ${String(r.minutes).padStart(4)}m  wait ${String(r.waitSPerMin).padStart(4)} s/min ${String(r.waitsPerMin).padStart(3)}/min longest ${String(r.longestWaitMs).padStart(5)}  rtt ${r.rttAvg}/${r.rttMax}  rb ${r.rollbacksPerMin}/min  slow frames ${r.slowFramePct}% (max ${r.maxFrameMs})  relay gap ${r.relayGapMs ?? "-"} stalls ${r.relayStalls ?? "-"}  delay ${r.inputDelay}  speed ${r.simRatePct}%${r.errors.length ? `  ERRORS ${r.errors.join(",")}` : ""}${on ? `  waited on: ${on}` : ""}`);
     }
   }
   return out.join("\n");
