@@ -243,6 +243,8 @@ function playTo(net: Room, peers: Peer[], frame: number, limit = frame * 4): voi
   expect(ticks, "ticks to reach the frame").toBeLessThan(limit);
   net.drain();
   for (const p of peers) p.session.synchronize();
+  // the relay's copy made everything final, which hashes, handoffs and pruning stand on
+  for (const p of peers) expect(p.session.finalThrough(), "final frames").toBeGreaterThan(frame - 60);
 }
 
 function sameAt(peers: Peer[], frame: number): void {
@@ -412,6 +414,7 @@ describe("rollback session over links and the relay", () => {
       peers.forEach((p, i) => { if (!handoffs[i]) { p.session.synchronize(); handoffs[i] = p.session.handoff(swapAt); } if (handoffs[i]) p.session.close(); });
       ticks++;
     }
+    expect(handoffs.every(Boolean), "both sessions handed off").toBe(true);
     for (const p of peers) p.link.close();
     // the swap takes a moment: whatever arrives now has no listener
     net.drain(20);

@@ -17,5 +17,6 @@ run school-3p --minutes 2 --at "60:leave Charlie"
 run school-3p --minutes 3 --stocks 2 --leave-out
 # a player's connection vanishes without a word: played away, then dropped after 20 s, the others back to the room
 run school-3p --minutes 2 --at "40:cut Charlie"
-# the room switches game bundles mid-match through the swappable page, links and all
-run ben-adrean-kirill --minutes 2 --shell --at "50:swap"
+# the room switches game bundles mid-match through the swappable page, links and all (on calmer wifi: the bundle is
+# ~27 MB with its music inlined, which a spiky-wifi player may not finish downloading in minutes)
+run school-3p --minutes 2 --shell --at "50:swap"

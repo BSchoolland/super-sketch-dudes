@@ -121,6 +121,7 @@ export class RollbackSession {
   /** Snapshots from this frame on are kept whatever the rollback window, so a bundle swap can hand one over. */
   keepFrom: number | null = null;
   private unsubscribers: Unsubscribe[];
+  private closed = false;
   private onDesync?: (info: DesyncInfo) => void;
 
   constructor(options: RollbackOptions) {
@@ -148,7 +149,7 @@ export class RollbackSession {
     this.snapshots.set(0, cloneState(this.state));
     if (options.resume) this.resume(options.resume);
     this.unsubscribers = [
-      this.transport.onInputs((slot, frame, inputs, ahead, acks) => this.receiveInputs(slot, frame, inputs, ahead, acks)),
+      this.transport.onInputs((slot, frame, inputs, ahead, acks, final) => this.receiveInputs(slot, frame, inputs, ahead, acks, final)),
       this.transport.onHash((slot, frame, hash) => this.receiveHash(slot, frame, hash)),
       this.transport.onVerdicts({ fill: (slot, from, through) => this.fill(slot, from, through), final: (frame) => this.finalOwn(frame) }),
     ];
@@ -159,7 +160,7 @@ export class RollbackSession {
    * the clock. True when the sim stepped (one frame, or several catching up).
    */
   advance(localInput: InputFrame): boolean {
-    if (this.desync) return false;
+    if (this.desync || this.closed) return false;
     this.ticks++;
     if (this.timeSyncSkip()) this.stats.timeSyncSkips++;
     else if (this.clock - this.state.frame >= MAX_CLOCK_LEAD) this.stats.clockHolds++;
@@ -307,7 +308,9 @@ export class RollbackSession {
     return Math.min(latency, rollback);
   }
 
+  /** Done with the match (or handed to another bundle): nothing more is taken, sent or stepped. */
   close(): void {
+    this.closed = true;
     for (const unsubscribe of this.unsubscribers) unsubscribe();
     this.unsubscribers.length = 0;
   }

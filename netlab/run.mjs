@@ -187,6 +187,12 @@ try {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 }, ...(p.name === videoOf ? { recordVideo: { dir: path.join(runDir, "video-raw"), size: { width: 1280, height: 720 } } } : {}) });
     const page = await ctx.newPage();
     page.on("pageerror", (e) => log(`${p.name} page error: ${e.message}`));
+    // NETLAB_CONSOLE=1: every console error and failed request of every page, for debugging the lab itself
+    if (process.env.NETLAB_CONSOLE) {
+      page.on("console", (m) => { if (m.type() === "error") log(`${p.name} console: ${m.text()}`); });
+      page.on("requestfailed", (r) => log(`${p.name} request failed: ${r.url()} ${r.failure()?.errorText}`));
+      page.on("response", (r) => { if (r.status() >= 400) log(`${p.name} HTTP ${r.status()} ${r.url()}`); });
+    }
     const throttle = sc.cpu?.[p.name];
     if (throttle) await (await ctx.newCDPSession(page)).send("Emulation.setCPUThrottlingRate", { rate: throttle });
     pages.push(page);
@@ -194,6 +200,11 @@ try {
   const url = shell ? `${origin}${BASE}shell.html?game=${BUNDLES[0]}` : `${origin}${BASE}`;
   const press = async (page, k) => { await page.keyboard.press(k); await page.waitForTimeout(100); };
   const [host, ...guests] = pages;
+  // the game bundle is tens of MB (its music inlined): load it once, past the menus' own waits, so it's in the cache
+  if (shell) await Promise.all(pages.map(async (page, i) => {
+    await page.goto(`${url}&dev=${encodeURIComponent(players[i].name)}`);
+    await page.waitForFunction(() => window.sketchbattle?.screen, null, { timeout: 180000 });
+  }));
   // menus by keyboard like a player; the create and join prompts by their methods (private room, typed code)
   await openOnline(host, url, players[0].name); await press(host, "ArrowDown"); await press(host, "Enter");
   await host.waitForFunction(() => window.sketchbattle.screen.phase === "create", null, { timeout: 20000 });
@@ -279,7 +290,7 @@ try {
     const views = await Promise.all(pages.map((p, i) => (gone.has(i) ? null : p.evaluate(() => {
       const s = window.sketchbattle.screen;
       const fighter = s.session?.state.fighters[s.opts.localSlot];
-      return { frame: s.session?.state.frame ?? -1, out: !!fighter && fighter.stocks <= 0, screen: s.constructor.name, phase: s.phase ?? null };
+      return { frame: s.session?.state.frame ?? -1, out: !!fighter && fighter.stocks <= 0, screen: s.constructor.name, phase: s.phase ?? null, bundle: window.sketchbattle.hash, swapAt: s.swapAt?.frame ?? null, final: s.session?.finalThrough?.() ?? null };
     }))));
     if (leaveOut) for (const [i, v] of views.entries()) if (v?.out) await leave(i, "out of stocks");
     const here = views.map((v, i) => (gone.has(i) || cut.has(i) ? null : v)).filter(Boolean);
@@ -292,7 +303,7 @@ try {
         over = true;
       }
     }
-    log(`frames ${views.map((v) => (v ? v.frame : "gone")).join(" / ")}`);
+    log(`frames ${views.map((v) => (!v ? "gone" : shell ? `${v.frame} (${v.bundle}${v.swapAt ? `, swap at ${v.swapAt}, final ${v.final}` : ""})` : v.frame)).join(" / ")}`);
   }
   timers.forEach(clearTimeout);
   await Promise.all(pending.splice(0));

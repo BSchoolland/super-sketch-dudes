@@ -98,6 +98,8 @@ export class NetVersusScreen extends VersusScreen {
   private unsubscribers: Unsubscribe[] = [];
   private cleanupMatch: (exit: string) => void;
   private swapAt: { hash: string; frame: number } | null = null;
+  /** Handed to the next bundle: this screen only waits for the shell to replace it (a 27 MB bundle takes a while). */
+  private handedOff = false;
 
   constructor(protected opts: NetVersusOptions) {
     let cleanup: ((exit: string) => void) | null = null;
@@ -171,6 +173,7 @@ export class NetVersusScreen extends VersusScreen {
   }
 
   override update(dt: number, menu: MenuInput): Screen | null {
+    if (this.handedOff) return null;
     this.opts.telemetry.tick(this.opts.transport.rtt(), this.session.waiting && !this.failure);
     this.pingTime += dt;
     if (this.pingTime >= 1 && !this.failure) {
@@ -211,6 +214,7 @@ export class NetVersusScreen extends VersusScreen {
       if (handoff) {
         const { hash } = this.swapAt;
         this.swapAt = null;
+        this.handedOff = true;
         this.cleanupMatch("swap");
         this.opts.mesh?.release();
         swap.request(hash, {
@@ -234,6 +238,7 @@ export class NetVersusScreen extends VersusScreen {
     label(ctx, status, VIEW_W - 24, 34, 17, color, "right", 700);
     label(ctx, swap.hash ? `bundle ${swap.hash}` : `build ${site.build}`, VIEW_W - 24, 56, 15, "rgba(41,39,34,0.55)", "right", 400);
     if (this.swapAt) label(ctx, `switching at frame ${this.swapAt.frame}`, VIEW_W - 24, 78, 15, "#c8402c", "right", 700);
+    if (this.handedOff) drawBanner(ctx, "SWITCHING GAME", "loading the new version", INK, 1);
     if (!this.go && !this.failure) label(ctx, "waiting for everyone to load", VIEW_W / 2, 140, 26, INK, "center", 700);
     if (this.failure) drawBanner(ctx, this.failure.title, this.failure.detail, "#ff4d2e", this.failureTime);
     else if (this.waitingFor > 0.5) drawBanner(ctx, "WAITING", this.waitingLine(), INK, 1);
