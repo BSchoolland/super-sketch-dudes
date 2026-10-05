@@ -92,7 +92,7 @@ async function teardown() {
 }
 process.on("SIGINT", async () => { await teardown(); process.exit(130); });
 
-const report = { scenario: scenarioName, about: sc.about, commit, seed, minutes, cpu: sc.cpu ?? {}, startedAt: new Date().toISOString(), players: players.map(({ profile: _, ...p }) => p), episodes: {}, timeline: {} };
+const report = { scenario: scenarioName, about: sc.about, commit, seed, minutes, cpu: sc.cpu ?? {}, startedAt: new Date().toISOString(), players: players.map(({ profile: _, ...p }) => p), episodes: {}, timeline: {}, shaping: [] };
 let browsers = [];
 const pages = [];
 try {
@@ -173,8 +173,13 @@ try {
     for (const [d, dir] of ["up", "down"].entries()) {
       const eps = schedule(p.profile, seconds, rng(seed * 1009 + i * 2 + d));
       report.episodes[`${p.name}/${dir}`] = eps;
-      const apply = () => { const t = Date.now() - startedAt; p.shaper.set(dir, netemArgs(p.profile.base, eps.filter((e) => e.atMs <= t && t < e.endMs))); };
-      for (const e of eps) { timers.push(setTimeout(apply, e.atMs), setTimeout(apply, e.endMs)); }
+      // evaluate at the scheduled instant, not Date.now(): a timer firing a millisecond early must not keep an ending episode alive
+      const apply = (t) => {
+        const args = netemArgs(p.profile.base, eps.filter((e) => e.atMs <= t && t < e.endMs));
+        p.shaper.set(dir, args);
+        report.shaping.push([Date.now() - startedAt, t, `${p.name}/${dir}`, args]);
+      };
+      for (const e of eps) timers.push(setTimeout(() => apply(e.atMs), e.atMs), setTimeout(() => apply(e.endMs), e.endMs));
     }
   }
   const deadline = startedAt + seconds * 1000;

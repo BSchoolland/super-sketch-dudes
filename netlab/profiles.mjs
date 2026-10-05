@@ -31,7 +31,7 @@ export const PROFILES = {
     about: "Home wifi whose per-packet jitter is invisible in a once-a-second ping: average and max look ordinary, but inputs arrive unevenly (fits the 4-player evening match: rtt 53-79 avg, yet 35-60 short waits a minute).",
     base: { delayMs: 20, jitterMs: 6 },
     // per-packet netem jitter can't model this: with packets kept in order it snowballs into seconds of queue
-    episodes: [{ type: "spike", everySec: 6, durMs: [40, 150], addMs: [50, 110] }],
+    episodes: [{ type: "spike", everySec: 5, durMs: [40, 150], addMs: [50, 120] }],
   },
   "busy-wifi": {
     about: "A Mac laptop on busier wifi (Adrean: rtt ~60-80 avg, max 260-400, relay gaps up to ~800 ms).",
