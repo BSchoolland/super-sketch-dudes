@@ -2,8 +2,10 @@
 // `targets` the production matches the lab's numbers are compared against, `net` each player's network profile.
 
 /**
- * @typedef {{ about: string, replay: string, targets: string[], net: Record<string, string>, cpu?: Record<string, number> }} Scenario
+ * @typedef {{ about: string, replay: string, targets: string[], net: Record<string, string>, cpu?: Record<string, number>, block?: Record<string, "p2p" | "webrtc"> }} Scenario
  *   `cpu`: Chrome CPU throttling per player (4 = a quarter of this machine's speed), for players on slow Chromebooks.
+ *   `block`: a player whose network blocks peer-to-peer: `p2p` (no UDP to the other players: links go through TURN)
+ *   or `webrtc` (no UDP at all and no TURN: every input rides the relay).
  */
 
 /** @type {Record<string, Scenario>} */
@@ -19,6 +21,20 @@ export const SCENARIOS = {
     replay: "m-SDS6-c3825af9",
     targets: [],
     net: { Ben: "lan", AdreanHC: "lan", Kirill: "lan" },
+  },
+  "ben-adrean-kirill-turn": {
+    about: "The rough 10/4 session with Kirill's network refusing direct UDP: his links must go through the TURN server.",
+    replay: "m-SDS6-c3825af9",
+    targets: [],
+    net: { Ben: "home-wifi", AdreanHC: "busy-wifi", Kirill: "spiky-wifi" },
+    block: { Kirill: "p2p" },
+  },
+  "ben-adrean-kirill-mixed": {
+    about: "The rough 10/4 session with Kirill's network blocking WebRTC entirely: Ben and Adrean linked, Kirill on the relay.",
+    replay: "m-SDS6-c3825af9",
+    targets: [],
+    net: { Ben: "home-wifi", AdreanHC: "busy-wifi", Kirill: "spiky-wifi" },
+    block: { Kirill: "webrtc" },
   },
   "alpha-bravo": {
     about: "Alpha and Bravo, 2 players on decent connections, 10/4 night: near zero waiting in production.",

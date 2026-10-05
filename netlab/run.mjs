@@ -1,10 +1,17 @@
 // Net lab: plays a real online match between 2-4 headless Chromes, each in its own container behind its own
 // shaped connection to a relay running this checkout, then reports it with the same numbers production logs.
 // Usage: node netlab/run.mjs <scenario> [--minutes 3] [--seed 1] [--video <player>] [--post <discord thread id>]
-//        [--net Name=profile ...] [--no-build] [--keep]
+//        [--net Name=profile ...] [--block Name=p2p|webrtc ...] [--at "<sec>:<action> <Name> [mode]" ...]
+//        [--stocks 99] [--leave-out] [--no-build] [--keep]
+//   --block: `p2p` drops UDP between that player and the others (their links must go through TURN); `webrtc` drops
+//            all UDP and TURN's TCP port too (no links at all: everything rides the relay).
+//   --at: mid-match events: `block <Name> <mode>`, `unblock <Name>`, `cut <Name>` (all of its game traffic dropped:
+//         the connection is gone), `leave <Name>` (closes the page, like quitting the tab).
+//   --leave-out: a player whose fighter is out of stocks closes its page (the others carry on without them).
 // Needs Docker (the sketchbattle-netlab image builds itself) and production's event log + fighters cached:
 // run `node netlab/prod.mjs events` once (fighters sync on demand). Output lands in netlab/runs/<stamp>-<scenario>/.
 import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -19,7 +26,9 @@ import { compareToProduction, formatMatches, matchStats, PROD_EVENTS, readEvents
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.dirname(HERE);
-const IMAGE = "sketchbattle-netlab";
+// tagged by the Dockerfile's content, so a changed Dockerfile builds a new image and never reuses a stale one
+const IMAGE = `sketchbattle-netlab:${createHash("sha256").update(fs.readFileSync(path.join(HERE, "Dockerfile"))).digest("hex").slice(0, 12)}`;
+const TURN_SECRET = "netlab";
 const BASE = "/sketch-battle/";
 const PORT = 3008;
 
@@ -33,6 +42,14 @@ const seed = Number(opt("--seed", "1"));
 const videoOf = opt("--video");
 const postTo = opt("--post");
 const netOverrides = Object.fromEntries(opts("--net").map((kv) => kv.split("=")));
+const blockOverrides = Object.fromEntries(opts("--block").map((kv) => kv.split("=")));
+const atEvents = opts("--at").map((spec) => {
+  const m = /^(\d+(?:\.\d+)?):(block|unblock|cut|leave) (\S+)(?: (p2p|webrtc))?$/.exec(spec);
+  if (!m || (m[2] === "block") !== !!m[4]) throw new Error(`--at "${spec}": want "<sec>:block <Name> p2p|webrtc", "<sec>:unblock|cut|leave <Name>"`);
+  return { atMs: Number(m[1]) * 1000, action: m[2], name: m[3], mode: m[4] ?? null };
+});
+const stocks = Number(opt("--stocks", "99"));
+const leaveOut = has("--leave-out");
 const noBuild = has("--no-build"), keep = has("--keep");
 const [scenarioName, ...rest] = argv;
 if (!scenarioName || rest.length) throw new Error(`usage: node netlab/run.mjs <scenario> [--minutes 3] [--seed 1] [--video <player>] [--post <thread>] [--net Name=profile] [--no-build] [--keep]`);
@@ -52,12 +69,15 @@ const config = replay.business.match.config;
 const players = replay.business.members.sort((a, b) => a.slot - b.slot).map((m) => {
   const net = netOverrides[m.name] ?? sc.net[m.name];
   if (!net) throw new Error(`scenario ${scenarioName} has no network profile for ${m.name}`);
-  return { name: m.name, fighter: m.fighter, bundleUrl: m.bundleUrl, net, profile: profile(net) };
+  const block = blockOverrides[m.name] ?? sc.block?.[m.name] ?? null;
+  if (block && !["p2p", "webrtc"].includes(block)) throw new Error(`${m.name}: block ${block}; want p2p or webrtc`);
+  return { name: m.name, fighter: m.fighter, bundleUrl: m.bundleUrl, net, profile: profile(net), block };
 }).map((p, _, all) => {
   if (sc.cpu) for (const name of Object.keys(sc.cpu)) if (!all.some((q) => q.name === name)) throw new Error(`cpu throttle for ${name}, who isn't in ${sc.replay}`);
   return p;
 });
 if (videoOf && !players.some((p) => p.name === videoOf)) throw new Error(`--video ${videoOf}: no such player (${players.map((p) => p.name).join(", ")})`);
+for (const e of atEvents) if (!players.some((p) => p.name === e.name)) throw new Error(`--at: no player ${e.name}`);
 
 const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
 const runDir = path.join(HERE, "runs", `${stamp}-${scenarioName}`);
@@ -81,6 +101,7 @@ if (spawnSync("docker", ["image", "inspect", IMAGE], { stdio: "ignore" }).status
 // ---- containers: a relay on the game network; players on a control network (Playwright) plus the game network
 const id = `netlab-${Date.now().toString(36)}`;
 const relayName = `${id}-relay`;
+const turnName = `${id}-turn`;
 const origin = `http://${relayName}:${PORT}`;
 const modules = fs.realpathSync(path.join(REPO, "node_modules"));
 const mounts = ["-v", `${REPO}:${REPO}:ro`, "-v", `${modules}:${modules}:ro`, "-w", REPO];
@@ -92,13 +113,18 @@ async function teardown() {
 }
 process.on("SIGINT", async () => { await teardown(); process.exit(130); });
 
-const report = { scenario: scenarioName, about: sc.about, commit, seed, minutes, cpu: sc.cpu ?? {}, startedAt: new Date().toISOString(), players: players.map(({ profile: _, ...p }) => p), episodes: {}, timeline: {}, shaping: [] };
+const report = { scenario: scenarioName, about: sc.about, commit, seed, minutes, cpu: sc.cpu ?? {}, stocks, at: atEvents, startedAt: new Date().toISOString(), players: players.map(({ profile: _, ...p }) => p), episodes: {}, timeline: {}, shaping: [], firewall: [], left: [], links: {} };
 let browsers = [];
 const pages = [];
 try {
   for (const n of [`${id}-game`, `${id}-ctl`]) { docker("network", "create", n); created.networks.push(n); }
+  // STUN and TURN for the players' peer-to-peer links, beside the relay and unshaped like it (production: coturn on the same box)
+  docker("run", "-d", "--name", turnName, "--network", `${id}-game`, IMAGE, "turnserver", "--listening-port", "3478", "--use-auth-secret",
+    "--static-auth-secret", TURN_SECRET, "--realm", "netlab", "--no-tls", "--no-dtls", "--no-cli", "--fingerprint", "--min-port", "49152", "--max-port", "49999", "--log-file", "stdout", "--simple-log");
+  created.containers.push(turnName);
   docker("run", "-d", "--name", relayName, "--network", `${id}-game`, ...mounts, "-v", `${dataDir}:/data`,
     "-e", `PORT=${PORT}`, "-e", "DEV_LOGIN=1", "-e", "SKETCHBATTLE_DATA=/data", "-e", `BUILD=netlab-${commit}`, "-e", `SKETCHBATTLE_BASE=${BASE}`,
+    "-e", `RTC_STUN=stun:${turnName}:3478`, "-e", `RTC_TURN=turn:${turnName}:3478?transport=udp,turn:${turnName}:3478?transport=tcp`, "-e", `RTC_TURN_SECRET=${TURN_SECRET}`,
     "--user", `${process.getuid()}:${process.getgid()}`, IMAGE, "node", "dist/server.mjs");
   created.containers.push(relayName);
 
@@ -112,18 +138,33 @@ try {
   await waitFor(() => spawnSync("docker", ["exec", relayName, "node", "-e", `fetch("http://localhost:${PORT}${BASE}api/health").then(r=>process.exit(r.ok?0:1),()=>process.exit(1))`]).status === 0, "the relay to answer", 30000);
 
   // ---- shape every player's game interface, before sign-in so the relay's auto input delay sees the real round trip
+  const ifaceOf = (container, ip) => docker("exec", container, "sh", "-c", `ip -o -4 addr show | awk '$4 ~ /^${ip.replace(/\./g, "\\.")}\\// {print $2}'`);
   for (const p of players) {
     const nets = JSON.parse(docker("inspect", "-f", "{{json .NetworkSettings.Networks}}", p.container));
     p.ctlIp = nets[`${id}-ctl`].IPAddress;
-    const gameIp = nets[`${id}-game`].IPAddress;
-    p.iface = docker("exec", p.container, "sh", "-c", `ip -o -4 addr show | awk '$4 ~ /^${gameIp.replace(/\./g, "\\.")}\\// {print $2}'`);
-    if (!p.iface) throw new Error(`no game interface for ${gameIp} in ${p.container}`);
+    p.gameIp = nets[`${id}-game`].IPAddress;
+    p.iface = ifaceOf(p.container, p.gameIp);
+    if (!p.iface) throw new Error(`no game interface for ${p.gameIp} in ${p.container}`);
+    // the control network joins the players too, unshaped: no game traffic may cross it, peer-to-peer links included
+    const ctlIface = ifaceOf(p.container, p.ctlIp);
+    if (!ctlIface) throw new Error(`no control interface for ${p.ctlIp} in ${p.container}`);
+    docker("exec", p.container, "sh", "-ec", `iptables -A OUTPUT -o ${ctlIface} -p udp -j DROP; iptables -A INPUT -i ${ctlIface} -p udp -j DROP`);
     p.shaper = new Shaper(p.container, p.iface);
     const steady = netemArgs(p.profile.base, []);
     p.shaper.setup(steady, steady);
     await waitFor(() => /ready ws/.test(docker("logs", p.container)), `${p.name}'s browser`, 30000);
   }
-  log(`relay ${relayName}, players ${players.map((p) => `${p.name} (${p.net})`).join(", ")}`);
+  // the game network's iptables chain per player: what a blocked network lets through
+  const firewall = (p, mode) => {
+    const rules = [`iptables -N NETLAB 2>/dev/null || iptables -F NETLAB`, `iptables -C OUTPUT -o ${p.iface} -j NETLAB 2>/dev/null || iptables -I OUTPUT -o ${p.iface} -j NETLAB`, `iptables -C INPUT -i ${p.iface} -j NETLAB 2>/dev/null || iptables -I INPUT -i ${p.iface} -j NETLAB`];
+    if (mode === "p2p") for (const q of players) if (q !== p) rules.push(`iptables -A NETLAB -p udp -d ${q.gameIp} -j DROP`, `iptables -A NETLAB -p udp -s ${q.gameIp} -j DROP`);
+    if (mode === "webrtc") rules.push("iptables -A NETLAB -p udp -j DROP", "iptables -A NETLAB -p tcp --dport 3478 -j DROP", "iptables -A NETLAB -p tcp --sport 3478 -j DROP");
+    if (mode === "cut") rules.push("iptables -A NETLAB -j DROP");
+    docker("exec", p.container, "sh", "-ec", rules.join("; "));
+    report.firewall.push([Date.now(), p.name, mode ?? "open"]);
+  };
+  for (const p of players) firewall(p, p.block);
+  log(`relay ${relayName}, players ${players.map((p) => `${p.name} (${p.net}${p.block ? `, ${p.block} blocked` : ""})`).join(", ")}`);
 
   // ---- browsers into one room
   for (const p of players) {
@@ -157,7 +198,7 @@ try {
   }
   await host.waitForFunction(() => window.sketchbattle.screen.lobbyDebug?.()?.members.every((m) => m.ready), null, { timeout: 30000 });
   log(`room ${code}: ${players.length} players ready, starting ${config.stage}`);
-  await host.evaluate((stage) => window.sketchbattle.screen.startMatch({ stage, stocks: 99, time: 0, map: null }), config.stage);
+  await host.evaluate(([stage, n]) => window.sketchbattle.screen.startMatch({ stage, stocks: n, time: 0, map: null }), [config.stage, stocks]);
   await Promise.all(pages.map((p) => p.waitForFunction(() => window.sketchbattle.screen.session?.state.frame > 0, null, { timeout: 90000 })));
 
   const botSource = fs.readFileSync(path.join(HERE, "bot.js"), "utf8");
@@ -182,23 +223,71 @@ try {
       for (const e of eps) timers.push(setTimeout(() => apply(e.atMs), e.atMs), setTimeout(() => apply(e.endMs), e.endMs));
     }
   }
+  // ---- mid-match events and players leaving
+  const gone = new Set(), cut = new Set();
+  const leave = async (i, why) => {
+    if (gone.has(i)) return;
+    gone.add(i);
+    const p = players[i];
+    report.timeline[p.name] = await pages[i].evaluate(() => { window.__netlab.stop(); return window.__netlab.samples; });
+    report.left.push({ name: p.name, atMs: Date.now() - startedAt, why });
+    log(`${p.name} leaves (${why})`);
+    await pages[i].context().close();
+  };
+  const pending = [];
+  for (const e of atEvents) {
+    timers.push(setTimeout(() => {
+      const i = players.findIndex((p) => p.name === e.name);
+      log(`${e.action} ${e.name}${e.mode ? ` ${e.mode}` : ""}`);
+      if (e.action === "leave") pending.push(leave(i, "left the page"));
+      else {
+        if (e.action === "cut") cut.add(i);
+        if (e.action === "unblock") cut.delete(i);
+        firewall(players[i], e.action === "block" ? e.mode : e.action === "cut" ? "cut" : players[i].block);
+      }
+    }, e.atMs));
+  }
+  // what each player's links settled on, once they're up: the lab checks they run on the shaped game network
+  timers.push(setTimeout(() => pending.push(Promise.all(pages.map(async (page, i) => {
+    if (gone.has(i)) return;
+    report.links[players[i].name] = await page.evaluate(selectedPairs);
+  })).then(() => log(`links: ${Object.entries(report.links).map(([n, l]) => `${n} ${l.map((x) => `${x.peer}:${x.route}`).join(",")}`).join(" · ")}`))), 25000));
   const deadline = startedAt + seconds * 1000;
-  while (Date.now() < deadline) {
-    await sleep(Math.min(15000, deadline - Date.now()));
-    const frames = await Promise.all(pages.map((p) => p.evaluate(() => window.sketchbattle.screen.session?.state.frame ?? -1)));
-    if (frames.some((f) => f < 0)) throw new Error(`a player left the match: frames ${frames.join(", ")}`);
-    log(`frames ${frames.join(" / ")}`);
+  let over = false;
+  while (Date.now() < deadline && !over) {
+    await sleep(Math.min(leaveOut || atEvents.length ? 3000 : 15000, deadline - Date.now()));
+    await Promise.all(pending.splice(0));
+    const views = await Promise.all(pages.map((p, i) => (gone.has(i) ? null : p.evaluate(() => {
+      const s = window.sketchbattle.screen;
+      const fighter = s.session?.state.fighters[s.opts.localSlot];
+      return { frame: s.session?.state.frame ?? -1, out: !!fighter && fighter.stocks <= 0, screen: s.constructor.name, phase: s.phase ?? null };
+    }))));
+    if (leaveOut) for (const [i, v] of views.entries()) if (v?.out) await leave(i, "out of stocks");
+    const here = views.map((v, i) => (gone.has(i) || cut.has(i) ? null : v)).filter(Boolean);
+    if (here.some((v) => v.frame < 0)) {
+      if (!report.left.length && !cut.size) throw new Error(`a player left the match: ${views.map((v) => v ? `${v.screen}/${v.phase}/${v.frame}` : "gone").join(", ")}`);
+      // after a player went, the others back in the room is the match over, as it should be
+      if (here.every((v) => v.frame < 0)) {
+        report.backInRoom = { atMs: Date.now() - startedAt, screens: here.map((v) => `${v.screen}/${v.phase}`) };
+        log(`everyone still here is back in the room (${report.backInRoom.screens.join(", ")})`);
+        over = true;
+      }
+    }
+    log(`frames ${views.map((v) => (v ? v.frame : "gone")).join(" / ")}`);
   }
   timers.forEach(clearTimeout);
+  await Promise.all(pending.splice(0));
   for (const p of players) { const steady = netemArgs(p.profile.base, []); p.shaper.set("up", steady); p.shaper.set("down", steady); }
 
   // ---- finish like a real match end, so every client sends its final event
   for (const [i, page] of pages.entries()) {
+    if (gone.has(i)) continue;
     report.timeline[players[i].name] = await page.evaluate(() => { window.__netlab.stop(); return window.__netlab.samples; });
   }
-  await Promise.all(pages.map((page) => page.evaluate(() => window.sketchbattle.screen.cleanupMatch("done"))));
+  await Promise.all(pages.map((page, i) => (gone.has(i) ? null : page.evaluate(() => { const s = window.sketchbattle.screen; if (s.session && s.cleanupMatch) s.cleanupMatch("done"); }))));
   await sleep(3000);
   for (const [i, page] of pages.entries()) {
+    if (gone.has(i)) continue;
     const video = page.video();
     await page.context().close();
     if (video) {
@@ -258,4 +347,21 @@ async function waitFor(check, what, ms) {
     if (Date.now() > until) throw new Error(`timed out waiting for ${what}`);
     await sleep(500);
   }
+}
+
+/** In a player's page: per peer link, the route and the selected candidate pair's addresses (from getStats). */
+async function selectedPairs() {
+  const mesh = window.sketchbattle.screen.opts?.mesh;
+  if (!mesh) return [];
+  const out = [];
+  for (const peer of mesh.peers.values()) {
+    if (!peer.pc || !peer.open) { out.push({ peer: peer.id, route: "none" }); continue; }
+    const report = new Map();
+    (await peer.pc.getStats()).forEach((s) => report.set(s.id, s));
+    let pair = null;
+    for (const s of report.values()) if (s.type === "transport" && s.selectedCandidatePairId) pair = report.get(s.selectedCandidatePairId);
+    const local = pair && report.get(pair.localCandidateId), remote = pair && report.get(pair.remoteCandidateId);
+    out.push({ peer: peer.id, route: peer.stats.route, local: local ? `${local.candidateType} ${local.address}:${local.port} ${local.protocol}` : null, remote: remote ? `${remote.candidateType} ${remote.address}:${remote.port}` : null });
+  }
+  return out;
 }

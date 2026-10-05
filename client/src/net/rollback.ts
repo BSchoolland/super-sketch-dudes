@@ -49,6 +49,11 @@ const MIN_WINDOW = 8;
 const RESIM_BUDGET_MS = 6;
 /** Step timings before this many are JIT warm-up and don't count. */
 const COST_WARMUP = 120;
+/**
+ * How far the clock may run ahead of a frozen sim: a second. Past it the clock holds too, so a long blackout ends in
+ * at most a second of fast-forward (played on inputs the player gave a frozen screen), not the whole blackout's worth.
+ */
+const MAX_CLOCK_LEAD = 60;
 /** Local inputs kept for resends, at least: a remote that acknowledged nothing for longer than this has been dropped. */
 const LOCAL_HISTORY = 150;
 
@@ -72,10 +77,10 @@ export class RollbackSession {
   /**
    * Counted for the match's wide event: `stalls` are ticks frozen waiting on remote inputs; `catchupFrames` frames
    * stepped beyond one a tick to get back to the clock after one (fast-forward); `maxBehind` the furthest the sim
-   * fell behind the clock; `window` the prediction window now and `minWindow` its lowest; `stepUs` the measured cost
+   * fell behind the clock; `clockHolds` ticks the clock waited for a sim frozen a second behind it; `window` the prediction window now and `minWindow` its lowest; `stepUs` the measured cost
    * of one sim step plus its snapshot.
    */
-  readonly stats = { rollbacks: 0, resimFrames: 0, maxDepth: 0, tooDeep: 0, stalls: 0, timeSyncSkips: 0, catchupFrames: 0, maxBehind: 0, window: 0, minWindow: 0, stepUs: 0 };
+  readonly stats = { rollbacks: 0, resimFrames: 0, maxDepth: 0, tooDeep: 0, stalls: 0, timeSyncSkips: 0, catchupFrames: 0, maxBehind: 0, clockHolds: 0, window: 0, minWindow: 0, stepUs: 0 };
 
   private humanSlots: number[];
   private cpuLevels: number[];
@@ -147,6 +152,7 @@ export class RollbackSession {
     if (this.desync) return false;
     this.ticks++;
     if (this.timeSyncSkip()) this.stats.timeSyncSkips++;
+    else if (this.clock - this.state.frame >= MAX_CLOCK_LEAD) this.stats.clockHolds++;
     else {
       this.clock++;
       const target = this.clock + this.inputDelay;
