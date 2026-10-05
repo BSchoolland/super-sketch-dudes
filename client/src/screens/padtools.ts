@@ -12,15 +12,15 @@ const swatchW = () => (settings.advanced ? 37 : 42);
 
 /**
  * The tool column left of a draw pad: colours, a custom colour, pencil, eraser, fill, sizes, undo, clear.
- * The ADVANCED toggle adds a custom swatch that opens a colour wheel over the tools and sizes. Ctrl+Z undoes while attached.
+ * The ADVANCED toggle adds a colour wheel in the screen's right column, above its buttons, and a swatch holding its
+ * last pick. Ctrl+Z undoes while attached.
  */
 export class PadTools {
   private readonly onKey = (e: KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.code === "KeyZ") { e.preventDefault(); this.pad.undo(); }
   };
 
-  private wheel = new ColorWheel(LEFT + COL_W / 2, 335, 145, { x: LEFT + 25, y: 505, w: COL_W - 50, h: 40 });
-  private wheelOpen = false;
+  private wheel = new ColorWheel(1660, 370, 140, { x: 1515, y: 545, w: 290, h: 40 });
   /** The last colour picked on the wheel, kept for its swatch. */
   private custom: string | null = null;
   private unsubscribe: (() => void) | null = null;
@@ -38,14 +38,10 @@ export class PadTools {
     window.removeEventListener("keydown", this.onKey);
     this.unsubscribe?.();
     this.unsubscribe = null;
-    this.wheelOpen = false;
   }
 
   private pointer(e: PointerStroke): void {
-    if (!this.wheelOpen) return;
-    const p = e.points[0];
-    if (this.wheel.pointer(e)) { this.custom = this.wheel.color; this.pick(this.custom); }
-    else if (e.phase === "down" && p.x > LEFT + COL_W) this.wheelOpen = false;
+    if (settings.advanced && this.wheel.pointer(e)) { this.custom = this.wheel.color; this.pick(this.custom); }
   }
 
   private pick(color: string): void {
@@ -56,10 +52,8 @@ export class PadTools {
     const b: Button[] = [];
     COLORS.forEach((_, i) => b.push({ id: `color${i}`, x: LEFT + i * swatchW(), y: 100, w: swatchW(), h: 64, text: "", custom: true }));
     if (settings.advanced) b.push({ id: "wheel", x: LEFT + COLORS.length * swatchW(), y: 100, w: swatchW(), h: 64, text: "", custom: true });
-    if (!this.wheelOpen) {
-      ["pencil", "eraser", "fill"].forEach((id, i) => b.push({ id, x: LEFT + i * 116, y: 214, w: 108, h: 84, text: "", custom: true }));
-      SIZES.forEach((_, i) => b.push({ id: `size${i}`, x: LEFT + i * 70, y: 422, w: 60, h: 90, text: "", custom: true }));
-    }
+    ["pencil", "eraser", "fill"].forEach((id, i) => b.push({ id, x: LEFT + i * 116, y: 214, w: 108, h: 84, text: "", custom: true }));
+    SIZES.forEach((_, i) => b.push({ id: `size${i}`, x: LEFT + i * 70, y: 422, w: 60, h: 90, text: "", custom: true }));
     b.push({ id: "undo", x: LEFT, y: 590, w: COL_W, h: 84, text: "UNDO", size: 36, disabled: !this.pad.canUndo });
     b.push({ id: "clear", x: LEFT, y: 700, w: COL_W, h: 84, text: "CLEAR", size: 36, disabled: this.pad.blank });
     b.push({ id: "advanced", x: LEFT, y: 810, w: COL_W, h: 70, text: "ADVANCED", size: 30, checked: settings.advanced });
@@ -72,12 +66,12 @@ export class PadTools {
     if (id === "pencil") pad.tool = { kind: "pen", color: pad.tool.color };
     else if (id === "eraser") pad.tool = { kind: "eraser", color: pad.tool.color };
     else if (id === "fill") pad.tool = { kind: "fill", color: pad.tool.color };
-    else if (id.startsWith("color")) { this.pick(COLORS[Number(id.slice(5))]); this.wheelOpen = false; }
-    else if (id === "wheel") { this.wheelOpen = !this.wheelOpen; if (this.wheelOpen && this.custom) this.pick(this.custom); }
+    else if (id.startsWith("color")) this.pick(COLORS[Number(id.slice(5))]);
+    else if (id === "wheel") this.pick(this.custom ?? this.wheel.color);
     else if (id.startsWith("size")) pad.size = Number(id.slice(4));
     else if (id === "undo") pad.undo();
     else if (id === "clear") pad.clear();
-    else if (id === "advanced") { settings.advanced = !settings.advanced; this.wheelOpen = false; saveSettings(); }
+    else if (id === "advanced") { settings.advanced = !settings.advanced; saveSettings(); }
     else return false;
     return true;
   }
@@ -91,20 +85,17 @@ export class PadTools {
       card(ctx, b.x, b.y, b.w, b.h, INK, active || focus === id);
       title(ctx, text, b.x + b.w / 2, b.y + 54, 30, active ? INK : PENCIL, "center", b.w - 12);
     };
-    if (this.wheelOpen) this.wheel.draw(ctx);
-    else {
-      toolCard("pencil", "pencil", tool.kind === "pen");
-      toolCard("eraser", "eraser", tool.kind === "eraser");
-      toolCard("fill", "fill", tool.kind === "fill");
-      SIZES.forEach((size, i) => {
-        const b = at(`size${i}`);
-        card(ctx, b.x, b.y, b.w, b.h, INK, this.pad.size === i || focus === b.id);
-        ctx.save();
-        ctx.fillStyle = tool.kind === "pen" ? tool.color : INK;
-        ctx.beginPath(); ctx.arc(b.x + b.w / 2, b.y + b.h / 2, 3 + size * 10, 0, Math.PI * 2); ctx.fill();
-        ctx.restore();
-      });
-    }
+    toolCard("pencil", "pencil", tool.kind === "pen");
+    toolCard("eraser", "eraser", tool.kind === "eraser");
+    toolCard("fill", "fill", tool.kind === "fill");
+    SIZES.forEach((size, i) => {
+      const b = at(`size${i}`);
+      card(ctx, b.x, b.y, b.w, b.h, INK, this.pad.size === i || focus === b.id);
+      ctx.save();
+      ctx.fillStyle = tool.kind === "pen" ? tool.color : INK;
+      ctx.beginPath(); ctx.arc(b.x + b.w / 2, b.y + b.h / 2, 3 + size * 10, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    });
     if (performance.now() - this.pad.leakedAt < 1800) {
       const b = at("advanced");
       label(ctx, "fill leaks to the edge", b.x + b.w / 2, b.y + b.h + 44, 28, "#c0392b");
@@ -118,12 +109,12 @@ export class PadTools {
       ctx.lineWidth = active || focus === b.id ? 4 : 1.5; ctx.strokeStyle = INK; ctx.stroke();
       ctx.restore();
     });
-    if (settings.advanced) this.drawWheelSwatch(ctx, at("wheel"), focus);
+    if (settings.advanced) { this.wheel.draw(ctx); this.drawWheelSwatch(ctx, at("wheel"), focus); }
   }
 
   private drawWheelSwatch(ctx: CanvasRenderingContext2D, w: Button, focus: string | undefined): void {
     const tool = this.pad.tool, wx = w.x + w.w / 2, wy = w.y + 32;
-    const active = this.wheelOpen || (tool.kind !== "eraser" && tool.color === this.custom && !COLORS.includes(tool.color));
+    const active = tool.kind !== "eraser" && tool.color === this.custom && !COLORS.includes(tool.color);
     const rainbow = ctx.createConicGradient(0, wx, wy);
     ["#f00", "#ff0", "#0f0", "#0ff", "#00f", "#f0f", "#f00"].forEach((c, i) => rainbow.addColorStop(i / 6, c));
     ctx.save();
