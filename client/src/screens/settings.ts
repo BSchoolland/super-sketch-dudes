@@ -4,7 +4,6 @@ import { kb1Bindings, keyName, type MenuInput } from "../input/devices";
 import { setMusicVolume, setVolume, sfx } from "../audio/audio";
 import { bg, card, hint, label, title, hover, clicked, arrows, backButton, goTo, type Screen, INK, settings, saveSettings } from "./ui";
 import { account } from "../account";
-import { ControlsScreen } from "./controls";
 
 interface Row { name: string; get: () => string; adj: (d: number) => void; act?: () => Screen }
 
@@ -18,7 +17,6 @@ export class SettingsScreen implements Screen {
     { name: "TAP JUMP (stick up)", get: () => (settings.tapJump ? "on" : "off"), adj: () => { settings.tapJump = !settings.tapJump; } },
     { name: "RUMBLE", get: () => (settings.rumble ? "on" : "off"), adj: () => { settings.rumble = !settings.rumble; } },
     { name: "DEFAULT CPU", get: () => tierName(settings.cpuTier), adj: (d) => { settings.cpuTier = Math.max(1, Math.min(CPU_TIERS.length, settings.cpuTier + d)); } },
-    { name: "CONTROLS", get: () => "keyboard ▶", adj: () => {}, act: () => new ControlsScreen(() => this) },
     { name: "SIGN OUT", get: () => account.player?.name ?? "", adj: () => {}, act: () => this.onSignOut() },
   ];
   constructor(private onBack: () => Screen, private onSignOut: () => Screen) {}
