@@ -9,7 +9,7 @@ import { isJudgement, type Judgement, type Judgements } from "../shared/moderati
 /** The judges couldn't run (the codex pool is out or logged out); the character goes to the forge unjudged. */
 export class ModerationUnavailable extends Error {}
 
-const MODEL = process.env.MODERATION_MODEL ?? "claude-sonnet-5-5";
+const MODEL = process.env.MODERATION_MODEL ?? "claude-opus-5-5";
 // gpt-* models only answer through claude-router
 const BIN = process.env.MODERATION_BIN ?? (MODEL.startsWith("gpt-") ? path.join(os.homedir(), "Projects/claude-router/bin/ccr") : "claude");
 const TIMEOUT_MS = 5 * 60_000;
