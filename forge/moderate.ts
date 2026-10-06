@@ -38,6 +38,7 @@ Excessive gore/violence
 Guns, explosions, swords, spears with a bit of red at the end, and general carnage are fine and even encouraged.  Just don't let it past if it goes too far.
 
 Other: Something I didn't cover but should really be moderated.
+Fan art and parodies of existing characters are fine.
 
 Record your answer by running exactly one of:
 ./verdict pass "<reasoning>"
