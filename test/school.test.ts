@@ -16,4 +16,8 @@ describe("class time", () => {
     expect(inClassTime(pacific("2026-10-03", "10:00"))).toBe(false);
     expect(inClassTime(pacific("2026-10-04", "10:00"))).toBe(false);
   });
+  it("is off on open days", () => {
+    expect(inClassTime(pacific("2026-10-06", "10:00"))).toBe(false);
+    expect(inClassTime(pacific("2026-10-07", "10:00"))).toBe(true);
+  });
 });
