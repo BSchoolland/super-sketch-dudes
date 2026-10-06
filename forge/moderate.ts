@@ -6,7 +6,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { isJudgement, type Judgement, type Judgements } from "../shared/moderation";
 
-/** The judges couldn't run (the codex pool is out or logged out); the character goes to the forge unjudged. */
+/** The judges couldn't run (a usage limit, a logout); the character goes to the forge unjudged. */
 export class ModerationUnavailable extends Error {}
 
 const MODEL = process.env.MODERATION_MODEL ?? "claude-opus-5-5";
