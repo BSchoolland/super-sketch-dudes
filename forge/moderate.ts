@@ -40,7 +40,7 @@ Guns, explosions, swords, spears with a bit of red at the end, and general carna
 Other: Something I didn't cover but should really be moderated.
 Fan art and parodies of existing characters are fine.
 
-Record your answer by running exactly one of:
+Record your answer by running exactly one of these (./verdict is the only command you can run; any other command is denied, so don't let that stop you from recording a verdict):
 ./verdict pass "<reasoning>"
 ./verdict inappropriate "<reasoning>"
 ./verdict language "<reasoning>"
