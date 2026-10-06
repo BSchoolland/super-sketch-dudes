@@ -114,7 +114,10 @@ class Room {
     if (!this.fills) return;
     const live = this.relays.filter((r) => !this.gone.has(r.slot)).map((r) => r.slot);
     if (live.length < 2) return;
-    const vouched = (s: number) => Math.max(this.forwarded[s], this.filled[s], ...live.map((o) => this.acks[o][s] ?? 0));
+    const vouched = (s: number) => {
+      const others = live.filter((o) => o !== s).map((o) => this.acks[o][s] ?? 0);
+      return Math.max(this.forwarded[s], this.filled[s], others.length ? Math.min(...others) : 0);
+    };
     for (const slot of live) {
       const others = live.filter((o) => o !== slot).map(vouched).sort((a, b) => b - a);
       const through = others[Math.min(1, others.length - 1)] - FILL_BEHIND;
@@ -470,6 +473,21 @@ describe("players whose inputs stop reaching the relay", () => {
     expect(peers[0].session.stats.stalls - stalls[0] + peers[2].session.stats.stalls - stalls[2]).toBe(0);
     playTo(net, peers, 900);
     sameAt(peers, 900);
+  });
+
+  it("a player whose relay connection stalls, linked to only one of the others: the one without a link plays on (the stalled player is away for it)", () => {
+    const { net, peers } = room(makeConfig(3), 0xbb23, { relay: [6, 10], link: [1, 3] });
+    net.down.add("0-1");
+    play(net, peers, 300);
+    const stalls = peers[0].session.stats.stalls;
+    net.relayMute.add(1);
+    play(net, peers, 240);
+    net.relayMute.delete(1);
+    // slot 0 hears slot 1 only through the relay: before, slot 2's word kept slot 1 "alive" and slot 0 froze
+    expect(peers[0].session.stats.stalls - stalls).toBeLessThan(40);
+    expect(peers[0].session.stats.awayFrames[1]).toBeGreaterThan(100);
+    playTo(net, peers, 1200);
+    sameAt(peers, 1200);
   });
 
   it("one on one, the player left alone plays on against a fighter standing still", () => {

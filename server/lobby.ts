@@ -194,8 +194,14 @@ function checkGo(room: Room): void {
 /** How far behind the second most advanced other player (in input frames at the relay) a player may fall before the relay decides their frames away. */
 export const FILL_BEHIND = 18;
 const frontier = (s: SlotRelay): number => Math.max(s.forwarded, s.filled);
-/** What's known of a player: their frames the relay has or decided, or that another player holds (over a link). */
-const vouched = (m: RelayMatch, slot: number, live: Client[]): number => Math.max(frontier(m.slots[slot]), ...live.map((c) => m.slots[c.slot]?.acks[slot] ?? 0));
+/**
+ * What's known of a player: their frames the relay has or decided, or that every other player holds (over links). A
+ * frame only one linked player holds doesn't count: a player without a link to them gets it only from the relay.
+ */
+const vouched = (m: RelayMatch, slot: number, live: Client[]): number => {
+  const others = live.filter((c) => c.slot !== slot).map((c) => m.slots[c.slot]?.acks[slot] ?? 0);
+  return Math.max(frontier(m.slots[slot]), others.length ? Math.min(...others) : 0);
+};
 
 /**
  * A player whose inputs stop reaching the relay (their uplink is down) would freeze everyone. Once they are
