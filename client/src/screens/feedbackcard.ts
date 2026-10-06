@@ -7,9 +7,11 @@ import { feedbackSketch, markSeen } from "../feedback";
 import type { FeedbackItem } from "../../../shared/feedback";
 import { drawImageIn } from "./images";
 import { wrapLines } from "./text";
-import { card, hover, label, title, INK } from "./ui";
+import { card, hover, label, title, FONT, INK } from "./ui";
 
 const LINE = 1.25;
+/** The "Developer (Ben):" line over a response. */
+const BY = 46;
 
 /** Every line of `text` (its own line breaks kept) at the largest size from `size` down to `min` that fits `maxH`; cut with "…" if even `min` doesn't. */
 function fitLines(ctx: CanvasRenderingContext2D, text: string, w: number, maxH: number, size: number, min: number): { lines: string[]; size: number } {
@@ -43,8 +45,8 @@ function layout(ctx: CanvasRenderingContext2D, item: FeedbackItem, w: number, to
   const sketch = item.sketch ? Math.min(top, 360) : 0;
   const text = item.text ? fitLines(ctx, item.text, sketch ? w - sketch - 40 : w, top, 30, 18) : null;
   const line = Math.max(text ? fitHeight(text) : 0, sketch) + 30;
-  const response = bottom && item.response ? fitLines(ctx, item.response.text, w, bottom, 30, 18) : null;
-  return { text, sketch, line, response, height: line + (!bottom ? 0 : response ? 30 + fitHeight(response) : 90) };
+  const response = bottom && item.response ? fitLines(ctx, item.response.text, w, bottom - BY, 30, 18) : null;
+  return { text, sketch, line, response, height: line + (!bottom ? 0 : response ? 30 + BY + fitHeight(response) : 90) };
 }
 
 /** Draws `layout`'s exchange at x, y; returns where the line is. */
@@ -53,7 +55,16 @@ export function drawExchange(ctx: CanvasRenderingContext2D, item: FeedbackItem, 
   if (item.sketch) drawSketch(ctx, item.sketch, x + w - at.sketch, y + 6, at.sketch - 12);
   const lineY = y + at.line;
   inkLine(ctx, x, lineY, x + w, lineY + 4, INK, 3);
-  if (at.response) drawFit(ctx, at.response, x, lineY + 30);
+  if (at.response) {
+    // the font has one weight: bold is a stroke over the fill
+    ctx.save();
+    ctx.font = `700 32px ${FONT}`;
+    ctx.lineJoin = "round"; ctx.lineWidth = 1.6; ctx.strokeStyle = ctx.fillStyle = INK;
+    ctx.strokeText("Developer (Ben):", x, lineY + 30 + 32);
+    ctx.fillText("Developer (Ben):", x, lineY + 30 + 32);
+    ctx.restore();
+    drawFit(ctx, at.response, x, lineY + 30 + BY);
+  }
   else if (bottom) label(ctx, "No response yet.", x, lineY + 70, 28, PENCIL, "left", 600);
   return lineY;
 }
