@@ -74,7 +74,8 @@ async function runJudge(stance: keyof typeof STANCE, drawing: string, name: stri
   fs.chmodSync(path.join(wd, "verdict"), 0o755);
   const out = fs.openSync(path.join(wd, "session.log"), "w");
   const code = await new Promise<number | null>((resolve, reject) => {
-    const child = spawn(BIN, ["-p", "--model", MODEL, "--tools", "Read,Bash", "--allowedTools", "Read", "Bash(./verdict:*)", "--permission-mode", "dontAsk"], { cwd: wd, stdio: ["pipe", out, out] });
+    // json output: session.log ends with the result line, cost included, for scripts/forge-spend.mjs
+    const child = spawn(BIN, ["-p", "--model", MODEL, "--output-format", "json", "--tools", "Read,Bash", "--allowedTools", "Read", "Bash(./verdict:*)", "--permission-mode", "dontAsk"], { cwd: wd, stdio: ["pipe", out, out] });
     const timer = setTimeout(() => child.kill("SIGKILL"), TIMEOUT_MS);
     child.on("error", reject);
     child.on("close", (c) => { clearTimeout(timer); resolve(c); });
