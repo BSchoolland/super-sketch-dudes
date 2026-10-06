@@ -56,7 +56,7 @@ async function handle(job: Claimed): Promise<void> {
     });
     await post(`/jobs/${job.id}/complete`, payload);
     if (verdict === "unjudged") await queueReview(submissionOf(job, drawing)).catch((e) => log(tag, `REVIEW QUEUE FAILED: ${e instanceof Error ? e.message : String(e)}`));
-    log(tag, `DONE ${payload.name} in ${((Date.now() - t0) / 1000).toFixed(0)}s, agent $${payload.report.costUsd.toFixed(2)}`);
+    log(tag, `DONE ${payload.name} in ${((Date.now() - t0) / 1000).toFixed(0)}s, agent $${payload.report.costUsd.toFixed(2)}, sheets $${payload.report.sheetCostUsd.toFixed(2)}`);
   } catch (e) {
     const msg = e instanceof ForgeError ? e.message : `something broke: ${e instanceof Error ? e.message : String(e)}`;
     fs.writeFileSync(path.join(dir, "error.txt"), e instanceof Error ? e.stack ?? e.message : String(e));

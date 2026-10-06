@@ -8,11 +8,13 @@ import { fileURLToPath } from "node:url";
 import type { CheckReport } from "./checks";
 import type { CpuStudy } from "../shared/cpu-study";
 
-export const AGENT_MODEL = "claude-opus-5-5";
+export const AGENT_MODEL = process.env.FORGE_MODEL ?? "claude-opus-5-5";
+const AGENT_EFFORT = process.env.FORGE_EFFORT;
+const AGENT_BIN = process.env.FORGE_CLAUDE_BIN ?? "claude";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
-const TIMEOUT_MS = 15 * 60_000;
+const TIMEOUT_MS = Number(process.env.FORGE_TIMEOUT_MIN ?? 15) * 60_000;
 
 export interface JobSpec { id: string; fighterId: string; playerName: string; hint?: { name: string; description: string } | null }
 
@@ -21,6 +23,8 @@ export interface ForgeReport {
   name: string;
   wallMs: number;
   costUsd: number;
+  /** gpt-image list-rate estimate, summed over every sheet drawn this run */
+  sheetCostUsd: number;
   sessionId: string;
   checks: CheckReport | undefined;
   soft: string[];
@@ -76,8 +80,9 @@ export async function runForge(job: JobSpec, drawingSrc: string, dir: string, io
 
   // stream the session so the room sees what it's doing
   const log = fs.createWriteStream(path.join(dir, "session.jsonl"));
+  const ledger = path.join(dir, "sheet-cost.jsonl");
   const result = await new Promise<{ costUsd: number; text: string; sessionId: string }>((resolve, reject) => {
-    const child = spawn("claude", ["-p", "--model", AGENT_MODEL, "--dangerously-skip-permissions", "--output-format", "stream-json", "--verbose"], { cwd: wt, stdio: ["pipe", "pipe", "pipe"], env: { ...process.env } });
+    const child = spawn(AGENT_BIN, ["-p", "--model", AGENT_MODEL, ...(AGENT_EFFORT ? ["--effort", AGENT_EFFORT] : []), "--dangerously-skip-permissions", "--output-format", "stream-json", "--verbose"], { cwd: wt, stdio: ["pipe", "pipe", "pipe"], env: { ...process.env, FORGE_SHEET_LEDGER: ledger } });
     let buf = "", err = "", timedOut = false, costUsd = 0, text = "", sessionId = "", lost = "", reached = -1;
     const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, TIMEOUT_MS);
     const onLine = (line: string) => {
@@ -126,9 +131,14 @@ export async function runForge(job: JobSpec, drawingSrc: string, dir: string, io
   spawnSync("git", ["worktree", "remove", "--force", wt], { cwd: root });
 
   const report: ForgeReport = {
-    fighterId: job.fighterId, name: p.name, wallMs: Date.now() - t0, costUsd: result.costUsd, sessionId: result.sessionId,
+    fighterId: job.fighterId, name: p.name, wallMs: Date.now() - t0, costUsd: result.costUsd, sheetCostUsd: sheetCost(ledger), sessionId: result.sessionId,
     checks: p.report?.checks, soft: p.report?.soft ?? [], notes: result.text.slice(0, 2000),
   };
   fs.writeFileSync(path.join(dir, "report.json"), JSON.stringify(report, null, 1));
   return { name: p.name, tagline: p.tagline, description: p.description ?? "", source: p.source, cpu: p.cpu, sprite: p.sprite, cells: p.cells, sheet: p.sheet, report };
+}
+
+function sheetCost(ledger: string): number {
+  if (!fs.existsSync(ledger)) return 0;
+  return fs.readFileSync(ledger, "utf8").split("\n").filter(Boolean).reduce((sum, l) => sum + (JSON.parse(l).costUsd ?? 0), 0);
 }
