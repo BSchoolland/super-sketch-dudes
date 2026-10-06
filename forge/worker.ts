@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadForgeEnv } from "./env";
 import { runForge, ForgeError, type JobSpec } from "./forge";
+import { moderate } from "./moderate";
 
 loadForgeEnv();
 const SITE = (process.env.SITE ?? "").replace(/\/$/, "");
@@ -21,15 +22,18 @@ const log = (tag: string, line: string) => console.log(`${stamp()} [${tag}] ${li
 async function api(p: string, init?: RequestInit): Promise<Response> {
   return fetch(`${SITE}/api/forge${p}`, { ...init, headers: { "x-forge-token": TOKEN, "content-type": "application/json", ...(init?.headers ?? {}) } });
 }
-async function post(p: string, body: unknown): Promise<void> {
+async function post(p: string, body: unknown): Promise<Response> {
   const res = await api(p, { method: "POST", body: JSON.stringify(body) });
   if (!res.ok) throw new Error(`POST ${p}: HTTP ${res.status} ${(await res.text()).slice(0, 300)}`);
+  return res;
 }
 
 /** Jobs this worker is on right now, so a job handed out twice (a server that lost track) isn't run twice. */
 const active = new Set<string>();
 
-async function handle(job: JobSpec & { attempts: number }): Promise<void> {
+type Claimed = JobSpec & { attempts: number; moderated: boolean };
+
+async function handle(job: Claimed): Promise<void> {
   const tag = job.fighterId;
   if (active.has(job.id)) { log(tag, `claimed job ${job.id} again (attempt ${job.attempts}) while still running it: carrying on with the one in progress`); return; }
   active.add(job.id);
@@ -42,8 +46,15 @@ async function handle(job: JobSpec & { attempts: number }): Promise<void> {
     if (!res.ok) throw new Error(`drawing download: HTTP ${res.status}`);
     const drawing = path.join(dir, "drawing.png");
     fs.writeFileSync(drawing, Buffer.from(await res.arrayBuffer()));
+    if (!job.moderated) {
+      await post(`/jobs/${job.id}/progress`, { stage: "auto moderator" });
+      const judgements = await moderate(drawing, job.hint?.name ?? "", dir);
+      const { blocked } = (await (await post(`/jobs/${job.id}/moderation`, judgements)).json()) as { blocked: boolean };
+      log(tag, `moderation: harsh ${judgements.harsh.verdict}, lenient ${judgements.lenient.verdict}${blocked ? ": BLOCKED" : ""}`);
+      if (blocked) return;
+    }
     const payload = await runForge(job, drawing, dir, {
-      progress: (stage) => post(`/jobs/${job.id}/progress`, { stage }),
+      progress: async (stage) => { await post(`/jobs/${job.id}/progress`, { stage }); },
       log: (line) => log(tag, line),
     });
     await post(`/jobs/${job.id}/complete`, payload);
@@ -63,7 +74,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 log("forge", `polling ${SITE} with ${CONCURRENCY} slots`);
 for (;;) {
   if (running >= CONCURRENCY) { await sleep(500); continue; }
-  let job: (JobSpec & { attempts: number }) | null = null;
+  let job: Claimed | null = null;
   try {
     const res = await api("/jobs/next");
     if (res.status === 200) job = await res.json();

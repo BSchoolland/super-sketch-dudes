@@ -97,6 +97,33 @@ describe("the creator", () => {
   });
 });
 
+describe("the auto moderator", () => {
+  it("fails a drawing both judges flag with the reason the player sees, and won't moderate a job twice", async () => {
+    const dev = await (await api("/auth/dev", { method: "POST", body: JSON.stringify({ name: "Mo" }) })).json();
+    const H = { "x-session": dev.session };
+    const draw = async () => (await (await api("/characters", { method: "POST", headers: H, body: JSON.stringify({ png: `data:image/png;base64,${png1x1}`, name: "x" }) })).json()).character;
+    const judge = (id: string, harsh: string, lenient: string) => api(`/forge/jobs/${id}/moderation`, { method: "POST", body: JSON.stringify({ harsh: { verdict: harsh, reason: "r" }, lenient: { verdict: lenient, reason: "r" } }) });
+
+    const ok = await draw();
+    const okJob = await (await api("/forge/jobs/next")).json();
+    expect(okJob.moderated).toBe(false);
+    expect(await (await judge(okJob.id, "pass", "inappropriate")).json()).toEqual({ blocked: false });
+    expect((await judge(okJob.id, "pass", "pass")).status).toBe(409);
+    expect((await (await api(`/characters/${ok.id}`, { headers: H })).json()).character.status).toBe("generating");
+    expect((await api(`/forge/jobs/${okJob.id}/fail`, { method: "POST", body: JSON.stringify({ error: "done with it" }) })).status).toBe(204);
+
+    const bad = await draw();
+    const badJob = await (await api("/forge/jobs/next")).json();
+    expect((await judge(badJob.id, "bogus", "pass")).status).toBe(400);
+    expect(await (await judge(badJob.id, "language", "inappropriate")).json()).toEqual({ blocked: true });
+    const entry = (await (await api(`/characters/${bad.id}`, { headers: H })).json()).character;
+    expect(entry.status).toBe("failed");
+    expect(entry.error).toBe("Auto moderator blocked your character for reason: foul language, inappropriate art");
+    const scores = JSON.parse(fs.readFileSync(path.join(dataDir, "reputation.json"), "utf8"));
+    expect(scores[dev.player.id]).toBe(60);
+  });
+});
+
 describe("the forge queue survives a restart", () => {
   it("keeps a running job running across a restart, so the worker still on it can finish it", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sb-forge-"));

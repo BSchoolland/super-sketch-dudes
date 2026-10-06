@@ -10,6 +10,8 @@ import { STUDY_VERSION, type CpuStudy } from "../shared/cpu-study";
 import { upsertCharacter } from "./library";
 import { finish, openEvent } from "./events";
 import type { WideEvent } from "../shared/wide";
+import { isJudgement, type Judgements } from "../shared/moderation";
+import { attachModeration, decide } from "./moderation";
 
 /**
  * The forge job queue. A job is one drawing becoming one fighter; it belongs to a player and
@@ -34,6 +36,8 @@ export interface ForgeJob {
   /** Listed in COMMUNITY once it's done. */
   public: boolean;
   createdAt: number;
+  /** The auto moderator's judgements, once both judges have answered. */
+  moderation: Judgements | null;
   /** Filled in on completion. */
   result: { name: string; tagline: string; description: string; bundleUrl: string; sheetUrl: string | null } | null;
 }
@@ -54,6 +58,7 @@ function restore(): void {
   const restored: ForgeJob[] = [];
   for (const job of saved) {
     job.public ??= true;
+    job.moderation ??= null;
     jobs.set(job.id, job);
     if (job.status === "queued") { queue.push(job.id); restored.push(job); }
     // the worker outlives a server restart and is still on it: keep it running; the stale-claim
@@ -138,7 +143,7 @@ export function enqueueJob(spec: { fighterId: string; player: Player; png: Buffe
   fs.writeFileSync(drawingPath, spec.png);
   const job: ForgeJob = {
     id: crypto.randomBytes(6).toString("hex"), fighterId: spec.fighterId, owner: spec.player.id, playerName: spec.player.name,
-    drawingPath, status: "queued", stage: "waiting in line", error: null, claimedAt: 0, attempts: 0, origin: spec.origin, hint: spec.hint ?? null, public: spec.public, createdAt: Date.now(), result: null,
+    drawingPath, status: "queued", stage: "waiting in line", error: null, claimedAt: 0, attempts: 0, origin: spec.origin, hint: spec.hint ?? null, public: spec.public, createdAt: Date.now(), moderation: null, result: null,
   };
   jobs.set(job.id, job);
   queue.push(job.id);
@@ -232,6 +237,7 @@ export function attachForge(api: express.Router, opts: ForgeOptions): void {
   genBase = opts.genBase;
   fs.mkdirSync(genDir, { recursive: true });
   jobsFile = path.join(opts.dataDir, "forge-jobs.json");
+  attachModeration(opts.dataDir);
   restore();
 
   const setStatus = (job: ForgeJob, status: ForgeJob["status"], stage: string, error: string | null = null): void => {
@@ -262,7 +268,7 @@ export function attachForge(api: express.Router, opts: ForgeOptions): void {
       queue.splice(queue.indexOf(job.id), 1);
       job.claimedAt = Date.now(); job.attempts++;
       setStatus(job, "running", "reading the drawing");
-      return res.json({ id: job.id, fighterId: job.fighterId, playerName: job.playerName, attempts: job.attempts, hint: job.hint });
+      return res.json({ id: job.id, fighterId: job.fighterId, playerName: job.playerName, attempts: job.attempts, hint: job.hint, moderated: !!job.moderation });
     }
     res.status(204).end();
   });
@@ -278,6 +284,21 @@ export function attachForge(api: express.Router, opts: ForgeOptions): void {
     if (!job || job.status !== "running") return res.status(409).json({ error: "job not running" });
     setStatus(job, "running", String(req.body?.stage ?? "").slice(0, 80));
     res.status(204).end();
+  });
+  // { harsh, lenient } -> { blocked }; a blocked job is failed here, with the reason the player sees
+  api.post("/forge/jobs/:id/moderation", (req, res) => {
+    if (!forgeAuth(req, res)) return;
+    const job = jobs.get(req.params.id);
+    if (!job || job.status !== "running") return res.status(409).json({ error: "job not running" });
+    if (job.moderation) return res.status(409).json({ error: "already moderated" });
+    const { harsh, lenient } = req.body ?? {};
+    if (!isJudgement(harsh) || !isJudgement(lenient)) return res.status(400).json({ error: "harsh and lenient judgements required" });
+    job.moderation = { harsh, lenient };
+    const d = decide(job.owner, job.fighterId, job.moderation);
+    events.get(job.id)?.set("moderation", { harsh: harsh.verdict, lenient: lenient.verdict, blocked: d.blocked, reputation: [d.before, d.after] });
+    if (d.blocked) setStatus(job, "failed", "", d.error);
+    else changed(job);
+    res.json({ blocked: d.blocked });
   });
   api.post("/forge/jobs/:id/fail", (req, res) => {
     if (!forgeAuth(req, res)) return;
