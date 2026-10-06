@@ -288,6 +288,15 @@ describe("rollback session over links and the relay", () => {
     expect(path.framesViaLink).toBeGreaterThan(path.framesViaRelay);
   });
 
+  it("keeps running past the end of the match: hashes stop at the result, the sim carries on", () => {
+    const config = { ...makeConfig(3), rules: { stocks: 99, time: 300 } };
+    const { net, peers } = room(config, 0xe7d, { relay: [5, 9], link: [2, 4] });
+    playTo(net, peers, 600);
+    for (const p of peers) expect(p.session.state.ended).toBe(true);
+    playTo(net, peers, 900);
+    sameAt(peers, 900);
+  });
+
   it("carries on over the relay alone when a link is down, and back on the link when it returns", () => {
     const { net, peers } = room(makeConfig(3), 0x11e4, { relay: [5, 9], link: [2, 4] });
     play(net, peers, 300);

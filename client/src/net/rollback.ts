@@ -576,7 +576,7 @@ export class RollbackSession {
       const snapshot = this.snapshots.get(this.nextHashFrame);
       if (!snapshot) throw new Error(`missing confirmed snapshot for hash frame ${this.nextHashFrame}`);
       // hashes stop with the match: a player leaving the result screen drops at a frame the clients needn't agree on
-      if (snapshot.ended) return;
+      if (snapshot.ended) { this.nextHashFrame = Infinity; return; }
       const hash = hashState(snapshot);
       this.localHashes.set(this.nextHashFrame, hash);
       this.transport.sendHash(this.nextHashFrame, hash);
