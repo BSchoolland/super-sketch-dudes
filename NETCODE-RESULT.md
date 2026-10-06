@@ -1,208 +1,111 @@
-# Netcode result: agent 4 (WebRTC), branch `netcode-4-webrtc`
+# Netcode: the combined result (step 5), branch `netcode-5-combined`
 
-Inputs now go peer to peer over WebRTC data channels, direct or through TURN. They also go through the relay at the
-same time, as a reliable copy, so a pair that can't link still plays. Around that, the rollback layer stops
-spreading freezes: a frozen client keeps feeding the others. The prediction window is wider, and the relay plays a
-player whose inputs have stopped as AWAY, so the others play on instead of waiting for them.
+Four agents worked independently on the online freezes. This branch takes the best of them: agent 4's WebRTC design
+as the base, agent 1's self-healing relay link, and agent 2's on-screen smoothing of corrections, plus two fixes
+found while combining them. Each agent's own write-up is on its branch (`netcode-1-open`, `netcode-2-nofreeze`,
+`netcode-3-pipe`, `netcode-4-webrtc`). Agent 4's is also kept here as `docs/netcode-agent4-webrtc.md`.
 
 ## Result
 
-Full benchmark, 2 seeds × 3 min per scenario, against the baseline (`netlab/bench/2026-10-05-22-50-webrtc-final.md`,
-commit 9caaaaf; the earlier full run `2026-10-05-22-06-webrtc.md` at 6737edf gave the same picture):
+The official lab benchmark (`netlab/bench/2026-10-06-00-38-combined-final.md`): 5 recreated sessions, 2 seeds × 3 min
+each, against the baseline of the current netcode.
 
-| tier | freezes/min | frozen s/min | longest freeze | game speed % | input delay | rollbacks past the window/min | away s/min | fast-forward frames/min | load wait s | errors |
-|---|---|---|---|---|---|---|---|---|---|---|
-| decent | **0** (was 11.7) | **0** (was 0.9) | 0 (was 499 ms) | 91.3 (was 91.2) | 2 (was 2) | 0 | 0 | 0 | 0.2 | none |
-| poor | **0.5** (was 68.5: **137× fewer**) | **0.3** (was 15.4: **51× less**) | 0.9 s (was 5.2 s) | 86.3 (was 81.9) | 2.5 (was 2) | 1.2 | 0.3 | 11.7 | 3.2 | none |
-| awful | **6.5** (was 60: **9.2× fewer**) | **3.6** (was 51.9: **14× less**) | 5.8 s (was 21.7 s) | 82.9 (was 55.7) | 3 (was 3) | 6.8 | 3.9 | 147.5 | 1.7 | none |
-
-Per scenario, decent tier: alpha-bravo, school-3p and evening-4p all had 0 freezes on both seeds. Was 2.5, 2 and 30.5
-a minute.
+| tier | freezes/min | frozen s/min | longest freeze | game speed % | input delay |
+|---|---|---|---|---|---|
+| decent (Alpha/Bravo, school 3p, evening 4p) | **0** (was 11.7) | **0** (was 0.9) | 0 (was 0.5 s) | 90 (was 91) | 2 |
+| poor (Ben/Adrean/Kirill) | **0.5** (was 68.5, 137× fewer) | **0.3** (was 15.4, 51× less) | 0.9 s (was 5.2 s) | 88 (was 82) | 2 |
+| awful (Juliet's worst night + a slow Chromebook) | **3** (was 60, 20× fewer) | **2.7** (was 51.9, 19× less) | 3.4 s (was 21.7 s) | 86 (was 56) | 2.5 |
 
 Who still freezes:
-- **Poor tier:** only seed 2, which has Kirill's 0.8-2.5 s blackouts. Kirill froze 1.7 s/min (his own downlink),
-  Adrean 0.2 and Ben 0.
-- **Awful tier:** Juliet, 7-12.6 s/min, during his own 1-10 s blackouts. Kilo and Lima were at 0-0.8 s/min
-  (baseline 40-65).
+- **Poor tier**: Ben and Adrean 0 s/min. Kirill 0-1.8 s/min, and only during his own wifi blackouts.
+- **Awful tier**: Kilo and Lima 0-0.2 s/min. Juliet 5-10 s/min, during his own 1-10 s blackouts (his connection
+  is simply gone then).
 
-Inputs arrived first over a peer-to-peer link 64-84 % of the time. That's in the lab, where a link has the same
-shaped latency as the relay path (uplink A + downlink B). The links win by having no TCP head-of-line blocking or
-retransmit backoff, not by being shorter. Real P2P is often shorter than going via the relay, but I'm not claiming
-that from the lab.
+No desyncs or crashes in any run. `npm run check` passes: 138 tests, including a 24-seed fuzz of blackouts, relay
+stalls, dead links and loss.
 
-Ben's bar: mild success is 3× fewer freezes, success 8×, great success "no freezes on half-decent connections,
-*almost* none on connections like Kirill's, almost no downsides". Every tier is past 8× ("success"): decent ∞, poor 137× / 51×, awful 9.2× / 14×.
-Half-decent connections had no freezes at all, and Kirill's connection had almost none (his own blackouts only),
-which is the "great success" shape. The "almost no downsides" part holds for decent and poor. On the awful tier
-the price is visible: the player with the dead link is played AWAY, there's fast-forward after freezes, and there
-are more time-sync slowdowns (below).
+### All five side by side (freezes/min · frozen s/min)
 
-## What changed and why
+| | decent | poor | awful |
+|---|---|---|---|
+| baseline | 11.7 · 0.9 | 68.5 · 15.4 | 60 · 51.9 |
+| 1, open brief | 0 · 0 | 1 · 0.7 | 6 · 4.7 |
+| 2, relax the freeze rule | 0 · 0 | 0.5 · 0.5 | 1.5 · 4.6 |
+| 3, better pipe, no WebRTC | 3.8 · 0.1 | 16.5 · 4.2 | 33.5 · 19.9 |
+| 4, WebRTC | 0 · 0 | 0.5 · 0.3 | 6.5 · 3.6 |
+| **combined** | **0 · 0** | **0.5 · 0.3** | **3 · 2.7** |
 
-**1. Peer-to-peer links** (`client/src/net/mesh.ts`, `wire.ts`, `link.ts`). Each pair in a room gets an
-RTCPeerConnection with one data channel: unordered, no retransmits, negotiated, so neither side waits for it to
-open. Links are built in the lobby, so they're up before START. Signaling (offers, answers, trickled candidates)
-rides the existing relay WebSocket (`rtc` messages, forwarded only between members of one room). ICE tries host and
-STUN candidates first and falls back to TURN on its own. TURN credentials come from the relay
-(`server/ice.ts`, coturn's REST scheme, valid 24 h), so nothing secret ships in the client. The member with the
-lower id offers, times out after 10 s, and retries after 1, 2, 5, 10, 20 and then 30 s. A link that goes
-"disconnected" gets 3 s before it's rebuilt. Each tick, every linked player gets the run of our inputs they haven't
-acknowledged: binary and run-length encoded, typically 40-60 bytes, so a lost packet is covered by the next one.
+Agents 1, 2 and 4 each found the same three root causes on their own:
+1. A frozen client stopped sending inputs, so one player's freeze spread to everyone.
+2. The 8-frame prediction window was smaller than ordinary wifi spikes.
+3. Nobody could play on past a player whose connection had died, and TCP's retry backoff stretched a 2 s wifi
+   dropout into a 20 s freeze.
 
-**2. The relay stays as the reliable copy** (`link.ts`). Every input also goes to the relay, once and in order, and
-the relay forwards it to everyone. Whichever copy arrives first counts. This one decision covers most of the
-fallback ladder: a pair whose ICE fails, a network that blocks UDP, a link that dies mid-match, an older bundle in
-the room. All of them simply play over the relay, with no switch-over moment to get wrong. It also keeps the
-relay's view of the match (timeouts, its wide event, its desync check), and gives a leaver's drop frame a single
-source. A relay-only pair whose acks stall gets its missing frames again over the relay, once a second (this is what
-heals a bundle swap that lost packets).
+Their designs land close together. Agent 3 kept the old rules and improved only the pipe, which got 2-4×.
 
-**3. Freezes no longer spread** (`rollback.ts`). Before, a client only produced its input for frame N when its sim
-stepped to N. One player freezing on a late packet therefore stopped feeding everyone else, and ~170 ms later the
-whole room froze: in the baseline timelines everyone's red strips line up. Now a match clock ticks with real time
-and takes and sends the local input every tick, whatever the sim is doing. The sim follows the clock and catches up
-after a stall, at up to 8 frames a tick. The clock runs at most a second ahead of a frozen sim, so a long blackout
-ends in under a second of fast-forward, not the whole blackout replayed.
+## Why this combination
 
-**4. A wider prediction window, budgeted on CPU** (`rollback.ts`). The sim may run up to 30 frames (500 ms) past the
-newest frame it has every input for, up from 8. Each step plus its snapshot is timed. The window is what 10 ms of
-re-simulation buys at that cost, with a floor of 12. The heaviest production fighters cost 70-100 µs a step here
-and ~200 µs on the 4×-throttled lab Chromebook (Lima), so Lima's window sits at 28-30 and dips to 12-14.
+- **Agent 4 as the base.** It has the most complete design and the most failure testing: TURN-only, WebRTC blocked
+  entirely, links lost and regained, leaves, silent drops, and a mid-match bundle swap. Every input goes peer to peer
+  *and* through the relay, so any pair that can't link still plays, with no switch-over moment to get wrong. With
+  WebRTC blocked for everyone it still holds the gains, so most of the win is the rollback/referee redesign, not
+  P2P.
+- **Agent 1's self-healing relay link** (`client/src/net/transport.ts`, `server/lobby.ts` "resume"). Agent 4 kept
+  the relay socket as it was. A relay-only player, and school wifi often blocks UDP, sat out TCP's backoff after
+  every blackout. Now, when the relay hasn't confirmed our inputs for 600 ms, fresh sockets open (one more a second)
+  and the first to connect resumes the player with a token from `hello`. The relay keeps the slot for 15 s and sends
+  `resumed`, then everything missed in order (fills, inputs, leaves). The client resends its own inputs after the
+  relay's ack. With WebRTC blocked, the worst player's longest freeze dropped from 14 s to 9 s.
+- **Agent 2's correction smoothing** (`render.ts`). When a rollback moves a fighter by up to 300 units, the move is
+  eased out over about 0.1 s instead of popping. Render only; the sim is untouched.
+- **Not taken**:
+  - Agent 2's majority-vote "away" scheme. It needs no server change, which is elegant, but it can't decide anything
+    in 1v1 or with two dropouts at once.
+  - Agent 3's WebTransport. It needs a glibc-2.38 native module (production is AlmaLinux 8) and a UDP port, for a
+    gain P2P already gives.
+  - Agent 1's KO slow motion inside the sim. It's a gameplay-adjacent change this design doesn't need.
 
-**5. The relay plays a silent player AWAY** (`server/lobby.ts` `checkFills`, `rollback.ts` `fill`). A player whose
-uplink dies would otherwise freeze everyone until the 20 s drop. Once a player is 18 frames behind the second most
-advanced other player at the relay, the relay decides their frames away up to there, sends `fill` to everyone, and
-drops the late inputs for those frames. Frames another player holds over a link count as alive: every relay message
-carries the sender's acks, so a stalled connection to the relay alone, while the links still work, doesn't make
-anyone away. An AWAY frame plays as no input plus invulnerability, drawn faded with RECONNECTING. The relay is the
-one place that sees every player's inputs in one order, so its call is the same everywhere. That makes inputs that
-came over a link provisional until the relay's copy, or its fill, confirms them. Hashes, bundle handoffs and
-snapshot pruning stand on these final frames, and a fill that overrules a provisional input rolls back as far as it
-must. A player whose own frames were filled jumps their clock to where everyone else's is and sits out the frames
-in between, so the room doesn't slow down while they catch up. Fills need every member to say it understands them,
-and stop once a bundle swap is scheduled (an older bundle would desync on one).
+## Fixed while combining
 
-**6. Smaller pieces.** A start barrier: the countdown starts on the relay's `go`, once every member's match screen
-is up, so a slow fighter load is a wait on the GET READY screen, not a freeze right after GO. A mid-match leave
-carries the relay's last frame for the leaver. The sim ignores an eliminated fighter's input, and hashes stop at the
-end of the match, so clients needn't agree on the exact drop frame (P2P has no single delivery order). Time sync
-ignores a remote it hasn't heard from in 20 ticks. Auto input delay uses a pair's direct-link round trip when there
-is one. The HUD shows "p2p n/m". A handed-off match screen stops ticking: before, the old bundle's screen kept
-simulating and sending inputs while the new bundle downloaded.
-
-## Failure tests (`netlab/failures.sh`, all on the final build or the one before; runs in `netlab/runs/`)
-
-| case | how | what happened |
-|---|---|---|
-| TURN only | `ben-adrean-kirill-turn`: Kirill's container drops UDP to the other players | All of Kirill's links route through the coturn container (`relay` candidates); Ben↔Adrean stay direct. 0 freezes, nobody away. (An earlier build played Kirill away for 3.5 s when his TCP to the relay stalled while TURN was fine. That's why the relay counts frames another player vouches for.) |
-| WebRTC blocked (mixed match) | `ben-adrean-kirill-mixed`: Kirill drops all UDP and TURN's TCP port | Kirill has no links; his pairs ride the relay, Ben↔Adrean are direct. 0 freezes; Kirill played away 0.2 s/min when his TCP stalled. |
-| Links lost mid-match, then back | `--at 40:block Kirill webrtc --at 80:unblock Kirill` | Inputs keep flowing over the relay: 0 freezes. ICE noticed in ~10 s; the offerer retried with backoff (3 failed attempts while blocked) and the links came back after the unblock (2 opens per pair). |
-| A player still fighting closes the tab | `school-3p --at 60:leave Charlie` | The others saw PLAYER DISCONNECTED and were back in the room 3 s later, as before. |
-| Players out of stocks leave | `school-3p --stocks 2 --leave-out` | Two eliminated players left one after the other; the rest played on to the end with no desync (the drop frame comes from the relay; the sim ignores an eliminated fighter's input). |
-| A connection vanishes silently | `school-3p --at 40:cut Charlie` (all of his traffic dropped) | The others played on against an AWAY Charlie; the relay dropped him after 20 s and they went back to the room. 0 freezes. |
-| Bundle swap mid-match | `school-3p --shell --at 30:swap` (the room switched to a second bundle the way `push-game.sh --room` does) | Everyone handed off at the same frame and resumed on the new bundle, 0 freezes, no desync. The same peer links carried on (adopted, not rebuilt). Found and fixed on the way: the old bundle's screen kept simulating and sending inputs while the new bundle downloaded. |
-
-Unit tests (`test/rollback.test.ts`) run the real NetLink and session over a simulated relay (which fills like the
-real one) and lossy, reordering links: dead links, deaf and mute players, a stalled relay connection, one on one, a
-handoff that lost packets, eliminated fighters, and a fuzz of 24 seeds mixing all of it with hash checks. The fuzz
-found a real desync: a deep rollback re-simulated our own pruned inputs as nothing. Fixed, and that state now throws.
+1. **Resume ordering**: the relay sent the catch-up before `resumed`, and the client ignored it, so a resumed player
+   slowly lost the link. Covered by a relay test.
+2. **A hole in agent 4's fills: partial mesh.** Juliet was linked to Kilo only, and his relay connection stuck.
+   Kilo's acks kept Juliet "alive", while Lima, who gets Juliet's inputs only from the relay, froze for 22 s. A frame
+   now counts as vouched for only when *every* other player holds it. A test fails on the old rule and passes on the
+   new one. In the lab, Kilo went from 5 to 0 s/min frozen and Lima from 9.3 to 0.5.
+3. `docs/webrtc-deploy.md` assumed Ubuntu. personal-server is AlmaLinux 8 with firewalld, and coturn 4.18 is in EPEL.
 
 ## Downsides a player could feel
 
-- **AWAY.** A player whose inputs stop reaching anyone (dead uplink) for more than ~300 ms stands still, untouchable,
-  faded with RECONNECTING, while the others play on; whatever they pressed meanwhile is dropped. If they were in the
-  air off stage they can still fall. On the awful tier Juliet spent 9-14 s/min that way; on the poor tier
-  Kirill 0-1.5 s/min. In the baseline everyone froze instead. On their own screen the cut-off player sees their
-  fighter snap back to standing when the fill arrives (a rollback).
-- **Fast-forward after a freeze.** A frozen client catches up to the clock at up to 8 frames a tick (≤ 1 s of
-  game). It's played on the inputs they gave a frozen screen. Awful tier: 147 frames/min; poor 12; decent 0.
-- **Deeper rollbacks.** The window is 30 frames instead of 8, so a late input can rewrite up to half a second
-  (remote fighters jump further when it happens). A fill that overrules provisional link inputs, or a recovery,
-  can go deeper still: max rollback 64 frames on the poor tier and ~475 (Juliet coming back) on the awful one. Rollbacks
-  past the window: 1.2/min poor, 6.8/min awful, 0 decent.
-- **Slow motion from time sync.** A client ahead of the others gives up a tick now and then (unchanged mechanism).
-  Per minute of play that's ~10 on the decent tier (baseline 11-53), ~90 on the poor one (baseline 88),
-  but ~250 on the awful one (baseline 133): when a cut-off player comes back, the room evens out its clocks.
-  It shows in game speed %, which also counts KO slow motion and the load wait.
-- **Input delay** is still the relay's automatic choice, from round trips measured at START: decent 2, poor 2.5
-  (one seed picked 3), awful 3 (baseline 2, 2, 3). Pairs with a link use the link's round trip. It's now a median:
-  an average once caught one of Juliet's spikes and picked 6 frames in the first full bench.
-- **A wait before the countdown.** Everyone waits on GET READY for the slowest fighter load (poor tier 3.2 s on
-  average, mostly Kirill's 5 s load). The baseline froze right after GO instead (and counted it).
-- **CPU.** A full-window rollback costs up to 10 ms on a slow machine (the window shrinks beyond that). On the
-  4×-throttled lab Chromebook slow frames went from 10-13 % to 22-30 % in the awful tier. It simulates real play
-  where it used to sit frozen half the match, and its rollbacks are deeper. Desktops: 1-8 % either way. In the
-  first full bench, school-3p seed 1 showed ~40 % slow frames for all three players at once, with no freezes. Its
-  step cost read 540 µs against ~70 µs normally, and the host's load average was ~7. A rerun of the same seed gave
-  1.2 %, and so did the final bench, so I take it as the host.
-- **Bandwidth** (estimated from the packet formats). A link packet is ~40-60 bytes of payload (~125 on the wire) 60 times a second per linked player,
-  plus every frame to the relay once (~150 bytes on the wire per tick). A 4-player match sends ~30 kB/s and
-  receives ~50 kB/s per player, roughly double the old upload. Players on bad wifi send more packets than before.
-- **TURN can win over direct.** ICE picks whichever pair works first; in one lab run two players with working
-  direct UDP ended up on a TURN route. In the lab it costs nothing; in production it would add the trip through
-  the server. Chrome may move to the direct pair later, but I didn't see it happen.
-- **A link that dies is only noticed by ICE after ~10 s.** Nothing waits on it (the relay copy is always there),
-  but for those seconds that pair is back to relay latency.
+- **AWAY.** A player whose inputs stop reaching anyone for more than about 0.3 s stands still, faded, can't be hit,
+  and shows RECONNECTING, while the others play on. Whatever they pressed meanwhile is dropped. On their own screen
+  they see a freeze, then a snap back when they return. Juliet spent ~3 s/min like this, Kirill 0.3 s/min. Before,
+  everyone froze instead.
+- **Deeper corrections.** The game predicts up to 30 frames (0.5 s) instead of freezing, so a late input can rewrite
+  more. Positions are smoothed, but a hit can land or vanish late. Max rollback was 10 frames on decent connections
+  and 64 on poor; on awful it was deeper, at the moment a dropped player is overruled.
+- **Fast-forward** after a player's own freeze: their sim catches up at up to 8 frames a tick (about 140 frames/min
+  in the awful tier, 0 on decent).
+- **Slow Chromebooks**: on the lab's 4×-throttled client, slow frames went from 10-13% (baseline, frozen half the
+  time) to 25-28%. About 19% of that remains with P2P off for that player, so P2P costs it a few points. Profiling
+  shows the time goes to canvas rendering, not netcode JS.
+- **A short GET READY** before the countdown while everyone's fighters load (0.1-2 s), instead of a freeze right
+  after GO.
+- **Bandwidth**: roughly double the old upload (P2P packets to each peer plus the relay copy), about 30 kB/s up in a
+  4-player match.
 
 ## What production needs that the lab doesn't have
 
-- **coturn** on personal-server for STUN and TURN, with the exact config, firewall rules, env and checks in
-  `docs/webrtc-deploy.md`. Without it the game still works, but most pairs won't link: browsers hide local
-  addresses behind mDNS names, and two homes behind NAT need STUN to find each other.
-- **Apache** doesn't change: signaling rides the existing `/sketch-battle/ws` WebSocket.
-- **TLS**: the page is https in production. The lab is plain http with Chrome told to treat it as secure. TURN over
-  TLS (5349) is configured but untested; the lab's TURN is plain UDP/TCP.
-- **NAT and firewalls.** The lab's players share one Docker bridge, so "direct" there means STUN-reflexive
-  candidates on one network, and the tests just drop packets. They don't model real NATs (symmetric NAT needs
-  TURN), carrier-grade NAT, or school networks that allow only 443. Those pairs fall back to TURN or the relay,
-  which the lab does test.
-- **Shell players** run whatever game bundle is current: push one built from master (`scripts/push-game.sh
-  --current`) for them to get any of this. A room mixing an older bundle still works: those pairs ride the relay,
-  and fills switch off for the match.
-- **Browsers.** Only headless Chrome was tested. Safari and Firefox support unordered, unreliable data channels,
-  but neither ran here.
-- **The bundle is ~27 MB** (its music is inlined). On Kirill's lab wifi it didn't finish downloading in 3 minutes, so
-  a mid-match swap would stall such a player for a long time. That's not new, but it's worth knowing before
-  swapping bundles in a live match.
+- **Deploy client and relay together, between sessions.** Pages open from before the deploy should reload. A room
+  mixing an old bundle still plays, but those pairs ride the relay and nobody is played away in that match.
+- **coturn on personal-server** for STUN/TURN (`docs/webrtc-deploy.md`, now written for the real box). Without it
+  everything still works over the relay, including the self-healing link. With it, most pairs link directly.
+- **Untested outside the lab**: Apache + TLS reconnects (resume uses the same `/sketch-battle/ws` URL, so no Apache
+  change is needed), real NATs, Safari and Firefox, and how players feel about AWAY. The match telemetry now records
+  everything needed to judge it from real sessions: per-player waits and who they waited on, `paths` (link vs relay),
+  `relayLink` (resumes), away and fill counts.
 
-## Changes to the lab (all additive; the freeze definition, bot, profiles, existing scenarios and bench scoring are untouched)
+## Lab tools added in this step
 
-- `Dockerfile`: coturn and iptables added; the image is tagged by the Dockerfile's hash, so a changed Dockerfile
-  builds a new image instead of reusing a stale one.
-- `run.mjs`: a coturn container on the game network beside the relay (unshaped, like the relay), with the relay
-  pointed at it. In every player container, UDP on the *control* network is dropped: it joins the players unshaped,
-  and ICE would otherwise find it. That's a lab bug fix that only matters with WebRTC. New options: `--block
-  Name=p2p|webrtc`, `--at "<sec>:block|unblock|cut|leave|swap ..."`, `--stocks`, `--leave-out`, `--shell` (players
-  on the swappable page; the ~27 MB bundle is loaded before the menus), and `NETLAB_CONSOLE=1`. The run records each
-  player's selected candidate pairs and checks they're on the game network.
-- `scenarios.mjs`: `ben-adrean-kirill-turn` and `ben-adrean-kirill-mixed` (the poor-tier session with Kirill's
-  network blocking direct UDP, or WebRTC entirely). Not in the bench suite.
-- `stats.mjs` and `bench.mjs`: new columns only (away s/min, fast-forward frames/min, rollbacks past the window,
-  load wait, share of inputs first over a link). The existing metrics are computed as before.
-- `failures.sh`: the failure cases above.
-- I read the other three agents' write-ups after my first version worked. Their diagnosis matched what my
-  timelines showed: freezes spread through the room, the 8-frame window was smaller than ordinary spikes, and TCP
-  backoff after blackouts. The design here is my own, built around the P2P/relay split.
-
-## Confidence and what's untested
-
-Confident: the fallback ladder (direct, TURN, relay) and mixed matches, determinism under loss, reordering and
-fills (unit tests, fuzz, and no desync in any lab run since 65ad082, which restored the hash exchange that an
-earlier fill build had silently stopped), the bundle-swap
-handoff with links adopted, leaves and drops, and the freeze numbers on these profiles.
-
-Less sure:
-- How often real-world pairs link directly. That depends on NAT types the lab doesn't have; telemetry `paths`
-  will say.
-- How AWAY feels to players. It's a gameplay call (stand still and invulnerable) that Ben should look at in a
-  real match.
-- The awful tier's slow-motion share and the throttled Chromebook's frame times: both measured, both worse than the
-  frozen baseline in their own way.
-- Fill timing (18 frames) and the window budget (10 ms) were tuned on these profiles only.
-
-Untested:
-- TURN over TLS, real NATs, Safari and Firefox, more than one room under load, and coturn itself on
-  personal-server. Nothing here touched production.
-- Relay WebSocket reconnection isn't implemented: losing the relay connection still ends your match (CONNECTION
-  LOST), as before, even with links up. The relay is the referee for fills and drops, so a client can't play on
-  without it.
+- `node netlab/run.mjs <scenario> --profile <player>` writes a CPU profile of that client over the fight and lists
+  the top self-time functions in the report.
