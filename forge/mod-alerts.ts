@@ -34,12 +34,12 @@ async function post(s: Submission, text: string): Promise<void> {
 const title = (s: Submission) => `**${s.name || "(no name)"}** by ${s.playerName} · \`${s.fighterId}\``;
 
 /** A character at least one judge flagged, whatever came of it. */
-export async function alertFlagged(s: Submission, j: Judgements, d: { blocked: boolean; before: number; after: number }): Promise<void> {
+export async function alertFlagged(s: Submission, j: Judgements, d: { blocked: boolean; held: boolean; before: number; after: number }): Promise<void> {
   await post(s, [
     title(s),
     `harsh: **${j.harsh.verdict}**: ${j.harsh.reason}`,
     `lenient: **${j.lenient.verdict}**: ${j.lenient.reason}`,
-    `${d.blocked ? "🚫 BLOCKED" : "✅ went through"} · reputation ${d.before} → ${d.after}`,
+    `${d.blocked ? "🚫 BLOCKED" : d.held ? "⏸ forging, held out of Community: @BenBot release or take it down" : "✅ went through"} · reputation ${d.before} → ${d.after}`,
   ].join("\n"));
 }
 

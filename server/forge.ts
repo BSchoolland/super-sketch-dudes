@@ -7,7 +7,7 @@ import type { CharStatus } from "../shared/account";
 import { buildGenerated } from "../shared/gen/load";
 import { SPRITE_CELLS } from "../shared/gen/sprite";
 import { STUDY_VERSION, type CpuStudy } from "../shared/cpu-study";
-import { upsertCharacter } from "./library";
+import { setHeld, upsertCharacter } from "./library";
 import { finish, openEvent } from "./events";
 import type { WideEvent } from "../shared/wide";
 import { isJudgement, type Judgements } from "../shared/moderation";
@@ -295,10 +295,11 @@ export function attachForge(api: express.Router, opts: ForgeOptions): void {
     if (!isJudgement(harsh) || !isJudgement(lenient)) return res.status(400).json({ error: "harsh and lenient judgements required" });
     job.moderation = { harsh, lenient };
     const d = decide(job.owner, job.fighterId, job.moderation);
-    events.get(job.id)?.set("moderation", { harsh: harsh.verdict, lenient: lenient.verdict, blocked: d.blocked, reputation: [d.before, d.after] });
+    events.get(job.id)?.set("moderation", { harsh: harsh.verdict, lenient: lenient.verdict, blocked: d.blocked, held: d.held, reputation: [d.before, d.after] });
+    if (d.held) setHeld(job.fighterId, true);
     if (d.blocked) setStatus(job, "failed", "", d.error);
     else changed(job);
-    res.json({ blocked: d.blocked, before: d.before, after: d.after });
+    res.json({ blocked: d.blocked, held: d.held, before: d.before, after: d.after });
   });
   api.post("/forge/jobs/:id/fail", (req, res) => {
     if (!forgeAuth(req, res)) return;

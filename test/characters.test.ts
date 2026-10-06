@@ -124,6 +124,39 @@ describe("the auto moderator", () => {
   });
 });
 
+describe("a character one judge flagged", () => {
+  it("forges but stays out of COMMUNITY and the menu brawl until it's released; a private one never shows there", async () => {
+    const dev = await (await api("/auth/dev", { method: "POST", body: JSON.stringify({ name: "Hel" }) })).json();
+    const H = { "x-session": dev.session };
+    const cells = Object.fromEntries(SPRITE_CELLS.map((c) => [c, png1x1]));
+    const forge = async (pub: boolean, harsh: string) => {
+      const created = (await (await api("/characters", { method: "POST", headers: H, body: JSON.stringify({ png: `data:image/png;base64,${png1x1}`, public: pub }) })).json()).character;
+      const job = await (await api("/forge/jobs/next")).json();
+      const d = await (await api(`/forge/jobs/${job.id}/moderation`, { method: "POST", body: JSON.stringify({ harsh: { verdict: harsh, reason: "r" }, lenient: { verdict: "pass", reason: "r" } }) })).json();
+      expect((await api(`/forge/jobs/${job.id}/complete`, { method: "POST", body: JSON.stringify({ name: "HEL", tagline: "t", description: "d", source, cpu: STUDY, sprite: { px: 512, feetPx: 448, heightPx: 360, anims: {} }, cells }) })).status).toBe(204);
+      return { id: created.id as string, held: d.held as boolean };
+    };
+    const listed = async () => {
+      const community = (await (await api("/characters/community?sort=new")).json()).characters.map((c: { id: string }) => c.id);
+      const sample = (await (await api("/characters/sample?n=24")).json()).characters.map((c: { id: string }) => c.id);
+      return (id: string) => [community.includes(id), sample.includes(id)];
+    };
+    const flagged = await forge(true, "other");
+    const clean = await forge(true, "pass");
+    const secret = await forge(false, "pass");
+    expect(flagged.held).toBe(true);
+    expect(clean.held).toBe(false);
+    let seen = await listed();
+    expect(seen(flagged.id)).toEqual([false, false]);
+    expect(seen(clean.id)).toEqual([true, true]);
+    expect(seen(secret.id)).toEqual([false, false]);
+    expect((await (await api(`/characters/${flagged.id}`, { headers: H })).json()).character).toMatchObject({ status: "ready", held: true });
+    expect((await api(`/characters/${flagged.id}/release`, { method: "POST" })).status).toBe(204);
+    seen = await listed();
+    expect(seen(flagged.id)).toEqual([true, true]);
+  });
+});
+
 describe("taking a character down", () => {
   it("removes it from its owner and from everyone who saved it, with the forge token only", async () => {
     const owner = await (await api("/auth/dev", { method: "POST", body: JSON.stringify({ name: "Tad" }) })).json();

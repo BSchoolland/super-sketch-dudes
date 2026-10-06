@@ -45,6 +45,8 @@ export interface LibraryEntry {
   saved?: number;
   /** Its creator deleted it while others had it saved: gone from theirs and from COMMUNITY, kept for the savers. */
   deleted?: boolean;
+  /** A moderator judge flagged it: kept out of COMMUNITY and the menu brawl, whatever `public` says, until Ben releases it. */
+  held?: boolean;
 }
 
 /** A character in COMMUNITY, as the caller sees it. */

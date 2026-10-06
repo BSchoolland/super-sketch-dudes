@@ -22,7 +22,8 @@ export function attachModeration(dataDir: string): void {
 
 export const reputationOf = (player: string): number => scores[player] ?? START;
 
-export interface Decision { blocked: boolean; error: string | null; before: number; after: number }
+/** `held`: flagged but let through, so kept out of COMMUNITY until Ben releases it. */
+export interface Decision { blocked: boolean; held: boolean; error: string | null; before: number; after: number }
 
 /** Applies one submission's judgements to its player's reputation, and says whether it may go to the forge. */
 export function decide(player: string, fighterId: string, j: Judgements): Decision {
@@ -33,6 +34,6 @@ export function decide(player: string, fighterId: string, j: Judgements): Decisi
   scores[player] = after;
   fs.writeFileSync(scoresFile, JSON.stringify(scores, null, 1));
   const error = blocked ? `Auto moderator blocked your character for reason: ${[...new Set(flags)].map((f) => FLAG_LABELS[f]).join(", ")}` : null;
-  fs.appendFileSync(logFile, JSON.stringify({ at: Date.now(), player, fighterId, ...j, blocked, before, after }) + "\n");
-  return { blocked, error, before, after };
+  fs.appendFileSync(logFile, JSON.stringify({ at: Date.now(), player, fighterId, ...j, blocked, held: flags.length > 0 && !blocked, before, after }) + "\n");
+  return { blocked, held: flags.length > 0 && !blocked, error, before, after };
 }

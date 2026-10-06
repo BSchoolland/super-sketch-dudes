@@ -176,7 +176,7 @@ export function setPublic(owner: string, id: string, pub: boolean): LibraryEntry
 export function communityCharacters(): { entry: LibraryEntry; creator: Player | null; plays: number }[] {
   scanAll();
   return [...cache.values()].flatMap((lib) => lib.characters
-    .filter((c) => c.status === "ready" && c.bundleUrl && c.public && !c.deleted && !starters.includes(c.id))
+    .filter((c) => c.status === "ready" && c.bundleUrl && c.public && !c.held && !c.deleted && !starters.includes(c.id))
     .map((entry) => ({ entry, creator: lib.player, plays: playCount(entry.id) })));
 }
 
@@ -208,6 +208,7 @@ export function upsertCharacter(entry: LibraryEntry, player?: Player): LibraryEn
     const was = lib.characters[i];
     entry = { ...entry, public: was.public };
     if (was.deleted) entry.deleted = true;
+    if (was.held) entry.held = true;
     lib.characters[i] = entry;
   } else lib.characters.push(entry);
   write(entry.owner);
@@ -220,6 +221,15 @@ export function removeCharacter(owner: string, id: string): boolean {
   if (!e) return false;
   if (saveCount(id)) { e.deleted = true; write(owner); }
   else purge(owner, id);
+  return true;
+}
+
+/** Holds a character out of COMMUNITY and the menu brawl, or releases it. False if there's no such character. */
+export function setHeld(id: string, held: boolean): boolean {
+  const e = findCharacter(id);
+  if (!e) return false;
+  if (held) e.held = true; else delete e.held;
+  write(e.owner);
   return true;
 }
 

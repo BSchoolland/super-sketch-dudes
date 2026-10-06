@@ -82,8 +82,8 @@ async function moderated(job: Claimed, drawing: string, dir: string): Promise<"j
     await alert("unavailable", alertUnavailable(s, e.message));
     return "unjudged";
   }
-  const d = (await (await post(`/jobs/${job.id}/moderation`, judgements)).json()) as { blocked: boolean; before: number; after: number };
-  log(tag, `moderation: harsh ${judgements.harsh.verdict}, lenient ${judgements.lenient.verdict}, reputation ${d.before} -> ${d.after}${d.blocked ? ": BLOCKED" : ""}`);
+  const d = (await (await post(`/jobs/${job.id}/moderation`, judgements)).json()) as { blocked: boolean; held: boolean; before: number; after: number };
+  log(tag, `moderation: harsh ${judgements.harsh.verdict}, lenient ${judgements.lenient.verdict}, reputation ${d.before} -> ${d.after}${d.blocked ? ": BLOCKED" : d.held ? ": held out of Community" : ""}`);
   if (judgements.harsh.verdict !== "pass" || judgements.lenient.verdict !== "pass") await alert("flagged", alertFlagged(s, judgements, d));
   return d.blocked ? "blocked" : "judged";
 }
