@@ -298,7 +298,7 @@ export function attachForge(api: express.Router, opts: ForgeOptions): void {
     events.get(job.id)?.set("moderation", { harsh: harsh.verdict, lenient: lenient.verdict, blocked: d.blocked, reputation: [d.before, d.after] });
     if (d.blocked) setStatus(job, "failed", "", d.error);
     else changed(job);
-    res.json({ blocked: d.blocked });
+    res.json({ blocked: d.blocked, before: d.before, after: d.after });
   });
   api.post("/forge/jobs/:id/fail", (req, res) => {
     if (!forgeAuth(req, res)) return;

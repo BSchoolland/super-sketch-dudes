@@ -107,7 +107,7 @@ describe("the auto moderator", () => {
     const ok = await draw();
     const okJob = await (await api("/forge/jobs/next")).json();
     expect(okJob.moderated).toBe(false);
-    expect(await (await judge(okJob.id, "pass", "inappropriate")).json()).toEqual({ blocked: false });
+    expect(await (await judge(okJob.id, "pass", "inappropriate")).json()).toMatchObject({ blocked: false });
     expect((await judge(okJob.id, "pass", "pass")).status).toBe(409);
     expect((await (await api(`/characters/${ok.id}`, { headers: H })).json()).character.status).toBe("generating");
     expect((await api(`/forge/jobs/${okJob.id}/fail`, { method: "POST", body: JSON.stringify({ error: "done with it" }) })).status).toBe(204);
@@ -115,7 +115,7 @@ describe("the auto moderator", () => {
     const bad = await draw();
     const badJob = await (await api("/forge/jobs/next")).json();
     expect((await judge(badJob.id, "bogus", "pass")).status).toBe(400);
-    expect(await (await judge(badJob.id, "language", "inappropriate")).json()).toEqual({ blocked: true });
+    expect(await (await judge(badJob.id, "language", "inappropriate")).json()).toMatchObject({ blocked: true });
     const entry = (await (await api(`/characters/${bad.id}`, { headers: H })).json()).character;
     expect(entry.status).toBe("failed");
     expect(entry.error).toBe("Auto moderator blocked your character for reason: foul language, inappropriate art");

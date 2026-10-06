@@ -5,13 +5,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadForgeEnv } from "./env";
 import { runForge, ForgeError, type JobSpec } from "./forge";
-import { moderate } from "./moderate";
+import { moderate, ModerationUnavailable } from "./moderate";
+import { alertFlagged, alertUnavailable, checkAlertConfig, type Submission } from "./mod-alerts";
 
 loadForgeEnv();
 const SITE = (process.env.SITE ?? "").replace(/\/$/, "");
 const TOKEN = process.env.FORGE_TOKEN ?? "";
 if (!SITE || !TOKEN) throw new Error("SITE and FORGE_TOKEN must be set (env, forge/.env or ~/.config/sketch-forge/env)");
 if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY must be set (forge/.env)");
+checkAlertConfig();
 const CONCURRENCY = Number(process.env.FORGE_CONCURRENCY ?? 6);
 const POLL_MS = 2000;
 const RUNS = path.join(path.dirname(fileURLToPath(import.meta.url)), "runs");
@@ -46,13 +48,7 @@ async function handle(job: Claimed): Promise<void> {
     if (!res.ok) throw new Error(`drawing download: HTTP ${res.status}`);
     const drawing = path.join(dir, "drawing.png");
     fs.writeFileSync(drawing, Buffer.from(await res.arrayBuffer()));
-    if (!job.moderated) {
-      await post(`/jobs/${job.id}/progress`, { stage: "auto moderator" });
-      const judgements = await moderate(drawing, job.hint?.name ?? "", dir);
-      const { blocked } = (await (await post(`/jobs/${job.id}/moderation`, judgements)).json()) as { blocked: boolean };
-      log(tag, `moderation: harsh ${judgements.harsh.verdict}, lenient ${judgements.lenient.verdict}${blocked ? ": BLOCKED" : ""}`);
-      if (blocked) return;
-    }
+    if (!job.moderated && await blockedByModerator(job, drawing, dir)) return;
     const payload = await runForge(job, drawing, dir, {
       progress: async (stage) => { await post(`/jobs/${job.id}/progress`, { stage }); },
       log: (line) => log(tag, line),
@@ -67,6 +63,25 @@ async function handle(job: Claimed): Promise<void> {
   } finally {
     active.delete(job.id);
   }
+}
+
+/** Runs the judges; true if the character must not be forged. Judges that can't run let it through, loudly. */
+async function blockedByModerator(job: Claimed, drawing: string, dir: string): Promise<boolean> {
+  const tag = job.fighterId;
+  const s: Submission = { jobId: job.id, fighterId: job.fighterId, playerName: job.playerName, name: job.hint?.name ?? "", drawing };
+  const alert = (what: string, p: Promise<void>) => p.catch((e) => log(tag, `ALERT FAILED (${what}): ${e instanceof Error ? e.message : String(e)}`));
+  await post(`/jobs/${job.id}/progress`, { stage: "auto moderator" });
+  let judgements;
+  try { judgements = await moderate(drawing, s.name, dir); } catch (e) {
+    if (!(e instanceof ModerationUnavailable)) throw e;
+    log(tag, `MODERATION UNAVAILABLE, forging unjudged: ${e.message}`);
+    await alert("unavailable", alertUnavailable(s, e.message));
+    return false;
+  }
+  const d = (await (await post(`/jobs/${job.id}/moderation`, judgements)).json()) as { blocked: boolean; before: number; after: number };
+  log(tag, `moderation: harsh ${judgements.harsh.verdict}, lenient ${judgements.lenient.verdict}, reputation ${d.before} -> ${d.after}${d.blocked ? ": BLOCKED" : ""}`);
+  if (judgements.harsh.verdict !== "pass" || judgements.lenient.verdict !== "pass") await alert("flagged", alertFlagged(s, judgements, d));
+  return d.blocked;
 }
 
 let running = 0;

@@ -5,7 +5,9 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { isJudgement, type Judgement, type Judgements } from "../shared/moderation";
-import { ForgeError } from "./forge";
+
+/** The judges couldn't run (the codex pool is out or logged out); the character goes to the forge unjudged. */
+export class ModerationUnavailable extends Error {}
 
 const MODEL = process.env.MODERATION_MODEL ?? "gpt-6.1-sol";
 // gpt-* models only answer through claude-router
@@ -58,7 +60,7 @@ async function judge(stance: keyof typeof STANCE, drawing: string, name: string,
     const { verdict, code, log } = await slot(() => runJudge(stance, drawing, name, dir));
     if (verdict) return verdict;
     if (attempt < RETRIES && log.includes(REFUSED)) { await new Promise((r) => setTimeout(r, RETRY_MS)); continue; }
-    throw new ForgeError(`auto moderator unavailable, try again (${stance} judge gave no verdict, exit ${code})`);
+    throw new ModerationUnavailable(`${stance} judge gave no verdict (exit ${code}): ${log.trim().split("\n").pop()?.slice(0, 200)}`);
   }
 }
 
