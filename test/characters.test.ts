@@ -154,6 +154,9 @@ describe("a character one judge flagged", () => {
     expect((await api(`/characters/${flagged.id}/release`, { method: "POST" })).status).toBe(204);
     seen = await listed();
     expect(seen(flagged.id)).toEqual([true, true]);
+    expect((await api(`/characters/${clean.id}/hold`, { method: "POST" })).status).toBe(204);
+    seen = await listed();
+    expect(seen(clean.id)).toEqual([false, false]);
   });
 });
 

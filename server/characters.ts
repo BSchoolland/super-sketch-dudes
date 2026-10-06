@@ -108,12 +108,14 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
     res.status(204).end();
   });
 
-  // Ben releasing a character the auto moderator held out of COMMUNITY
-  api.post("/characters/:id/release", (req, res) => {
-    if (!forgeToken || req.get("x-forge-token") !== forgeToken) return res.status(401).json({ error: "bad token" });
-    if (!setHeld(req.params.id, false)) return res.status(404).json({ error: "no such character" });
-    res.status(204).end();
-  });
+  // the auto moderator holding a character out of COMMUNITY and the menu brawl, and Ben releasing it
+  for (const [route, held] of [["hold", true], ["release", false]] as const) {
+    api.post(`/characters/:id/${route}`, (req, res) => {
+      if (!forgeToken || req.get("x-forge-token") !== forgeToken) return res.status(401).json({ error: "bad token" });
+      if (!setHeld(req.params.id, held)) return res.status(404).json({ error: "no such character" });
+      res.status(204).end();
+    });
+  }
 
   // { png: <data URL>, name?, description? } -> the new library entry, queued for the forge
   api.post("/characters", (req, res) => {
