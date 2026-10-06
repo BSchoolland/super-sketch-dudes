@@ -1,5 +1,6 @@
 import { onPointer, type PointerStroke } from "../input/pointer";
 import { PAPER, INK } from "../render/paper";
+import { fillPixels } from "./fill";
 
 export const PAD_PX = 768;
 /** Pen colours, black first. Lines are solid: the sheet model reads clean ink best. */
@@ -18,10 +19,6 @@ interface Fill { kind: "fill"; x: number; y: number; layer: HTMLCanvasElement }
 type Mark = Stroke | Picture | Fill | "clear";
 
 const BASE_WIDTH: Record<StrokeKind, number> = { pen: 18, eraser: 40 };
-/** How far (summed RGB) a pixel can be from the tapped one and still fill: soaks up a line's antialiased fringe. */
-const FILL_TOLERANCE = 96;
-/** The fill grows this far past its region so it tucks under the line instead of leaving a pale seam. */
-const FILL_GROW = 2;
 
 function paint(g: CanvasRenderingContext2D, s: Stroke | Picture | Fill): void {
   if (s.kind === "fill") { g.drawImage(s.layer, s.x, s.y); return; }
@@ -62,52 +59,11 @@ function hexRgb(hex: string): [number, number, number] {
 
 /** Flood fills from (sx, sy) on `g` in `color`; null when the region reaches the pad's edge (it would flood the background). */
 function floodFill(g: CanvasRenderingContext2D, sx: number, sy: number, color: string): Fill | null {
-  const N = PAD_PX;
-  const src = g.getImageData(0, 0, N, N).data;
-  const seed = (sy * N + sx) * 4;
-  const [r0, g0, b0] = [src[seed], src[seed + 1], src[seed + 2]];
-  const [fr, fg, fb] = hexRgb(color);
-  if (Math.abs(r0 - fr) + Math.abs(g0 - fg) + Math.abs(b0 - fb) < 8) return null;
-  const inside = new Uint8Array(N * N);
-  const stack = [sy * N + sx];
-  inside[sy * N + sx] = 1;
-  let x1 = sx, y1 = sy, x2 = sx, y2 = sy;
-  while (stack.length) {
-    const i = stack.pop()!;
-    const x = i % N, y = (i - x) / N;
-    if (x === 0 || y === 0 || x === N - 1 || y === N - 1) return null;
-    if (x < x1) x1 = x; if (x > x2) x2 = x; if (y < y1) y1 = y; if (y > y2) y2 = y;
-    for (const j of [i - 1, i + 1, i - N, i + N]) {
-      if (inside[j]) continue;
-      const k = j * 4;
-      if (Math.abs(src[k] - r0) + Math.abs(src[k + 1] - g0) + Math.abs(src[k + 2] - b0) > FILL_TOLERANCE) continue;
-      inside[j] = 1;
-      stack.push(j);
-    }
-  }
-  x1 = Math.max(0, x1 - FILL_GROW); y1 = Math.max(0, y1 - FILL_GROW);
-  x2 = Math.min(N - 1, x2 + FILL_GROW); y2 = Math.min(N - 1, y2 + FILL_GROW);
-  const w = x2 - x1 + 1, h = y2 - y1 + 1;
-  const [layer, lg] = canvas(w, h);
-  const out = lg.createImageData(w, h);
-  for (let y = y1; y <= y2; y++) {
-    for (let x = x1; x <= x2; x++) {
-      let hit = false;
-      for (let dy = -FILL_GROW; dy <= FILL_GROW && !hit; dy++) {
-        const yy = y + dy;
-        if (yy < 0 || yy >= N) continue;
-        for (let dx = -FILL_GROW; dx <= FILL_GROW; dx++) {
-          const xx = x + dx;
-          if (xx >= 0 && xx < N && inside[yy * N + xx]) { hit = true; break; }
-        }
-      }
-      if (!hit) continue;
-      const k = ((y - y1) * w + (x - x1)) * 4;
-      out.data[k] = fr; out.data[k + 1] = fg; out.data[k + 2] = fb; out.data[k + 3] = 255;
-    }
-  }
-  lg.putImageData(out, 0, 0);
-  return { kind: "fill", x: x1, y: y1, layer };
+  const px = fillPixels(g.getImageData(0, 0, PAD_PX, PAD_PX).data, PAD_PX, sx, sy, hexRgb(color));
+  if (!px) return null;
+  const [layer, lg] = canvas(px.w, px.h);
+  lg.putImageData(new ImageData(px.data, px.w, px.h), 0, 0);
+  return { kind: "fill", x: px.x, y: px.y, layer };
 }
 
 /** The 768x768 drawing: a stack of marks (strokes and clears) replayed onto paper, so undo is exact. */
