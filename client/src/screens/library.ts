@@ -14,7 +14,7 @@ import { CharacterDetail, COL_W, COL_X, moveRows, type MoveRow } from "./charcar
 import { DrawPad } from "./pad";
 import { PAD } from "./create";
 import type { Nav } from "./nav";
-import { drawCharTabs, otherTabButton } from "./chartabs";
+import { drawCharTabs, otherCharTab } from "./chartabs";
 
 const COLS = 6, ROWS = 2, ART = 250, GAP = 50, ROW_H = 350, TOP = 160;
 const X0 = (VIEW_W - (COLS * ART + (COLS - 1) * GAP)) / 2;
@@ -57,7 +57,7 @@ export class LibraryScreen implements Screen {
     if (this.scroll + ROWS < rows) b.push({ id: "down", x: VIEW_W - 110, y: TOP + ROWS * ROW_H - 150, w: 80, h: 80, text: "▼", size: 40 });
     b.push({ id: "new", x: VIEW_W / 2 - 250, y: VIEW_H - 150, w: 500, h: 110, text: "NEW CHARACTER", size: 44 });
     b.push({ id: "back", x: 40, y: VIEW_H - 130, w: 240, h: 90, text: "BACK", size: 40 });
-    b.push(otherTabButton("mine"));
+    b.push(otherCharTab("mine"));
     return b;
   }
 

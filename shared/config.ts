@@ -8,6 +8,10 @@ export const C = {
   HELPLESS_LAND_LAG: 24,
   BUFFER: 6,
   FLICK_WINDOW: 4,
+  /** Keyboard: frames attack is held, with a direction, before the tilt it would be becomes the smash charge. */
+  SMASH_HOLD: 10,
+  /** Keyboard: frames into a dash that attack still counts as pressed with the key that started it. */
+  KEYS_TOGETHER: 4,
   SMASH_CHARGE_MAX: 60,
   SMASH_CHARGE_MUL: 0.4,
   SHIELD_MAX: 50,

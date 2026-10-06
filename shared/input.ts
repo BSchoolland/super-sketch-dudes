@@ -12,11 +12,10 @@ export const B = {
   ATTACK: 2,
   SPECIAL: 4,
   SHIELD: 8,
-  /** Keyboard: directions are on/off, so a key press is never a smash flick. */
+  /** Keyboard: directions are on/off, so a key press is never a smash flick; holding attack makes the smash instead. */
   DIGITAL: 16,
   TAUNT: 32,
   PAUSE: 64,
-  SMASH: 128, // keyboard smash key: an attack that is always a smash
   /** Online only: the relay decided this player away for the frame (their inputs stopped reaching it). Never a button. */
   AWAY: 256,
 } as const;

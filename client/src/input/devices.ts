@@ -1,57 +1,10 @@
 import { B, EMPTY_INPUT, type InputFrame } from "../../../shared/input";
+import { KB2, kb1Bindings } from "./bindings";
 
 export type DeviceId = "kb1" | "kb2" | `pad${number}`;
 
-export interface KeyBindings {
-  left: string[]; right: string[]; up: string[]; down: string[];
-  jump: string[]; attack: string[]; special: string[]; shield: string[]; smash: string[]; taunt: string[]; pause: string[];
-  /** Directional attacks: the keyboard's right stick (smashes on the ground, aerials in the air). */
-  cUp: string[]; cDown: string[]; cLeft: string[]; cRight: string[];
-}
-export type KeyAction = keyof KeyBindings;
-export const KB1_DEFAULT: Readonly<KeyBindings> = {
-  left: ["KeyA"], right: ["KeyD"], up: ["KeyW"], down: ["KeyS"],
-  jump: ["Space"], attack: ["Mouse0"], special: ["KeyE", "Mouse2"], shield: ["ShiftLeft"], smash: ["KeyR"], taunt: ["KeyT"], pause: ["Escape"],
-  cUp: [], cDown: [], cLeft: [], cRight: [],
-};
-const KB2: KeyBindings = {
-  left: ["ArrowLeft"], right: ["ArrowRight"], up: ["ArrowUp"], down: ["ArrowDown"],
-  jump: ["Numpad0"], attack: ["Numpad1"], special: ["Numpad2"], shield: ["Numpad3", "ShiftRight"], smash: ["Numpad6"], taunt: ["Numpad5"], pause: ["Escape"],
-  cUp: [], cDown: [], cLeft: [], cRight: [],
-};
-
-/** Keyboard player 1's bindings: the defaults with the player's overrides from settings on top. */
-let kb1: KeyBindings = withOverrides({});
-function withOverrides(overrides: Partial<KeyBindings>): KeyBindings {
-  const out = {} as KeyBindings;
-  for (const a of Object.keys(KB1_DEFAULT) as KeyAction[]) out[a] = [...(overrides[a] ?? KB1_DEFAULT[a])];
-  return out;
-}
-export function kb1Bindings(): Readonly<KeyBindings> { return kb1; }
-export function setKb1Overrides(overrides: Partial<KeyBindings>): void { kb1 = withOverrides(overrides); }
-
-/** A readable name for a KeyboardEvent.code or Mouse<button>. */
-export function keyName(code: string): string {
-  const named: Record<string, string> = {
-    Mouse0: "LEFT CLICK", Mouse1: "MIDDLE CLICK", Mouse2: "RIGHT CLICK", Space: "SPACE", Escape: "ESC", Enter: "ENTER", Tab: "TAB",
-    ArrowUp: "UP ARROW", ArrowDown: "DOWN ARROW", ArrowLeft: "LEFT ARROW", ArrowRight: "RIGHT ARROW", Backspace: "BACKSPACE", CapsLock: "CAPS",
-    ShiftLeft: "L SHIFT", ShiftRight: "R SHIFT", ControlLeft: "L CTRL", ControlRight: "R CTRL", AltLeft: "L ALT", AltRight: "R ALT",
-    MetaLeft: "L CMD", MetaRight: "R CMD", Semicolon: ";", Quote: "'", Comma: ",", Period: ".", Slash: "/", Backslash: "\\",
-    BracketLeft: "[", BracketRight: "]", Minus: "-", Equal: "=", Backquote: "`",
-  };
-  if (named[code]) return named[code];
-  const m = /^(?:Key|Digit)(.)$/.exec(code);
-  if (m) return m[1];
-  if (code.startsWith("Numpad")) return `NUM ${code.slice(6).toUpperCase()}`;
-  if (code.startsWith("Mouse")) return `MOUSE ${code.slice(5)}`;
-  return code.toUpperCase();
-}
-
 const keys = new Set<string>();
 const pressedThisFrame = new Set<string>();
-// input frame each key went down on: directional attack keys reach the sim as a short pulse, like a flicked right stick
-let inputFrame = 0;
-const pressedAt = new Map<string, number>();
 const typedThisFrame: string[] = [];
 let anyPress = false;
 window.addEventListener("keydown", (e) => {
@@ -60,7 +13,6 @@ window.addEventListener("keydown", (e) => {
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
   keys.add(e.code);
   pressedThisFrame.add(e.code);
-  pressedAt.set(e.code, inputFrame);
   if (/^[a-z0-9]$/i.test(e.key)) typedThisFrame.push(e.key.toUpperCase());
   if (e.key === "Backspace") typedThisFrame.push("\b");
   if (e.key === "Enter") typedThisFrame.push("\n");
@@ -70,7 +22,7 @@ window.addEventListener("keydown", (e) => {
 window.addEventListener("keyup", (e) => keys.delete(e.code));
 // mouse buttons are keys named Mouse<button>; menus and join prompts leave them alone (`mouse: false`)
 const isMouse = (code: string) => code.startsWith("Mouse");
-window.addEventListener("pointerdown", (e) => { if (e.pointerType !== "mouse") return; keys.add(`Mouse${e.button}`); pressedThisFrame.add(`Mouse${e.button}`); pressedAt.set(`Mouse${e.button}`, inputFrame); });
+window.addEventListener("pointerdown", (e) => { if (e.pointerType !== "mouse") return; keys.add(`Mouse${e.button}`); pressedThisFrame.add(`Mouse${e.button}`); });
 window.addEventListener("pointerup", (e) => { if (e.pointerType === "mouse") keys.delete(`Mouse${e.button}`); });
 window.addEventListener("pointercancel", (e) => { if (e.pointerType === "mouse") keys.delete(`Mouse${e.button}`); });
 window.addEventListener("contextmenu", (e) => { if (!(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) e.preventDefault(); });
@@ -97,23 +49,19 @@ const q = (v: number): number => Math.round(v * 100);
 /** Reads a device into a sim input frame. Call once per sim frame. */
 export function readDevice(dev: DeviceId, opts: { tapJump: boolean; mouse?: boolean } = { tapJump: true }): InputFrame {
   if (dev === "kb1" || dev === "kb2") {
-    const b = dev === "kb1" ? kb1 : KB2;
+    const b = dev === "kb1" ? kb1Bindings() : KB2;
     // a tap that started and ended between two frames still counts for one frame
     const down = (list: string[]) => list.some((k) => (opts.mouse !== false || !isMouse(k)) && (keys.has(k) || pressedThisFrame.has(k)));
-    const pulse = (list: string[]) => list.some((k) => (opts.mouse !== false || !isMouse(k)) && inputFrame - (pressedAt.get(k) ?? -10) <= 1 && (keys.has(k) || pressedThisFrame.has(k)));
     const x = (down(b.right) ? 100 : 0) - (down(b.left) ? 100 : 0);
     const y = (down(b.down) ? 100 : 0) - (down(b.up) ? 100 : 0);
-    const cx = (pulse(b.cRight) ? 100 : 0) - (pulse(b.cLeft) ? 100 : 0);
-    const cy = (pulse(b.cDown) ? 100 : 0) - (pulse(b.cUp) ? 100 : 0);
     let bits = B.DIGITAL;
     if (down(b.jump)) bits |= B.JUMP;
     if (down(b.attack)) bits |= B.ATTACK;
     if (down(b.special)) bits |= B.SPECIAL;
     if (down(b.shield)) bits |= B.SHIELD;
-    if (down(b.smash)) bits |= B.SMASH | B.ATTACK;
     if (down(b.taunt)) bits |= B.TAUNT;
     if (down(b.pause)) bits |= B.PAUSE;
-    return { x, y, cx, cy, b: bits };
+    return { x, y, cx: 0, cy: 0, b: bits };
   }
   const idx = Number(dev.slice(3));
   const s = padState(idx);
@@ -127,9 +75,9 @@ export function readDevice(dev: DeviceId, opts: { tapJump: boolean; mouse?: bool
   if (btn(0)) bits |= B.ATTACK;
   if (btn(1)) bits |= B.SPECIAL;
   if (btn(2) || btn(3)) bits |= B.JUMP;
-  if (btn(4) || btn(5) || btn(6)) bits |= B.SHIELD;
+  if (btn(4) || btn(5) || btn(6) || btn(7)) bits |= B.SHIELD;
+  if (btn(8)) bits |= B.TAUNT;
   if (btn(9)) bits |= B.PAUSE;
-  if (btn(13) && !btn(12)) bits |= B.TAUNT;
   // tap jump: a stick flick up counts as a jump press for 2 frames and holds while the stick stays up
   if (opts.tapJump) {
     if (ay < -0.7 && prev.ay >= -0.4) prev.jumpFlick = 2;
@@ -180,6 +128,11 @@ export function consumeTypedChars(): string[] {
   return typedThisFrame.splice(0);
 }
 
+/** Whether a key or mouse button (Mouse<button>) is down. */
+export function keyHeld(code: string): boolean {
+  return keys.has(code);
+}
+
 /** The first key or mouse button pressed this frame, for binding screens. */
 export function takeKeyPress(): string | null {
   const [first] = pressedThisFrame;
@@ -187,7 +140,6 @@ export function takeKeyPress(): string | null {
 }
 
 export function endInputFrame(): void {
-  inputFrame++;
   pressedThisFrame.clear();
   typedThisFrame.length = 0;
   anyPress = false;

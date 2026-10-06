@@ -14,17 +14,19 @@ stocks. Keyboard or controller, couch or online.
 | | Keyboard 1 | Keyboard 2 | Gamepad |
 |---|---|---|---|
 | Move | WASD | Arrows | Left stick / d-pad |
-| Jump | W / Space | Up / Numpad 0 | X, Y, or flick the stick up |
+| Jump | Space | Numpad 0 | X, Y, or flick the stick up |
 | Attack | Left click | Numpad 1 | A |
 | Special | E / right click | Numpad 2 | B |
-| Shield | Shift | Numpad 3 / Right Shift | LB, RB, LT |
-| Smash | hold R + direction + click, or flick + click | Numpad 6 + direction | Right stick |
-| Taunt | T | Numpad 5 | d-pad down |
+| Shield | Shift | Numpad 3 / Right Shift | LB, RB, LT, RT |
+| Smash | hold attack with a direction | hold attack with a direction | flick the stick with A, or the right stick |
+| Taunt | T | Numpad 5 | Back |
 | Pause | Esc | Esc | Start |
 
-Tilts: hold a direction, then attack. Smashes: flick a direction with attack, use the modifier, or
-the right stick. Shield + a direction rolls; shield + down spot-dodges; shield in the air is an air
-dodge; shield just before a hit lands parries.
+A direction with attack or special picks the move. On a keyboard, a tap of attack with a direction is
+the tilt and holding it is the smash, charging while held; on a gamepad, tilt the stick for a tilt and
+flick it (or use the right stick) for a smash. Shield + a direction rolls; shield + down spot-dodges;
+shield in the air is an air dodge; shield just before a hit lands parries. Keyboard 1's keys can be
+changed in Settings, Controls.
 
 ## Fighters
 

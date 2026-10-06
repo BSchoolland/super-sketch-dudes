@@ -2,7 +2,8 @@ import { DEFAULT_TIER } from "../../../shared/cpu-skill";
 import { drawPaper, paperCard, INK, FONT } from "../render/paper";
 export { INK, FONT } from "../render/paper";
 import { VIEW_H, VIEW_W } from "../render/camera";
-import { setKb1Overrides, type KeyBindings, type MenuInput } from "../input/devices";
+import type { MenuInput } from "../input/devices";
+import { kb1Bindings, kb1OverridesOf, setKb1Overrides, type KeyBindings } from "../input/bindings";
 import { noteControls } from "../telemetry/events";
 import { pointer } from "../input/pointer";
 
@@ -61,13 +62,19 @@ export function hint(ctx: CanvasRenderingContext2D, text: string): void {
 }
 
 export interface Settings {
-  volume: number; music: number; shake: number; tapJump: boolean; rumble: boolean; stocks: number; time: number; cpuTier: number;
+  volume: number; music: number;
+  /** Index into MAYHEM: how often a new fighter drops into the title screen fight. */
+  mayhem: number; tapJump: boolean; rumble: boolean; stocks: number; time: number; cpuTier: number;
   /** The draw pad's ADVANCED toggle: the colour wheel. */
   advanced: boolean;
   /** Keyboard player 1's rebound actions; everything else keeps its default key. */
   keys: Partial<KeyBindings>;
 }
-export const settings: Settings = { volume: 0.8, music: 0.5, shake: 1, tapJump: true, rumble: true, stocks: 3, time: 0, cpuTier: DEFAULT_TIER, advanced: false, keys: {} };
+/** MENU MAYHEM's steps: seconds between fighters dropping into the title screen fight. */
+export const MAYHEM: { name: string; seconds: number }[] = [
+  { name: "CALM", seconds: 20 }, { name: "LIVELY", seconds: 10 }, { name: "ROWDY", seconds: 6 }, { name: "MAYHEM", seconds: 3 },
+];
+export const settings: Settings = { volume: 0.8, music: 0.5, mayhem: 3, tapJump: true, rumble: true, stocks: 3, time: 0, cpuTier: DEFAULT_TIER, advanced: false, keys: {} };
 export function loadSettings(): void {
   try { Object.assign(settings, JSON.parse(localStorage.getItem("sketchbattle.settings") ?? "{}")); } catch { /* ignore */ }
   applyKeys();
@@ -78,6 +85,8 @@ export function saveSettings(): void {
 }
 function applyKeys(): void {
   setKb1Overrides(settings.keys);
+  // drops keys saved for actions that are gone
+  settings.keys = kb1OverridesOf(kb1Bindings());
   noteControls(settings.keys);
 }
 
