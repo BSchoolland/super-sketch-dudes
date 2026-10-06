@@ -9,7 +9,7 @@ import { FLAG_LABELS, type Flag, type Judgements } from "../shared/moderation";
 const START = 90, MAX = 100;
 /** Below this, one judge flagging is enough to block. */
 const TRUSTED = 75;
-const BOTH_PASS = 5, ONE_FLAG = -5, BOTH_FLAG = -25;
+const BOTH_PASS = 2, ONE_FLAG = -5, BOTH_FLAG = -25;
 
 let scores: Record<string, number> = {};
 let scoresFile = "", logFile = "";

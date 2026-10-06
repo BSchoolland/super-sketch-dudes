@@ -14,9 +14,10 @@ describe("auto moderator reputation", () => {
 
   it("starts everyone at 90, rewards two passes up to 100", () => {
     expect(reputationOf("a")).toBe(90);
-    expect(decide("a", "f1", judged("pass", "pass"))).toMatchObject({ blocked: false, before: 90, after: 95 });
-    decide("a", "f2", judged("pass", "pass"));
-    expect(decide("a", "f3", judged("pass", "pass"))).toMatchObject({ after: 100 });
+    expect(decide("a", "f1", judged("pass", "pass"))).toMatchObject({ blocked: false, before: 90, after: 92 });
+    for (let i = 0; i < 3; i++) decide("a", `f${i + 2}`, judged("pass", "pass"));
+    expect(decide("a", "f5", judged("pass", "pass"))).toMatchObject({ before: 98, after: 100 });
+    expect(decide("a", "f6", judged("pass", "pass"))).toMatchObject({ after: 100 });
   });
 
   it("lets one flag through at 75 or above for -5, blocks it below 75", () => {
