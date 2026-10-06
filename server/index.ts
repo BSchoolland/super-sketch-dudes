@@ -1,5 +1,7 @@
 import express from "express";
 import { attachSchool } from "./school";
+import { attachFeedback } from "./feedback";
+import { FEEDBACK_ADMIN } from "../shared/feedback";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -59,7 +61,9 @@ app.use("/gen", express.static(genDir, { maxAge: "1y", immutable: true }));
 
 attachEvents(api);
 attachBrawlStats(api, DATA_DIR);
-attachSchool(api, DATA_DIR);
+attachSchool(api);
+// on a DEV_LOGIN server, ?dev=ben reads and answers feedback
+attachFeedback(api, { dataDir: DATA_DIR, admins: [FEEDBACK_ADMIN, ...(process.env.DEV_LOGIN === "1" ? ["dev-ben"] : [])] });
 // the one-line log that builds from before wide events still post to
 const LOG = path.join(DATA_DIR, "client-log.jsonl");
 const LOG_MAX = 8 * 1024 * 1024;

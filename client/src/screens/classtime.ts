@@ -3,7 +3,9 @@ import { PENCIL } from "../render/paper";
 import type { MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
 import { sfx } from "../audio/audio";
-import { api } from "../account";
+import { api, signedIn } from "../account";
+import { feedbackApi } from "../feedback";
+import { FEEDBACK_MAX, type FeedbackItem } from "../../../shared/feedback";
 import { classTime } from "../classtime";
 import { bg, card, label, title, type Screen, INK } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
@@ -12,6 +14,7 @@ import { TextField } from "./textfield";
 import { wrapLines } from "./text";
 import { DrawPad } from "./pad";
 import { PadTools, padPng } from "./padtools";
+import { FeedbackListScreen } from "./feedbacklist";
 
 const NOTE_W = 1240, NOTE_X = (VIEW_W - NOTE_W) / 2, SIZE = 27, LINE = SIZE * 1.3, GAP = 18;
 
@@ -60,9 +63,11 @@ export class ClassScreen implements Screen {
 
 const BOX = { x: 160, y: 240, w: 1040, h: 460 };
 const THUMB = { x: 1260, y: 240, w: 460, h: 460 };
-const FEEDBACK_MAX = 2000;
 
-/** Anything a player wants to tell Ben about the game, with an optional sketch; it lands in feedback.jsonl on the server. */
+/**
+ * Anything a player wants to tell Ben about the game, with an optional sketch; it lands in feedback.jsonl on the server.
+ * A signed-in player with feedback on file gets PAST FEEDBACK; Ben gets his INBOX of everyone's.
+ */
 export class FeedbackScreen implements Screen {
   t = 0;
   private menu = new ButtonMenu();
@@ -71,21 +76,43 @@ export class FeedbackScreen implements Screen {
   private sending = false;
   private sent = false;
   private problem = "";
+  /** The PAST FEEDBACK or INBOX list, once fetched. */
+  private past: { items: FeedbackItem[]; admin: boolean } | null = null;
 
   constructor(private onBack: () => Screen) {
     this.field = new TextField({ maxLength: FEEDBACK_MAX, multiline: true, onSubmit: () => this.send(), onCancel: () => this.field.el.blur() });
+    if (signedIn()) void this.loadPast();
+  }
+
+  private async loadPast(): Promise<void> {
+    try {
+      const mine = await feedbackApi.mine();
+      this.past = mine.admin ? { items: (await feedbackApi.all()).items, admin: true } : { items: mine.items, admin: false };
+    } catch (e) {
+      console.error("past feedback failed", e);
+      this.problem = `past feedback failed: ${e instanceof Error ? e.message : String(e)}`;
+    }
   }
 
   enter(): void { this.field.el.style.display = this.sent ? "none" : ""; }
   abandon(): void { this.field.remove(); }
 
+  private pastButton(): Button[] {
+    const p = this.past;
+    if (!p?.items.length) return [];
+    const waiting = p.admin ? p.items.filter((i) => i.player && !i.response).length : p.items.filter((i) => i.response && !i.response.seenAt).length;
+    const text = p.admin ? `INBOX${waiting ? ` (${waiting})` : ""}` : `PAST FEEDBACK${waiting ? ` (${waiting} NEW)` : ""}`;
+    return [{ id: "past", x: VIEW_W - 560, y: 50, w: 520, h: 90, text, size: 32, disabled: this.sending }];
+  }
+
   private buttons(): Button[] {
     const y = BOX.y + BOX.h + 60;
-    if (this.sent) return [{ id: "back", x: VIEW_W / 2 - 220, y, w: 440, h: 100, text: "DONE", size: 34 }];
+    if (this.sent) return [{ id: "back", x: VIEW_W / 2 - 220, y, w: 440, h: 100, text: "DONE", size: 34 }, ...this.pastButton()];
     return [
       { id: "sketch", ...THUMB, text: "", custom: true, disabled: this.sending },
       { id: "send", x: VIEW_W / 2 - 460, y, w: 440, h: 100, text: this.sending ? "…" : "SEND", size: 34, disabled: this.sending || (!this.field.value.trim() && this.pad.blank) },
       { id: "back", x: VIEW_W / 2 + 20, y, w: 440, h: 100, text: "BACK", size: 34, disabled: this.sending },
+      ...this.pastButton(),
     ];
   }
 
@@ -95,6 +122,7 @@ export class FeedbackScreen implements Screen {
     const pressed = this.menu.update(this.buttons(), typing ? { ...m, confirm: false, left: false, right: false, up: false, down: false } : m, consumeTaps());
     if (pressed === "send") this.send();
     if (pressed === "sketch") { this.field.el.style.display = "none"; return new SketchScreen(this.pad, () => this); }
+    if (pressed === "past" && this.past) { this.field.el.style.display = "none"; return new FeedbackListScreen(this.past.items, this.past.admin, () => this); }
     if (pressed === "back" || (m.back && !typing && !this.sending)) { sfx.menuBack(); this.field.remove(); return this.onBack(); }
     return null;
   }
@@ -134,7 +162,7 @@ export class FeedbackScreen implements Screen {
     this.sending = true;
     this.problem = "";
     api<void>("/feedback", { method: "POST", body: JSON.stringify({ text, png }) }).then(
-      () => { this.sent = true; this.sending = false; this.field.el.style.display = "none"; this.menu.focus = 0; sfx.menuConfirm(); },
+      () => { this.sent = true; this.sending = false; this.field.el.style.display = "none"; this.menu.focus = 0; sfx.menuConfirm(); if (signedIn()) void this.loadPast(); },
       (e: unknown) => { console.error("feedback failed", e); this.problem = e instanceof Error ? e.message : String(e); this.sending = false; },
     );
   }

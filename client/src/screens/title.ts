@@ -10,6 +10,8 @@ import { drawAvatar } from "./images";
 import { MenuBrawl } from "./brawl";
 import { drawNewSticker } from "./sticker";
 import { UpdateCard } from "./updatecard";
+import { FeedbackResponseCard } from "./feedbackcard";
+import { unseenResponses } from "../feedback";
 import { MENU_CARD } from "../../../shared/stages/menu";
 
 const MENU_Y = MENU_CARD.y0, MENU_STEP = MENU_CARD.step;
@@ -71,10 +73,16 @@ export class TitleScreen implements Screen {
   brawl: MenuBrawl | null = null;
   /** What's new since this player last played, over the menu until they close it. */
   private whatsNew: UpdateCard | null = unseenReleases.length ? new UpdateCard(unseenReleases.splice(0)) : null;
+  /** Ben's responses to their feedback they haven't seen, after what's new. */
+  private responses: FeedbackResponseCard | null = null;
   constructor(private onPick: (m: Mode) => Screen) {}
   enter(): void {
     void refreshLibrary();
     void refreshMaps();
+    unseenResponses().then(
+      (items) => { if (items.length) this.responses = new FeedbackResponseCard(items); },
+      (error: unknown) => console.error("feedback responses failed", error),
+    );
     this.brawl = new MenuBrawl();
   }
   private pick(mode: Mode): Screen {
@@ -87,6 +95,10 @@ export class TitleScreen implements Screen {
       if (this.whatsNew.update(dt, m)) this.whatsNew = null;
       return null;
     }
+    if (this.responses) {
+      if (this.responses.update(dt, m)) this.responses = null;
+      return null;
+    }
     const n = this.items.length;
     if (m.up) { this.sel = this.sel === FEEDBACK ? n - 1 : this.sel === 0 ? FEEDBACK : this.sel - 1; sfx.menuMove(); }
     if (m.down) { this.sel = this.sel === FEEDBACK ? 0 : (this.sel + 1) % n; sfx.menuMove(); }
@@ -97,7 +109,7 @@ export class TitleScreen implements Screen {
     this.t += dt;
     bg(ctx, this.t);
     drawLogo(ctx, 170);
-    const live = !this.whatsNew;
+    const live = !this.whatsNew && !this.responses;
     const x = MENU_CARD.x, w = MENU_CARD.w, h = MENU_CARD.h;
     this.items.forEach((it, i) => {
       const y = MENU_Y + i * MENU_STEP;
@@ -117,6 +129,7 @@ export class TitleScreen implements Screen {
     label(ctx, desc, VIEW_W / 2, MENU_Y + this.items.length * MENU_STEP + 30, 26, INK, "center");
     hint(ctx, "click, or arrows + Enter · gamepad: stick + A");
     label(ctx, `build ${__BUILD__}`, VIEW_W - 20, VIEW_H - 16, 14, "rgba(41,39,34,0.5)", "right", 400);
-    this.whatsNew?.draw(ctx, dt);
+    if (this.whatsNew) this.whatsNew.draw(ctx, dt);
+    else this.responses?.draw(ctx);
   }
 }
