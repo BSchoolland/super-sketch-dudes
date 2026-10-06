@@ -7,7 +7,7 @@ export const feedbackApi = {
   /** The caller's own feedback, newest first, and whether they're the one who reads everyone's. */
   mine: () => api<{ items: FeedbackItem[]; admin: boolean }>("/feedback/mine"),
   all: () => api<{ items: FeedbackItem[] }>("/feedback/all"),
-  respond: (id: string, text: string) => api<{ item: FeedbackItem }>("/feedback/response", { method: "PUT", body: JSON.stringify({ id, text }) }),
+  respond: (id: string, text: string, png: string | undefined) => api<{ item: FeedbackItem }>("/feedback/response", { method: "PUT", body: JSON.stringify({ id, text, png }) }),
   seen: (ids: string[]) => api<void>("/feedback/seen", { method: "POST", body: JSON.stringify({ ids }) }),
 };
 
@@ -31,20 +31,46 @@ export function markSeen(item: FeedbackItem): void {
 
 type Sketch = { url: string } | { error: string } | "loading";
 const sketches = new Map<string, Sketch>();
+const fetches = new Map<string, Promise<string>>();
 
-/** A feedback sketch as an object URL: it's behind the session header, which an <img> can't send. */
+/** A feedback sketch's object URL: it's behind the session header, which an <img> can't send. */
+function sketchUrl(name: string): Promise<string> {
+  let f = fetches.get(name);
+  if (!f) {
+    f = fetch(`${site.base}api/feedback/sketch/${name}`, { headers: { [SESSION_HEADER]: account.session ?? "" } }).then(async (res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return URL.createObjectURL(await res.blob());
+    });
+    fetches.set(name, f);
+  }
+  return f;
+}
+
+/** A feedback sketch to draw this frame: loading, its object URL, or why it failed. */
 export function feedbackSketch(name: string): Sketch {
   const s = sketches.get(name);
   if (s) return s;
   sketches.set(name, "loading");
-  fetch(`${site.base}api/feedback/sketch/${name}`, { headers: { [SESSION_HEADER]: account.session ?? "" } })
-    .then(async (res) => {
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      sketches.set(name, { url: URL.createObjectURL(await res.blob()) });
-    })
-    .catch((error: unknown) => {
+  sketchUrl(name).then(
+    (url) => sketches.set(name, { url }),
+    (error: unknown) => {
       console.error(`feedback sketch ${name} failed`, error);
       sketches.set(name, { error: "sketch failed to load" });
-    });
+    },
+  );
   return "loading";
+}
+
+/** A feedback sketch as a loaded image, to draw on. */
+export async function feedbackSketchImage(name: string): Promise<HTMLImageElement> {
+  return loadImage(await sketchUrl(name));
+}
+
+export function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`image failed to load: ${src}`));
+    img.src = src;
+  });
 }

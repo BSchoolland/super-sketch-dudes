@@ -3,13 +3,16 @@ import { PENCIL } from "../render/paper";
 import type { MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
 import { sfx } from "../audio/audio";
-import { feedbackApi, markSeen } from "../feedback";
+import { feedbackApi, feedbackSketchImage, markSeen } from "../feedback";
 import { RESPONSE_MAX, type FeedbackItem } from "../../../shared/feedback";
 import { bg, card, label, title, type Screen, INK } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
 import { RED } from "./character";
 import { TextField } from "./textfield";
 import { drawExchange, drawSketch } from "./feedbackcard";
+import { DrawPad } from "./pad";
+import { padPng } from "./padtools";
+import { SketchScreen, SKETCH_PAD } from "./classtime";
 
 const day = (id: string): string => new Date(id).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
@@ -89,27 +92,54 @@ export class FeedbackListScreen implements Screen {
 const BODY = { x: 200, y: 170, w: VIEW_W - 400 };
 const TOP_H = 420, BOTTOM_H = 230, REPLY_H = 220;
 
-/** One feedback and its response; Ben writes or rewrites the response here. */
+/** One feedback and its response; Ben writes or rewrites the response here, with a drawing or attached image beside it. */
 export class FeedbackDetailScreen implements Screen {
   t = 0;
   private menu = new ButtonMenu();
   private field: TextField | null = null;
+  private pad: DrawPad | null = null;
+  /** The pad's revision when it last matched the sent response. */
+  private sentRevision = 0;
+  /** The sent response's image, still being laid on the pad. */
+  private loadingImage = false;
   private sending = false;
   private problem = "";
+  /** Where the reply box is, as last drawn: it sits under however tall the feedback is. */
+  private replyY = 0;
 
   constructor(private item: FeedbackItem, private admin: boolean, private onBack: () => Screen) {
-    if (admin && item.player) this.field = new TextField({ maxLength: RESPONSE_MAX, multiline: true, value: item.response?.text ?? "", onSubmit: () => this.send(), onCancel: () => this.field?.el.blur() });
+    if (admin && item.player) {
+      this.field = new TextField({ maxLength: RESPONSE_MAX, multiline: true, value: item.response?.text ?? "", onSubmit: () => this.send(), onCancel: () => this.field?.el.blur() });
+      this.pad = new DrawPad(SKETCH_PAD);
+      if (item.response?.sketch) this.loadImage(item.response.sketch);
+    }
     if (!admin) markSeen(item);
   }
 
+  private loadImage(name: string): void {
+    const pad = this.pad!;
+    this.loadingImage = true;
+    feedbackSketchImage(name).then(
+      (img) => { pad.startFrom(img); this.sentRevision = pad.revision; this.loadingImage = false; },
+      (e: unknown) => { console.error(`response image ${name} failed`, e); this.problem = `your image failed to load: ${e instanceof Error ? e.message : String(e)}`; },
+    );
+  }
+
+  enter(): void { if (this.field) this.field.el.style.display = ""; }
   abandon(): void { this.field?.remove(); }
+
+  private get thumb() {
+    return { x: BODY.x + BODY.w - REPLY_H, y: this.replyY, w: REPLY_H, h: REPLY_H };
+  }
 
   private buttons(): Button[] {
     const y = VIEW_H - 130;
     const b: Button[] = [{ ...BACK, disabled: this.sending }];
-    if (this.field) {
-      const unchanged = this.field.value.trim() === (this.item.response?.text ?? "");
-      b.push({ id: "send", x: VIEW_W - 480, y, w: 440, h: 90, text: this.sending ? "…" : this.item.response ? "UPDATE RESPONSE" : "SEND RESPONSE", size: 32, disabled: this.sending || !this.field.value.trim() || unchanged });
+    if (this.field && this.pad) {
+      const empty = !this.field.value.trim() && this.pad.blank;
+      const unchanged = this.field.value.trim() === (this.item.response?.text ?? "") && this.pad.revision === this.sentRevision;
+      b.push({ id: "send", x: VIEW_W - 480, y, w: 440, h: 90, text: this.sending ? "…" : this.item.response ? "UPDATE RESPONSE" : "SEND RESPONSE", size: 32, disabled: this.sending || this.loadingImage || empty || unchanged });
+      if (this.replyY) b.push({ id: "image", ...this.thumb, text: "", custom: true, disabled: this.sending || this.loadingImage });
     }
     return b;
   }
@@ -119,6 +149,7 @@ export class FeedbackDetailScreen implements Screen {
     const typing = !!this.field && document.activeElement === this.field.el;
     const pressed = this.menu.update(this.buttons(), typing ? { ...m, confirm: false, left: false, right: false, up: false, down: false } : m, consumeTaps());
     if (pressed === "send") this.send();
+    if (pressed === "image" && this.pad) { this.field!.el.style.display = "none"; return new SketchScreen(this.pad, () => this, { prompt: "draw your answer", attach: true }); }
     if (pressed === "back" || (m.back && !typing && !this.sending)) { sfx.menuBack(); this.field?.remove(); return this.onBack(); }
     return null;
   }
@@ -128,12 +159,20 @@ export class FeedbackDetailScreen implements Screen {
     const it = this.item;
     title(ctx, this.admin ? (it.player?.name ?? "Signed out") : "YOUR FEEDBACK", VIEW_W / 2, 100, 56);
     label(ctx, day(it.id), BODY.x + BODY.w, 100, 24, PENCIL, "right", 700);
-    const lineY = drawExchange(ctx, this.admin ? { ...it, response: null } : it, BODY.x, BODY.y, BODY.w, TOP_H, this.admin ? 0 : BOTTOM_H);
-    const reply = { x: BODY.x, y: lineY + 30, w: BODY.w, h: REPLY_H };
-    if (this.field) {
+    const [top, bottom] = !this.admin && it.response?.sketch ? [300, 380] : [TOP_H, this.admin ? 0 : BOTTOM_H];
+    const lineY = drawExchange(ctx, this.admin ? { ...it, response: null } : it, BODY.x, BODY.y, BODY.w, top, bottom);
+    this.replyY = lineY + 30;
+    const reply = { x: BODY.x, y: this.replyY, w: BODY.w - REPLY_H - 30, h: REPLY_H };
+    if (this.field && this.pad) {
       card(ctx, reply.x, reply.y, reply.w, reply.h, INK, document.activeElement === this.field.el);
       this.field.place(reply.x + 24, reply.y + 16, reply.w - 48, reply.h - 32, 30);
+      const t = this.thumb;
+      card(ctx, t.x, t.y, t.w, t.h, INK, this.menu.focused(this.buttons())?.id === "image");
+      if (this.loadingImage) label(ctx, "…", t.x + t.w / 2, t.y + t.h / 2 + 10, 30, PENCIL);
+      else if (this.pad.blank) label(ctx, "+ DRAW / IMAGE", t.x + t.w / 2, t.y + t.h / 2 + 10, 26, INK, "center", 900);
+      else this.pad.draw(ctx, t);
       label(ctx, `${this.field.value.length} / ${RESPONSE_MAX}`, reply.x + reply.w, reply.y + reply.h + 30, 20, PENCIL, "right", 600);
+      if (!this.loadingImage && !this.pad.blank) label(ctx, "click to change it", t.x + t.w, t.y + t.h + 30, 20, PENCIL, "right", 600);
       if (it.response) label(ctx, it.response.seenAt ? `${it.player!.name} saw this ${day(it.response.seenAt)}` : `Sent. ${it.player!.name} hasn't seen it yet.`, reply.x, reply.y + reply.h + 30, 22, PENCIL, "left", 600);
     } else if (this.admin) label(ctx, "Sent signed out: there's no account to respond to.", BODY.x, reply.y + 40, 28, PENCIL, "left", 600);
     this.menu.draw(ctx, this.buttons());
@@ -141,12 +180,21 @@ export class FeedbackDetailScreen implements Screen {
   }
 
   private send(): void {
-    const text = this.field?.value.trim();
-    if (!text || this.sending) return;
+    const pad = this.pad;
+    if (!this.field || !pad || this.sending || this.loadingImage) return;
+    const text = this.field.value.trim();
+    if (!text && pad.blank) return;
+    let png: string | undefined;
+    if (!pad.blank) {
+      const out = padPng(pad);
+      if ("problem" in out) { this.problem = out.problem; return; }
+      png = out.png;
+    }
+    const revision = pad.revision;
     this.sending = true;
     this.problem = "";
-    feedbackApi.respond(this.item.id, text).then(
-      ({ item }) => { Object.assign(this.item, item); this.sending = false; sfx.menuConfirm(); },
+    feedbackApi.respond(this.item.id, text, png).then(
+      ({ item }) => { Object.assign(this.item, item); this.sentRevision = revision; this.sending = false; sfx.menuConfirm(); },
       (e: unknown) => { console.error("feedback response failed", e); this.problem = e instanceof Error ? e.message : String(e); this.sending = false; },
     );
   }

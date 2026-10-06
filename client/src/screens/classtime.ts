@@ -4,7 +4,7 @@ import type { MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
 import { sfx } from "../audio/audio";
 import { api, signedIn } from "../account";
-import { feedbackApi } from "../feedback";
+import { feedbackApi, loadImage } from "../feedback";
 import { FEEDBACK_MAX, type FeedbackItem } from "../../../shared/feedback";
 import { classTime } from "../classtime";
 import { bg, card, label, title, type Screen, INK } from "./ui";
@@ -121,7 +121,7 @@ export class FeedbackScreen implements Screen {
     const typing = document.activeElement === this.field.el;
     const pressed = this.menu.update(this.buttons(), typing ? { ...m, confirm: false, left: false, right: false, up: false, down: false } : m, consumeTaps());
     if (pressed === "send") this.send();
-    if (pressed === "sketch") { this.field.el.style.display = "none"; return new SketchScreen(this.pad, () => this); }
+    if (pressed === "sketch") { this.field.el.style.display = "none"; return new SketchScreen(this.pad, () => this, { prompt: "sketch your idea" }); }
     if (pressed === "past" && this.past) { this.field.el.style.display = "none"; return new FeedbackListScreen(this.past.items, this.past.admin, () => this); }
     if (pressed === "back" || (m.back && !typing && !this.sending)) { sfx.menuBack(); this.field.remove(); return this.onBack(); }
     return null;
@@ -142,7 +142,7 @@ export class FeedbackScreen implements Screen {
       card(ctx, THUMB.x, THUMB.y, THUMB.w, THUMB.h, INK, this.menu.focused(buttons)?.id === "sketch");
       if (this.pad.blank) label(ctx, "+ ADD A SKETCH", THUMB.x + THUMB.w / 2, THUMB.y + THUMB.h / 2 + 12, 34, INK, "center", 900);
       else {
-        ctx.save(); ctx.translate(THUMB.x, THUMB.y); ctx.scale(THUMB.w / this.pad.rect.w, THUMB.h / this.pad.rect.h); ctx.translate(-this.pad.rect.x, -this.pad.rect.y); this.pad.draw(ctx); ctx.restore();
+        this.pad.draw(ctx, THUMB);
         label(ctx, "click to change it", THUMB.x + THUMB.w, THUMB.y + THUMB.h + 32, 20, PENCIL, "right", 600);
       }
     }
@@ -168,40 +168,81 @@ export class FeedbackScreen implements Screen {
   }
 }
 
-const SKETCH_PAD = { x: 510, y: 90, w: 900, h: 900 };
+export const SKETCH_PAD = { x: 510, y: 90, w: 900, h: 900 };
 const RIGHT = 1490, COL_W = 340;
 
-/** The character creator's pad and tools, for a feedback sketch. */
+interface SketchOptions {
+  prompt: string;
+  /** ATTACH IMAGE and Ctrl+V lay an image on the pad to draw over. */
+  attach?: boolean;
+}
+
+/** The character creator's pad and tools, for a feedback sketch or Ben's response. */
 export class SketchScreen implements Screen {
   t = 0;
   private tools: PadTools;
   private menu = new ButtonMenu();
-  constructor(pad: DrawPad, private onDone: () => Screen) {
+  private problem = "";
+  private readonly onPaste = (e: ClipboardEvent) => {
+    const file = Array.from(e.clipboardData?.files ?? []).find((f) => f.type.startsWith("image/"));
+    if (file) { e.preventDefault(); this.lay(file); }
+  };
+
+  constructor(pad: DrawPad, private onDone: () => Screen, private opts: SketchOptions) {
     this.tools = new PadTools(pad);
   }
 
-  enter(): void { this.tools.attach(); }
-  abandon(): void { this.tools.detach(); }
+  enter(): void {
+    this.tools.attach();
+    if (this.opts.attach) window.addEventListener("paste", this.onPaste);
+  }
+  abandon(): void { this.leave(); }
+
+  private leave(): void {
+    this.tools.detach();
+    window.removeEventListener("paste", this.onPaste);
+  }
 
   private buttons(): Button[] {
-    return [...this.tools.buttons(), { id: "done", x: RIGHT, y: 820, w: COL_W, h: 130, text: "DONE", size: 40 }];
+    const b = [...this.tools.buttons(), { id: "done", x: RIGHT, y: 820, w: COL_W, h: 130, text: "DONE", size: 40 }];
+    if (this.opts.attach) b.push({ id: "attach", x: RIGHT, y: 640, w: COL_W, h: 100, text: "ATTACH IMAGE", size: 32 });
+    return b;
   }
 
   update(dt: number, m: MenuInput): Screen | null {
     this.t += dt;
     const pressed = this.menu.update(this.buttons(), m, consumeTaps());
-    if (pressed === "done" || m.back) { sfx.menuConfirm(); this.tools.detach(); return this.onDone(); }
-    if (pressed) this.tools.press(pressed);
+    if (pressed === "done" || m.back) { sfx.menuConfirm(); this.leave(); return this.onDone(); }
+    if (pressed === "attach") this.pick();
+    else if (pressed) this.tools.press(pressed);
     return null;
+  }
+
+  private pick(): void {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = () => { if (input.files?.[0]) this.lay(input.files[0]); };
+    input.click();
+  }
+
+  private lay(file: File): void {
+    this.problem = "";
+    loadImage(URL.createObjectURL(file)).then(
+      (img) => this.tools.pad.startFrom(img),
+      (e: unknown) => { console.error("attaching an image failed", e); this.problem = `couldn't read ${file.name} as an image`; },
+    );
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
     bg(ctx, this.t);
     card(ctx, SKETCH_PAD.x - 6, SKETCH_PAD.y - 6, SKETCH_PAD.w + 12, SKETCH_PAD.h + 12, INK, false);
     this.tools.pad.draw(ctx);
-    label(ctx, "sketch your idea", RIGHT + COL_W / 2, 160, 36, INK, "center", 900);
+    label(ctx, this.opts.prompt, RIGHT + COL_W / 2, 160, 36, INK, "center", 900);
+    if (this.opts.attach) label(ctx, "or paste one", RIGHT + COL_W / 2, 776, 22, PENCIL, "center", 600);
     const buttons = this.buttons();
     this.tools.draw(ctx, buttons, this.menu.focused(buttons)?.id);
     this.menu.draw(ctx, buttons);
+    if (this.problem) label(ctx, this.problem, VIEW_W / 2, VIEW_H - 40, 28, RED);
   }
 }

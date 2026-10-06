@@ -19,6 +19,8 @@ export interface FeedbackItem {
 
 export interface FeedbackResponse {
   text: string;
+  /** File name of Ben's drawing or attached image, fetched like a feedback sketch. */
+  sketch: string | null;
   at: string;
   /** When the player saw it, in the popup or their past feedback. */
   seenAt: string | null;

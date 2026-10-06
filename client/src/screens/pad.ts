@@ -117,6 +117,8 @@ export class DrawPad {
   locked = false;
   /** When (performance.now) a fill was last refused for reaching the edge. */
   leakedAt = -Infinity;
+  /** Goes up with every mark added or undone. */
+  revision = 0;
   private marks: Mark[] = [];
   private current: { id: number; stroke: Stroke } | null = null;
   private committed: HTMLCanvasElement;
@@ -154,19 +156,22 @@ export class DrawPad {
   undo(): void {
     if (this.locked || !this.marks.length) return;
     this.marks.pop();
+    this.revision++;
     this.replay();
   }
 
   clear(): void {
     if (this.locked || this.blank) return;
     this.marks.push("clear");
+    this.revision++;
     this.replay();
   }
 
-  /** Starts from a finished picture (a copied character's drawing); it undoes and clears like any mark. */
+  /** Lays down a whole picture (a copied character's drawing, an attached image); it undoes and clears like any mark. */
   startFrom(img: HTMLImageElement): void {
     this.finishStroke();
     this.marks.push({ kind: "picture", img });
+    this.revision++;
     paint(this.cg, { kind: "picture", img });
     this.liveDirty = true;
   }
@@ -176,13 +181,13 @@ export class DrawPad {
     return this.committed.toDataURL("image/png");
   }
 
-  draw(ctx: CanvasRenderingContext2D): void {
+  draw(ctx: CanvasRenderingContext2D, at = this.rect): void {
     if (this.liveDirty) {
       this.lg.drawImage(this.committed, 0, 0);
       if (this.current) paint(this.lg, this.current.stroke);
       this.liveDirty = false;
     }
-    const { x, y, w, h } = this.rect;
+    const { x, y, w, h } = at;
     ctx.drawImage(this.live, x, y, w, h);
   }
 
@@ -212,6 +217,7 @@ export class DrawPad {
     // a tap that ended where it started is a dot
     if (stroke.points.length === 4 && stroke.points[0] === stroke.points[2] && stroke.points[1] === stroke.points[3]) stroke.points.length = 2;
     this.marks.push(stroke);
+    this.revision++;
     paint(this.cg, stroke);
     this.liveDirty = true;
   }
@@ -220,6 +226,7 @@ export class DrawPad {
     const fill = floodFill(this.cg, x, y, this.tool.color);
     if (!fill) { this.leakedAt = performance.now(); return; }
     this.marks.push(fill);
+    this.revision++;
     paint(this.cg, fill);
     this.liveDirty = true;
   }

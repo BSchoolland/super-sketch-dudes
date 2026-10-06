@@ -38,15 +38,17 @@ export function drawSketch(ctx: CanvasRenderingContext2D, name: string, x: numbe
   else drawImageIn(ctx, s.url, x, y, size);
 }
 
-interface Exchange { text: Fit | null; sketch: number; line: number; response: Fit | null; height: number }
+interface Exchange { text: Fit | null; sketch: number; line: number; response: Fit | null; responseSketch: number; height: number }
 
-/** What the player wrote (up to `top` tall) beside their sketch, the line under it, and Ben's response in up to `bottom` (0: none). */
+/** What the player wrote (up to `top` tall) beside their sketch, the line under it, and Ben's response beside his image in up to `bottom` (0: none). */
 function layout(ctx: CanvasRenderingContext2D, item: FeedbackItem, w: number, top: number, bottom: number): Exchange {
   const sketch = item.sketch ? Math.min(top, 360) : 0;
   const text = item.text ? fitLines(ctx, item.text, sketch ? w - sketch - 40 : w, top, 30, 18) : null;
   const line = Math.max(text ? fitHeight(text) : 0, sketch) + 30;
-  const response = bottom && item.response ? fitLines(ctx, item.response.text, w, bottom - BY, 30, 18) : null;
-  return { text, sketch, line, response, height: line + (!bottom ? 0 : response ? 30 + BY + fitHeight(response) : 90) };
+  const r = bottom ? item.response : null;
+  const responseSketch = r?.sketch ? bottom - BY : 0;
+  const response = r?.text ? fitLines(ctx, r.text, responseSketch ? w - responseSketch - 40 : w, bottom - BY, 30, 18) : null;
+  return { text, sketch, line, response, responseSketch, height: line + (!bottom ? 0 : r ? 30 + BY + Math.max(response ? fitHeight(response) : 0, responseSketch) : 90) };
 }
 
 /** Draws `layout`'s exchange at x, y; returns where the line is. */
@@ -55,7 +57,7 @@ export function drawExchange(ctx: CanvasRenderingContext2D, item: FeedbackItem, 
   if (item.sketch) drawSketch(ctx, item.sketch, x + w - at.sketch, y + 6, at.sketch - 12);
   const lineY = y + at.line;
   inkLine(ctx, x, lineY, x + w, lineY + 4, INK, 3);
-  if (at.response) {
+  if (bottom && item.response) {
     // the font has one weight: bold is a stroke over the fill
     ctx.save();
     ctx.font = `700 32px ${FONT}`;
@@ -63,7 +65,8 @@ export function drawExchange(ctx: CanvasRenderingContext2D, item: FeedbackItem, 
     ctx.strokeText("Developer (Ben):", x, lineY + 30 + 32);
     ctx.fillText("Developer (Ben):", x, lineY + 30 + 32);
     ctx.restore();
-    drawFit(ctx, at.response, x, lineY + 30 + BY);
+    if (at.response) drawFit(ctx, at.response, x, lineY + 30 + BY);
+    if (item.response?.sketch) drawSketch(ctx, item.response.sketch, x + w - at.responseSketch, lineY + 30 + 6, at.responseSketch - 12);
   }
   else if (bottom) label(ctx, "No response yet.", x, lineY + 70, 28, PENCIL, "left", 600);
   return lineY;
@@ -91,7 +94,8 @@ export class FeedbackResponseCard {
   draw(ctx: CanvasRenderingContext2D): void {
     const item = this.items[0];
     if (!item) return;
-    const at = layout(ctx, item, W - 2 * PAD, 330, 270);
+    const [top, bottom] = item.response?.sketch ? [260, 400] : [330, 270];
+    const at = layout(ctx, item, W - 2 * PAD, top, bottom);
     const h = HEAD + at.height + FOOT, y = (VIEW_H - h) / 2;
     ctx.fillStyle = "rgba(41,39,34,0.45)";
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
@@ -99,7 +103,7 @@ export class FeedbackResponseCard {
     ctx.fillStyle = PAPER; ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.stroke();
     title(ctx, "Feedback response", VIEW_W / 2, y + 95, 64);
-    drawExchange(ctx, item, X + PAD, y + HEAD, W - 2 * PAD, 330, 270, at);
+    drawExchange(ctx, item, X + PAD, y + HEAD, W - 2 * PAD, top, bottom, at);
     const ok = this.ok;
     ok.y = y + h - OK_H - 40;
     if (hover(ok.x, ok.y, ok.w, ok.h)) document.body.style.cursor = "pointer";

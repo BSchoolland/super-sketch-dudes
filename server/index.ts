@@ -29,7 +29,7 @@ watchProcess({ port: PORT, base: BASE, node: process.version });
 
 const app = express();
 // forge completions carry nine PNG cells + a sheet as base64; a new character carries its drawing
-app.use((req, res, next) => express.json({ limit: req.path.includes("/forge/") || req.path.endsWith("/characters/import") || req.path.endsWith("/cells") ? "12mb" : req.path.endsWith("/cpu") ? "4mb" : req.path.includes("/games") ? "40mb" : req.path.endsWith("/events") ? "256kb" : req.path.endsWith("/source") ? "4mb" : req.path.endsWith("/characters") || req.path.endsWith("/feedback") ? "2mb" : req.path.includes("/maps") ? "80kb" : "8kb" })(req, res, next));
+app.use((req, res, next) => express.json({ limit: req.path.includes("/forge/") || req.path.endsWith("/characters/import") || req.path.endsWith("/cells") ? "12mb" : req.path.endsWith("/cpu") ? "4mb" : req.path.includes("/games") ? "40mb" : req.path.endsWith("/events") ? "256kb" : req.path.endsWith("/source") ? "4mb" : req.path.endsWith("/characters") || req.path.endsWith("/feedback") || req.path.endsWith("/feedback/response") ? "2mb" : req.path.includes("/maps") ? "80kb" : "8kb" })(req, res, next));
 const api = express.Router();
 // Apache proxies /sketch-battle/* to / here; when hit directly the prefix is still present, so mount both.
 app.use("/api", api);

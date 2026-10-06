@@ -76,6 +76,22 @@ describe("feedback responses", () => {
     expect((await call(`/feedback/sketch/${name}`, null)).status).toBe(403);
   });
 
+  it("responds with an image, served to the feedback's sender and the admin, and replaced with the response", async () => {
+    const id = "2026-10-01T10:00:00.000Z";
+    const respond = (body: object) => call("/feedback/response", ben, { method: "PUT", body: JSON.stringify({ id, ...body }) });
+    expect((await respond({ text: "", png: "data:image/png;base64,AAAA" })).status).toBe(400);
+    const { item } = await (await respond({ text: "", png: PNG })).json() as { item: FeedbackItem };
+    const name = item.response!.sketch!;
+    expect(name).toMatch(/^[0-9a-f]{12}\.png$/);
+    expect((await call(`/feedback/sketch/${name}`, ann)).status).toBe(200);
+    expect((await call(`/feedback/sketch/${name}`, ben)).status).toBe(200);
+    expect((await call(`/feedback/sketch/${name}`, bob)).status).toBe(403);
+    const after = await (await respond({ text: "text only now" })).json() as { item: FeedbackItem };
+    expect(after.item.response).toMatchObject({ text: "text only now", sketch: null });
+    expect(fs.existsSync(path.join(dataDir, "feedback", name))).toBe(false);
+    expect((await call(`/feedback/sketch/${name}`, ann)).status).toBe(404);
+  });
+
   it("keeps feedback.jsonl's lines as they were and responses beside it", () => {
     const lines = fs.readFileSync(path.join(dataDir, "feedback.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
     expect(Object.keys(lines[1]).sort()).toEqual(["at", "player", "sketch", "text"]);
