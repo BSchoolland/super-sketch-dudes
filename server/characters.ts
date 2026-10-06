@@ -6,7 +6,7 @@ import { playerOf } from "./auth";
 import type { WideEvent } from "../shared/wide";
 import type { LibraryEntry } from "../shared/account";
 import { drawingUrlOf, enqueueJob, entryOf, jobOf, newFighterId, reviseCharacter, storeCharacter } from "./forge";
-import { communityCharacters, dummyEntry, everyCharacter, findCharacter, libraryOf, removeCharacter, saveCharacter, savedOf, setDummy, setPublic, setStarters, starterEntries, starterIds, unsaveCharacter, upsertCharacter } from "./library";
+import { communityCharacters, dummyEntry, everyCharacter, findCharacter, libraryOf, removeCharacter, saveCharacter, savedOf, setDummy, setPublic, setStarters, starterEntries, starterIds, takeDown, unsaveCharacter, upsertCharacter } from "./library";
 import { HOUSE_ROSTER } from "../shared/house";
 
 /** The character creator and the library, over HTTP, for signed-in players. */
@@ -97,6 +97,14 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
     if (!player) return res.status(401).json({ error: "not signed in" });
     if (starterIds().includes(req.params.id)) return res.status(403).json({ error: "that one is everyone's" });
     if (!removeCharacter(player.id, req.params.id)) return res.status(404).json({ error: "not in your library" });
+    res.status(204).end();
+  });
+
+  // a moderator taking a character down, from its owner and everyone who saved it
+  api.post("/characters/:id/take-down", (req, res) => {
+    if (!forgeToken || req.get("x-forge-token") !== forgeToken) return res.status(401).json({ error: "bad token" });
+    if (starterIds().includes(req.params.id)) return res.status(403).json({ error: "that one is everyone's" });
+    if (!takeDown(req.params.id)) return res.status(404).json({ error: "no such character" });
     res.status(204).end();
   });
 

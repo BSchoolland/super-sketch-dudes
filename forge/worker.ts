@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { loadForgeEnv } from "./env";
 import { runForge, ForgeError, type JobSpec } from "./forge";
 import { moderate, ModerationUnavailable } from "./moderate";
-import { alertFlagged, alertUnavailable, checkAlertConfig, type Submission } from "./mod-alerts";
+import { alertFlagged, alertUnavailable, checkAlertConfig, queueReview, type Submission } from "./mod-alerts";
 
 loadForgeEnv();
 const SITE = (process.env.SITE ?? "").replace(/\/$/, "");
@@ -48,12 +48,14 @@ async function handle(job: Claimed): Promise<void> {
     if (!res.ok) throw new Error(`drawing download: HTTP ${res.status}`);
     const drawing = path.join(dir, "drawing.png");
     fs.writeFileSync(drawing, Buffer.from(await res.arrayBuffer()));
-    if (!job.moderated && await blockedByModerator(job, drawing, dir)) return;
+    const verdict = job.moderated ? "judged" : await moderated(job, drawing, dir);
+    if (verdict === "blocked") return;
     const payload = await runForge(job, drawing, dir, {
       progress: async (stage) => { await post(`/jobs/${job.id}/progress`, { stage }); },
       log: (line) => log(tag, line),
     });
     await post(`/jobs/${job.id}/complete`, payload);
+    if (verdict === "unjudged") await queueReview(submissionOf(job, drawing)).catch((e) => log(tag, `REVIEW QUEUE FAILED: ${e instanceof Error ? e.message : String(e)}`));
     log(tag, `DONE ${payload.name} in ${((Date.now() - t0) / 1000).toFixed(0)}s, agent $${payload.report.costUsd.toFixed(2)}`);
   } catch (e) {
     const msg = e instanceof ForgeError ? e.message : `something broke: ${e instanceof Error ? e.message : String(e)}`;
@@ -65,10 +67,12 @@ async function handle(job: Claimed): Promise<void> {
   }
 }
 
-/** Runs the judges; true if the character must not be forged. Judges that can't run let it through, loudly. */
-async function blockedByModerator(job: Claimed, drawing: string, dir: string): Promise<boolean> {
+const submissionOf = (job: Claimed, drawing: string): Submission => ({ jobId: job.id, fighterId: job.fighterId, playerName: job.playerName, name: job.hint?.name ?? "", drawing });
+
+/** Runs the judges. Judges that can't run let the character through, loudly ("unjudged"). */
+async function moderated(job: Claimed, drawing: string, dir: string): Promise<"judged" | "blocked" | "unjudged"> {
   const tag = job.fighterId;
-  const s: Submission = { jobId: job.id, fighterId: job.fighterId, playerName: job.playerName, name: job.hint?.name ?? "", drawing };
+  const s = submissionOf(job, drawing);
   const alert = (what: string, p: Promise<void>) => p.catch((e) => log(tag, `ALERT FAILED (${what}): ${e instanceof Error ? e.message : String(e)}`));
   await post(`/jobs/${job.id}/progress`, { stage: "auto moderator" });
   let judgements;
@@ -76,12 +80,12 @@ async function blockedByModerator(job: Claimed, drawing: string, dir: string): P
     if (!(e instanceof ModerationUnavailable)) throw e;
     log(tag, `MODERATION UNAVAILABLE, forging unjudged: ${e.message}`);
     await alert("unavailable", alertUnavailable(s, e.message));
-    return false;
+    return "unjudged";
   }
   const d = (await (await post(`/jobs/${job.id}/moderation`, judgements)).json()) as { blocked: boolean; before: number; after: number };
   log(tag, `moderation: harsh ${judgements.harsh.verdict}, lenient ${judgements.lenient.verdict}, reputation ${d.before} -> ${d.after}${d.blocked ? ": BLOCKED" : ""}`);
   if (judgements.harsh.verdict !== "pass" || judgements.lenient.verdict !== "pass") await alert("flagged", alertFlagged(s, judgements, d));
-  return d.blocked;
+  return d.blocked ? "blocked" : "judged";
 }
 
 let running = 0;

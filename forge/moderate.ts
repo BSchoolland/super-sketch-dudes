@@ -1,4 +1,4 @@
-// The auto moderator: two gpt judges, one harsh and one lenient, look at a drawing and its name before the forge does.
+// The auto moderator: two judges, one harsh and one lenient, look at a drawing and its name before the forge does.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -9,11 +9,11 @@ import { isJudgement, type Judgement, type Judgements } from "../shared/moderati
 /** The judges couldn't run (the codex pool is out or logged out); the character goes to the forge unjudged. */
 export class ModerationUnavailable extends Error {}
 
-const MODEL = process.env.MODERATION_MODEL ?? "gpt-6.1-sol";
+const MODEL = process.env.MODERATION_MODEL ?? "claude-sonnet-5-5";
 // gpt-* models only answer through claude-router
-const BIN = process.env.MODERATION_BIN ?? path.join(os.homedir(), "Projects/claude-router/bin/ccr");
+const BIN = process.env.MODERATION_BIN ?? (MODEL.startsWith("gpt-") ? path.join(os.homedir(), "Projects/claude-router/bin/ccr") : "claude");
 const TIMEOUT_MS = 5 * 60_000;
-/** The codex leg refuses connections past roughly 7 at once (403 on the websocket upgrade), and Ben's own sessions share it. */
+/** The codex leg (gpt-* judges) refuses connections past roughly 7 at once (403 on the websocket upgrade). */
 const MAX_JUDGES = Number(process.env.MODERATION_CONCURRENCY ?? 4);
 const REFUSED = "403 WebSocket upgrade was rejected", RETRIES = 2, RETRY_MS = 15_000;
 const VERDICT_SCRIPT = path.join(path.dirname(fileURLToPath(import.meta.url)), "tools", "moderation-verdict");

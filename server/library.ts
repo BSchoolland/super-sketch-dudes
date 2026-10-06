@@ -223,6 +223,16 @@ export function removeCharacter(owner: string, id: string): boolean {
   return true;
 }
 
+/** A moderator pulling a character: gone from its owner's library and from everyone who saved it. False if there's no such character. */
+export function takeDown(id: string): boolean {
+  const e = findCharacter(id);
+  if (!e) return false;
+  for (const [owner, lib] of cache) if (lib.saved.some((s) => s.id === id)) { lib.saved = lib.saved.filter((s) => s.id !== id); write(owner); }
+  saves.delete(id);
+  purge(e.owner, id);
+  return true;
+}
+
 function purge(owner: string, id: string): void {
   const lib = load(owner);
   lib.characters = lib.characters.filter((c) => c.id !== id);

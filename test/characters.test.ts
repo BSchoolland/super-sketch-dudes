@@ -124,6 +124,25 @@ describe("the auto moderator", () => {
   });
 });
 
+describe("taking a character down", () => {
+  it("removes it from its owner and from everyone who saved it, with the forge token only", async () => {
+    const owner = await (await api("/auth/dev", { method: "POST", body: JSON.stringify({ name: "Tad" }) })).json();
+    const fan = await (await api("/auth/dev", { method: "POST", body: JSON.stringify({ name: "Fan" }) })).json();
+    const created = (await (await api("/characters", { method: "POST", headers: { "x-session": owner.session }, body: JSON.stringify({ png: `data:image/png;base64,${png1x1}` }) })).json()).character;
+    const job = await (await api("/forge/jobs/next")).json();
+    const cells = Object.fromEntries(SPRITE_CELLS.map((c) => [c, png1x1]));
+    expect((await api(`/forge/jobs/${job.id}/complete`, { method: "POST", body: JSON.stringify({ name: "TAD", tagline: "t", description: "d", source, cpu: STUDY, sprite: { px: 512, feetPx: 448, heightPx: 360, anims: {} }, cells }) })).status).toBe(204);
+    expect((await api(`/library/saved/${created.id}`, { method: "POST", headers: { "x-session": fan.session } })).status).toBe(200);
+    const ids = async (s: string) => (await (await api("/library", { headers: { "x-session": s } })).json()).characters.map((c: { id: string }) => c.id);
+    expect(await ids(fan.session)).toContain(created.id);
+    expect((await api(`/characters/${created.id}/take-down`, { method: "POST", headers: { "x-forge-token": "nope" } })).status).toBe(401);
+    expect((await api(`/characters/${created.id}/take-down`, { method: "POST" })).status).toBe(204);
+    expect(await ids(owner.session)).not.toContain(created.id);
+    expect(await ids(fan.session)).not.toContain(created.id);
+    expect((await api(`/characters/${created.id}/take-down`, { method: "POST" })).status).toBe(404);
+  });
+});
+
 describe("the forge queue survives a restart", () => {
   it("keeps a running job running across a restart, so the worker still on it can finish it", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sb-forge-"));
