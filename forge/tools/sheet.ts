@@ -27,6 +27,12 @@ const run = (script: string, ...a: string[]) => {
   const r = spawnSync("python3", [new URL(`../img/${script}`, import.meta.url).pathname, ...a], { encoding: "utf8" });
   if (r.status !== 0) { console.error(r.stderr || r.stdout); process.exit(1); }
 };
+// an earlier sheet is kept beside the new one (never uploaded) so the run shows what was rejected
+if ((fromDrawing || note) && fs.existsSync(sheet)) {
+  let n = 1;
+  while (fs.existsSync(path.join(out, `rejected-sheet-${n}.png`))) n++;
+  fs.renameSync(sheet, path.join(out, `rejected-sheet-${n}.png`));
+}
 if (fromDrawing) {
   run("tile.py", path.resolve(drawing), sheet);
   console.log(`sheet built from the drawing itself -> ${sheet}`);
