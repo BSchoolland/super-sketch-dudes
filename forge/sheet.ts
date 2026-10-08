@@ -32,10 +32,11 @@ export function sheetPrompt(): string {
   return p;
 }
 
-export async function drawSheet(drawingPath: string, outPath: string): Promise<SheetResult> {
+/** `note`: what the forge agent saw go wrong in an earlier sheet of this drawing, passed on to the image model. */
+export async function drawSheet(drawingPath: string, outPath: string, note = ""): Promise<SheetResult> {
   if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not set (forge/.env)");
   const client = new OpenAI({ timeout: 5 * 60_000, maxRetries: 1 });
-  const prompt = sheetPrompt();
+  const prompt = note ? `${sheetPrompt()}\n\nAbout this particular drawing: ${note}` : sheetPrompt();
   fs.writeFileSync(path.join(path.dirname(outPath), "sheet-prompt.txt"), prompt);
   const t0 = Date.now();
   const res = await client.images.edit({

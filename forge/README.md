@@ -12,6 +12,7 @@ forge/
   tools/           what the agent runs: sheet.ts, check.ts, preview.ts, deploy.ts
   sheet.ts         gpt-image-2.5-sunburst images.edit from the drawing, SHEET-PROMPT.md with the nine cell poses
   img/normalize.py sheet -> nine keyed, scaled, aligned cells + cells.json content boxes
+  img/tile.py      the drawing itself as a sheet (sheet.ts --from-drawing)
   checks.ts        headless gate: lint/build/validate, determinism resim, ladder vs the house roster, recovery, KO
   exemplar/        the example fighters (SWORD GUY, FIRE WIZARD) the agent reads before writing its own
 ```
@@ -24,6 +25,8 @@ forge/
    `forge/work/<fighterId>/`.
 3. **Agent** gets PROMPT.md and does everything with `forge/tools`:
    - `sheet.ts <drawing> <cells>` draws the 3x3 sheet and cuts it into cells (`--mirror` flips a left-facing one)
+   - reviews every cell against the drawing; a bad one is dropped (`drop-cell.ts`, which also keeps the sheet
+     from uploading), or the sheet is redrawn with `--note "…"` or built from the drawing with `--from-drawing`
    - reads the exemplar and its cells, writes `<fighterId>.fighter.js`
    - `check.ts` runs the gate; `preview.ts` renders contact sheets of every move with the real renderer
    - `deploy.ts --name --tagline` re-runs the gate and writes `payload.json`, the only thing that leaves the worktree
