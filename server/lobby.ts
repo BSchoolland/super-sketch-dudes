@@ -500,13 +500,13 @@ export function attachLobby(wss: WebSocketServer): void {
           room.picking = null;
           room.seed = (Math.random() * 0xffffffff) >>> 0;
           const members = room.members;
-          const auto = requested.inputDelay === "auto" ? autoInputDelay(members.map((m) => m.rtt ?? 0), (i, j) => peerRoundTrip(members[i], members[j])) : null;
-          if (auto) requested.inputDelay = auto.delay;
-          const unmeasured = auto ? room.members.filter((m) => m.rtt === null).map((m) => m.name) : [];
+          const auto = autoInputDelay(members.map((m) => m.rtt ?? 0), (i, j) => peerRoundTrip(members[i], members[j]));
+          requested.inputDelay = auto.delay;
+          const unmeasured = room.members.filter((m) => m.rtt === null).map((m) => m.name);
           room.config = { ...requested, players: room.members.map((m) => ({ fighter: m.fighter, bundleUrl: m.bundleUrl })) };
           startRelayMatch(room, room.seed, room.config, room.members);
           recordPlays(room.members.map((m) => m.fighter));
-          room.match?.event.set("inputDelay", auto ?? { delay: requested.inputDelay, chosen: "host" });
+          room.match?.event.set("inputDelay", auto);
           if (unmeasured.length) room.match?.event.issue("error", "rtt", `auto input delay without a round trip for ${unmeasured.join(", ")}`);
           broadcast(room, { t: "start", seed: room.seed, config: room.config, members: room.members.map((m) => ({ id: m.id, name: m.name, slot: m.slot })) });
           break;

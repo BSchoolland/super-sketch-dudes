@@ -128,7 +128,7 @@ describe("relay link resume", () => {
     a.send({ t: "pick", fighter: "slugbert", bundleUrl: "/house/slugbert/bundle.json", ready: true });
     b.send({ t: "pick", fighter: "woodstove", bundleUrl: "/house/woodstove/bundle.json", ready: true });
     await a.expect("room", (m) => m.members.every((x: any) => x.ready));
-    a.send({ t: "start", config: { stage: "proving", rules: { stocks: 3, time: 0 }, inputDelay: 2 } });
+    a.send({ t: "start", config: { stage: "proving", rules: { stocks: 3, time: 0 } } });
     await b.expect("start");
     a.send({ t: "loaded", fills: true }); b.send({ t: "loaded", fills: true });
     await a.expect("go"); await b.expect("go");
@@ -190,7 +190,7 @@ describe("relay events", () => {
     a.send({ t: "pick", fighter: "rocket", bundleUrl: "/house/rocket/bundle.json", ready: true });
     b.send({ t: "pick", fighter: "wizard", bundleUrl: "/house/wizard/bundle.json", ready: true });
     await a.expect("room", (m) => m.members.every((x: any) => x.ready));
-    a.send({ t: "start", config: { stage: "proving", rules: { stocks: 3, time: 0 }, inputDelay: 2 } });
+    a.send({ t: "start", config: { stage: "proving", rules: { stocks: 3, time: 0 } } });
     const start = await b.expect("start");
     expect([playCount("rocket"), playCount("wizard")]).toEqual([1, 1]);
     expect(JSON.parse(fs.readFileSync(path.join(dataDir, "plays.json"), "utf8"))).toMatchObject({ rocket: 1, wizard: 1 });
@@ -226,7 +226,7 @@ describe("relay events", () => {
     a.send({ t: "pick", fighter: "rocket", bundleUrl: "/house/rocket/bundle.json", ready: true });
     b.send({ t: "pick", fighter: "wizard", bundleUrl: "/house/wizard/bundle.json", ready: true });
     await a.expect("room", (m) => m.members.every((x: any) => x.ready));
-    a.send({ t: "start", config: { stage: "proving", rules: { stocks: 3, time: 0 }, inputDelay: 2 } });
+    a.send({ t: "start", config: { stage: "proving", rules: { stocks: 3, time: 0 } } });
     const start = await b.expect("start");
     for (let f = 1; f <= 5; f++) { a.send({ t: "inputs", frame: f, inputs: [], ahead: [0, 2.5] }); b.send({ t: "inputs", frame: f, inputs: [] }); }
     // the sender's frame lead rides along for time sync; a client that doesn't send one relays none

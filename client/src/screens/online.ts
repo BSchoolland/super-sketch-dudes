@@ -17,14 +17,7 @@ import { NetVersusScreen, startConfig } from "./netversus";
 import { MatchTelemetry } from "../telemetry/match";
 import { swap, type Handoff } from "../handoff";
 import { MESH_VERSION, PeerMesh } from "../net/mesh";
-import { bg, card, hint, label, title, hover, clicked, arrows, button, backButton, goTo, type Screen, INK } from "./ui";
-
-/** The host's input delay choice: auto, then 1 to 6 frames. */
-const DELAYS: (number | "auto")[] = ["auto", 1, 2, 3, 4, 5, 6];
-function stepDelay(current: number | "auto", dir: number): number | "auto" {
-  const i = DELAYS.indexOf(current);
-  return DELAYS[Math.max(0, Math.min(DELAYS.length - 1, i + dir))];
-}
+import { bg, card, hint, label, title, hover, clicked, button, backButton, goTo, type Screen, INK } from "./ui";
 
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const LIST_Y = 170, ROW_H = 84, LIST_MAX = 5, CODE_Y = LIST_Y + LIST_MAX * ROW_H + 60;
@@ -63,8 +56,6 @@ export class OnlineScreen implements Screen {
   private polled = -Infinity;
   code = ["A", "A", "A", "A"];
   codePos = 0;
-  /** "auto": the relay picks it from everyone's ping at START (see autoInputDelay on the server). */
-  inputDelay: number | "auto" = "auto";
   /** The stage screen after the host's START: theirs to edit, everyone else's to watch. */
   private picker: StagePicker | null = null;
   error = "";
@@ -314,7 +305,7 @@ export class OnlineScreen implements Screen {
   private startMatch(setup: MatchSetup): void {
     this.context.transport.sendLobby({
       t: "start",
-      config: { stage: setup.stage, rules: { stocks: setup.stocks, time: setup.time }, inputDelay: this.inputDelay, ...(setup.map ? { map: setup.map } : {}) },
+      config: { stage: setup.stage, rules: { stocks: setup.stocks, time: setup.time }, ...(setup.map ? { map: setup.map } : {}) },
     });
     sfx.go();
   }
@@ -461,9 +452,6 @@ export class OnlineScreen implements Screen {
     const by = ACTION_Y;
     if (isHost) {
       if (button(ctx, VIEW_W / 2 - 170, by, 340, 84, "START", { key: "Enter", size: 36, focused: this.focus === 2, disabled: !canStart })) this.openStagePick();
-      label(ctx, `input delay ${this.inputDelay === "auto" ? "auto" : `${this.inputDelay}f`}`, VIEW_W / 2 + 330, by + 52, 20, "rgba(41,39,34,0.85)");
-      const d = arrows(ctx, VIEW_W / 2 + 330, by + 52, 90, 22);
-      if (d) { this.inputDelay = stepDelay(this.inputDelay, d); sfx.menuMove(); }
     } else label(ctx, canStart ? "waiting for the host to press START" : "everyone readies up, then the host starts", VIEW_W / 2, by + 52, 24, INK);
     if (button(ctx, 40, VIEW_H - 100, 200, 64, "LEAVE", { key: "Esc", size: 26, focused: this.focus === 3 })) this.leave();
     hint(ctx, isHost && !canStart ? `START unlocks when everyone is ready (${room.members.length}/2+ players)` : "click a character, or left/right, to pick");
