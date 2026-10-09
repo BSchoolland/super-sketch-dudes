@@ -7,11 +7,11 @@ import { stageOf } from "../../../shared/sim";
 import { Camera, VIEW_H, VIEW_W } from "./camera";
 import { Fx } from "./fx";
 import { animFor, poseAt } from "./rig";
-import { drawSprite, FLOOR_ANIMS, restOnFloor, stillSprites } from "./sprite";
+import { drawSprite, FLOOR_ANIMS, prepareCards, restOnFloor, stillSprites } from "./sprite";
 import { cellFor } from "../../../shared/gen/sprite";
 import type { FighterDef, Look, Pose } from "../../../shared/types";
 import { drawBackdrop, drawShadow, drawStage } from "./stage";
-import { drawStageArt, stageArt } from "./stageart";
+import { ART_THEMES, drawStageArt, stageArt } from "./stageart";
 import { SLOT_COLORS, createHud, drawHud, type HudState } from "./hud";
 import { drawStrikes, inWindup } from "./strikes";
 import { drawLook, lookColor, lookOf, type LookAt } from "./looks";
@@ -48,6 +48,7 @@ export class Renderer {
     this.fx = new Fx(SLOT_COLORS);
     this.hud = createHud(state.fighters.length);
     this.names = names;
+    if (ART_THEMES.has(stageOf(state).theme)) for (const f of state.fighters) prepareCards(defOf(f));
     this.snapshot(state);
     this.prevPos = this.curPos.map((p) => ({ ...p }));
   }
@@ -216,7 +217,7 @@ export class Renderer {
     const seated = FLOOR_ANIMS.has(a.name) ? restOnFloor(def, c.cell, pose) : pose;
     // in the air a lean is a spin about the body; on the ground it tips from the feet
     const spinAround = !f.grounded && !FLOOR_ANIMS.has(a.name) ? "middle" : "feet";
-    drawSprite(ctx, def, c.cell, seated, { alpha, flash: f.hitlag > 0 && !!f.pending, flip: c.flip, spinAround });
+    drawSprite(ctx, def, c.cell, seated, { alpha, flash: f.hitlag > 0 && !!f.pending, flip: c.flip, spinAround, card: !!stageArt(stageOf(state)) });
     ctx.restore();
     // shield bubble
     if (f.shieldHeld || f.action === "shieldStun") {
