@@ -144,6 +144,23 @@ describe("low gravity", () => {
   });
 });
 
+describe("ice", () => {
+  /** How far a fighter slides after letting go of a run. */
+  const slide = (stage: string) => {
+    const s = createMatch({ stage, players: [{ fighter: "lampjack" }, { fighter: "lampjack" }], seed: 1 });
+    const f = s.fighters[0];
+    s.fighters[1].x = 500;
+    f.x = -400;
+    for (let i = 0; i < 40; i++) step(s, [inp({ x: 100 }), EMPTY_INPUT]);
+    const from = f.x;
+    for (let i = 0; i < 90; i++) step(s, [EMPTY_INPUT, EMPTY_INPUT]);
+    return f.x - from;
+  };
+  it("lets a fighter stopping a run on the frozen pond slide on much further", () => {
+    expect(slide("snow")).toBeGreaterThan(slide("gym") * 3);
+  });
+});
+
 describe("trampoline", () => {
   const drop = (hold: Partial<InputFrame>, fighter = "lampjack") => {
     const s = createMatch({ stage: "gym", players: [{ fighter }, { fighter: "lampjack" }], seed: 1 });

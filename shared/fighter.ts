@@ -329,8 +329,13 @@ export function applyGravity(f: Fighter, def: FighterDef, input: InputFrame, sta
   if (f.vy > cap) f.vy = cap;
 }
 
-function groundFriction(f: Fighter, def: FighterDef, mul = 1): void {
-  f.vx = approach(f.vx, 0, def.stats.traction * mul);
+/** Traction on what the fighter stands on (ice has less). */
+function traction(f: Fighter, def: FighterDef, stage: Stage): number {
+  return def.stats.traction * (f.grounded && f.platform >= 0 ? stage.platforms[f.platform].grip ?? 1 : 1);
+}
+
+function groundFriction(f: Fighter, def: FighterDef, stage: Stage, mul = 1): void {
+  f.vx = approach(f.vx, 0, traction(f, def, stage) * mul);
 }
 
 export function land(state: State, f: Fighter, platform: number): void {
@@ -494,10 +499,10 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
       if (Math.abs(input.x) >= STICK_WALK) {
         f.facing = sign(input.x) as 1 | -1;
         if (f.action !== "walk") setAction(f, "walk");
-        f.vx = approach(f.vx, (input.x / 100) * s.walk, s.traction * 2);
+        f.vx = approach(f.vx, (input.x / 100) * s.walk, traction(f, def, stage) * 2);
       } else {
         if (f.action !== "idle") setAction(f, "idle");
-        groundFriction(f, def);
+        groundFriction(f, def, stage);
       }
       break;
     }
@@ -524,12 +529,12 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
       if (Math.abs(input.x) >= STICK_RUN && sign(input.x) !== f.facing) { setAction(f, "runTurn"); break; }
       if (Math.abs(input.x) < STICK_WALK) { setAction(f, "skid"); break; }
       if (input.y >= STICK_RUN + 10 && Math.abs(input.x) < STICK_RUN) { setAction(f, "skid"); break; }
-      f.vx = approach(f.vx, s.run * f.facing, s.traction * 1.5);
+      f.vx = approach(f.vx, s.run * f.facing, traction(f, def, stage) * 1.5);
       break;
     }
     case "runTurn": {
       if (tryGroundActions(state, f, def, input, e, false)) break;
-      groundFriction(f, def, 2);
+      groundFriction(f, def, stage, 2);
       if (f.frame >= C.RUN_TURN_FRAMES) {
         f.facing = -f.facing as 1 | -1;
         if (Math.abs(input.x) >= STICK_RUN && sign(input.x) === f.facing) { setAction(f, "run"); f.vx = s.run * f.facing * 0.6; }
@@ -539,13 +544,13 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
     }
     case "skid": {
       if (tryGroundActions(state, f, def, input, e, true)) break;
-      groundFriction(f, def, 1.5);
+      groundFriction(f, def, stage, 1.5);
       if (f.frame >= C.SKID_FRAMES) setAction(f, "idle");
       break;
     }
     case "crouch": {
       if (tryGroundActions(state, f, def, input, e, true)) break;
-      groundFriction(f, def, 2);
+      groundFriction(f, def, stage, 2);
       if (input.y < STICK_RUN) { setAction(f, "idle"); break; }
       // drop through a soft platform
       if (f.platform >= 0 && !stage.platforms[f.platform].solid && (f.flickY > 0 && f.flickT > 0 && f.frame > 1)) {
@@ -557,7 +562,7 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
       break;
     }
     case "jumpSquat": {
-      groundFriction(f, def, 0.5);
+      groundFriction(f, def, stage, 0.5);
       if (f.frame >= C.JUMP_SQUAT) {
         const full = (e.held & B.JUMP) !== 0;
         jump(state, f, def, full, false);
@@ -579,13 +584,13 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
       break;
     }
     case "land": {
-      groundFriction(f, def, 1.5);
+      groundFriction(f, def, stage, 1.5);
       if (f.frame >= C.LAND_LAG) setAction(f, "idle");
       break;
     }
     case "attackHold": {
       // keyboard: let go in time and it's the tilt; still holding and it's the smash, charged from the press
-      groundFriction(f, def, 2);
+      groundFriction(f, def, stage, 2);
       if (!(e.held & B.ATTACK)) { startMove(state, f, f.move!); break; }
       if (f.frame >= C.SMASH_HOLD) {
         const held = f.frame, smash = SMASH_OF[f.move!];
@@ -597,7 +602,7 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
       break;
     }
     case "smashCharge": {
-      groundFriction(f, def, 2);
+      groundFriction(f, def, stage, 2);
       f.charge++;
       const c = cstickDir(f, input);
       const release = !(e.held & B.ATTACK) || f.charge >= C.SMASH_CHARGE_MAX;
@@ -615,7 +620,7 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
     case "shield": {
       f.shieldFrames++;
       f.shieldHeld = true;
-      groundFriction(f, def, 2);
+      groundFriction(f, def, stage, 2);
       f.shield = Math.max(0, f.shield - C.SHIELD_DRAIN);
       if (f.shield <= 0) { shieldBreak(state, f); break; }
       if (buffered(f, e, B.JUMP)) { consume(f, B.JUMP); f.shieldHeld = false; setAction(f, "jumpSquat"); break; }
@@ -631,13 +636,13 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
       break;
     }
     case "shieldDrop": {
-      groundFriction(f, def, 2);
+      groundFriction(f, def, stage, 2);
       if (f.frame >= C.SHIELD_DROP) setAction(f, "idle");
       else if (buffered(f, e, B.JUMP)) { consume(f, B.JUMP); setAction(f, "jumpSquat"); }
       break;
     }
     case "shieldStun": {
-      groundFriction(f, def, 1);
+      groundFriction(f, def, stage, 1);
       if (f.frame >= f.hitstun) {
         f.hitstun = 0;
         if (e.held & B.SHIELD) { setAction(f, "shield"); f.shieldFrames = 10; }
@@ -646,19 +651,19 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
       break;
     }
     case "parry": {
-      groundFriction(f, def, 2);
+      groundFriction(f, def, stage, 2);
       if (f.frame >= C.PARRY_FRAMES) setAction(f, "idle");
       break;
     }
     case "shieldBreak": {
       if (!f.grounded) { applyGravity(f, def, input, stage, false); f.vx = approach(f.vx, 0, 0.1); }
-      else groundFriction(f, def, 1);
+      else groundFriction(f, def, stage, 1);
       if (f.mash > 0 && f.frame > 30) { f.frame += f.mash * 2; f.mash = 0; }
       if (f.frame >= C.SHIELD_BREAK_STUN) { setAction(f, "idle"); f.shield = C.SHIELD_MAX * 0.6; }
       break;
     }
     case "spotDodge": {
-      groundFriction(f, def, 3);
+      groundFriction(f, def, stage, 3);
       const d = C.SPOT_DODGE;
       if (f.frame === d.start) f.invuln = Math.max(f.invuln, d.invuln - d.start);
       if (f.frame >= d.total) setAction(f, "idle");
@@ -668,7 +673,7 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
       const d = C.ROLL;
       if (f.frame === d.start) f.invuln = Math.max(f.invuln, d.invuln - d.start);
       if (f.frame >= d.start && f.frame < d.invuln) f.vx = (d.dist / (d.invuln - d.start)) * f.facing;
-      else groundFriction(f, def, 2);
+      else groundFriction(f, def, stage, 2);
       if (f.frame >= d.total) setAction(f, "idle");
       break;
     }
@@ -686,7 +691,7 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
       break;
     }
     case "hitstun": {
-      if (f.grounded) groundFriction(f, def, 0.6);
+      if (f.grounded) groundFriction(f, def, stage, 0.6);
       else { applyGravity(f, def, input, stage, false); f.vx = approach(f.vx, 0, C.LAUNCH_DECAY); airControl(f, def, input, 0.25); }
       if (f.frame >= f.hitstun) { f.hitstun = 0; setAction(f, f.grounded ? "idle" : "air"); }
       break;
@@ -706,7 +711,7 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
       break;
     }
     case "knockdown": {
-      groundFriction(f, def, 1.5);
+      groundFriction(f, def, stage, 1.5);
       if (f.frame < 8) break;
       if (buffered(f, e, B.ATTACK)) { consume(f, B.ATTACK); f.invuln = Math.max(f.invuln, 10); startMove(state, f, "getupAttack"); break; }
       if (Math.abs(input.x) >= STICK_RUN || buffered(f, e, B.SHIELD)) {
@@ -724,7 +729,7 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
       break;
     }
     case "getup": {
-      groundFriction(f, def, 2);
+      groundFriction(f, def, stage, 2);
       if (f.frame >= C.GETUP) setAction(f, "idle");
       break;
     }
@@ -732,12 +737,12 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
     case "techRoll": {
       const total = f.action === "getupRoll" ? C.GETUP_ROLL : C.TECH_ROLL;
       if (f.frame < total * 0.7) f.vx = (110 / (total * 0.7)) * f.facing;
-      else groundFriction(f, def, 2);
+      else groundFriction(f, def, stage, 2);
       if (f.frame >= total) setAction(f, "idle");
       break;
     }
     case "tech": {
-      groundFriction(f, def, 3);
+      groundFriction(f, def, stage, 3);
       if (f.frame === 1 && Math.abs(input.x) >= STICK_RUN) { f.facing = sign(input.x) as 1 | -1; setAction(f, "techRoll"); f.invuln = Math.max(f.invuln, 20); break; }
       if (f.frame >= C.TECH_FRAMES) setAction(f, "idle");
       break;
@@ -800,7 +805,7 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
     case "grabHold": {
       const v = state.fighters[f.grabbing];
       if (!v || v.grabbedBy !== f.slot) { setAction(f, "idle"); f.grabbing = -1; break; }
-      groundFriction(f, def, 3);
+      groundFriction(f, def, stage, 3);
       f.grabTimer--;
       v.x = f.x + f.facing * (s.width * 0.5 + defOf(v).stats.width * 0.5 + 6);
       v.y = f.y;
@@ -827,7 +832,7 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
       break;
     }
     case "taunt": {
-      groundFriction(f, def, 2);
+      groundFriction(f, def, stage, 2);
       if (f.frame >= C.TAUNT) { setAction(f, "idle"); f.tauntCooldown = 30; }
       break;
     }
@@ -932,7 +937,7 @@ function stepMove(state: State, f: Fighter, def: FighterDef, input: InputFrame, 
   const hovering = mv.hover && f.frame >= mv.hover[0] && f.frame <= mv.hover[1];
   if (mv.invuln && f.frame === mv.invuln[0]) f.invuln = Math.max(f.invuln, mv.invuln[1] - mv.invuln[0] + 1);
   if (f.grounded) {
-    groundFriction(f, def, mv.aerial ? 1 : 1.2);
+    groundFriction(f, def, stage, mv.aerial ? 1 : 1.2);
   } else if (hovering) {
     f.vy = 0;
     f.vx = approach(f.vx, 0, 0.3);

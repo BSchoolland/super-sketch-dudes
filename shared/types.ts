@@ -301,6 +301,8 @@ export interface Platform {
   hidden?: boolean;
   /** A trampoline: falling onto it springs you back up this high (and gives your jumps back); hold down to land. */
   bounce?: number;
+  /** Traction times this while standing on it (ice is slippery). */
+  grip?: number;
 }
 export interface Ledge {
   x: number;

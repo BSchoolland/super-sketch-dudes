@@ -5,6 +5,7 @@ import { NEST } from "../../../shared/stages/ship";
 import { BOOKS, CUP, PLANE } from "../../../shared/stages/desk";
 import { LANDER, ROCK, SHELF } from "../../../shared/stages/moon";
 import { BACKBOARD, BLEACHERS, TRAMPOLINE } from "../../../shared/stages/gym";
+import { BRANCH, HAT, PINE_X } from "../../../shared/stages/snow";
 import { PENCIL } from "./paper";
 
 /** What scenery reads of a match: the frame (things that move) and where the moving platforms are. */
@@ -18,7 +19,7 @@ export type Scene = Pick<State, "frame" | "platOffsets">;
 /**
  * World-space scenery under the platforms: water in Islands' gaps, the cables the Elevators' lifts hang from, the
  * Fairground's wheel, the Pirate Ship's sea and mast, the School Desk's legs, books, pencil cup and paper airplane,
- * the Moon's lander, flag and floating rock, the Gym's trampoline, bleachers and hoop.
+ * the Moon's lander, flag and floating rock, the Gym's trampoline, bleachers and hoop, Snow Day's pines, snowman and snow.
  */
 export function drawStageDecor(ctx: CanvasRenderingContext2D, state: Scene, stage: Stage): void {
   if (stage.theme === "islands") water(ctx, state, stage);
@@ -28,6 +29,7 @@ export function drawStageDecor(ctx: CanvasRenderingContext2D, state: Scene, stag
   else if (stage.theme === "desk") deskTop(ctx, state, stage);
   else if (stage.theme === "moon") moonScene(ctx, state, stage);
   else if (stage.theme === "gym") gymScene(ctx);
+  else if (stage.theme === "snow") snowScene(ctx, state);
 }
 
 function water(ctx: CanvasRenderingContext2D, state: Scene, stage: Stage): void {
@@ -291,6 +293,55 @@ function gymScene(ctx: CanvasRenderingContext2D): void {
   ctx.restore();
 }
 
+function snowScene(ctx: CanvasRenderingContext2D, state: Scene): void {
+  ctx.save();
+  ctx.strokeStyle = PENCIL; ctx.lineCap = "round"; ctx.lineJoin = "round";
+  ctx.globalAlpha = 0.6; ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  // a pine at each end, three tiers on a trunk; the bottom tier's inner edge is the branch you stand on
+  for (const side of [-1, 1]) {
+    const tx = side * PINE_X, inner = side * BRANCH.x1 - tx;
+    ctx.moveTo(tx - 14, 0); ctx.lineTo(tx - 14, BRANCH.y + 20); ctx.moveTo(tx + 14, 0); ctx.lineTo(tx + 14, BRANCH.y + 20);
+    // one zigzag outline down each side, tier by tier, closed along the bottom by the branch
+    const tiers = [[-470, 85, 40], [-340, 140, 75], [BRANCH.y, Math.abs(inner), 0]];
+    for (const d of [-1, 1]) {
+      ctx.moveTo(tx, -640);
+      for (const [foot, half, notch] of tiers) { ctx.lineTo(tx + d * half, foot); if (notch) ctx.lineTo(tx + d * notch, foot); }
+    }
+    // snow along each tier's edge
+    for (const [foot, half, notch] of tiers.slice(0, 2)) {
+      for (const d of [-1, 1]) { ctx.moveTo(tx + d * half, foot); ctx.quadraticCurveTo(tx + d * (half + notch) / 2, foot + 14, tx + d * notch, foot); }
+    }
+  }
+  // the snowman: three balls, stick arms, coal eyes and buttons, a top hat whose top is the platform
+  const balls = [[-85, 85], [-228, 62], [-332, 45]];
+  for (const [y, r] of balls) { ctx.moveTo(r, y); ctx.arc(0, y, r, 0, Math.PI * 2); }
+  ctx.moveTo(-58, -238); ctx.lineTo(-150, -290); ctx.lineTo(-170, -320); ctx.moveTo(-130, -279); ctx.lineTo(-140, -312);
+  ctx.moveTo(58, -238); ctx.lineTo(150, -280); ctx.lineTo(178, -270); ctx.moveTo(132, -272); ctx.lineTo(150, -300);
+  const brim = -372;
+  ctx.moveTo(-85, brim); ctx.lineTo(85, brim);
+  ctx.rect(HAT.x1, HAT.y, HAT.x2 - HAT.x1, brim - HAT.y);
+  ctx.moveTo(HAT.x1, brim - 18); ctx.lineTo(HAT.x2, brim - 18);
+  ctx.stroke();
+  ctx.fillStyle = PENCIL;
+  ctx.beginPath();
+  for (const [x, y, r] of [[-16, -342, 5], [16, -342, 5], [0, -250, 6], [0, -210, 6], [0, -120, 7]]) { ctx.moveTo(x + r, y); ctx.arc(x, y, r, 0, Math.PI * 2); }
+  ctx.fill();
+  ctx.fillStyle = "#e8833a"; ctx.globalAlpha = 0.85;
+  ctx.beginPath(); ctx.moveTo(-4, -330); ctx.lineTo(38, -322); ctx.lineTo(-4, -318); ctx.fill();
+  // snow drifting down
+  ctx.globalAlpha = 0.45; ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let n = 0; n < 36; n++) {
+    const x = ((n * 613) % 2400) - 1200 + Math.sin(state.frame * 0.02 + n) * 24;
+    const y = ((n * 389 + state.frame * (0.7 + (n % 3) * 0.2)) % 1300) - 1150, r = 4 + (n % 3) * 1.5;
+    ctx.moveTo(x - r, y); ctx.lineTo(x + r, y); ctx.moveTo(x - r * 0.5, y - r * 0.87); ctx.lineTo(x + r * 0.5, y + r * 0.87);
+    ctx.moveTo(x - r * 0.5, y + r * 0.87); ctx.lineTo(x + r * 0.5, y - r * 0.87);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
 /**
  * Faint doodles on one backdrop layer (already translated to the layer's origin, stroke style set), for the themes
  * that have them; false for the rest, which keep the plain construction lines.
@@ -383,6 +434,25 @@ export function drawBackdropDoodles(ctx: CanvasRenderingContext2D, theme: string
     for (let i = -8; i <= 8; i++) { const px = i * 100, t = (px + 900) / 1800, ly = py + 2 * 90 * t * (1 - t); ctx.moveTo(px - 25, ly); ctx.lineTo(px, ly + 50 * k); ctx.lineTo(px + 25, ly); }
     const rx = 760 - depth * 900;
     ctx.moveTo(rx, -900); ctx.bezierCurveTo(rx + 12, -500, rx - 12, -200, rx + 6, 60);
+    ctx.stroke();
+    return true;
+  }
+  if (theme === "snow") {
+    ctx.beginPath();
+    // snowy hills with little pines on them, and the school far off with snow on its roof
+    const hy = -120 + depth * 260;
+    ctx.moveTo(-1100, hy); ctx.quadraticCurveTo(-600 + depth * 300, hy - 220 * k, -100, hy - 40); ctx.quadraticCurveTo(400 - depth * 300, hy - 260 * k, 1100, hy - 20);
+    for (let i = 0; i < 6; i++) {
+      const px = -900 + i * 330 + depth * 200, py = hy - 120 * k - (i % 2) * 60 * k, ph = 120 * k;
+      ctx.moveTo(px - ph * 0.35, py); ctx.lineTo(px, py - ph); ctx.lineTo(px + ph * 0.35, py); ctx.lineTo(px - ph * 0.35, py);
+    }
+    if (depth > 0.3) {
+      const sx = -560, sy = -520;
+      ctx.rect(sx, sy, 300, 150); ctx.moveTo(sx - 20, sy); ctx.lineTo(sx + 150, sy - 80); ctx.lineTo(sx + 320, sy);
+      ctx.rect(sx + 125, sy + 80, 50, 70);
+      for (const wx of [sx + 30, sx + 215]) ctx.rect(wx, sy + 40, 55, 40);
+      ctx.moveTo(sx + 150, sy - 80); ctx.lineTo(sx + 150, sy - 140); ctx.lineTo(sx + 200, sy - 125); ctx.lineTo(sx + 150, sy - 110);
+    }
     ctx.stroke();
     return true;
   }

@@ -2,7 +2,7 @@ import type { Stage, State } from "../../../shared/types";
 import { platformOffset } from "../../../shared/physics";
 import type { Camera } from "./camera";
 import { VIEW_H, VIEW_W } from "./camera";
-import { drawPaper, hatch, inkArc, inkLine, inkRect, INK, PAPER, PENCIL, noise } from "./paper";
+import { drawPaper, hatch, inkArc, inkLine, inkRect, ICE, INK, PAPER, PENCIL, noise } from "./paper";
 import { drawBackdropDoodles, drawStageDecor } from "./stagedecor";
 
 const DEPTHS = [0.08, 0.22, 0.35];
@@ -81,12 +81,28 @@ export function drawStage(ctx: CanvasRenderingContext2D, state: State, stage: St
     const h = p.solid ? p.bottom! - p.y : p.motion ? 42 : 16;
     ctx.fillStyle = PAPER; ctx.fillRect(x, y, w, 3);
     hatch(ctx, x, y + 3, w, h - 3, PENCIL, 0.36);
+    if (p.grip) drawIce(ctx, x, y, w);
     inkRect(ctx, x, y, w, h, PENCIL, 1.8);
     inkLine(ctx, x, y, x + w, y, INK, 3, i);
     inkLine(ctx, x + 3, y + 4, x + w - 3, y + 4, PENCIL, 1, i + 4);
     inkLine(ctx, x, y - 3, x, y + 11, INK, 2);
     inkLine(ctx, x + w, y - 3, x + w, y + 11, INK, 2);
   });
+}
+
+/** A slippery top: a pale blue band with skate scratches and a few glints. */
+function drawIce(ctx: CanvasRenderingContext2D, x: number, y: number, w: number): void {
+  ctx.save();
+  ctx.fillStyle = ICE; ctx.fillRect(x, y, w, 30);
+  ctx.strokeStyle = "#8fb8cf"; ctx.lineWidth = 1.5; ctx.lineCap = "round";
+  ctx.beginPath();
+  for (let sx = x + 60; sx < x + w - 160; sx += 230) { ctx.moveTo(sx, y + 20); ctx.quadraticCurveTo(sx + 70, y + 8, sx + 150, y + 16); }
+  ctx.stroke();
+  ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  for (let gx = x + 140; gx < x + w - 40; gx += 310) { ctx.moveTo(gx, y + 24); ctx.lineTo(gx + 14, y + 8); ctx.moveTo(gx + 12, y + 25); ctx.lineTo(gx + 20, y + 15); }
+  ctx.stroke();
+  ctx.restore();
 }
 
 export function drawShadow(ctx: CanvasRenderingContext2D, state: State, stage: Stage, x: number, y: number, w: number): void {

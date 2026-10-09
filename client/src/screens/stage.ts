@@ -1,5 +1,5 @@
 import { VIEW_H, VIEW_W } from "../render/camera";
-import { hatch, inkLine, inkRect, PAPER, PENCIL } from "../render/paper";
+import { hatch, ICE, inkLine, inkRect, PAPER, PENCIL } from "../render/paper";
 import { platformMotion } from "../../../shared/physics";
 import type { MenuInput } from "../input/devices";
 import { sfx } from "../audio/audio";
@@ -74,6 +74,7 @@ function drawPlatformDiagram(ctx: CanvasRenderingContext2D, stage: Stage, x: num
     }
     ctx.fillStyle = PAPER; ctx.fillRect(px, py, pw, ph);
     hatch(ctx, px, py, pw, ph, PENCIL, 0.36);
+    if (p.grip) { ctx.fillStyle = ICE; ctx.fillRect(px, py, pw, 7); }
     inkRect(ctx, px, py, pw, ph, PENCIL, 1.5);
     inkLine(ctx, px, py, px + pw, py, INK, 3, i);
   });

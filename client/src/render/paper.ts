@@ -1,6 +1,8 @@
 export const PAPER = "#f4efe4";
 export const INK = "#292722";
 export const PENCIL = "#777267";
+/** Ice on a slippery platform. */
+export const ICE = "#cfe5f1";
 export const FONT = "'Patrick Hand', 'Comic Sans MS', cursive";
 
 export function noise(seed: number): number {
