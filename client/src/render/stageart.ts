@@ -47,7 +47,11 @@ interface ArtLayer extends ArtLayerSpec {
 export interface StageArt { theme: string; ref: StageManifest["ref"]; layers: ArtLayer[]; thin: ThinStyle }
 
 interface Entry { art: StageArt | null; promise: Promise<StageArt> }
-const cache = new Map<string, Entry>();
+/** Full art, one stage at a time: each is ~16 MB of canvases, which a Chromebook can't spare four times over. */
+const full = new Map<string, Entry>();
+/** Picker thumbnails: the same art kept only at THUMB_PX and smaller. */
+const thumbs = new Map<string, Entry>();
+const THUMB_PX = 512;
 
 function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((ok, fail) => {
@@ -95,7 +99,7 @@ function mipChain(img: HTMLImageElement, blur: number, opaque: boolean): HTMLCan
   return mips;
 }
 
-async function load(theme: string): Promise<StageArt> {
+async function load(theme: string, thumb: boolean): Promise<StageArt> {
   const dir = `${import.meta.env.BASE_URL}stages/${theme}/`;
   const res = await fetch(`${dir}stage.json`);
   if (!res.ok) throw new Error(`stage art for ${theme}: ${dir}stage.json is HTTP ${res.status}`);
@@ -103,28 +107,33 @@ async function load(theme: string): Promise<StageArt> {
   if (!m.ref || !Array.isArray(m.layers) || !m.layers.length || !m.thin) throw new Error(`stage art for ${theme}: stage.json needs ref, layers and thin`);
   const layers = await Promise.all(m.layers.map(async (l): Promise<ArtLayer> => {
     const img = await loadImage(`${dir}${l.src}`);
-    return { ...l, mips: mipChain(img, l.blur ?? 0, !!l.cover) };
+    const mips = mipChain(img, l.blur ?? 0, !!l.cover);
+    return { ...l, mips: thumb ? mips.filter((m) => Math.max(m.width, m.height) <= THUMB_PX) : mips };
   }));
   return { theme, ref: m.ref, layers, thin: m.thin };
 }
 
-function entry(theme: string): Entry {
+function entry(cache: Map<string, Entry>, theme: string, thumb: boolean): Entry {
   let e = cache.get(theme);
   if (e) return e;
-  const made: Entry = { art: null, promise: load(theme) };
+  if (!thumb) cache.clear();
+  const made: Entry = { art: null, promise: load(theme, thumb) };
   made.promise.then((art) => { made.art = art; }, (err: unknown) => console.error(err));
   cache.set(theme, made);
   return made;
 }
 
-/** The stage's art once it has loaded; null while loading, after a failure (logged), or for a pencil stage. */
+/**
+ * The stage's art once it has loaded (asking starts the load, and lets go of any other stage's); null while loading,
+ * after a failure (logged), or for a pencil stage.
+ */
 export function stageArt(stage: Stage): StageArt | null {
-  return ART_THEMES.has(stage.theme) ? entry(stage.theme).art : null;
+  return ART_THEMES.has(stage.theme) ? entry(full, stage.theme, false).art : null;
 }
 
-/** Loads a stage's art; rejects if it can't. Pencil stages resolve at once. */
-export async function loadStageArt(stage: Stage): Promise<void> {
-  if (ART_THEMES.has(stage.theme)) await entry(stage.theme).promise;
+/** The stage's art for a picker card, small; null as for stageArt. */
+export function stageArtThumb(stage: Stage): StageArt | null {
+  return ART_THEMES.has(stage.theme) ? entry(thumbs, stage.theme, true).art : null;
 }
 
 /**

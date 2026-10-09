@@ -7,7 +7,7 @@ import { account } from "../account";
 import { stageChoices, type StageChoice } from "../maps";
 import type { MapDoc } from "../../../shared/maps";
 import { bg, card, hint, label, title, hover, clicked, arrows, button, backButton, goTo, type Screen, INK, settings, saveSettings } from "./ui";
-import { drawStageArtThumb, stageArt } from "../render/stageart";
+import { drawStageArtThumb, stageArt, stageArtThumb } from "../render/stageart";
 import type { Stage } from "../../../shared/types";
 
 /** `time` is in frames; 0 is no limit. `map` is the player-made map `stage` names, if it is one. */
@@ -25,7 +25,7 @@ const CARD_W = (VIEW_W - 2 * 160 - (COLS - 1) * GAP) / COLS;
 export function drawStageThumb(ctx: CanvasRenderingContext2D, stage: Stage, x: number, y: number, w: number, h: number): void {
   ctx.save();
   ctx.beginPath(); ctx.roundRect(x, y, w, h, 10); ctx.clip();
-  const art = stageArt(stage);
+  const art = stageArtThumb(stage);
   if (art) {
     const sc = Math.min((w - 40) / (stage.camera.right - stage.camera.left), (h - 24) / (stage.camera.bottom - stage.camera.top));
     const cx = (stage.camera.left + stage.camera.right) / 2, cy = (stage.camera.top + stage.camera.bottom) / 2;
@@ -138,6 +138,8 @@ export class StagePicker {
     const edit = !this.readOnly;
     const choices = this.choices;
     if (this.sel >= choices.length) this.sel = 0;
+    // the chosen stage's full art loads while they decide, so the match opens on it
+    stageArt(choices[this.sel].stage);
     const rowsShown = choices.length > COLS ? 2 : 1;
     const h = rowsShown === 1 ? 300 : 230;
     const rows = Math.ceil(choices.length / COLS);
