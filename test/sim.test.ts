@@ -144,6 +144,32 @@ describe("low gravity", () => {
   });
 });
 
+describe("trampoline", () => {
+  const drop = (hold: Partial<InputFrame>) => {
+    const s = createMatch({ stage: "gym", players: [{ fighter: "lampjack" }, { fighter: "lampjack" }], seed: 1 });
+    const f = s.fighters[0];
+    f.x = 0; f.y = -300; f.grounded = false; f.platform = -1; f.action = "air"; f.jumpsLeft = 0; f.usedUpSpecial = true;
+    let low = -Infinity, back = Infinity;
+    for (let i = 0; i < 120; i++) {
+      step(s, [inp(hold), EMPTY_INPUT]);
+      low = Math.max(low, f.y);
+      if (low >= -70) back = Math.min(back, f.y);
+    }
+    return { f, low, back };
+  };
+  it("springs a fighter falling onto it back up, with its jumps and up special back", () => {
+    const { f, low, back } = drop({});
+    expect(low).toBeLessThanOrEqual(-70);
+    expect(back).toBeLessThan(-250);
+    expect(f.usedUpSpecial).toBe(false);
+  });
+  it("lets a fighter holding down land on it", () => {
+    const { f } = drop({ y: 100 });
+    expect(f.grounded).toBe(true);
+    expect(f.y).toBe(-70);
+  });
+});
+
 describe("menu brawl stage", () => {
   it("runs six CPUs for a minute on the title screen's stage, fighters dropping in mid-match, and never ends", async () => {
     await loadAllHouse();

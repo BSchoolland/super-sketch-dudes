@@ -4,6 +4,7 @@ import { WHEEL } from "../../../shared/stages/fairground";
 import { NEST } from "../../../shared/stages/ship";
 import { BOOKS, CUP, PLANE } from "../../../shared/stages/desk";
 import { LANDER, ROCK, SHELF } from "../../../shared/stages/moon";
+import { BACKBOARD, BLEACHERS, TRAMPOLINE } from "../../../shared/stages/gym";
 import { PENCIL } from "./paper";
 
 /**
@@ -14,7 +15,7 @@ import { PENCIL } from "./paper";
 /**
  * World-space scenery under the platforms: water in Islands' gaps, the cables the Elevators' lifts hang from, the
  * Fairground's wheel, the Pirate Ship's sea and mast, the School Desk's legs, books, pencil cup and paper airplane,
- * the Moon's lander, flag and floating rock.
+ * the Moon's lander, flag and floating rock, the Gym's trampoline, bleachers and hoop.
  */
 export function drawStageDecor(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void {
   if (stage.theme === "islands") water(ctx, state, stage);
@@ -23,6 +24,7 @@ export function drawStageDecor(ctx: CanvasRenderingContext2D, state: State, stag
   else if (stage.theme === "ship") { water(ctx, state, stage); mast(ctx, state, stage); }
   else if (stage.theme === "desk") deskTop(ctx, state, stage);
   else if (stage.theme === "moon") moonScene(ctx, state, stage);
+  else if (stage.theme === "gym") gymScene(ctx);
 }
 
 function water(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void {
@@ -254,6 +256,38 @@ function moonScene(ctx: CanvasRenderingContext2D, state: State, stage: Stage): v
   ctx.restore();
 }
 
+function gymScene(ctx: CanvasRenderingContext2D): void {
+  ctx.save();
+  ctx.strokeStyle = PENCIL; ctx.lineCap = "round"; ctx.lineJoin = "round";
+  ctx.globalAlpha = 0.6; ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  // the trampoline: a frame under the bed on four legs, springs between them
+  const { x1, x2, y } = TRAMPOLINE, frame = y + 26;
+  ctx.moveTo(x1 - 14, frame); ctx.lineTo(x2 + 14, frame);
+  for (const x of [x1 - 4, x1 + 50, x2 - 50, x2 + 4]) { ctx.moveTo(x, frame); ctx.lineTo(x + (x < 0 ? -6 : 6), 0); }
+  for (let x = x1 + 8; x <= x2 - 8; x += 24) {
+    ctx.moveTo(x, y + 4);
+    for (let k = 1; k <= 4; k++) ctx.lineTo(x + (k % 2 ? 5 : -5), y + 4 + k * 5.5);
+  }
+  // bleachers: the top bench on stilts, braced
+  for (const side of [-1, 1]) {
+    const a = side < 0 ? -BLEACHERS.x2 : BLEACHERS.x1, b = side < 0 ? -BLEACHERS.x1 : BLEACHERS.x2, by = BLEACHERS.y;
+    ctx.moveTo(a + 16, by); ctx.lineTo(a + 16, 0); ctx.moveTo(b - 16, by); ctx.lineTo(b - 16, 0);
+    ctx.moveTo(a + 16, by + 30); ctx.lineTo(b - 16, -10); ctx.moveTo(b - 16, by + 30); ctx.lineTo(a + 16, -10);
+    ctx.moveTo(a, by + 24); ctx.lineTo(b, by + 24);
+  }
+  // the backboard (its top is the platform), a hoop and net under it, a pole up to the ceiling
+  const { x1: bx1, x2: bx2, y: bt } = BACKBOARD, mid = (bx1 + bx2) / 2;
+  ctx.rect(bx1, bt, bx2 - bx1, 100);
+  ctx.rect(mid - 30, bt + 40, 60, 44);
+  ctx.moveTo(mid, bt); ctx.lineTo(mid, bt - 420);
+  ctx.moveTo(mid + 38, bt + 104); ctx.ellipse(mid, bt + 104, 38, 9, 0, 0, Math.PI * 2);
+  for (const dx of [-36, -18, 0, 18, 36]) { ctx.moveTo(mid + dx, bt + 108); ctx.lineTo(mid + dx * 0.6, bt + 160); }
+  ctx.moveTo(mid - 30, bt + 130); ctx.lineTo(mid + 30, bt + 130);
+  ctx.stroke();
+  ctx.restore();
+}
+
 /**
  * Faint doodles on one backdrop layer (already translated to the layer's origin, stroke style set), for the themes
  * that have them; false for the rest, which keep the plain construction lines.
@@ -330,6 +364,22 @@ export function drawBackdropDoodles(ctx: CanvasRenderingContext2D, theme: string
       const x = gx + dx, y = gy + dy;
       ctx.moveTo(x - 30, y); ctx.quadraticCurveTo(x - 15, y - 16, x, y); ctx.quadraticCurveTo(x + 15, y - 16, x + 30, y);
     }
+    ctx.stroke();
+    return true;
+  }
+  if (theme === "gym") {
+    ctx.beginPath();
+    // the gym wall: high windows, a scoreboard, a string of pennants and a climbing rope
+    const wy = -620 + depth * 300;
+    for (let i = -2; i <= 2; i++) { const wx = i * 360 * k + depth * 400 - 90; ctx.rect(wx, wy, 180 * k, 110 * k); ctx.moveTo(wx + 90 * k, wy); ctx.lineTo(wx + 90 * k, wy + 110 * k); }
+    const sx = -200 - depth * 600, sy = -380 + depth * 300;
+    ctx.rect(sx, sy, 400 * k, 160 * k);
+    ctx.rect(sx + 40 * k, sy + 60 * k, 110 * k, 70 * k); ctx.rect(sx + 250 * k, sy + 60 * k, 110 * k, 70 * k);
+    const py = -470 + depth * 200;
+    ctx.moveTo(-900, py); ctx.quadraticCurveTo(0, py + 90, 900, py);
+    for (let i = -8; i <= 8; i++) { const px = i * 100, t = (px + 900) / 1800, ly = py + 2 * 90 * t * (1 - t); ctx.moveTo(px - 25, ly); ctx.lineTo(px, ly + 50 * k); ctx.lineTo(px + 25, ly); }
+    const rx = 760 - depth * 900;
+    ctx.moveTo(rx, -900); ctx.bezierCurveTo(rx + 12, -500, rx - 12, -200, rx + 6, 60);
     ctx.stroke();
     return true;
   }

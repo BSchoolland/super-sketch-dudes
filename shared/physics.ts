@@ -117,6 +117,17 @@ export function stepPhysics(state: State, f: Fighter, input: InputFrame, stage: 
     if (best >= 0 && (FALL_THROUGH_ACTIONS.has(f.action) || f.action === "air")) {
       f.y = bestY;
       f.x = Math.max(platTop(state, stage, best).x1, Math.min(platTop(state, stage, best).x2, f.x));
+      const bounce = stage.platforms[best].bounce;
+      if (bounce && input.y < STICK_RUN && (f.action === "air" || f.action === "helpless")) {
+        state.events.push({ t: "land", frame: state.frame, slot: f.slot, x: f.x, y: f.y, hard: false });
+        f.vy = -bounce;
+        f.fastFalling = false;
+        f.jumpsLeft = s.jumps - 1;
+        f.usedUpSpecial = false;
+        f.airDodged = false;
+        if (f.action === "helpless") setAction(f, "air");
+        return;
+      }
       if (f.action === "hitstun" && f.pending === null && f.hitstun > 0 && f.vy > 3) { f.vy = 0; }
       if (f.action === "tumble" && f.frame < f.hitstun && f.techWindow === 0 && f.vy > C.GROUND_BOUNCE_SPEED) {
         state.events.push({ t: "land", frame: state.frame, slot: f.slot, x: f.x, y: f.y, hard: true });
