@@ -9,6 +9,7 @@ import type { MapDoc } from "../../../shared/maps";
 import { bg, card, hint, label, title, hover, clicked, arrows, button, backButton, goTo, type Screen, INK, settings, saveSettings } from "./ui";
 import { drawStageArtThumb, stageArt, stageArtThumb } from "../render/stageart";
 import { wheelSteps } from "../input/pointer";
+import { drawStageDecor } from "../render/stagedecor";
 import type { Stage } from "../../../shared/types";
 
 /** `time` is in frames; 0 is no limit. `map` is the player-made map `stage` names, if it is one. */
@@ -54,6 +55,12 @@ function drawPlatformDiagram(ctx: CanvasRenderingContext2D, stage: Stage, x: num
   const sc = Math.min((w - 36) / (x2 - x1), (h - 30) / (Math.max(0, ...shown.map((p) => p.y)) - top + 60));
   const sx = (wx: number) => x + w / 2 + (wx - (x1 + x2) / 2) * sc;
   const sy = (wy: number) => y + 15 + (wy - top) * sc;
+  // the scenery under it (the lander, the ship's mast, the trampoline), as at the start of a match
+  ctx.save();
+  ctx.translate(sx(0), sy(0));
+  ctx.scale(sc, sc);
+  drawStageDecor(ctx, { frame: 0, platOffsets: [] }, stage);
+  ctx.restore();
   shown.forEach((p, i) => {
     const o = paths[i][0], px = sx(p.x1 + o.dx), py = sy(p.y + o.dy), pw = (p.x2 - p.x1) * sc;
     const ph = p.solid ? y + h - py + 10 : 7;

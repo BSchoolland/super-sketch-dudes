@@ -7,6 +7,9 @@ import { LANDER, ROCK, SHELF } from "../../../shared/stages/moon";
 import { BACKBOARD, BLEACHERS, TRAMPOLINE } from "../../../shared/stages/gym";
 import { PENCIL } from "./paper";
 
+/** What scenery reads of a match: the frame (things that move) and where the moving platforms are. */
+export type Scene = Pick<State, "frame" | "platOffsets">;
+
 /**
  * The pencil stages' scenery, in plain strokes (cheap every frame): what sits in the world with the platforms, drawn
  * before them, and faint doodles on each backdrop layer.
@@ -17,7 +20,7 @@ import { PENCIL } from "./paper";
  * Fairground's wheel, the Pirate Ship's sea and mast, the School Desk's legs, books, pencil cup and paper airplane,
  * the Moon's lander, flag and floating rock, the Gym's trampoline, bleachers and hoop.
  */
-export function drawStageDecor(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void {
+export function drawStageDecor(ctx: CanvasRenderingContext2D, state: Scene, stage: Stage): void {
   if (stage.theme === "islands") water(ctx, state, stage);
   else if (stage.theme === "elevators") cables(ctx, state, stage);
   else if (stage.theme === "fairground") wheel(ctx, state, stage);
@@ -27,7 +30,7 @@ export function drawStageDecor(ctx: CanvasRenderingContext2D, state: State, stag
   else if (stage.theme === "gym") gymScene(ctx);
 }
 
-function water(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void {
+function water(ctx: CanvasRenderingContext2D, state: Scene, stage: Stage): void {
   const solids = stage.platforms.filter((p) => p.solid).sort((a, b) => a.x1 - b.x1);
   // the open water: from the blast zone's edge to the first island, between islands, past the last
   const spans: [number, number][] = [];
@@ -55,7 +58,7 @@ function water(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void 
   ctx.restore();
 }
 
-function cables(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void {
+function cables(ctx: CanvasRenderingContext2D, state: Scene, stage: Stage): void {
   ctx.save();
   ctx.strokeStyle = PENCIL; ctx.lineCap = "round";
   stage.platforms.forEach((p, i) => {
@@ -83,7 +86,7 @@ function cables(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void
 }
 
 /** The Ferris wheel: an A-frame, a double rim turning with the gondolas, spokes, and each gondola's hanger. */
-function wheel(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void {
+function wheel(ctx: CanvasRenderingContext2D, state: Scene, stage: Stage): void {
   // each gondola hangs this far under its point on the rim
   const HANG = 60;
   const hx = WHEEL.x, hy = WHEEL.y - HANG;
@@ -125,7 +128,7 @@ function wheel(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void 
 }
 
 /** The mast, leaning with the crow's nest it carries: two sails, the rigging down to the deck's ends, a pirate flag. */
-function mast(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void {
+function mast(ctx: CanvasRenderingContext2D, state: Scene, stage: Stage): void {
   const i = stage.platforms.findIndex((p) => p.motion);
   const nx = (NEST.x1 + NEST.x2) / 2 + platformOffset(state, i).dx;
   // a point up the mast: 0 at the deck, 1 at the nest
@@ -162,7 +165,7 @@ function mast(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void {
   ctx.restore();
 }
 
-function deskTop(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void {
+function deskTop(ctx: CanvasRenderingContext2D, state: Scene, stage: Stage): void {
   const top = stage.platforms[0];
   ctx.save();
   ctx.strokeStyle = PENCIL; ctx.lineCap = "round"; ctx.lineJoin = "round";
@@ -211,7 +214,7 @@ function deskTop(ctx: CanvasRenderingContext2D, state: State, stage: Stage): voi
   ctx.restore();
 }
 
-function moonScene(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void {
+function moonScene(ctx: CanvasRenderingContext2D, state: Scene, stage: Stage): void {
   const ground = stage.platforms[0];
   ctx.save();
   ctx.strokeStyle = PENCIL; ctx.lineCap = "round"; ctx.lineJoin = "round";

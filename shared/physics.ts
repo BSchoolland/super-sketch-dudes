@@ -6,7 +6,7 @@ import type { InputFrame } from "./input";
 import { STICK_RUN } from "./input";
 import type { Fighter, Platform, Stage, State } from "./types";
 
-export function platformOffset(state: State, i: number): { dx: number; dy: number } {
+export function platformOffset(state: Pick<State, "platOffsets">, i: number): { dx: number; dy: number } {
   return state.platOffsets[i] ?? { dx: 0, dy: 0 };
 }
 
