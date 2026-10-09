@@ -22,7 +22,7 @@ export const moon: Stage = {
     { x: 640, y: 0, side: 1, platform: 0 },
   ],
   blast: { left: -1250, right: 1250, top: -1350, bottom: 650 },
-  camera: { left: -1080, right: 1080, top: -1150, bottom: 440, minWidth: 900 },
+  camera: { left: -1200, right: 1200, top: -1000, bottom: 440, minWidth: 900 },
   spawns: [
     { x: -440, y: 0, facing: 1 },
     { x: 440, y: 0, facing: -1 },
