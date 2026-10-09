@@ -53,20 +53,36 @@ function targetOf(state: State, f: Fighter): Fighter | null {
   return target;
 }
 
-function mainBounds(state: State, stage: Stage): { x1: number; x2: number; y: number } {
-  const p = stage.platforms[0];
-  const o = state.platOffsets[0];
-  return { x1: p.x1 + (o?.dx ?? 0), x2: p.x2 + (o?.dx ?? 0), y: p.y + (o?.dy ?? 0) };
+/**
+ * The solid block a fighter at (x, y) belongs to: the highest one under it, or else the nearest one sideways (over a
+ * gap between islands). On a stage with one solid block, that block.
+ */
+function mainBounds(state: State, stage: Stage, x: number, y: number): { x1: number; x2: number; y: number; bottom: number } {
+  let under = -1, near = -1, underY = Infinity, nearD = Infinity;
+  for (let i = 0; i < stage.platforms.length; i++) {
+    const p = stage.platforms[i];
+    if (!p.solid) continue;
+    const o = state.platOffsets[i];
+    const x1 = p.x1 + (o?.dx ?? 0), x2 = p.x2 + (o?.dx ?? 0), top = p.y + (o?.dy ?? 0);
+    if (x >= x1 && x <= x2 && top >= y - 35 && top < underY) { under = i; underY = top; }
+    const d = Math.max(x1 - x, x - x2, 0);
+    if (d < nearD) { near = i; nearD = d; }
+  }
+  const i = under >= 0 ? under : Math.max(0, near);
+  const p = stage.platforms[i], o = state.platOffsets[i];
+  return { x1: p.x1 + (o?.dx ?? 0), x2: p.x2 + (o?.dx ?? 0), y: p.y + (o?.dy ?? 0), bottom: p.bottom! + (o?.dy ?? 0) };
 }
 
 function nearEdge(state: State, f: Fighter, stage: Stage, margin: number): boolean {
-  const main = mainBounds(state, stage);
+  const main = mainBounds(state, stage, f.x, f.y);
   return f.x < main.x1 + margin || f.x > main.x2 - margin;
 }
 
+/** In the air and not over solid ground or a platform to land on (a ferry, a lift): time to recover. */
 function offStage(state: State, f: Fighter, stage: Stage): boolean {
-  const main = mainBounds(state, stage);
-  return !f.grounded && (f.x < main.x1 - 8 || f.x > main.x2 + 8 || f.y > main.y + 35);
+  const main = mainBounds(state, stage, f.x, f.y);
+  if (f.grounded || !(f.x < main.x1 - 8 || f.x > main.x2 + 8 || f.y > main.y + 35)) return false;
+  return !surfaceUnder(surfaces(state, stage), f.x, f.y);
 }
 
 /** `slack` is how much farther than the truth the attacker believes the move reaches. */
@@ -168,9 +184,9 @@ function impendingCollision(state: State, f: Fighter, stage: Stage): boolean {
       if (f.x >= x1 && f.x <= x2 && f.y <= y && y - f.y <= f.vy * 18 + 18) return true;
     }
   }
-  const main = mainBounds(state, stage);
+  const main = mainBounds(state, stage, f.x, f.y);
   const halfW = defOf(f).stats.width * 0.5;
-  const insideWallY = f.y > main.y && f.y - defOf(f).stats.height < stage.platforms[0].bottom!;
+  const insideWallY = f.y > main.y && f.y - defOf(f).stats.height < main.bottom;
   if (insideWallY && ((f.vx > 0 && f.x < main.x1 - halfW && main.x1 - halfW - f.x < f.vx * 18 + 12) ||
     (f.vx < 0 && f.x > main.x2 + halfW && f.x - main.x2 - halfW < -f.vx * 18 + 12))) return true;
   return false;
@@ -180,7 +196,7 @@ function disadvantageInput(state: State, f: Fighter, target: Fighter | null, sk:
   const out = blank();
   if (f.hitlag > 0 && f.pending) {
     const attacker = state.fighters[f.pending.attacker] ?? target;
-    const main = mainBounds(state, stage);
+    const main = mainBounds(state, stage, f.x, f.y);
     const nearEdge = profile(f).cautious && (f.x < main.x1 + 170 || f.x > main.x2 - 170);
     out.x = nearEdge ? sign((main.x1 + main.x2) * 0.5 - f.x) * 90 : attacker ? sign(f.x - attacker.x) * 85 : sign(-f.pending.vx) * 85;
     out.y = -100;
@@ -196,7 +212,7 @@ function disadvantageInput(state: State, f: Fighter, target: Fighter | null, sk:
   }
   if (f.action === "tumble" || f.action === "hitstun") {
     const attacker = f.lastHitBy >= 0 ? state.fighters[f.lastHitBy] : target;
-    const main = mainBounds(state, stage);
+    const main = mainBounds(state, stage, f.x, f.y);
     const nearEdge = profile(f).cautious && (f.x < main.x1 + 140 || f.x > main.x2 - 140);
     out.x = nearEdge ? sign((main.x1 + main.x2) * 0.5 - f.x) * 90 : attacker ? sign(f.x - attacker.x) * 80 : sign(-f.vx) * 80;
     out.y = -70;
@@ -231,11 +247,9 @@ function ledgeInput(state: State, f: Fighter, target: Fighter | null, sk: Skill,
 
 function recoveryInput(state: State, f: Fighter, sk: Skill, stage: Stage): InputFrame {
   const out = blank();
-  const def = defOf(f), main = mainBounds(state, stage);
+  const def = defOf(f), main = mainBounds(state, stage, f.x, f.y);
   const side: 1 | -1 = f.x < (main.x1 + main.x2) * 0.5 ? -1 : 1;
-  const ledge = side < 0 ? stage.ledges[0] : stage.ledges[stage.ledges.length - 1];
-  const ledgeX = ledge.x + (state.platOffsets[ledge.platform]?.dx ?? 0);
-  const ledgeY = ledge.y + (state.platOffsets[ledge.platform]?.dy ?? 0);
+  const ledgeX = side < 0 ? main.x1 : main.x2, ledgeY = main.y;
   const above = f.y < ledgeY - 35;
   const targetX = above ? ledgeX - side * 45 : ledgeX + side * (def.stats.width * 0.5 + 10);
   const dx = targetX - f.x;
@@ -498,7 +512,7 @@ const NEUTRAL_SPECIALS = ["nspecial", "sspecial", "dspecial"] as const;
 
 /** True if the fighter would still be over the main stage after moving `dx` along its facing. */
 function landsOnStage(state: State, f: Fighter, stage: Stage, dx: number): boolean {
-  const main = mainBounds(state, stage), x = f.x + f.facing * dx;
+  const main = mainBounds(state, stage, f.x, f.y), x = f.x + f.facing * dx;
   return x > main.x1 + 50 && x < main.x2 - 50;
 }
 
@@ -572,7 +586,7 @@ function specialChoice(state: State, f: Fighter, target: Fighter, sk: Skill, fac
 
 function edgeguardInput(state: State, f: Fighter, target: Fighter, sk: Skill, stage: Stage): InputFrame | null {
   if (sk.c < 0.5 || !offStage(state, target, stage) || !f.grounded) return null;
-  const main = mainBounds(state, stage);
+  const main = mainBounds(state, stage, target.x, target.y);
   const side: 1 | -1 = target.x < (main.x1 + main.x2) * 0.5 ? -1 : 1;
   const ledgeX = side < 0 ? main.x1 : main.x2;
   const trapX = ledgeX - side * (85 + defOf(f).stats.width * 0.25);
@@ -744,7 +758,7 @@ function groundNeutral(state: State, f: Fighter, target: Fighter, sk: Skill, sta
   const losing = f.stocks < target.stocks || (f.stocks === target.stocks && f.percent > target.percent + 30);
   if (p.zoning >= 0.5 && sk.c >= 0.3 && !losing && !finishable(state, f, target, facing)) {
     const keep = Math.max(200, Math.min(420, shotReach(p) * 0.6));
-    const main = mainBounds(state, stage), behind = f.x - facing * 150;
+    const main = mainBounds(state, stage, f.x, f.y), behind = f.x - facing * 150;
     const room = behind > main.x1 + 30 && behind < main.x2 - 30;
     const brawl = distance < 90 && (moveCanReach(f, target, "jab1", facing, sk.slack) || moveCanReach(f, target, "ftilt", facing, sk.slack));
     if (!brawl) {

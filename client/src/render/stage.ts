@@ -3,6 +3,7 @@ import { platformOffset } from "../../../shared/physics";
 import type { Camera } from "./camera";
 import { VIEW_H, VIEW_W } from "./camera";
 import { drawPaper, hatch, inkArc, inkLine, inkRect, INK, PAPER, PENCIL, noise } from "./paper";
+import { drawBackdropDoodles, drawStageDecor } from "./stagedecor";
 
 const DEPTHS = [0.08, 0.22, 0.35];
 const buildings = new Map<string, { canvas: HTMLCanvasElement; x: number; y: number; w: number; h: number }>();
@@ -58,6 +59,7 @@ export function drawBackdrop(ctx: CanvasRenderingContext2D, stage: Stage, cam: C
     ctx.globalAlpha = depth === 0.35 ? 0.23 : 0.12;
     // faint enough that the pencil wobble never showed: plain strokes
     ctx.strokeStyle = PENCIL; ctx.lineWidth = 1;
+    if (drawBackdropDoodles(ctx, stage.theme, depth)) { ctx.restore(); continue; }
     ctx.setLineDash([9, 12]);
     ctx.beginPath();
     ctx.moveTo(-850, depth * 500); ctx.lineTo(850, depth * 500);
@@ -71,6 +73,7 @@ export function drawBackdrop(ctx: CanvasRenderingContext2D, stage: Stage, cam: C
 }
 
 export function drawStage(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void {
+  drawStageDecor(ctx, state, stage);
   stage.platforms.forEach((p, i) => {
     if (p.hidden) return;
     const o = platformOffset(state, i);

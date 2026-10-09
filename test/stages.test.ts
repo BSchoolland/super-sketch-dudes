@@ -9,18 +9,19 @@ const PUBLIC = join(__dirname, "../client/public/stages");
 
 describe("shipped stages", () => {
   for (const s of stageList) {
-    it(`${s.id}: the main platform has its ledges, spawns stand on it, and the camera box sits inside the blast zone`, () => {
-      const main = s.platforms[0];
-      expect(main.solid).toBe(true);
-      expect(s.ledges).toEqual([
-        { x: main.x1, y: main.y, side: -1, platform: 0 },
-        { x: main.x2, y: main.y, side: 1, platform: 0 },
-      ]);
-      for (const p of s.spawns) expect(p.x > main.x1 && p.x < main.x2 && p.y === main.y, `spawn ${p.x}`).toBe(true);
+    it(`${s.id}: every solid block has its ledges, spawns stand on one, and the camera box sits inside the blast zone`, () => {
+      expect(s.platforms[0].solid).toBe(true);
+      const solids = s.platforms.flatMap((p, i) => (p.solid ? [{ p, i }] : []));
+      expect(s.ledges).toEqual(solids.flatMap(({ p, i }) => [
+        { x: p.x1, y: p.y, side: -1, platform: i },
+        { x: p.x2, y: p.y, side: 1, platform: i },
+      ]));
+      for (const sp of s.spawns) expect(solids.some(({ p }) => sp.x > p.x1 && sp.x < p.x2 && sp.y === p.y), `spawn ${sp.x}`).toBe(true);
       expect(s.respawn.y).toBeLessThan(Math.min(...s.platforms.map((p) => p.y)) - 100);
       const c = s.camera, b = s.blast;
-      expect(b.left < c.left && c.left < main.x1 && main.x2 < c.right && c.right < b.right).toBe(true);
-      expect(b.top < c.top && c.bottom < b.bottom && main.bottom! < c.bottom).toBe(true);
+      const x1 = Math.min(...solids.map(({ p }) => p.x1)), x2 = Math.max(...solids.map(({ p }) => p.x2)), bottom = Math.max(...solids.map(({ p }) => p.bottom!));
+      expect(b.left < c.left && c.left < x1 && x2 < c.right && c.right < b.right).toBe(true);
+      expect(b.top < c.top && c.bottom < b.bottom && bottom < c.bottom).toBe(true);
     });
   }
 });
