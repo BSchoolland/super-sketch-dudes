@@ -9,7 +9,7 @@ import { loadAllHouse } from "../test/house";
 await loadAllHouse();
 const N = Number(process.argv[2] ?? 12), LEVEL = Number(process.argv[3] ?? 5), PLAYERS = Number(process.argv[4] ?? 2);
 const only = process.argv[5]?.split(",");
-const ids = rosterList.map((d) => d.id);
+const ids = rosterList.map((d) => d.id).sort(); // the house fighters register in whatever order they load
 for (const stage of stageList.filter((s) => !only || only.includes(s.id))) {
   let frames = 0, kos = 0, sds = 0, timeouts = 0;
   const sides = { left: 0, right: 0, top: 0, bottom: 0 };
