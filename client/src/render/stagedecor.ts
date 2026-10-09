@@ -1,7 +1,8 @@
 import type { Stage, State } from "../../../shared/types";
-import { platformOffset } from "../../../shared/physics";
+import { platformMotion, platformOffset } from "../../../shared/physics";
 import { WHEEL } from "../../../shared/stages/fairground";
 import { NEST } from "../../../shared/stages/ship";
+import { BOOKS, CUP, PLANE } from "../../../shared/stages/desk";
 import { PENCIL } from "./paper";
 
 /**
@@ -11,13 +12,14 @@ import { PENCIL } from "./paper";
 
 /**
  * World-space scenery under the platforms: water in Islands' gaps, the cables the Elevators' lifts hang from, the
- * Fairground's wheel, the Pirate Ship's sea and mast.
+ * Fairground's wheel, the Pirate Ship's sea and mast, the School Desk's legs, books, pencil cup and paper airplane.
  */
 export function drawStageDecor(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void {
   if (stage.theme === "islands") water(ctx, state, stage);
   else if (stage.theme === "elevators") cables(ctx, state, stage);
   else if (stage.theme === "fairground") wheel(ctx, state, stage);
   else if (stage.theme === "ship") { water(ctx, state, stage); mast(ctx, state, stage); }
+  else if (stage.theme === "desk") deskTop(ctx, state, stage);
 }
 
 function water(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void {
@@ -155,6 +157,55 @@ function mast(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void {
   ctx.restore();
 }
 
+function deskTop(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void {
+  const top = stage.platforms[0];
+  ctx.save();
+  ctx.strokeStyle = PENCIL; ctx.lineCap = "round"; ctx.lineJoin = "round";
+  // legs and a footrest bar under the desk
+  ctx.globalAlpha = 0.55; ctx.lineWidth = 6;
+  ctx.beginPath();
+  for (const x of [top.x1 + 60, top.x2 - 60]) { ctx.moveTo(x, top.bottom!); ctx.lineTo(x, top.bottom! + 520); }
+  ctx.moveTo(top.x1 + 60, top.bottom! + 300); ctx.lineTo(top.x2 - 60, top.bottom! + 300);
+  ctx.stroke();
+  ctx.globalAlpha = 0.6; ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  // three books, each a little off square, spines striped
+  const h = (0 - BOOKS.y) / 3;
+  for (const [i, inset, lean] of [[0, 0, 0], [1, 14, -8], [2, 4, 10]] as const) {
+    const y0 = -i * h, y1 = y0 - h, x0 = BOOKS.x1 + inset + lean, x1 = BOOKS.x2 - inset + lean;
+    ctx.rect(x0, y1, x1 - x0, h);
+    ctx.moveTo(x0 + 18, y1); ctx.lineTo(x0 + 18, y0);
+    ctx.moveTo(x1 - 18, y1); ctx.lineTo(x1 - 18, y0);
+    ctx.moveTo(x0 + 40, y1 + h / 2); ctx.lineTo(x1 - 40, y1 + h / 2);
+  }
+  // the pencil cup, a little narrower at the foot, with pencils leaning out of it
+  const taper = 14;
+  ctx.moveTo(CUP.x1, CUP.y); ctx.lineTo(CUP.x1 + taper, 0); ctx.lineTo(CUP.x2 - taper, 0); ctx.lineTo(CUP.x2, CUP.y);
+  for (let y = CUP.y + 40; y < -10; y += 40) { const t = (y - CUP.y) / -CUP.y; ctx.moveTo(CUP.x1 + taper * t + 6, y); ctx.lineTo(CUP.x2 - taper * t - 6, y); }
+  for (const [x, ang, len] of [[CUP.x1 + 30, -1.9, 170], [(CUP.x1 + CUP.x2) / 2 - 6, -1.6, 150], [CUP.x2 - 42, -1.3, 190]]) {
+    const ex = x + Math.cos(ang) * len, ey = CUP.y + 30 + Math.sin(ang) * len;
+    ctx.moveTo(x, CUP.y + 30); ctx.lineTo(ex, ey);
+    ctx.moveTo(x + 12, CUP.y + 30); ctx.lineTo(ex + 12, ey);
+    ctx.lineTo(ex + 6 + Math.cos(ang) * 26, ey + Math.sin(ang) * 26); ctx.lineTo(ex, ey);
+  }
+  ctx.stroke();
+  // the paper airplane: its back is the platform, nose first the way it's flying
+  const i = stage.platforms.findIndex((pl) => pl.motion);
+  const o = platformOffset(state, i), next = platformMotion(stage.platforms[i], state.frame + 1);
+  const dir = next.dx >= o.dx ? 1 : -1;
+  const mid = (PLANE.x1 + PLANE.x2) / 2 + o.dx, half = (PLANE.x2 - PLANE.x1) / 2, y = PLANE.y + o.dy;
+  const tail = mid - dir * (half + 10), nose = mid + dir * (half + 50);
+  ctx.globalAlpha = 0.75; ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(tail, y); ctx.lineTo(nose, y + 6); ctx.lineTo(mid - dir * half * 0.4, y + 80); ctx.lineTo(tail, y);
+  ctx.moveTo(nose, y + 6); ctx.lineTo(mid - dir * half * 0.1, y + 48);
+  ctx.stroke();
+  ctx.globalAlpha = 0.35; ctx.lineWidth = 2;
+  ctx.setLineDash([14, 16]);
+  ctx.beginPath(); ctx.moveTo(tail - dir * 30, y + 20); ctx.lineTo(tail - dir * 190, y + 34); ctx.stroke();
+  ctx.restore();
+}
+
 /**
  * Faint doodles on one backdrop layer (already translated to the layer's origin, stroke style set), for the themes
  * that have them; false for the rest, which keep the plain construction lines.
@@ -231,6 +282,31 @@ export function drawBackdropDoodles(ctx: CanvasRenderingContext2D, theme: string
       const x = gx + dx, y = gy + dy;
       ctx.moveTo(x - 30, y); ctx.quadraticCurveTo(x - 15, y - 16, x, y); ctx.quadraticCurveTo(x + 15, y - 16, x + 30, y);
     }
+    ctx.stroke();
+    return true;
+  }
+  if (theme === "desk") {
+    ctx.beginPath();
+    // the classroom past the desk: a chalkboard with sums on it, a clock, a window
+    const by = -560 + depth * 380, bw = 760 * k, bx = -380 * k - 500 + depth * 1300;
+    ctx.rect(bx, by, bw, 380 * k);
+    ctx.moveTo(bx - 20 * k, by + 400 * k); ctx.lineTo(bx + bw + 20 * k, by + 400 * k);
+    for (let r = 0; r < 3; r++) {
+      const ly = by + (90 + r * 100) * k;
+      for (let c = 0; c < 3; c++) {
+        // a sum: "x + x = x", every digit a little squiggle
+        const lx = bx + (60 + c * 230) * k;
+        ctx.moveTo(lx, ly); ctx.quadraticCurveTo(lx + 20 * k, ly - 50 * k, lx + 30 * k, ly);
+        ctx.moveTo(lx + 60 * k, ly - 22 * k); ctx.lineTo(lx + 100 * k, ly - 22 * k); ctx.moveTo(lx + 80 * k, ly - 42 * k); ctx.lineTo(lx + 80 * k, ly - 2 * k);
+        ctx.moveTo(lx + 130 * k, ly - 30 * k); ctx.lineTo(lx + 165 * k, ly - 30 * k); ctx.moveTo(lx + 130 * k, ly - 14 * k); ctx.lineTo(lx + 165 * k, ly - 14 * k);
+      }
+    }
+    const cx = 900 - depth * 1500, cy = -620 + depth * 300, r = 70 * k;
+    ctx.moveTo(cx + r, cy); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.moveTo(cx, cy); ctx.lineTo(cx, cy - r * 0.75); ctx.moveTo(cx, cy); ctx.lineTo(cx + r * 0.5, cy + r * 0.2);
+    const wx = -1100 + depth * 600, wy = -500 + depth * 300;
+    ctx.rect(wx, wy, 320 * k, 420 * k);
+    ctx.moveTo(wx + 160 * k, wy); ctx.lineTo(wx + 160 * k, wy + 420 * k); ctx.moveTo(wx, wy + 210 * k); ctx.lineTo(wx + 320 * k, wy + 210 * k);
     ctx.stroke();
     return true;
   }
