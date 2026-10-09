@@ -81,6 +81,8 @@ export class StagePicker {
   private scroll = 0;
   /** The selection the scroll last followed: the arrows can scroll it out of view until it moves again. */
   private scrolledTo = -1;
+  private artSel = -1;
+  private artSince = 0;
   private foreign: MapDoc | null = null;
 
   constructor(private readOnly: boolean, private onChange: (setup: MatchSetup) => void = () => {}) {}
@@ -138,8 +140,9 @@ export class StagePicker {
     const edit = !this.readOnly;
     const choices = this.choices;
     if (this.sel >= choices.length) this.sel = 0;
-    // the chosen stage's full art loads while they decide, so the match opens on it
-    stageArt(choices[this.sel].stage);
+    // the chosen stage's full art loads while they decide, so the match opens on it; not while they scroll past
+    if (this.sel !== this.artSel) { this.artSel = this.sel; this.artSince = t; }
+    if (t - this.artSince > 0.4) stageArt(choices[this.sel].stage);
     const rowsShown = choices.length > COLS ? 2 : 1;
     const h = rowsShown === 1 ? 300 : 230;
     const rows = Math.ceil(choices.length / COLS);
@@ -156,7 +159,7 @@ export class StagePicker {
       if (row < 0 || row >= rowsShown) return;
       const x = x0 + (i % COLS) * (CARD_W + GAP), y = TOP + row * (h + GAP);
       if (edit && hover(x, y, CARD_W, h)) { this.row = 0; document.body.style.cursor = "pointer"; }
-      if (edit && clicked(x, y, CARD_W, h) && i !== this.sel) { this.sel = i; this.changed(); }
+      if (edit && clicked(x, y, CARD_W, h) && i !== this.sel) { this.sel = i; this.artSel = i; this.artSince = -Infinity; this.changed(); }
       card(ctx, x, y, CARD_W, h, INK, i === this.sel && (this.row === 0 || !edit), i === this.sel || edit ? 1 : 0.5);
       drawStageThumb(ctx, c.stage, x + 12, y + 12, CARD_W - 24, h - 70);
       title(ctx, c.stage.name, x + CARD_W / 2, y + h - 18, 30, INK, "center", CARD_W - 30);
