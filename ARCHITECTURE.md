@@ -84,6 +84,9 @@ removed for real when the last saver unsaves it.
    attack startup -> active -> recovery, hitstun -> tumble -> tech), ledge logic, specials.
 3. Physics: velocities, gravity, fast fall, air control, ground friction, then move and collide
    against stage geometry (platforms are one-way from below; main stage is solid; walls).
+   A stage's `gravity` (the Moon's 0.7) scales every fighter's gravity, and its fall caps by the square root.
+   A platform's `grip` (Snow Day's pond, 0.25) scales the traction of whoever stands on it; a `bounce` platform
+   (Gym Class's trampoline) springs a fighter falling onto it back up that high.
 4. Hits: for each active hitbox of each fighter, test against every other fighter's hurtboxes,
    shields, and projectiles. Resolve one hit per attacker-victim pair per move (hit ids).
    Apply damage, hitlag (both), knockback (victim), shield stun, DI.
