@@ -15,7 +15,11 @@ export interface MatchSetup { stage: string; stocks: number; time: number; map: 
 
 export type PickerAction = "fight" | "back" | null;
 
+/** The last card: a shipped stage rolled when the match starts (`StagePicker.rolled`). */
+export const RANDOM = "random";
+
 const COLS = 4, GAP = 30, TOP = 150;
+const PICKED = "#c8402c";
 const CARD_W = (VIEW_W - 2 * 160 - (COLS - 1) * GAP) / COLS;
 
 /**
@@ -91,16 +95,25 @@ export class StagePicker {
     return stageChoices(this.foreign, this.readOnly || settings.extraStages);
   }
 
+  /** What's picked so far, RANDOM included; mirrored to anyone watching. */
   get setup(): MatchSetup {
     const choices = this.choices;
-    const c = choices[Math.min(this.sel, choices.length - 1)];
-    return { stage: c.stage.id, stocks: this.stocks, time: this.minutes * 60 * 60, map: c.map };
+    const c = choices[this.sel];
+    return { stage: c ? c.stage.id : RANDOM, stocks: this.stocks, time: this.minutes * 60 * 60, map: c ? c.map : null };
+  }
+
+  /** The setup to start a match with: RANDOM becomes one of the shipped stages on offer. */
+  rolled(): MatchSetup {
+    const setup = this.setup;
+    if (setup.stage !== RANDOM) return setup;
+    const shipped = this.choices.filter((c) => !c.map);
+    return { ...setup, stage: shipped[Math.floor(Math.random() * shipped.length)].stage.id };
   }
 
   /** Mirror a pick made elsewhere. */
   show(setup: MatchSetup): void {
     if (setup.map) this.foreign = setup.map;
-    const i = this.choices.findIndex((c) => c.stage.id === setup.stage);
+    const i = setup.stage === RANDOM ? this.choices.length : this.choices.findIndex((c) => c.stage.id === setup.stage);
     if (i < 0) throw new Error(`unknown stage ${setup.stage}`);
     this.sel = i;
     this.stocks = setup.stocks;
@@ -116,7 +129,7 @@ export class StagePicker {
   }
 
   private step(row: number, d: number): void {
-    const n = this.choices.length;
+    const n = this.choices.length + 1;
     if (row === 0) this.sel = (this.sel + d + n) % n;
     if (row === 1) this.stocks = Math.max(1, Math.min(10, this.stocks + d));
     if (row === 2) this.minutes = Math.max(0, Math.min(10, this.minutes + d));
@@ -139,30 +152,38 @@ export class StagePicker {
     title(ctx, "STAGE", VIEW_W / 2, 90, 64);
     const edit = !this.readOnly;
     const choices = this.choices;
-    if (this.sel >= choices.length) this.sel = 0;
+    const cards = choices.length + 1;
+    if (this.sel >= cards) this.sel = 0;
     // the chosen stage's full art loads while they decide, so the match opens on it; not while they scroll past
     if (this.sel !== this.artSel) { this.artSel = this.sel; this.artSince = t; }
-    if (t - this.artSince > 0.4) stageArt(choices[this.sel].stage);
-    const rowsShown = choices.length > COLS ? 2 : 1;
+    if (t - this.artSince > 0.4 && choices[this.sel]) stageArt(choices[this.sel].stage);
+    const rowsShown = cards > COLS ? 2 : 1;
     const h = rowsShown === 1 ? 300 : 230;
-    const rows = Math.ceil(choices.length / COLS);
+    const rows = Math.ceil(cards / COLS);
     const selRow = Math.floor(this.sel / COLS);
     if (this.sel !== this.scrolledTo) {
       this.scrolledTo = this.sel;
       if (selRow < this.scroll) this.scroll = selRow;
       if (selRow >= this.scroll + rowsShown) this.scroll = selRow - rowsShown + 1;
     }
-    const shown = Math.min(choices.length, COLS);
+    const shown = Math.min(cards, COLS);
     const x0 = (VIEW_W - (shown * CARD_W + (shown - 1) * GAP)) / 2;
-    choices.forEach((c, i) => {
+    [...choices, null].forEach((c, i) => {
       const row = Math.floor(i / COLS) - this.scroll;
       if (row < 0 || row >= rowsShown) return;
       const x = x0 + (i % COLS) * (CARD_W + GAP), y = TOP + row * (h + GAP);
       if (edit && hover(x, y, CARD_W, h)) { this.row = 0; document.body.style.cursor = "pointer"; }
       if (edit && clicked(x, y, CARD_W, h) && i !== this.sel) { this.sel = i; this.artSel = i; this.artSince = -Infinity; this.changed(); }
-      card(ctx, x, y, CARD_W, h, INK, i === this.sel && (this.row === 0 || !edit), i === this.sel || (edit && this.row === 0) ? 1 : 0.5);
+      const picked = i === this.sel;
+      card(ctx, x, y, CARD_W, h, INK, picked && (this.row === 0 || !edit), picked ? 1 : edit && this.row === 0 ? 0.75 : 0.5);
+      const nameInk = picked ? PICKED : INK;
+      if (!c) {
+        title(ctx, "?", x + CARD_W / 2, y + (h - 70) / 2 + 48, Math.min(150, h - 90), INK);
+        title(ctx, "RANDOM", x + CARD_W / 2, y + h - 18, 30, nameInk, "center", CARD_W - 30);
+        return;
+      }
       drawStageThumb(ctx, c.stage, x + 12, y + 12, CARD_W - 24, h - 70);
-      title(ctx, c.stage.name, x + CARD_W / 2, y + h - 18, 30, INK, "center", CARD_W - 30);
+      title(ctx, c.stage.name, x + CARD_W / 2, y + h - 18, 30, nameInk, "center", CARD_W - 30);
       if (c.map) label(ctx, c.map.owner === account.player?.id ? "your map" : `${c.map.ownerName}'s map`, x + CARD_W - 14, y + 30, 18, PENCIL, "right");
     });
     // more rows above or below: an arrow beside the top or bottom row
@@ -196,7 +217,7 @@ export class StageScreen implements Screen {
   constructor(private onStart: (setup: MatchSetup) => Screen, private onBack: () => Screen) {}
 
   private act(action: PickerAction): Screen | null {
-    if (action === "fight") return this.onStart(this.picker.setup);
+    if (action === "fight") return this.onStart(this.picker.rolled());
     if (action === "back") return this.onBack();
     return null;
   }
@@ -216,7 +237,7 @@ export class StageScreen implements Screen {
 function scrollArrow(ctx: CanvasRenderingContext2D, glyph: string, cx: number, cy: number, size = 40): boolean {
   const x = cx - size / 2, y = cy - size * 0.9, w = size, h = size * 1.2;
   const over = hover(x, y, w, h);
-  label(ctx, glyph, cx, cy, size * (over ? 1.15 : 1), over ? "#c8402c" : INK);
+  label(ctx, glyph, cx, cy, size * (over ? 1.15 : 1), over ? PICKED : INK);
   if (over) document.body.style.cursor = "pointer";
   return clicked(x, y, w, h);
 }

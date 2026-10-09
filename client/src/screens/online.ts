@@ -299,7 +299,7 @@ export class OnlineScreen implements Screen {
     if (!room || !this.picker || !action) return;
     const isHost = room.host === this.context.id;
     if (action === "back") { if (isHost) this.context.transport.sendLobby({ t: "picking", pick: null }); else this.leave(); return; }
-    if (isHost) this.startMatch(this.picker.setup);
+    if (isHost) this.startMatch(this.picker.rolled());
   }
 
   private startMatch(setup: MatchSetup): void {
