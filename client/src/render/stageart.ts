@@ -1,7 +1,7 @@
 import type { Stage, State } from "../../../shared/types";
 import { platformOffset } from "../../../shared/physics";
 import { VIEW_H, VIEW_W, type Camera } from "./camera";
-import { inkPath, noise } from "./paper";
+import { inkPath, noise, PAPER } from "./paper";
 
 /**
  * Stages drawn from art rather than pencil boxes: `public/stages/<theme>/stage.json` and the images next to it,
@@ -67,6 +67,9 @@ function canvasOf(w: number, h: number, opaque: boolean): [HTMLCanvasElement, Ca
   return [c, g];
 }
 
+/** How far a backdrop (cover layer) is faded toward the paper. */
+const BACKDROP_WASH = 0.22;
+
 /** The image blurred once (never per frame) and halved until it fits in 512 px, so every zoom draws from a level within 2x of its size. */
 function mipChain(img: HTMLImageElement, blur: number, opaque: boolean): HTMLCanvasElement[] {
   const [top, g] = canvasOf(img.naturalWidth, img.naturalHeight, opaque);
@@ -77,6 +80,10 @@ function mipChain(img: HTMLImageElement, blur: number, opaque: boolean): HTMLCan
     g.drawImage(img, 0, 0);
     g.filter = "none";
   } else g.drawImage(img, 0, 0);
+  if (opaque) {
+    // the backdrop washed toward the paper, so the drawn fighters stand out from a busy painting
+    g.globalAlpha = BACKDROP_WASH; g.fillStyle = PAPER; g.fillRect(0, 0, top.width, top.height); g.globalAlpha = 1;
+  }
   const mips = [top];
   while (Math.max(mips[mips.length - 1].width, mips[mips.length - 1].height) > 512) {
     const prev = mips[mips.length - 1];
