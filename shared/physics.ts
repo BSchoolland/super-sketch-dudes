@@ -1,6 +1,6 @@
 import { C } from "./config";
 import { cosDeg, sinDeg } from "./fixed";
-import { defOf, grabLedge, hitWall, land, setAction } from "./fighter";
+import { currentMove, defOf, grabLedge, hitWall, land, setAction } from "./fighter";
 import { fx } from "./fx";
 import type { InputFrame } from "./input";
 import { STICK_RUN } from "./input";
@@ -83,6 +83,8 @@ export function stepPhysics(state: State, f: Fighter, input: InputFrame, stage: 
         if (Math.abs(n.y - t.y) <= 1 && f.x >= n.x1 && f.x <= n.x2) { f.platform = i; f.y = n.y; return; }
       }
       // walk off the edge
+      // on ice, only someone running, walking or knocked goes over; a slide (a ground attack's too) stops at the lip
+      if (t.p.grip !== undefined && (f.action === "idle" || f.action === "skid" || f.action === "runTurn" || f.action === "land" || f.action === "crouch" || f.action === "attack")) { f.x = f.x < t.x1 ? t.x1 : t.x2; f.vx = 0; return; }
       const keep = f.action === "attack" || f.action === "hitstun" || f.action === "roll" || f.action === "techRoll" || f.action === "getupRoll" || f.action === "ledgeRoll";
       if (f.action === "dash" || f.action === "run" || f.action === "walk" || f.action === "idle" || f.action === "skid" || f.action === "runTurn") {
         // idle-ish states teeter instead of falling unless moving
@@ -118,7 +120,9 @@ export function stepPhysics(state: State, f: Fighter, input: InputFrame, stage: 
       f.y = bestY;
       f.x = Math.max(platTop(state, stage, best).x1, Math.min(platTop(state, stage, best).x2, f.x));
       const bounce = stage.platforms[best].bounce;
-      if (bounce && input.y < STICK_RUN && (f.action === "air" || f.action === "helpless")) {
+      // an aerial or an air dodge bounces too (instead of its landing lag): a kid mashing attack still springs
+      const springy = f.action === "air" || f.action === "helpless" || f.action === "airDodge" || (f.action === "attack" && !!currentMove(f)?.aerial);
+      if (bounce && input.y < STICK_RUN && springy) {
         state.events.push({ t: "land", frame: state.frame, slot: f.slot, x: f.x, y: f.y, hard: false });
         // the same height for everyone, whatever their gravity
         f.vy = -Math.sqrt(2 * s.gravity * (stage.gravity ?? 1) * bounce);
@@ -127,7 +131,7 @@ export function stepPhysics(state: State, f: Fighter, input: InputFrame, stage: 
         f.usedUpSpecial = false;
         f.airDodged = false;
         f.wallJumped = false;
-        if (f.action === "helpless") setAction(f, "air");
+        if (f.action !== "air") setAction(f, "air");
         return;
       }
       if (f.action === "hitstun" && f.pending === null && f.hitstun > 0 && f.vy > 3) { f.vy = 0; }

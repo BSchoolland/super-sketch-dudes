@@ -159,6 +159,16 @@ describe("ice", () => {
   it("lets a fighter stopping a run on the frozen pond slide on much further", () => {
     expect(slide("snow")).toBeGreaterThan(slide("gym") * 3);
   });
+  it("stops a slide at the edge instead of carrying the fighter over it", () => {
+    const s = createMatch({ stage: "snow", players: [{ fighter: "lampjack" }, { fighter: "lampjack" }], seed: 1 });
+    const f = s.fighters[0];
+    s.fighters[1].x = -500;
+    f.x = 300;
+    for (let i = 0; i < 40 && f.x < 560; i++) step(s, [inp({ x: 100 }), EMPTY_INPUT]);
+    for (let i = 0; i < 90; i++) step(s, [EMPTY_INPUT, EMPTY_INPUT]);
+    expect(f.grounded).toBe(true);
+    expect(f.x).toBeLessThanOrEqual(620);
+  });
 });
 
 describe("trampoline", () => {
@@ -183,6 +193,20 @@ describe("trampoline", () => {
   it("springs everyone about as high, whatever their gravity", () => {
     const tops = ["lampjack", "slugbert", "woodstove"].map((id) => drop({}, id).back);
     expect(Math.max(...tops) - Math.min(...tops)).toBeLessThan(40);
+  });
+  it("springs a fighter mashing attack on the way down, cutting the aerial short", () => {
+    const s = createMatch({ stage: "gym", players: [{ fighter: "lampjack" }, { fighter: "lampjack" }], seed: 1 });
+    const f = s.fighters[0];
+    f.x = 0; f.y = -200; f.grounded = false; f.platform = -1; f.action = "air";
+    let aerialAtLanding = false, back = Infinity;
+    for (let i = 0; i < 90; i++) {
+      const wasAttacking = s.fighters[0].action === "attack";
+      step(s, [inp({ b: i % 4 < 2 ? B.ATTACK : 0 }), EMPTY_INPUT]);
+      if (wasAttacking && f.vy < 0 && f.y > -100) aerialAtLanding = true;
+      if (aerialAtLanding) back = Math.min(back, f.y);
+    }
+    expect(aerialAtLanding).toBe(true);
+    expect(back).toBeLessThan(-250);
   });
   it("lets a fighter holding down land on it", () => {
     const { f } = drop({ y: 100 });

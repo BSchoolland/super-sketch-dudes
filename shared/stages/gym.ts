@@ -4,6 +4,8 @@ import type { Stage } from "../types";
 export const TRAMPOLINE = { x1: -130, x2: 130, y: -70 };
 export const BLEACHERS = { x1: 340, x2: 540, y: -250 };
 export const BACKBOARD = { x1: -90, x2: 90, y: -540 };
+/** How high a trampoline springs you (player maps' bouncy pieces too). */
+export const BOUNCE = 380;
 
 /** Gym class: a trampoline in the middle bounces you up toward the basketball backboard. */
 export const gym: Stage = {
@@ -11,7 +13,7 @@ export const gym: Stage = {
   name: "Gym Class",
   platforms: [
     { x1: -660, x2: 660, y: 0, solid: true, bottom: 140 },
-    { ...TRAMPOLINE, bounce: 380 },
+    { ...TRAMPOLINE, bounce: BOUNCE },
     { x1: -BLEACHERS.x2, x2: -BLEACHERS.x1, y: BLEACHERS.y },
     { ...BLEACHERS },
     { ...BACKBOARD },

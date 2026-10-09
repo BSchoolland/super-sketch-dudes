@@ -3,6 +3,8 @@ export const INK = "#292722";
 export const PENCIL = "#777267";
 /** Ice on a slippery platform. */
 export const ICE = "#cfe5f1";
+/** The pad on a trampoline. */
+export const PAD = "#f3b7a2";
 export const FONT = "'Patrick Hand', 'Comic Sans MS', cursive";
 
 export function noise(seed: number): number {

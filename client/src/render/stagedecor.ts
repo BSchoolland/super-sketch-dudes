@@ -8,6 +8,9 @@ import { BACKBOARD, BLEACHERS, TRAMPOLINE } from "../../../shared/stages/gym";
 import { BRANCH, HAT, PINE_X } from "../../../shared/stages/snow";
 import { PENCIL } from "./paper";
 
+/** How far a bouncy platform's springs reach down. */
+export const SPRING = 16;
+
 /** What scenery reads of a match: the frame (things that move) and where the moving platforms are. */
 export type Scene = Pick<State, "frame" | "platOffsets">;
 
@@ -266,14 +269,10 @@ function gymScene(ctx: CanvasRenderingContext2D): void {
   ctx.strokeStyle = PENCIL; ctx.lineCap = "round"; ctx.lineJoin = "round";
   ctx.globalAlpha = 0.6; ctx.lineWidth = 2.5;
   ctx.beginPath();
-  // the trampoline: a frame under the bed on four legs, springs between them
-  const { x1, x2, y } = TRAMPOLINE, frame = y + 26;
+  // the trampoline: a frame on four legs under the bed's springs
+  const { x1, x2, y } = TRAMPOLINE, frame = y + 16 + SPRING;
   ctx.moveTo(x1 - 14, frame); ctx.lineTo(x2 + 14, frame);
   for (const x of [x1 - 4, x1 + 50, x2 - 50, x2 + 4]) { ctx.moveTo(x, frame); ctx.lineTo(x + (x < 0 ? -6 : 6), 0); }
-  for (let x = x1 + 8; x <= x2 - 8; x += 24) {
-    ctx.moveTo(x, y + 4);
-    for (let k = 1; k <= 4; k++) ctx.lineTo(x + (k % 2 ? 5 : -5), y + 4 + k * 5.5);
-  }
   // bleachers: the top bench on stilts, braced
   for (const side of [-1, 1]) {
     const a = side < 0 ? -BLEACHERS.x2 : BLEACHERS.x1, b = side < 0 ? -BLEACHERS.x1 : BLEACHERS.x2, by = BLEACHERS.y;
@@ -303,32 +302,28 @@ function snowScene(ctx: CanvasRenderingContext2D, state: Scene): void {
     const tx = side * PINE_X, inner = side * BRANCH.x1 - tx;
     ctx.moveTo(tx - 14, 0); ctx.lineTo(tx - 14, BRANCH.y + 20); ctx.moveTo(tx + 14, 0); ctx.lineTo(tx + 14, BRANCH.y + 20);
     // one zigzag outline down each side, tier by tier, closed along the bottom by the branch
-    const tiers = [[-470, 85, 40], [-340, 140, 75], [BRANCH.y, Math.abs(inner), 0]];
+    const tiers = [[-420, 75, 36], [-320, 125, 68], [BRANCH.y, Math.abs(inner), 0]];
     for (const d of [-1, 1]) {
-      ctx.moveTo(tx, -640);
+      ctx.moveTo(tx, -560);
       for (const [foot, half, notch] of tiers) { ctx.lineTo(tx + d * half, foot); if (notch) ctx.lineTo(tx + d * notch, foot); }
     }
-    // snow along each tier's edge
-    for (const [foot, half, notch] of tiers.slice(0, 2)) {
-      for (const d of [-1, 1]) { ctx.moveTo(tx + d * half, foot); ctx.quadraticCurveTo(tx + d * (half + notch) / 2, foot + 14, tx + d * notch, foot); }
-    }
+    ctx.moveTo(side * BRANCH.x2, BRANCH.y); ctx.lineTo(tx + side * Math.abs(inner), BRANCH.y);
   }
   // the snowman: three balls, stick arms, coal eyes and buttons, a top hat whose top is the platform
-  const balls = [[-85, 85], [-228, 62], [-332, 45]];
+  const balls = [[-70, 70], [-185, 50], [-265, 36]];
   for (const [y, r] of balls) { ctx.moveTo(r, y); ctx.arc(0, y, r, 0, Math.PI * 2); }
-  ctx.moveTo(-58, -238); ctx.lineTo(-150, -290); ctx.lineTo(-170, -320); ctx.moveTo(-130, -279); ctx.lineTo(-140, -312);
-  ctx.moveTo(58, -238); ctx.lineTo(150, -280); ctx.lineTo(178, -270); ctx.moveTo(132, -272); ctx.lineTo(150, -300);
-  const brim = -372;
-  ctx.moveTo(-85, brim); ctx.lineTo(85, brim);
+  for (const d of [-1, 1]) { ctx.moveTo(d * 47, -195); ctx.lineTo(d * 125, -240); ctx.lineTo(d * 142, -264); ctx.moveTo(d * 106, -229); ctx.lineTo(d * 112, -256); }
+  const brim = -300;
+  ctx.moveTo(-72, brim); ctx.lineTo(72, brim);
   ctx.rect(HAT.x1, HAT.y, HAT.x2 - HAT.x1, brim - HAT.y);
-  ctx.moveTo(HAT.x1, brim - 18); ctx.lineTo(HAT.x2, brim - 18);
+  ctx.moveTo(HAT.x1, brim - 12); ctx.lineTo(HAT.x2, brim - 12);
   ctx.stroke();
   ctx.fillStyle = PENCIL;
   ctx.beginPath();
-  for (const [x, y, r] of [[-16, -342, 5], [16, -342, 5], [0, -250, 6], [0, -210, 6], [0, -120, 7]]) { ctx.moveTo(x + r, y); ctx.arc(x, y, r, 0, Math.PI * 2); }
+  for (const [x, y, r] of [[-12, -274, 4], [12, -274, 4], [0, -200, 5], [0, -168, 5], [0, -95, 6]]) { ctx.moveTo(x + r, y); ctx.arc(x, y, r, 0, Math.PI * 2); }
   ctx.fill();
   ctx.fillStyle = "#e8833a"; ctx.globalAlpha = 0.85;
-  ctx.beginPath(); ctx.moveTo(-4, -330); ctx.lineTo(38, -322); ctx.lineTo(-4, -318); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-3, -266); ctx.lineTo(30, -260); ctx.lineTo(-3, -255); ctx.fill();
   // snow drifting down
   ctx.globalAlpha = 0.45; ctx.lineWidth = 2;
   ctx.beginPath();
@@ -423,17 +418,21 @@ export function drawBackdropDoodles(ctx: CanvasRenderingContext2D, theme: string
   }
   if (theme === "gym") {
     ctx.beginPath();
-    // the gym wall: high windows, a scoreboard, a string of pennants and a climbing rope
-    const wy = -620 + depth * 300;
-    for (let i = -2; i <= 2; i++) { const wx = i * 360 * k + depth * 400 - 90; ctx.rect(wx, wy, 180 * k, 110 * k); ctx.moveTo(wx + 90 * k, wy); ctx.lineTo(wx + 90 * k, wy + 110 * k); }
-    const sx = -200 - depth * 600, sy = -380 + depth * 300;
-    ctx.rect(sx, sy, 400 * k, 160 * k);
-    ctx.rect(sx + 40 * k, sy + 60 * k, 110 * k, 70 * k); ctx.rect(sx + 250 * k, sy + 60 * k, 110 * k, 70 * k);
-    const py = -470 + depth * 200;
-    ctx.moveTo(-900, py); ctx.quadraticCurveTo(0, py + 90, 900, py);
-    for (let i = -8; i <= 8; i++) { const px = i * 100, t = (px + 900) / 1800, ly = py + 2 * 90 * t * (1 - t); ctx.moveTo(px - 25, ly); ctx.lineTo(px, ly + 50 * k); ctx.lineTo(px + 25, ly); }
-    const rx = 760 - depth * 900;
-    ctx.moveTo(rx, -900); ctx.bezierCurveTo(rx + 12, -500, rx - 12, -200, rx + 6, 60);
+    // the gym wall, one thing per layer so they don't pile up: high windows far back, pennants, then a scoreboard
+    // and a climbing rope nearest
+    if (depth < 0.1) {
+      for (let i = -2; i <= 2; i++) { const wx = i * 360 - 90; ctx.rect(wx, -560, 180, 110); ctx.moveTo(wx + 90, -560); ctx.lineTo(wx + 90, -450); }
+    } else if (depth < 0.3) {
+      const py = -470 + depth * 200;
+      ctx.moveTo(-900, py); ctx.quadraticCurveTo(0, py + 90, 900, py);
+      for (let i = -8; i <= 8; i++) { const px = i * 100, t = (px + 900) / 1800, ly = py + 2 * 90 * t * (1 - t); ctx.moveTo(px - 25, ly); ctx.lineTo(px, ly + 50 * k); ctx.lineTo(px + 25, ly); }
+    } else {
+      const sx = -460, sy = -330;
+      ctx.rect(sx, sy, 400 * k, 160 * k);
+      ctx.rect(sx + 40 * k, sy + 60 * k, 110 * k, 70 * k); ctx.rect(sx + 250 * k, sy + 60 * k, 110 * k, 70 * k);
+      const rx = 760 - depth * 900;
+      ctx.moveTo(rx, -900); ctx.bezierCurveTo(rx + 12, -500, rx - 12, -200, rx + 6, 60);
+    }
     ctx.stroke();
     return true;
   }

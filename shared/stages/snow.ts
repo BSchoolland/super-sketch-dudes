@@ -3,14 +3,16 @@ import type { Stage } from "../types";
 /** A snowy branch low on each pine (pointing in), and the top of the snowman's hat. */
 export const BRANCH = { x1: 330, x2: 500, y: -210 };
 export const PINE_X = 540;
-export const HAT = { x1: -60, x2: 60, y: -455 };
+export const HAT = { x1: -60, x2: 60, y: -335 };
+/** Traction on ice (player maps' icy pieces too). */
+export const ICE_GRIP = 0.25;
 
 /** Snow Day: the whole floor is a frozen pond, so you slide; pine branches and a snowman's hat to stand on. */
 export const snow: Stage = {
   id: "snow",
   name: "Snow Day",
   platforms: [
-    { x1: -620, x2: 620, y: 0, solid: true, bottom: 140, grip: 0.25 },
+    { x1: -620, x2: 620, y: 0, solid: true, bottom: 140, grip: ICE_GRIP },
     { x1: -BRANCH.x2, x2: -BRANCH.x1, y: BRANCH.y },
     { ...BRANCH },
     { ...HAT },

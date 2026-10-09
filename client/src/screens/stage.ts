@@ -1,5 +1,5 @@
 import { VIEW_H, VIEW_W } from "../render/camera";
-import { hatch, ICE, inkLine, inkRect, PAPER, PENCIL } from "../render/paper";
+import { hatch, ICE, inkLine, inkRect, PAD, PAPER, PENCIL } from "../render/paper";
 import { platformMotion } from "../../../shared/physics";
 import type { MenuInput } from "../input/devices";
 import { sfx } from "../audio/audio";
@@ -75,6 +75,16 @@ function drawPlatformDiagram(ctx: CanvasRenderingContext2D, stage: Stage, x: num
     ctx.fillStyle = PAPER; ctx.fillRect(px, py, pw, ph);
     hatch(ctx, px, py, pw, ph, PENCIL, 0.36);
     if (p.grip) { ctx.fillStyle = ICE; ctx.fillRect(px, py, pw, 7); }
+    if (p.bounce) {
+      ctx.fillStyle = PAD; ctx.fillRect(px, py, pw, Math.min(ph, 7));
+      ctx.save();
+      ctx.strokeStyle = PENCIL; ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      const top = p.solid ? py + 2 : py + ph;
+      for (let zx = px + 4; zx <= px + pw - 4; zx += 7) { ctx.moveTo(zx, top); ctx.lineTo(zx + 2, top + 2); ctx.lineTo(zx - 2, top + 4); ctx.lineTo(zx, top + 6); }
+      ctx.stroke();
+      ctx.restore();
+    }
     inkRect(ctx, px, py, pw, ph, PENCIL, 1.5);
     inkLine(ctx, px, py, px + pw, py, INK, 3, i);
   });
