@@ -617,7 +617,7 @@ function routeTo(state: State, f: Fighter, target: Fighter, stage: Stage): { me:
   const me = f.grounded && f.platform >= 0 ? surfs[f.platform] : surfaceUnder(surfs, f.x, f.y);
   const goal = target.grounded && target.platform >= 0 ? surfs[target.platform] : surfaceUnder(surfs, target.x, target.y);
   if (!me || !goal || me.i === goal.i) return null;
-  const path = route(surfs, me, goal, legs(f));
+  const path = route(surfs, me, goal, legs(f, stage));
   if (!path || path.length < 2) return null;
   return { me, next: path[1], goal };
 }
@@ -642,7 +642,7 @@ function navInput(state: State, f: Fighter, target: Fighter, stage: Stage): Inpu
   const out = blank();
   const dx = lx - f.x;
   if (Math.abs(dx) > 16) { out.x = sign(dx) * (Math.abs(dx) > 120 ? 100 : 55); return out; }
-  if (!canCross(me, next, legs(f), true)) return out;
+  if (!canCross(me, next, legs(f, stage), true)) return out;
   if (next.y < me.y - 8) {
     // up: a full hop, held toward the far side
     out.b = B.JUMP;

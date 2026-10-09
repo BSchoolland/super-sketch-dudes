@@ -3,6 +3,7 @@ import { platformMotion, platformOffset } from "../../../shared/physics";
 import { WHEEL } from "../../../shared/stages/fairground";
 import { NEST } from "../../../shared/stages/ship";
 import { BOOKS, CUP, PLANE } from "../../../shared/stages/desk";
+import { LANDER, ROCK } from "../../../shared/stages/moon";
 import { PENCIL } from "./paper";
 
 /**
@@ -12,7 +13,8 @@ import { PENCIL } from "./paper";
 
 /**
  * World-space scenery under the platforms: water in Islands' gaps, the cables the Elevators' lifts hang from, the
- * Fairground's wheel, the Pirate Ship's sea and mast, the School Desk's legs, books, pencil cup and paper airplane.
+ * Fairground's wheel, the Pirate Ship's sea and mast, the School Desk's legs, books, pencil cup and paper airplane,
+ * the Moon's lander, flag and floating rock.
  */
 export function drawStageDecor(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void {
   if (stage.theme === "islands") water(ctx, state, stage);
@@ -20,6 +22,7 @@ export function drawStageDecor(ctx: CanvasRenderingContext2D, state: State, stag
   else if (stage.theme === "fairground") wheel(ctx, state, stage);
   else if (stage.theme === "ship") { water(ctx, state, stage); mast(ctx, state, stage); }
   else if (stage.theme === "desk") deskTop(ctx, state, stage);
+  else if (stage.theme === "moon") moonScene(ctx, state, stage);
 }
 
 function water(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void {
@@ -206,6 +209,42 @@ function deskTop(ctx: CanvasRenderingContext2D, state: State, stage: Stage): voi
   ctx.restore();
 }
 
+function moonScene(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void {
+  const ground = stage.platforms[0];
+  ctx.save();
+  ctx.strokeStyle = PENCIL; ctx.lineCap = "round"; ctx.lineJoin = "round";
+  ctx.globalAlpha = 0.55; ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  // crater rims along the ground behind the fighters
+  for (const [x, w] of [[-120, 150], [300, 110], [520, 70]]) { ctx.moveTo(x - w, 0); ctx.quadraticCurveTo(x - w * 0.8, -28, x - w * 0.5, -22); ctx.moveTo(x + w * 0.5, -22); ctx.quadraticCurveTo(x + w * 0.8, -28, x + w, 0); }
+  // the lander: an angular body under its deck with a window and a nozzle, splayed legs on round feet, a dish
+  const { x1, x2, y } = LANDER, mid = (x1 + x2) / 2;
+  ctx.moveTo(x1 + 10, y); ctx.lineTo(x1 - 12, y + 50); ctx.lineTo(x1 + 20, y + 100); ctx.lineTo(x2 - 20, y + 100); ctx.lineTo(x2 + 12, y + 50); ctx.lineTo(x2 - 10, y);
+  ctx.moveTo(mid + 20, y + 48); ctx.arc(mid, y + 48, 20, 0, Math.PI * 2);
+  ctx.moveTo(mid - 20, y + 100); ctx.lineTo(mid - 32, y + 136); ctx.lineTo(mid + 32, y + 136); ctx.lineTo(mid + 20, y + 100);
+  for (const side of [-1, 1]) {
+    const hip = side < 0 ? x1 - 4 : x2 + 4, foot = side < 0 ? x1 - 60 : x2 + 60;
+    ctx.moveTo(hip, y + 60); ctx.lineTo(foot, -10);
+    ctx.moveTo(mid + side * 40, y + 100); ctx.lineTo((hip + foot) / 2, (y + 60 - 10) / 2);
+    ctx.moveTo(foot + 22, 0); ctx.arc(foot, 0, 22, 0, Math.PI, true);
+  }
+  ctx.moveTo(x2 - 50, y); ctx.lineTo(x2 - 50, y - 60); ctx.moveTo(x2 - 82, y - 78); ctx.quadraticCurveTo(x2 - 50, y - 40, x2 - 18, y - 78);
+  // a flag on a stiff pole (there's no wind to wave it)
+  const fx = ground.x2 - 110;
+  ctx.moveTo(fx, 0); ctx.lineTo(fx, -230); ctx.rect(fx, -230, 110, 70);
+  ctx.moveTo(fx + 20, -215); ctx.lineTo(fx + 90, -215); ctx.moveTo(fx + 20, -195); ctx.lineTo(fx + 90, -195); ctx.moveTo(fx + 20, -175); ctx.lineTo(fx + 60, -175);
+  // the floating rock: a lumpy underside hanging from its flat top
+  const i = stage.platforms.findIndex((pl) => pl.motion);
+  const o = platformOffset(state, i), ry = ROCK.y + o.dy, w = ROCK.x2 - ROCK.x1;
+  ctx.moveTo(ROCK.x1, ry);
+  ctx.bezierCurveTo(ROCK.x1 - 10, ry + 60, ROCK.x1 + w * 0.3, ry + 100, ROCK.x1 + w * 0.55, ry + 92);
+  ctx.bezierCurveTo(ROCK.x1 + w * 0.8, ry + 88, ROCK.x2 + 12, ry + 50, ROCK.x2, ry);
+  ctx.moveTo(ROCK.x1 + w * 0.3, ry + 40); ctx.arc(ROCK.x1 + w * 0.3 - 14, ry + 40, 14, 0, Math.PI * 2);
+  ctx.moveTo(ROCK.x1 + w * 0.7, ry + 58); ctx.arc(ROCK.x1 + w * 0.7 - 9, ry + 58, 9, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
 /**
  * Faint doodles on one backdrop layer (already translated to the layer's origin, stroke style set), for the themes
  * that have them; false for the rest, which keep the plain construction lines.
@@ -281,6 +320,24 @@ export function drawBackdropDoodles(ctx: CanvasRenderingContext2D, theme: string
     for (const [dx, dy] of [[0, 0], [90, -40], [170, 10]]) {
       const x = gx + dx, y = gy + dy;
       ctx.moveTo(x - 30, y); ctx.quadraticCurveTo(x - 15, y - 16, x, y); ctx.quadraticCurveTo(x + 15, y - 16, x + 30, y);
+    }
+    ctx.stroke();
+    return true;
+  }
+  if (theme === "moon") {
+    ctx.beginPath();
+    // stars on every layer, a planet on the nearest
+    for (let n = 0; n < 14; n++) {
+      const sx = ((n * 397 + depth * 1000) % 2000) - 1000, sy = ((n * 233 + depth * 700) % 900) - 700, r = 6 * k + 3;
+      ctx.moveTo(sx - r, sy); ctx.lineTo(sx + r, sy); ctx.moveTo(sx, sy - r); ctx.lineTo(sx, sy + r);
+    }
+    if (depth > 0.3) {
+      // a ringed planet, the ring drawn through it the way kids draw one
+      const ex = 520, ey = -470, er = 95;
+      ctx.moveTo(ex + er, ey); ctx.arc(ex, ey, er, 0, Math.PI * 2);
+      ctx.moveTo(ex + er * 1.9, ey); ctx.ellipse(ex, ey, er * 1.9, er * 0.42, -0.3, 0, Math.PI * 2);
+      ctx.moveTo(ex - er * 0.8, ey - 30); ctx.quadraticCurveTo(ex, ey - 50, ex + er * 0.8, ey - 30);
+      ctx.moveTo(ex - er * 0.7, ey + 45); ctx.quadraticCurveTo(ex, ey + 25, ex + er * 0.75, ey + 40);
     }
     ctx.stroke();
     return true;

@@ -125,6 +125,25 @@ describe("a full CPU match ends", () => {
   });
 });
 
+describe("low gravity", () => {
+  it("a full hop on the Moon rises about 1/gravity as high and falls slower", () => {
+    const hop = (stage: string) => {
+      const s = createMatch({ stage, players: [{ fighter: "lampjack" }, { fighter: "lampjack" }], seed: 1 });
+      const f = s.fighters[0], y0 = f.y;
+      let top = 0, fall = 0;
+      for (let i = 0; i < 240; i++) {
+        step(s, [inp({ b: i < 12 ? B.JUMP : 0 }), EMPTY_INPUT]);
+        top = Math.max(top, y0 - f.y); fall = Math.max(fall, f.vy);
+      }
+      return { top, fall };
+    };
+    const earth = hop("proving"), moon = hop("moon");
+    expect(moon.top / earth.top).toBeGreaterThan(1.4);
+    expect(moon.top / earth.top).toBeLessThan(1.65);
+    expect(moon.fall).toBeLessThan(earth.fall);
+  });
+});
+
 describe("menu brawl stage", () => {
   it("runs six CPUs for a minute on the title screen's stage, fighters dropping in mid-match, and never ends", async () => {
     await loadAllHouse();

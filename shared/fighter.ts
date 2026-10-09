@@ -312,8 +312,16 @@ export function airControl(f: Fighter, def: FighterDef, input: InputFrame, mul =
   }
 }
 
-export function applyGravity(f: Fighter, def: FighterDef, input: InputFrame, allowFastFall = true): void {
-  const s = def.stats;
+/** A fighter's gravity and fall-speed cap on this stage: a low-gravity stage scales the caps by the root of its pull. */
+function pull(def: FighterDef, stage: Stage): { gravity: number; fallSpeed: number; fastFall: number } {
+  const k = stage.gravity ?? 1, s = def.stats;
+  if (k === 1) return s;
+  const r = Math.sqrt(k);
+  return { gravity: s.gravity * k, fallSpeed: s.fallSpeed * r, fastFall: s.fastFall * r };
+}
+
+export function applyGravity(f: Fighter, def: FighterDef, input: InputFrame, stage: Stage, allowFastFall = true): void {
+  const s = pull(def, stage);
   if (allowFastFall && !f.fastFalling && f.vy >= -0.5 && (input.y >= STICK_RUN && (f.flickY > 0 || input.y >= 90))) f.fastFalling = true;
   const cap = f.fastFalling ? s.fastFall : s.fallSpeed;
   f.vy += s.gravity;
@@ -561,13 +569,13 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
     case "air": {
       if (tryAirActions(state, f, def, input, e)) break;
       airControl(f, def, input);
-      applyGravity(f, def, input);
+      applyGravity(f, def, input, stage);
       if (Math.abs(input.x) >= STICK_DEAD && f.frame > 2) f.facing = f.facing; // facing locks in the air
       break;
     }
     case "helpless": {
       airControl(f, def, input, 0.6);
-      applyGravity(f, def, input);
+      applyGravity(f, def, input, stage);
       break;
     }
     case "land": {
@@ -643,7 +651,7 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
       break;
     }
     case "shieldBreak": {
-      if (!f.grounded) { applyGravity(f, def, input, false); f.vx = approach(f.vx, 0, 0.1); }
+      if (!f.grounded) { applyGravity(f, def, input, stage, false); f.vx = approach(f.vx, 0, 0.1); }
       else groundFriction(f, def, 1);
       if (f.mash > 0 && f.frame > 30) { f.frame += f.mash * 2; f.mash = 0; }
       if (f.frame >= C.SHIELD_BREAK_STUN) { setAction(f, "idle"); f.shield = C.SHIELD_MAX * 0.6; }
@@ -672,21 +680,22 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
         f.vy *= 0.94;
       } else {
         airControl(f, def, input, 0.5);
-        applyGravity(f, def, input, false);
+        applyGravity(f, def, input, stage, false);
       }
       if (f.frame >= d.total) setAction(f, "air");
       break;
     }
     case "hitstun": {
       if (f.grounded) groundFriction(f, def, 0.6);
-      else { applyGravity(f, def, input, false); f.vx = approach(f.vx, 0, C.LAUNCH_DECAY); airControl(f, def, input, 0.25); }
+      else { applyGravity(f, def, input, stage, false); f.vx = approach(f.vx, 0, C.LAUNCH_DECAY); airControl(f, def, input, 0.25); }
       if (f.frame >= f.hitstun) { f.hitstun = 0; setAction(f, f.grounded ? "idle" : "air"); }
       break;
     }
     case "tumble": {
       // a downward launch outruns the fall-speed cap and slows to it instead of being clipped
-      if (f.vy > def.stats.fallSpeed) f.vy = Math.max(def.stats.fallSpeed, f.vy + def.stats.gravity - C.SPIKE_DECAY);
-      else applyGravity(f, def, input, false);
+      const fall = pull(def, stage);
+      if (f.vy > fall.fallSpeed) f.vy = Math.max(fall.fallSpeed, f.vy + fall.gravity - C.SPIKE_DECAY);
+      else applyGravity(f, def, input, stage, false);
       f.vx = approach(f.vx, 0, C.LAUNCH_DECAY);
       if (f.frame >= f.hitstun) {
         // out of hitstun: can act, still tumbling until then
@@ -734,7 +743,7 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
       break;
     }
     case "wallTech": {
-      applyGravity(f, def, input, false);
+      applyGravity(f, def, input, stage, false);
       if (f.frame >= 10) setAction(f, "air");
       break;
     }
@@ -930,7 +939,7 @@ function stepMove(state: State, f: Fighter, def: FighterDef, input: InputFrame, 
   } else {
     if (mv.aerial || f.move === "uspecial" || f.move === "sspecial" || f.move === "nspecial" || f.move === "dspecial") airControl(f, def, input, 0.8);
     else f.vx = approach(f.vx, 0, s.airAccel * 0.3);
-    applyGravity(f, def, input, mv.aerial === true);
+    applyGravity(f, def, input, stage, mv.aerial === true);
   }
   // throws
   if (mv.throwFrame && f.frame === mv.throwFrame && f.grabbing >= 0) {

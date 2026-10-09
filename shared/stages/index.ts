@@ -7,6 +7,7 @@ import { elevators } from "./elevators";
 import { fairground } from "./fairground";
 import { ship } from "./ship";
 import { desk } from "./desk";
+import { moon } from "./moon";
 import { stadium } from "./stadium";
 import { forest } from "./forest";
 import { cliffs } from "./cliffs";
@@ -14,7 +15,7 @@ import { finalStage } from "./final";
 import { menuStage } from "./menu";
 
 /** The stages a match can be played on. */
-export const stageList: Stage[] = [rooftops, provingGround, playground, islands, elevators, fairground, ship, desk, stadium, forest, cliffs, finalStage];
+export const stageList: Stage[] = [rooftops, provingGround, playground, islands, elevators, fairground, ship, desk, moon, stadium, forest, cliffs, finalStage];
 /** Every stage the sim knows, including the title screen's brawl stage. */
 export const stages: Record<StageId, Stage> = Object.fromEntries([...stageList, menuStage].map((s) => [s.id, s]));
 

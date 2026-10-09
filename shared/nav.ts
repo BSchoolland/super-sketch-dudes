@@ -57,9 +57,9 @@ export function surfaceUnder(surfs: Surface[], x: number, y: number): Surface | 
 interface Legs { rise: number; reach: number }
 
 /** How high and how far a fighter's jumps carry it. */
-export function legs(f: Fighter): Legs {
+export function legs(f: Fighter, stage: Stage): Legs {
   const st = defOf(f).stats;
-  const rise = (st.fullHop * st.fullHop + Math.max(0, st.jumps - 1) * st.doubleJump * st.doubleJump) / (2 * st.gravity) * 0.9;
+  const rise = (st.fullHop * st.fullHop + Math.max(0, st.jumps - 1) * st.doubleJump * st.doubleJump) / (2 * st.gravity * (stage.gravity ?? 1)) * 0.9;
   return { rise, reach: st.airSpeed * 70 + 40 };
 }
 

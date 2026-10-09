@@ -318,6 +318,8 @@ export interface Stage {
   respawn: { x: number; y: number };
   /** Renderer theme key. */
   theme: string;
+  /** Gravity times this (the Moon's is low); fall speeds scale by its square root. */
+  gravity?: number;
 }
 
 export type Action =
