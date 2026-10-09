@@ -1,0 +1,39 @@
+{
+ "id": "cliffs",
+ "ref": {
+  "x": 0,
+  "y": -200,
+  "zoom": 1.6
+ },
+ "layers": [
+  {
+   "src": "bg.webp",
+   "depth": 0.25,
+   "rect": [
+    -991.78,
+    -758.17,
+    991.78,
+    358.17
+   ],
+   "blur": 1.5,
+   "cover": true
+  },
+  {
+   "src": "plat.webp",
+   "depth": 1,
+   "rect": [
+    -424.316,
+    -28.863,
+    422.697,
+    302.389
+   ]
+  }
+ ],
+ "thin": {
+  "style": "slab",
+  "fill": "#c7742f",
+  "ink": "#24180f",
+  "accent": "#a8b83a",
+  "depth": 20
+ }
+}

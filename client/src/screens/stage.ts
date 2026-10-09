@@ -7,6 +7,7 @@ import { stageChoices, type StageChoice } from "../maps";
 import type { MapDoc } from "../../../shared/maps";
 import { bg, card, hint, label, title, hover, clicked, arrows, button, backButton, goTo, type Screen, INK, settings, saveSettings } from "./ui";
 import { drawStage } from "../render/stage";
+import { drawStageArtThumb, stageArt } from "../render/stageart";
 import type { Stage, State } from "../../../shared/types";
 
 /** `time` is in frames; 0 is no limit. `map` is the player-made map `stage` names, if it is one. */
@@ -17,16 +18,21 @@ export type PickerAction = "fight" | "back" | null;
 const COLS = 4, GAP = 30, TOP = 150;
 const CARD_W = (VIEW_W - 2 * 160 - (COLS - 1) * GAP) / COLS;
 
-/** A stage drawn small inside a card: its platforms to scale, framed by its camera box. */
+/** A stage drawn small inside a card: its platforms to scale (over its art, for an art stage), framed by its camera box. */
 export function drawStageThumb(ctx: CanvasRenderingContext2D, stage: Stage, x: number, y: number, w: number, h: number): void {
   ctx.save();
   ctx.beginPath(); ctx.roundRect(x, y, w, h, 10); ctx.clip();
   const sc = Math.min((w - 40) / (stage.camera.right - stage.camera.left), (h - 24) / (stage.camera.bottom - stage.camera.top));
+  const cx = (stage.camera.left + stage.camera.right) / 2, cy = (stage.camera.top + stage.camera.bottom) / 2;
   ctx.translate(x + w / 2, y + h / 2);
   ctx.scale(sc, sc);
-  ctx.translate(-(stage.camera.left + stage.camera.right) / 2, -(stage.camera.top + stage.camera.bottom) / 2);
-  const fake = { platOffsets: stage.platforms.map(() => ({ dx: 0, dy: 0 })) } as unknown as State;
-  drawStage(ctx, fake, stage);
+  ctx.translate(-cx, -cy);
+  const art = stageArt(stage);
+  if (art) drawStageArtThumb(ctx, art, stage, [cx - w / sc / 2, cy - h / sc / 2, cx + w / sc / 2, cy + h / sc / 2]);
+  else {
+    const fake = { platOffsets: stage.platforms.map(() => ({ dx: 0, dy: 0 })) } as unknown as State;
+    drawStage(ctx, fake, stage);
+  }
   ctx.restore();
 }
 
@@ -47,7 +53,7 @@ export class StagePicker {
   constructor(private readOnly: boolean, private onChange: (setup: MatchSetup) => void = () => {}) {}
 
   private get choices(): StageChoice[] {
-    return stageChoices(this.foreign);
+    return stageChoices(this.foreign, this.readOnly || settings.extraStages);
   }
 
   get setup(): MatchSetup {

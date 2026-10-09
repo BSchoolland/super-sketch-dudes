@@ -14,7 +14,7 @@ const TABS: Tabs<SettingsTab> = { left: { id: "general", text: "GENERAL" }, righ
 
 interface Row { id: string; name: string; get: () => string; step: (d: -1 | 1) => void }
 const ROW = { x: VIEW_W / 2 - 400, w: 800, h: 80, top: 220, gap: 100 };
-const SIGN_OUT = { w: 300, h: 80, y: 640 };
+const SIGN_OUT = { w: 300, h: 80, y: 720 };
 
 const clamp01 = (v: number): number => Math.max(0, Math.min(1, Math.round(v * 10) / 10));
 
@@ -27,6 +27,7 @@ export class SettingsScreen implements Screen {
     { id: "sound", name: "SOUND VOLUME", get: () => `${Math.round(settings.volume * 100)}%`, step: (d) => { settings.volume = clamp01(settings.volume + d * 0.1); setVolume(settings.volume); } },
     { id: "music", name: "MUSIC VOLUME", get: () => `${Math.round(settings.music * 100)}%`, step: (d) => { settings.music = clamp01(settings.music + d * 0.1); setMusicVolume(settings.music); } },
     { id: "mayhem", name: "MENU MAYHEM", get: () => MAYHEM[settings.mayhem].name, step: (d) => { settings.mayhem = Math.max(0, Math.min(MAYHEM.length - 1, settings.mayhem + d)); } },
+    { id: "stages", name: "EXTRA STAGES", get: () => (settings.extraStages ? "ON" : "OFF"), step: () => { settings.extraStages = !settings.extraStages; } },
   ];
   constructor(private onBack: () => Screen, private onSignOut: () => Screen) {}
 

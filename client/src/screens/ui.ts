@@ -67,6 +67,8 @@ export interface Settings {
   mayhem: number; tapJump: boolean; rumble: boolean; stocks: number; time: number; cpuTier: number;
   /** The draw pad's ADVANCED toggle: the colour wheel. */
   advanced: boolean;
+  /** The stages drawn from art (Stadium, Forest, Cliffs, Final Draft) in the stage picker. */
+  extraStages: boolean;
   /** Keyboard player 1's rebound actions; everything else keeps its default key. */
   keys: Partial<KeyBindings>;
 }
@@ -74,7 +76,7 @@ export interface Settings {
 export const MAYHEM: { name: string; seconds: number }[] = [
   { name: "CALM", seconds: 20 }, { name: "LIVELY", seconds: 10 }, { name: "ROWDY", seconds: 6 }, { name: "MAYHEM", seconds: 3 },
 ];
-export const settings: Settings = { volume: 0.8, music: 0.5, mayhem: 3, tapJump: true, rumble: true, stocks: 3, time: 0, cpuTier: DEFAULT_TIER, advanced: false, keys: {} };
+export const settings: Settings = { volume: 0.8, music: 0.5, mayhem: 3, tapJump: true, rumble: true, stocks: 3, time: 0, cpuTier: DEFAULT_TIER, advanced: false, extraStages: false, keys: {} };
 export function loadSettings(): void {
   try { Object.assign(settings, JSON.parse(localStorage.getItem("sketchbattle.settings") ?? "{}")); } catch { /* ignore */ }
   applyKeys();

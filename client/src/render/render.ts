@@ -11,6 +11,7 @@ import { drawSprite, FLOOR_ANIMS, restOnFloor, stillSprites } from "./sprite";
 import { cellFor } from "../../../shared/gen/sprite";
 import type { FighterDef, Look, Pose } from "../../../shared/types";
 import { drawBackdrop, drawShadow, drawStage } from "./stage";
+import { drawStageArt, stageArt } from "./stageart";
 import { SLOT_COLORS, createHud, drawHud, type HudState } from "./hud";
 import { drawStrikes, inWindup } from "./strikes";
 import { drawLook, lookColor, lookOf, type LookAt } from "./looks";
@@ -120,10 +121,12 @@ export class Renderer {
     this.ghosts = this.ghosts.filter((g) => g.age < 0.22);
 
     ctx.save();
-    if (this.chrome) drawBackdrop(ctx, stage, this.cam);
+    const art = stageArt(stage);
+    if (art) drawStageArt(ctx, art, state, stage, this.cam, this.chrome);
+    else if (this.chrome) drawBackdrop(ctx, stage, this.cam);
     ctx.save();
     this.cam.apply(ctx);
-    drawStage(ctx, state, stage);
+    if (!art) drawStage(ctx, state, stage);
     // shadows
     state.fighters.forEach((f, i) => { if (f.action !== "dead") drawShadow(ctx, state, stage, interp[i].x, interp[i].y, defOf(f).stats.width * 0.8); });
     // ghosts

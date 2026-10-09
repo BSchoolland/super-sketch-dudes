@@ -1,0 +1,39 @@
+{
+ "id": "forest",
+ "ref": {
+  "x": 0,
+  "y": -200,
+  "zoom": 1.6
+ },
+ "layers": [
+  {
+   "src": "bg.webp",
+   "depth": 0.25,
+   "rect": [
+    -991.78,
+    -758.17,
+    991.78,
+    358.17
+   ],
+   "blur": 1.5,
+   "cover": true
+  },
+  {
+   "src": "plat.webp",
+   "depth": 1,
+   "rect": [
+    -460.934,
+    -28.485,
+    457.481,
+    324.265
+   ]
+  }
+ ],
+ "thin": {
+  "style": "branch",
+  "fill": "#7a4a22",
+  "ink": "#21160c",
+  "accent": "#7cc242",
+  "depth": 18
+ }
+}

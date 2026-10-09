@@ -2,6 +2,7 @@ import { api } from "./account";
 import { registerStage, stageList, stages } from "../../shared/stages/index";
 import { stageFromMap, type MapDoc } from "../../shared/maps";
 import type { Stage } from "../../shared/types";
+import { ART_THEMES } from "./render/stageart";
 
 /** The signed-in player's maps and whether they may make them, fetched on demand and shared by every screen. */
 export const myMaps: { docs: MapDoc[] | null; canCreate: boolean; error: string; loading: boolean } = { docs: null, canCreate: false, error: "", loading: false };
@@ -45,8 +46,9 @@ export function registerMap(doc: MapDoc): Stage {
 /** A stage someone can pick: shipped, or a map (theirs, or one a host is showing them). */
 export interface StageChoice { stage: Stage; map: MapDoc | null }
 
-export function stageChoices(extra: MapDoc | null = null): StageChoice[] {
-  const out: StageChoice[] = stageList.map((stage) => ({ stage, map: null }));
+/** `art`: the stages drawn from art too (the EXTRA STAGES setting, or someone else's pick being shown). */
+export function stageChoices(extra: MapDoc | null = null, art = true): StageChoice[] {
+  const out: StageChoice[] = stageList.filter((stage) => art || !ART_THEMES.has(stage.theme)).map((stage) => ({ stage, map: null }));
   for (const doc of myMaps.docs ?? []) out.push({ stage: stages[doc.id] ?? registerMap(doc), map: doc });
   if (extra && !out.some((c) => c.map?.id === extra.id)) out.push({ stage: registerMap(extra), map: extra });
   return out;
