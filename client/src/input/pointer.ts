@@ -60,7 +60,12 @@ export function attachPointer(canvas: HTMLCanvasElement): () => void {
     if (e.type === "pointerup" && Math.hypot(p.x - start.x, p.y - start.y) < 40) { taps.push(start); track(start); pointer.clicked = true; pointer.tapX = start.x; pointer.tapY = start.y; }
   };
   on("pointerleave", () => { pointer.present = false; });
-  on("wheel", (e) => { if (performance.now() - wheelAt > 250) wheelSum = 0; wheelSum += e.deltaY; wheelAt = performance.now(); });
+  // a notch (or a touchpad's scroll) is one step, however many pixels the browser calls it; pinch-zoom sends ctrl
+  on("wheel", (e) => {
+    if (e.ctrlKey || e.deltaY === 0 || performance.now() - wheelAt < 120) return;
+    wheelPending = Math.sign(e.deltaY);
+    wheelAt = performance.now();
+  });
   on("pointerup", end);
   on("pointercancel", end);
   return () => ac.abort();
@@ -71,13 +76,12 @@ export function onPointer(listener: StrokeListener): () => void {
   return () => listeners.delete(listener);
 }
 
-let wheelSum = 0, wheelAt = 0;
+let wheelPending = 0, wheelAt = -Infinity;
 
-/** Whole notches the mouse wheel (or a touchpad's two-finger scroll) moved since the last call, down positive. */
-export function wheelSteps(notch = 80): number {
-  if (performance.now() - wheelAt > 250) { wheelSum = 0; return 0; }
-  const n = Math.trunc(wheelSum / notch);
-  wheelSum -= n * notch;
+/** A step of the mouse wheel (or a touchpad's two-finger scroll) since the last call: 1 down, -1 up, 0. */
+export function wheelSteps(): number {
+  const n = performance.now() - wheelAt < 250 ? wheelPending : 0;
+  wheelPending = 0;
   return n;
 }
 
