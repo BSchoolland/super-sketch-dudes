@@ -79,6 +79,8 @@ export class StagePicker {
   private minutes = settings.time;
   private row = 0; // 0 stage, 1 stocks, 2 time
   private scroll = 0;
+  /** The selection the scroll last followed: the arrows can scroll it out of view until it moves again. */
+  private scrolledTo = -1;
   private foreign: MapDoc | null = null;
 
   constructor(private readOnly: boolean, private onChange: (setup: MatchSetup) => void = () => {}) {}
@@ -140,8 +142,11 @@ export class StagePicker {
     const h = rowsShown === 1 ? 300 : 230;
     const rows = Math.ceil(choices.length / COLS);
     const selRow = Math.floor(this.sel / COLS);
-    if (selRow < this.scroll) this.scroll = selRow;
-    if (selRow >= this.scroll + rowsShown) this.scroll = selRow - rowsShown + 1;
+    if (this.sel !== this.scrolledTo) {
+      this.scrolledTo = this.sel;
+      if (selRow < this.scroll) this.scroll = selRow;
+      if (selRow >= this.scroll + rowsShown) this.scroll = selRow - rowsShown + 1;
+    }
     const shown = Math.min(choices.length, COLS);
     const x0 = (VIEW_W - (shown * CARD_W + (shown - 1) * GAP)) / 2;
     choices.forEach((c, i) => {
@@ -155,10 +160,9 @@ export class StagePicker {
       title(ctx, c.stage.name, x + CARD_W / 2, y + h - 18, 30, INK, "center", CARD_W - 30);
       if (c.map) label(ctx, c.map.owner === account.player?.id ? "your map" : `${c.map.ownerName}'s map`, x + CARD_W - 14, y + 30, 18, PENCIL, "right");
     });
-    if (rows > rowsShown) {
-      const d = arrows(ctx, VIEW_W - 110, TOP + (rowsShown * (h + GAP)) / 2, 0, 40);
-      if (d) this.scroll = Math.max(0, Math.min(rows - rowsShown, this.scroll + d));
-    }
+    // more rows above or below: an arrow beside the top or bottom row
+    if (this.scroll > 0 && scrollArrow(ctx, "▲", VIEW_W - 110, TOP + h / 2)) this.scroll--;
+    if (this.scroll < rows - rowsShown && scrollArrow(ctx, "▼", VIEW_W - 110, TOP + (rowsShown - 1) * (h + GAP) + h / 2)) this.scroll++;
     const rowY = TOP + rowsShown * (h + GAP) + 20;
     const rowCard = (r: number, y: number, text: string, value: string) => {
       const sel = edit && this.row === r;
@@ -201,4 +205,13 @@ export class StageScreen implements Screen {
     const next = this.act(this.picker.draw(ctx, this.t));
     if (next) goTo(next);
   }
+}
+
+/** A ▲ or ▼ like `arrows`' glyphs: true on the frame it's clicked. */
+function scrollArrow(ctx: CanvasRenderingContext2D, glyph: string, cx: number, cy: number, size = 40): boolean {
+  const x = cx - size / 2, y = cy - size * 0.9, w = size, h = size * 1.2;
+  const over = hover(x, y, w, h);
+  label(ctx, glyph, cx, cy, size * (over ? 1.15 : 1), over ? "#c8402c" : INK);
+  if (over) document.body.style.cursor = "pointer";
+  return clicked(x, y, w, h);
 }
