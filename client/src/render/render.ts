@@ -86,6 +86,12 @@ export class Renderer {
       else if (trail === "sparks" && state.frame % 2 === 0) this.fx.spark(p.x, p.y, 2, 140, color, 3, 0.3);
       else if (trail === "flames") this.fx.flame(p.x - p.vx * 0.5, p.y + 4, 1, look.color ?? color);
     }
+    // ice chips off anyone sliding on a slippery floor (not running on it)
+    const stage = stageOf(state);
+    for (const f of state.fighters) {
+      const sliding = f.grounded && f.platform >= 0 && stage.platforms[f.platform].grip && Math.abs(f.vx) > 2.5 && f.action !== "run" && f.action !== "dash" && f.action !== "walk";
+      if (sliding && (state.frame + f.slot) % 2 === 0) this.fx.spark(f.x - Math.sign(f.vx) * 20, f.y - 4, 3, 220, "#5f9cc0", 7, 0.35);
+    }
     // afterimages for fast moves
     state.fighters.forEach((f) => {
       const mv = f.action === "attack" ? currentMove(f) : null;
