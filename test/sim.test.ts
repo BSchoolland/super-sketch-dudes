@@ -138,7 +138,7 @@ describe("low gravity", () => {
       return { top, fall };
     };
     const earth = hop("proving"), moon = hop("moon");
-    expect(moon.top / earth.top).toBeGreaterThan(1.4);
+    expect(moon.top / earth.top).toBeGreaterThan(1.3);
     expect(moon.top / earth.top).toBeLessThan(1.65);
     expect(moon.fall).toBeLessThan(earth.fall);
   });

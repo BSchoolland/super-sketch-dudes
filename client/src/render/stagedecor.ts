@@ -3,7 +3,7 @@ import { platformMotion, platformOffset } from "../../../shared/physics";
 import { WHEEL } from "../../../shared/stages/fairground";
 import { NEST } from "../../../shared/stages/ship";
 import { BOOKS, CUP, PLANE } from "../../../shared/stages/desk";
-import { LANDER, ROCK } from "../../../shared/stages/moon";
+import { LANDER, ROCK, SHELF } from "../../../shared/stages/moon";
 import { PENCIL } from "./paper";
 
 /**
@@ -229,10 +229,19 @@ function moonScene(ctx: CanvasRenderingContext2D, state: State, stage: Stage): v
     ctx.moveTo(foot + 22, 0); ctx.arc(foot, 0, 22, 0, Math.PI, true);
   }
   ctx.moveTo(x2 - 50, y); ctx.lineTo(x2 - 50, y - 60); ctx.moveTo(x2 - 82, y - 78); ctx.quadraticCurveTo(x2 - 50, y - 40, x2 - 18, y - 78);
-  // a flag on a stiff pole (there's no wind to wave it)
-  const fx = ground.x2 - 110;
-  ctx.moveTo(fx, 0); ctx.lineTo(fx, -230); ctx.rect(fx, -230, 110, 70);
-  ctx.moveTo(fx + 20, -215); ctx.lineTo(fx + 90, -215); ctx.moveTo(fx + 20, -195); ctx.lineTo(fx + 90, -195); ctx.moveTo(fx + 20, -175); ctx.lineTo(fx + 60, -175);
+  // a flag with a star on it, on a stiff pole (there's no wind to wave it)
+  const fx = ground.x2 - 110, fy = -230;
+  ctx.moveTo(fx, 0); ctx.lineTo(fx, fy); ctx.rect(fx, fy, 110, 70);
+  for (let n = 0; n <= 5; n++) {
+    const a = -Math.PI / 2 + n * Math.PI * 0.8, r = 22;
+    const px = fx + 55 + Math.cos(a) * r, py = fy + 37 + Math.sin(a) * r;
+    if (n === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  // rock lumps under the shelves at the foot of each cliff
+  for (const side of [-1, 1]) {
+    const a = side < 0 ? -SHELF.x2 : SHELF.x1, b = side < 0 ? -SHELF.x1 : SHELF.x2;
+    ctx.moveTo(a, SHELF.y); ctx.bezierCurveTo(a + 10, SHELF.y + 50, b - 20, SHELF.y + 70, b, SHELF.y);
+  }
   // the floating rock: a lumpy underside hanging from its flat top
   const i = stage.platforms.findIndex((pl) => pl.motion);
   const o = platformOffset(state, i), ry = ROCK.y + o.dy, w = ROCK.x2 - ROCK.x1;
