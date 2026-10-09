@@ -59,7 +59,7 @@ function drawPlatformDiagram(ctx: CanvasRenderingContext2D, stage: Stage, x: num
   ctx.save();
   ctx.translate(sx(0), sy(0));
   ctx.scale(sc, sc);
-  drawStageDecor(ctx, { frame: 0, platOffsets: [] }, stage);
+  drawStageDecor(ctx, { frame: 0, platOffsets: stage.platforms.map((p) => platformMotion(p, 0)) }, stage);
   ctx.restore();
   shown.forEach((p, i) => {
     const o = paths[i][0], px = sx(p.x1 + o.dx), py = sy(p.y + o.dy), pw = (p.x2 - p.x1) * sc;

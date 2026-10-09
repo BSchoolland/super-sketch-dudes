@@ -5,7 +5,7 @@ import { stepFighter } from "./fighter";
 import { roster } from "./fighters/index";
 import { resolveHits } from "./hits";
 import { B, EMPTY_INPUT, cloneInput, type InputFrame } from "./input";
-import { stepPhysics, stepProjectiles, updatePlatforms } from "./physics";
+import { platformMotion, stepPhysics, stepProjectiles, updatePlatforms } from "./physics";
 import { stepRules } from "./rules";
 import { registerStage, stages } from "./stages/index";
 import { stageFromMap, type MapDoc } from "./maps";
@@ -66,7 +66,8 @@ export function createMatch(cfg: MatchConfig): State {
     fighters: cfg.players.map((p, i) => createFighter(i, p.fighter, stage, rules, p.team ?? i, p.cpu ?? 0)),
     projectiles: [], nextProjectile: 1, events: [], timer: rules.time,
     ended: false, winner: -1, suddenDeath: false, slowmo: 0, paused: false,
-    platOffsets: stage.platforms.map(() => ({ dx: 0, dy: 0 })),
+    // where the moving platforms are on frame 0, so the countdown shows them there
+    platOffsets: stage.platforms.map((p) => platformMotion(p, 0)),
     inputs: cfg.players.map(() => cloneInput(EMPTY_INPUT)),
     seen: [],
   };
@@ -77,6 +78,7 @@ export function createMatch(cfg: MatchConfig): State {
     f.grounded = true;
     f.platform = i;
     f.action = "idle";
+    f.x += state.platOffsets[i].dx; f.y += state.platOffsets[i].dy;
   }
   return state;
 }
