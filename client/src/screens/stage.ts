@@ -1,14 +1,14 @@
 import { VIEW_H, VIEW_W } from "../render/camera";
-import { PENCIL } from "../render/paper";
+import { hatch, inkLine, inkRect, PAPER, PENCIL } from "../render/paper";
+import { platformMotion } from "../../../shared/physics";
 import type { MenuInput } from "../input/devices";
 import { sfx } from "../audio/audio";
 import { account } from "../account";
 import { stageChoices, type StageChoice } from "../maps";
 import type { MapDoc } from "../../../shared/maps";
 import { bg, card, hint, label, title, hover, clicked, arrows, button, backButton, goTo, type Screen, INK, settings, saveSettings } from "./ui";
-import { drawStage } from "../render/stage";
 import { drawStageArtThumb, stageArt } from "../render/stageart";
-import type { Stage, State } from "../../../shared/types";
+import type { Stage } from "../../../shared/types";
 
 /** `time` is in frames; 0 is no limit. `map` is the player-made map `stage` names, if it is one. */
 export interface MatchSetup { stage: string; stocks: number; time: number; map: MapDoc | null }
@@ -18,22 +18,53 @@ export type PickerAction = "fight" | "back" | null;
 const COLS = 4, GAP = 30, TOP = 150;
 const CARD_W = (VIEW_W - 2 * 160 - (COLS - 1) * GAP) / COLS;
 
-/** A stage drawn small inside a card: its platforms to scale (over its art, for an art stage), framed by its camera box. */
+/**
+ * A stage drawn small inside a card. An art stage is its art framed by its camera box; a pencil stage
+ * is a diagram of its platforms framed by the platforms themselves, with each moving platform's path dashed.
+ */
 export function drawStageThumb(ctx: CanvasRenderingContext2D, stage: Stage, x: number, y: number, w: number, h: number): void {
   ctx.save();
   ctx.beginPath(); ctx.roundRect(x, y, w, h, 10); ctx.clip();
-  const sc = Math.min((w - 40) / (stage.camera.right - stage.camera.left), (h - 24) / (stage.camera.bottom - stage.camera.top));
-  const cx = (stage.camera.left + stage.camera.right) / 2, cy = (stage.camera.top + stage.camera.bottom) / 2;
-  ctx.translate(x + w / 2, y + h / 2);
-  ctx.scale(sc, sc);
-  ctx.translate(-cx, -cy);
   const art = stageArt(stage);
-  if (art) drawStageArtThumb(ctx, art, stage, [cx - w / sc / 2, cy - h / sc / 2, cx + w / sc / 2, cy + h / sc / 2]);
-  else {
-    const fake = { platOffsets: stage.platforms.map(() => ({ dx: 0, dy: 0 })) } as unknown as State;
-    drawStage(ctx, fake, stage);
-  }
+  if (art) {
+    const sc = Math.min((w - 40) / (stage.camera.right - stage.camera.left), (h - 24) / (stage.camera.bottom - stage.camera.top));
+    const cx = (stage.camera.left + stage.camera.right) / 2, cy = (stage.camera.top + stage.camera.bottom) / 2;
+    ctx.translate(x + w / 2, y + h / 2);
+    ctx.scale(sc, sc);
+    ctx.translate(-cx, -cy);
+    drawStageArtThumb(ctx, art, stage, [cx - w / sc / 2, cy - h / sc / 2, cx + w / sc / 2, cy + h / sc / 2]);
+  } else drawPlatformDiagram(ctx, stage, x, y, w, h);
   ctx.restore();
+}
+
+function drawPlatformDiagram(ctx: CanvasRenderingContext2D, stage: Stage, x: number, y: number, w: number, h: number): void {
+  const shown = stage.platforms.filter((p) => !p.hidden);
+  const paths = shown.map((p) => Array.from({ length: p.motion ? 25 : 1 }, (_, i) => platformMotion(p, p.motion ? (i * p.motion.period) / 24 : 0)));
+  let x1 = Infinity, x2 = -Infinity, top = Infinity;
+  shown.forEach((p, i) => {
+    for (const o of paths[i]) { x1 = Math.min(x1, p.x1 + o.dx); x2 = Math.max(x2, p.x2 + o.dx); top = Math.min(top, p.y + o.dy); }
+  });
+  // headroom over the highest platform; the solid bodies run off the card's bottom edge
+  top -= 120;
+  const sc = Math.min((w - 36) / (x2 - x1), (h - 30) / (Math.max(0, ...shown.map((p) => p.y)) - top + 60));
+  const sx = (wx: number) => x + w / 2 + (wx - (x1 + x2) / 2) * sc;
+  const sy = (wy: number) => y + 15 + (wy - top) * sc;
+  shown.forEach((p, i) => {
+    const o = paths[i][0], px = sx(p.x1 + o.dx), py = sy(p.y + o.dy), pw = (p.x2 - p.x1) * sc;
+    const ph = p.solid ? y + h - py + 10 : 7;
+    if (paths[i].length > 1) {
+      ctx.save();
+      ctx.strokeStyle = PENCIL; ctx.lineWidth = 2; ctx.setLineDash([5, 6]);
+      ctx.beginPath();
+      paths[i].forEach((q, k) => ctx[k ? "lineTo" : "moveTo"](sx((p.x1 + p.x2) / 2 + q.dx), sy(p.y + q.dy) + 3));
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.fillStyle = PAPER; ctx.fillRect(px, py, pw, ph);
+    hatch(ctx, px, py, pw, ph, PENCIL, 0.36);
+    inkRect(ctx, px, py, pw, ph, PENCIL, 1.5);
+    inkLine(ctx, px, py, px + pw, py, INK, 3, i);
+  });
 }
 
 /**
