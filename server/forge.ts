@@ -188,7 +188,7 @@ function isStudy(cpu: unknown): cpu is CpuStudy {
 
 /** A new version of a stored character with its module (and the CPU study of it), its CPU study alone, or its
  * cells (and the idle height they were cut at) replaced; everything else comes along, under a new URL. */
-export async function reviseCharacter(entry: LibraryEntry, change: { source?: string; cpu?: unknown; cells?: Record<string, string>; heightPx?: number }): Promise<{ bundleUrl: string; sheetUrl: string | null }> {
+export async function reviseCharacter(entry: LibraryEntry, change: { source?: string; cpu?: unknown; cells?: Record<string, string>; heightPx?: number; sheet?: string }): Promise<{ bundleUrl: string; sheetUrl: string | null }> {
   if (change.source !== undefined && change.cpu === undefined) throw new Error("a new source needs the CPU study of it (cpu)");
   if (change.cpu !== undefined && !isStudy(change.cpu)) throw new Error(`cpu is not a v${STUDY_VERSION} CPU study`);
   if (!entry.bundleUrl) throw new Error(`${entry.id} has no bundle`);
@@ -210,8 +210,10 @@ export async function reviseCharacter(entry: LibraryEntry, change: { source?: st
     else fs.copyFileSync(path.join(oldDir, `${c}.png`), path.join(dir, `${c}.png`));
     cells[c] = `${base}/${c}.png`;
   }
-  const sheet = fs.existsSync(path.join(oldDir, "sheet.png"));
-  if (sheet) fs.copyFileSync(path.join(oldDir, "sheet.png"), path.join(dir, "sheet.png"));
+  // new cells come with their own sheet or none: the old sheet shows the cells they replace
+  const sheet = change.cells ? typeof change.sheet === "string" : fs.existsSync(path.join(oldDir, "sheet.png"));
+  if (change.cells && sheet) fs.writeFileSync(path.join(dir, "sheet.png"), Buffer.from(change.sheet!, "base64"));
+  else if (sheet) fs.copyFileSync(path.join(oldDir, "sheet.png"), path.join(dir, "sheet.png"));
   const heightPx = change.heightPx ?? old.sprite.heightPx;
   const bundle = { ...old, source, sprite: { ...old.sprite, heightPx, cells }, cpu: change.cpu ?? old.cpu };
   await buildGenerated(bundle);

@@ -160,11 +160,12 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
     await revise(req, res, { cpu: req.body.cpu });
   });
 
-  // re-cut cells for a character that already exists (a normalize.py fix): { cells: { <cell>: base64 png }, heightPx }
+  // new cells for a character that already exists (a normalize.py fix, a redrawn sheet): { cells: { <cell>: base64 png }, heightPx, sheet? }
   api.post("/characters/:id/cells", async (req, res) => {
     const cells = req.body?.cells, heightPx = Number(req.body?.heightPx);
     if (!cells || typeof cells !== "object" || !(heightPx > 0)) return res.status(400).json({ error: "cells and heightPx required" });
-    await revise(req, res, { cells, heightPx });
+    const sheet = typeof req.body?.sheet === "string" ? req.body.sheet : undefined;
+    await revise(req, res, { cells, heightPx, sheet });
   });
 
   async function revise(req: express.Request, res: express.Response, change: Parameters<typeof reviseCharacter>[1]): Promise<void> {
