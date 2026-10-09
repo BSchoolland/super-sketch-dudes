@@ -160,7 +160,7 @@ export class StagePicker {
       const x = x0 + (i % COLS) * (CARD_W + GAP), y = TOP + row * (h + GAP);
       if (edit && hover(x, y, CARD_W, h)) { this.row = 0; document.body.style.cursor = "pointer"; }
       if (edit && clicked(x, y, CARD_W, h) && i !== this.sel) { this.sel = i; this.artSel = i; this.artSince = -Infinity; this.changed(); }
-      card(ctx, x, y, CARD_W, h, INK, i === this.sel && (this.row === 0 || !edit), i === this.sel || edit ? 1 : 0.5);
+      card(ctx, x, y, CARD_W, h, INK, i === this.sel && (this.row === 0 || !edit), i === this.sel || (edit && this.row === 0) ? 1 : 0.5);
       drawStageThumb(ctx, c.stage, x + 12, y + 12, CARD_W - 24, h - 70);
       title(ctx, c.stage.name, x + CARD_W / 2, y + h - 18, 30, INK, "center", CARD_W - 30);
       if (c.map) label(ctx, c.map.owner === account.player?.id ? "your map" : `${c.map.ownerName}'s map`, x + CARD_W - 14, y + 30, 18, PENCIL, "right");

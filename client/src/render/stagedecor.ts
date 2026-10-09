@@ -136,11 +136,10 @@ function mast(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void {
   ctx.beginPath(); ctx.moveTo(0, deck.y); ctx.lineTo(tx, ty); ctx.stroke();
   ctx.globalAlpha = 0.5; ctx.lineWidth = 2.5;
   ctx.beginPath();
-  // each sail hangs from a yard and bellies out
+  // each sail bellies out from a sagging top edge: a straight one reads as a platform to land on
   for (const [top, bottom, half] of [[0.88, 0.55, 170], [0.48, 0.12, 230]]) {
     const [ax, ay] = at(top), [bx, by] = at(bottom);
-    ctx.moveTo(ax - half - 20, ay); ctx.lineTo(ax + half + 20, ay);
-    ctx.moveTo(ax - half, ay);
+    ctx.moveTo(ax + half, ay); ctx.quadraticCurveTo(ax, ay + 22, ax - half, ay);
     ctx.quadraticCurveTo(bx - half * 1.15, (ay + by) / 2, bx - half, by);
     ctx.quadraticCurveTo(bx, by + 26, bx + half, by);
     ctx.quadraticCurveTo(bx + half * 1.15, (ay + by) / 2, ax + half, ay);
