@@ -60,6 +60,7 @@ export function attachPointer(canvas: HTMLCanvasElement): () => void {
     if (e.type === "pointerup" && Math.hypot(p.x - start.x, p.y - start.y) < 40) { taps.push(start); track(start); pointer.clicked = true; pointer.tapX = start.x; pointer.tapY = start.y; }
   };
   on("pointerleave", () => { pointer.present = false; });
+  on("wheel", (e) => { if (performance.now() - wheelAt > 250) wheelSum = 0; wheelSum += e.deltaY; wheelAt = performance.now(); });
   on("pointerup", end);
   on("pointercancel", end);
   return () => ac.abort();
@@ -68,6 +69,16 @@ export function attachPointer(canvas: HTMLCanvasElement): () => void {
 export function onPointer(listener: StrokeListener): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
+}
+
+let wheelSum = 0, wheelAt = 0;
+
+/** Whole notches the mouse wheel (or a touchpad's two-finger scroll) moved since the last call, down positive. */
+export function wheelSteps(notch = 80): number {
+  if (performance.now() - wheelAt > 250) { wheelSum = 0; return 0; }
+  const n = Math.trunc(wheelSum / notch);
+  wheelSum -= n * notch;
+  return n;
 }
 
 /** The taps since the last sim tick, for a screen's update. */

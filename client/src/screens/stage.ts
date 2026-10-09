@@ -8,6 +8,7 @@ import { stageChoices, type StageChoice } from "../maps";
 import type { MapDoc } from "../../../shared/maps";
 import { bg, card, hint, label, title, hover, clicked, arrows, button, backButton, goTo, type Screen, INK, settings, saveSettings } from "./ui";
 import { drawStageArtThumb, stageArt, stageArtThumb } from "../render/stageart";
+import { wheelSteps } from "../input/pointer";
 import type { Stage } from "../../../shared/types";
 
 /** `time` is in frames; 0 is no limit. `map` is the player-made map `stage` names, if it is one. */
@@ -146,6 +147,16 @@ export class StagePicker {
     return null;
   }
 
+  /** Scrolls a row; the pick moves along in its column rather than stay picked out of sight. */
+  private scrollBy(d: number, rows: number, rowsShown: number, cards: number): void {
+    this.scroll = Math.max(0, Math.min(rows - rowsShown, this.scroll + d));
+    const selRow = Math.floor(this.sel / COLS);
+    if (this.readOnly || (selRow >= this.scroll && selRow < this.scroll + rowsShown)) return;
+    const row = selRow < this.scroll ? this.scroll : this.scroll + rowsShown - 1;
+    this.sel = this.scrolledTo = Math.min(cards - 1, row * COLS + (this.sel % COLS));
+    this.changed();
+  }
+
   /** `note` replaces the FIGHT button on a read-only picker (who's choosing). */
   draw(ctx: CanvasRenderingContext2D, t: number, note = ""): PickerAction {
     bg(ctx, t);
@@ -186,9 +197,11 @@ export class StagePicker {
       title(ctx, c.stage.name, x + CARD_W / 2, y + h - 18, 30, nameInk, "center", CARD_W - 30);
       if (c.map) label(ctx, c.map.owner === account.player?.id ? "your map" : `${c.map.ownerName}'s map`, x + CARD_W - 14, y + 30, 18, PENCIL, "right");
     });
-    // more rows above or below: an arrow beside the top or bottom row
-    if (this.scroll > 0 && scrollArrow(ctx, "▲", VIEW_W - 110, TOP + h / 2)) this.scroll--;
-    if (this.scroll < rows - rowsShown && scrollArrow(ctx, "▼", VIEW_W - 110, TOP + (rowsShown - 1) * (h + GAP) + h / 2)) this.scroll++;
+    // more rows above or below: an arrow beside the top or bottom row, or the wheel
+    if (this.scroll > 0 && scrollArrow(ctx, "▲", VIEW_W - 110, TOP + h / 2)) this.scrollBy(-1, rows, rowsShown, cards);
+    if (this.scroll < rows - rowsShown && scrollArrow(ctx, "▼", VIEW_W - 110, TOP + (rowsShown - 1) * (h + GAP) + h / 2)) this.scrollBy(1, rows, rowsShown, cards);
+    const wheel = wheelSteps();
+    if (wheel) this.scrollBy(Math.sign(wheel), rows, rowsShown, cards);
     const rowY = TOP + rowsShown * (h + GAP) + 20;
     const rowCard = (r: number, y: number, text: string, value: string) => {
       const sel = edit && this.row === r;
