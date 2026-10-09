@@ -1,5 +1,6 @@
 import type { Stage, State } from "../../../shared/types";
 import { platformOffset } from "../../../shared/physics";
+import { WHEEL } from "../../../shared/stages/fairground";
 import { PENCIL } from "./paper";
 
 /**
@@ -7,10 +8,14 @@ import { PENCIL } from "./paper";
  * before them, and faint doodles on each backdrop layer.
  */
 
-/** World-space scenery under the platforms: water in Islands' gaps, the cables the Elevators' lifts hang from. */
+/**
+ * World-space scenery under the platforms: water in Islands' gaps, the cables the Elevators' lifts hang from, the
+ * Fairground's wheel.
+ */
 export function drawStageDecor(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void {
   if (stage.theme === "islands") water(ctx, state, stage);
   else if (stage.theme === "elevators") cables(ctx, state, stage);
+  else if (stage.theme === "fairground") wheel(ctx, state, stage);
 }
 
 function water(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void {
@@ -68,6 +73,48 @@ function cables(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void
   ctx.restore();
 }
 
+/** The Ferris wheel: an A-frame, a double rim turning with the gondolas, spokes, and each gondola's hanger. */
+function wheel(ctx: CanvasRenderingContext2D, state: State, stage: Stage): void {
+  // each gondola hangs this far under its point on the rim
+  const HANG = 60;
+  const hx = WHEEL.x, hy = WHEEL.y - HANG;
+  const cars: { x: number; y: number; half: number }[] = [];
+  stage.platforms.forEach((p, i) => {
+    if (p.motion?.kind !== "orbit") return;
+    const o = platformOffset(state, i);
+    cars.push({ x: (p.x1 + p.x2) / 2 + o.dx, y: p.y + o.dy, half: (p.x2 - p.x1) / 2 });
+  });
+  const turn = cars.length ? Math.atan2(cars[0].y - WHEEL.y, cars[0].x - WHEEL.x) : 0;
+  ctx.save();
+  ctx.strokeStyle = PENCIL; ctx.lineCap = "round"; ctx.lineJoin = "round";
+  ctx.globalAlpha = 0.5; ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(hx - 230, 0); ctx.lineTo(hx, hy); ctx.lineTo(hx + 230, 0);
+  ctx.moveTo(hx - 150, -130); ctx.lineTo(hx + 150, -130);
+  ctx.stroke();
+  ctx.globalAlpha = 0.55; ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(hx + WHEEL.r, hy); ctx.arc(hx, hy, WHEEL.r, 0, Math.PI * 2);
+  ctx.moveTo(hx + WHEEL.r * 0.86, hy); ctx.arc(hx, hy, WHEEL.r * 0.86, 0, Math.PI * 2);
+  for (let k = 0; k < 8; k++) {
+    const a = turn + (k * Math.PI) / 4;
+    ctx.moveTo(hx, hy); ctx.lineTo(hx + Math.cos(a) * WHEEL.r, hy + Math.sin(a) * WHEEL.r);
+  }
+  ctx.moveTo(hx + 18, hy); ctx.arc(hx, hy, 18, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 0.75; ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (const c of cars) {
+    const top = c.y - HANG, yoke = top + 16;
+    ctx.moveTo(c.x, top); ctx.lineTo(c.x, yoke);
+    ctx.moveTo(c.x - c.half + 12, yoke); ctx.lineTo(c.x + c.half - 12, yoke);
+    ctx.moveTo(c.x - c.half + 12, yoke); ctx.lineTo(c.x - c.half, c.y);
+    ctx.moveTo(c.x + c.half - 12, yoke); ctx.lineTo(c.x + c.half, c.y);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
 /**
  * Faint doodles on one backdrop layer (already translated to the layer's origin, stroke style set), for the themes
  * that have them; false for the rest, which keep the plain construction lines.
@@ -105,6 +152,25 @@ export function drawBackdropDoodles(ctx: CanvasRenderingContext2D, theme: string
     const cx = -300 + depth * 1200, cy = -380 + depth * 200;
     for (const [dx, r] of [[0, 50], [60, 70], [130, 45]]) { ctx.moveTo(cx + dx + r, cy); ctx.arc(cx + dx, cy, r, Math.PI, 0); }
     ctx.moveTo(cx - 50, cy); ctx.lineTo(cx + 175, cy);
+    ctx.stroke();
+    return true;
+  }
+  if (theme === "fairground") {
+    ctx.beginPath();
+    // striped tents, bunting between poles, a horizon
+    const gy = 150 + depth * 280;
+    ctx.moveTo(-1600, gy); ctx.lineTo(1600, gy);
+    for (const [i, tx] of [-900 + depth * 500, 250 + depth * 900, 1100 - depth * 300].entries()) {
+      const w = (160 + i * 40) * k, h = (190 + i * 30) * k;
+      ctx.moveTo(tx - w, gy); ctx.lineTo(tx, gy - h); ctx.lineTo(tx + w, gy);
+      for (const f of [-0.5, 0, 0.5]) { ctx.moveTo(tx, gy - h); ctx.lineTo(tx + f * w, gy); }
+      ctx.moveTo(tx, gy - h); ctx.lineTo(tx, gy - h - 50 * k); ctx.lineTo(tx + 34 * k, gy - h - 40 * k); ctx.lineTo(tx, gy - h - 30 * k);
+    }
+    const by = gy - 330 * k;
+    for (let x = -1400; x < 1400; x += 280) {
+      ctx.moveTo(x, by); ctx.quadraticCurveTo(x + 140, by + 60 * k, x + 280, by);
+      for (let f = 0.2; f < 0.9; f += 0.2) { const fx = x + f * 280, fy = by + 2 * f * (1 - f) * 60 * k; ctx.moveTo(fx - 12 * k, fy); ctx.lineTo(fx, fy + 26 * k); ctx.lineTo(fx + 12 * k, fy); }
+    }
     ctx.stroke();
     return true;
   }
