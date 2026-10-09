@@ -120,11 +120,13 @@ export function stepPhysics(state: State, f: Fighter, input: InputFrame, stage: 
       const bounce = stage.platforms[best].bounce;
       if (bounce && input.y < STICK_RUN && (f.action === "air" || f.action === "helpless")) {
         state.events.push({ t: "land", frame: state.frame, slot: f.slot, x: f.x, y: f.y, hard: false });
-        f.vy = -bounce;
+        // the same height for everyone, whatever their gravity
+        f.vy = -Math.sqrt(2 * s.gravity * (stage.gravity ?? 1) * bounce);
         f.fastFalling = false;
         f.jumpsLeft = s.jumps - 1;
         f.usedUpSpecial = false;
         f.airDodged = false;
+        f.wallJumped = false;
         if (f.action === "helpless") setAction(f, "air");
         return;
       }

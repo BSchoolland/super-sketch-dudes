@@ -299,7 +299,7 @@ export interface Platform {
   motion?: PlatformMotion;
   /** Drawn by the screen that owns the stage (the title screen's menu cards), not the stage renderer. */
   hidden?: boolean;
-  /** A trampoline: falling onto it springs you back up at this speed (and gives your jumps back); hold down to land. */
+  /** A trampoline: falling onto it springs you back up this high (and gives your jumps back); hold down to land. */
   bounce?: number;
 }
 export interface Ledge {

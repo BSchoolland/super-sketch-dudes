@@ -11,7 +11,7 @@ export const gym: Stage = {
   name: "Gym Class",
   platforms: [
     { x1: -660, x2: 660, y: 0, solid: true, bottom: 140 },
-    { ...TRAMPOLINE, bounce: 17 },
+    { ...TRAMPOLINE, bounce: 380 },
     { x1: -BLEACHERS.x2, x2: -BLEACHERS.x1, y: BLEACHERS.y },
     { ...BLEACHERS },
     { ...BACKBOARD },

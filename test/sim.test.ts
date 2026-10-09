@@ -145,8 +145,8 @@ describe("low gravity", () => {
 });
 
 describe("trampoline", () => {
-  const drop = (hold: Partial<InputFrame>) => {
-    const s = createMatch({ stage: "gym", players: [{ fighter: "lampjack" }, { fighter: "lampjack" }], seed: 1 });
+  const drop = (hold: Partial<InputFrame>, fighter = "lampjack") => {
+    const s = createMatch({ stage: "gym", players: [{ fighter }, { fighter: "lampjack" }], seed: 1 });
     const f = s.fighters[0];
     f.x = 0; f.y = -300; f.grounded = false; f.platform = -1; f.action = "air"; f.jumpsLeft = 0; f.usedUpSpecial = true;
     let low = -Infinity, back = Infinity;
@@ -162,6 +162,10 @@ describe("trampoline", () => {
     expect(low).toBeLessThanOrEqual(-70);
     expect(back).toBeLessThan(-250);
     expect(f.usedUpSpecial).toBe(false);
+  });
+  it("springs everyone about as high, whatever their gravity", () => {
+    const tops = ["lampjack", "slugbert", "woodstove"].map((id) => drop({}, id).back);
+    expect(Math.max(...tops) - Math.min(...tops)).toBeLessThan(40);
   });
   it("lets a fighter holding down land on it", () => {
     const { f } = drop({ y: 100 });
