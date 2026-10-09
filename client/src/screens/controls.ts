@@ -16,6 +16,7 @@ const GROUPS: { name: string; note?: string; actions: KeyAction[] }[] = [
   { name: "MOVE", note: "aims attacks and specials", actions: ["up", "left", "down", "right"] },
   { name: "JUMP", note: "again in the air", actions: ["jump"] },
   { name: "ATTACK", note: "hold it to SMASH", actions: ["attack"] },
+  { name: "SMASH", note: "+ a direction, right away", actions: ["smash"] },
   { name: "SPECIAL", note: "up + special flies you back", actions: ["special"] },
   { name: "SHIELD", note: "+ a direction: dodge", actions: ["shield"] },
   { name: "TAUNT", actions: ["taunt"] },

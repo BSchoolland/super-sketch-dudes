@@ -18,7 +18,7 @@ stocks. Keyboard or controller, couch or online.
 | Attack | Left click | Numpad 1 | A |
 | Special | E / right click | Numpad 2 | B |
 | Shield | Shift | Numpad 3 / Right Shift | LB, RB, LT, RT |
-| Smash | hold attack with a direction | hold attack with a direction | flick the stick with A, or the right stick |
+| Smash | hold attack with a direction, or R (+ a direction) | hold attack with a direction, or Numpad 6 | flick the stick with A, or the right stick |
 | Taunt | T | Numpad 5 | Back |
 | Pause | Esc | Esc | Start |
 

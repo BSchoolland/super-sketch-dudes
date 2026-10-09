@@ -2,16 +2,18 @@
 export interface KeyBindings {
   left: string[]; right: string[]; up: string[]; down: string[];
   jump: string[]; attack: string[]; special: string[]; shield: string[]; taunt: string[]; pause: string[];
+  /** Smash right away in the direction held (no direction: the way you last moved), as a right-stick flick. */
+  smash: string[];
 }
 export type KeyAction = keyof KeyBindings;
 export const KB1_DEFAULT: Readonly<KeyBindings> = {
   left: ["KeyA"], right: ["KeyD"], up: ["KeyW"], down: ["KeyS"],
-  jump: ["Space"], attack: ["Mouse0"], special: ["KeyE", "Mouse2"], shield: ["ShiftLeft"], taunt: ["KeyT"], pause: ["Escape"],
+  jump: ["Space"], attack: ["Mouse0"], special: ["KeyE", "Mouse2"], shield: ["ShiftLeft"], taunt: ["KeyT"], pause: ["Escape"], smash: ["KeyR"],
 };
 const KEY_ACTIONS = Object.keys(KB1_DEFAULT) as KeyAction[];
 export const KB2: Readonly<KeyBindings> = {
   left: ["ArrowLeft"], right: ["ArrowRight"], up: ["ArrowUp"], down: ["ArrowDown"],
-  jump: ["Numpad0"], attack: ["Numpad1"], special: ["Numpad2"], shield: ["Numpad3", "ShiftRight"], taunt: ["Numpad5"], pause: ["Escape"],
+  jump: ["Numpad0"], attack: ["Numpad1"], special: ["Numpad2"], shield: ["Numpad3", "ShiftRight"], taunt: ["Numpad5"], pause: ["Escape"], smash: ["Numpad6"],
 };
 
 /** Keyboard player 1's bindings: the defaults with the player's overrides from settings on top. */

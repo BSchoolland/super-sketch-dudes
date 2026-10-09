@@ -5,6 +5,9 @@ export type DeviceId = "kb1" | "kb2" | `pad${number}`;
 
 const keys = new Set<string>();
 const pressedThisFrame = new Set<string>();
+// input frame each key went down on: the smash key reaches the sim as a short right-stick flick
+let inputFrame = 0;
+const pressedAt = new Map<string, number>();
 const typedThisFrame: string[] = [];
 let anyPress = false;
 window.addEventListener("keydown", (e) => {
@@ -13,6 +16,7 @@ window.addEventListener("keydown", (e) => {
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
   keys.add(e.code);
   pressedThisFrame.add(e.code);
+  pressedAt.set(e.code, inputFrame);
   if (/^[a-z0-9]$/i.test(e.key)) typedThisFrame.push(e.key.toUpperCase());
   if (e.key === "Backspace") typedThisFrame.push("\b");
   if (e.key === "Enter") typedThisFrame.push("\n");
@@ -27,6 +31,9 @@ window.addEventListener("pointerup", (e) => { if (e.pointerType === "mouse") key
 window.addEventListener("pointercancel", (e) => { if (e.pointerType === "mouse") keys.delete(`Mouse${e.button}`); });
 window.addEventListener("contextmenu", (e) => { if (!(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) e.preventDefault(); });
 window.addEventListener("blur", () => keys.clear());
+
+/** Each keyboard's last horizontal direction: where a smash with no direction held goes. */
+const lastX = new Map<DeviceId, 1 | -1>();
 
 const padPrev = new Map<number, { ax: number; ay: number; cx: number; cy: number; jumpFlick: number; cFlick: number }>();
 
@@ -54,14 +61,21 @@ export function readDevice(dev: DeviceId, opts: { tapJump: boolean; mouse?: bool
     const down = (list: string[]) => list.some((k) => (opts.mouse !== false || !isMouse(k)) && (keys.has(k) || pressedThisFrame.has(k)));
     const x = (down(b.right) ? 100 : 0) - (down(b.left) ? 100 : 0);
     const y = (down(b.down) ? 100 : 0) - (down(b.up) ? 100 : 0);
+    if (x) lastX.set(dev, Math.sign(x) as 1 | -1);
+    // smash: the first 2 frames of a press flick the right stick the way you're aiming; held, it holds attack
+    // so the smash charges like a held attack
+    const smashing = down(b.smash);
+    const flick = b.smash.some((k) => inputFrame - (pressedAt.get(k) ?? -10) <= 1 && (keys.has(k) || pressedThisFrame.has(k)));
+    const cx = flick ? (y && !x ? 0 : (x || (lastX.get(dev) ?? 1) * 100)) : 0;
+    const cy = flick ? y : 0;
     let bits = B.DIGITAL;
     if (down(b.jump)) bits |= B.JUMP;
-    if (down(b.attack)) bits |= B.ATTACK;
+    if (down(b.attack) || smashing) bits |= B.ATTACK;
     if (down(b.special)) bits |= B.SPECIAL;
     if (down(b.shield)) bits |= B.SHIELD;
     if (down(b.taunt)) bits |= B.TAUNT;
     if (down(b.pause)) bits |= B.PAUSE;
-    return { x, y, cx: 0, cy: 0, b: bits };
+    return { x, y, cx, cy, b: bits };
   }
   const idx = Number(dev.slice(3));
   const s = padState(idx);
@@ -140,6 +154,7 @@ export function takeKeyPress(): string | null {
 }
 
 export function endInputFrame(): void {
+  inputFrame++;
   pressedThisFrame.clear();
   typedThisFrame.length = 0;
   anyPress = false;
