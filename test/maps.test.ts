@@ -40,6 +40,20 @@ describe("checkMap", () => {
   });
 });
 
+describe("surfaces", () => {
+  it("makes icy pieces slippery and bouncy ones trampolines, and rejects any other surface", () => {
+    const d = doc();
+    d.pieces[0] = { ...d.pieces[0], surface: "ice" };
+    d.pieces[2] = { ...d.pieces[2], surface: "bouncy" };
+    expect(checkMap(d)).toEqual([]);
+    const s = stageFromMap(d);
+    expect(s.platforms[0].grip).toBeLessThan(1);
+    expect(s.platforms.find((p) => p.x1 === -200)?.bounce).toBeGreaterThan(0);
+    expect(s.platforms[1]).not.toHaveProperty("grip");
+    expect(checkMap({ ...d, pieces: [{ ...d.pieces[0], surface: "lava" }] })[0]).toMatch(/surface/);
+  });
+});
+
 describe("stageFromMap", () => {
   it("puts the biggest terrain first, with ledges on every block and a derived arena", () => {
     const d = doc();

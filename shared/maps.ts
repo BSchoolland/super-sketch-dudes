@@ -1,12 +1,17 @@
 import type { Platform, PlatformMotion, Stage } from "./types";
+import { BOUNCE } from "./stages/gym";
+import { ICE_GRIP } from "./stages/snow";
 
 /**
  * A player-made stage, as the editor keeps it: solid terrain blocks, thin platforms (some of
  * them moving) and four spawn points. `stageFromMap` derives everything the sim needs from it
  * (ledges, blast zones, camera, respawn) so a map is only what its maker drew.
  */
-export interface MapTerrain { kind: "terrain"; x: number; y: number; w: number; h: number }
-export interface MapPlatform { kind: "platform"; x: number; y: number; w: number; motion?: PlatformMotion }
+/** What a piece's top is like: slippery ice, or a trampoline that springs you up. Plain when absent. */
+export type Surface = "ice" | "bouncy";
+export const SURFACES: readonly Surface[] = ["ice", "bouncy"];
+export interface MapTerrain { kind: "terrain"; x: number; y: number; w: number; h: number; surface?: Surface }
+export interface MapPlatform { kind: "platform"; x: number; y: number; w: number; motion?: PlatformMotion; surface?: Surface }
 export type MapPiece = MapTerrain | MapPlatform;
 export interface MapSpawn { x: number; y: number; facing: 1 | -1 }
 
@@ -77,6 +82,7 @@ export function checkMap(v: unknown): string[] {
       if (!num(o.w, PLATFORM_MIN_W, MAP_EXTENT)) p.push(`${at}: platforms must be at least ${PLATFORM_MIN_W} wide`);
       if (o.motion !== undefined) checkMotion(o.motion, at, p);
     } else p.push(`${at}: kind must be terrain or platform`);
+    if (o.surface !== undefined && !SURFACES.includes(o.surface as Surface)) p.push(`${at}: surface must be ice or bouncy`);
   });
   if (!terrain) p.push("a map needs at least one piece of terrain");
   if (!Array.isArray(d.spawns) || d.spawns.length !== 4) p.push("a map needs four spawn points");
@@ -100,14 +106,19 @@ function motionBox(p: MapPlatform): { x1: number; x2: number; y1: number; y2: nu
   return { x1: m.cx - m.rx - p.w / 2, x2: m.cx + m.rx + p.w / 2, y1: m.cy - m.ry, y2: m.cy + m.ry };
 }
 
+/** The sim's side of a piece's surface. */
+export function surfaceOf(p: MapPiece): Pick<Platform, "grip" | "bounce"> {
+  return p.surface === "ice" ? { grip: ICE_GRIP } : p.surface === "bouncy" ? { bounce: BOUNCE } : {};
+}
+
 export function stageFromMap(doc: MapDoc): Stage {
   const terrain = terrainOf(doc);
   const main = terrain[0];
   if (!main) throw new Error(`map ${doc.id} has no terrain`);
   const thin = doc.pieces.filter((p): p is MapPlatform => p.kind === "platform");
   const platforms: Platform[] = [
-    ...terrain.map((t): Platform => ({ x1: t.x, x2: t.x + t.w, y: t.y, solid: true, bottom: t.y + t.h })),
-    ...thin.map((p): Platform => ({ x1: p.x, x2: p.x + p.w, y: p.y, ...(p.motion ? { motion: p.motion } : {}) })),
+    ...terrain.map((t): Platform => ({ x1: t.x, x2: t.x + t.w, y: t.y, solid: true, bottom: t.y + t.h, ...surfaceOf(t) })),
+    ...thin.map((p): Platform => ({ x1: p.x, x2: p.x + p.w, y: p.y, ...(p.motion ? { motion: p.motion } : {}), ...surfaceOf(p) })),
   ];
   // a corner is a ledge unless another block fills the air beside it or stands on it
   const solidAt = (x: number, y: number) => terrain.some((t) => x > t.x && x < t.x + t.w && y > t.y && y < t.y + t.h);

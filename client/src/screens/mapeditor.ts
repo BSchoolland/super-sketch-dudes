@@ -11,7 +11,7 @@ import { mapsApi, refreshMaps, registerMap } from "../maps";
 import { button, card, label, title, goTo, type Screen } from "./ui";
 import { TextField } from "./textfield";
 import { RED } from "./character";
-import { checkMap, newMapDoc, stageFromMap, terrainOf, MAP_NAME_MAX, PERIOD_MAX, PERIOD_MIN, PLATFORM_MIN_W, TERRAIN_MIN, type MapDoc, type MapPiece, type MapPlatform, type MapSpawn } from "../../../shared/maps";
+import { checkMap, newMapDoc, stageFromMap, surfaceOf, terrainOf, MAP_NAME_MAX, PERIOD_MAX, PERIOD_MIN, PLATFORM_MIN_W, SURFACES, TERRAIN_MIN, type MapDoc, type MapPiece, type MapPlatform, type MapSpawn } from "../../../shared/maps";
 import type { Platform, State } from "../../../shared/types";
 import type { Nav } from "./nav";
 
@@ -51,7 +51,7 @@ function pieceRect(p: MapPiece): Rect {
   return p.kind === "terrain" ? { x: p.x, y: p.y, w: p.w, h: p.h } : { x: p.x, y: p.y - 4, w: p.w, h: 20 };
 }
 function asPlatform(p: MapPlatform): Platform {
-  return { x1: p.x, x2: p.x + p.w, y: p.y, ...(p.motion ? { motion: p.motion } : {}) };
+  return { x1: p.x, x2: p.x + p.w, y: p.y, ...(p.motion ? { motion: p.motion } : {}), ...surfaceOf(p) };
 }
 /** The far point of a mover's path: where a line ends, or an orbit's centre. */
 function farPoint(p: MapPlatform): WorldPt | null {
@@ -257,7 +257,7 @@ export class MapEditorScreen implements Screen {
   /** Cards the pointer is over belong to the buttons, not the map. */
   private overUi(v: ViewPoint): boolean {
     const rects: Rect[] = [{ x: 0, y: 0, w: VIEW_W, h: 100 }, { x: 0, y: COL.y0 - 10, w: COL.x + COL.w + 20, h: 6 * COL.step + 60 }, { x: 0, y: VIEW_H - 130, w: VIEW_W, h: 130 }];
-    if (this.sel) rects.push({ x: INSPECT.x - 10, y: INSPECT.y - 10, w: INSPECT.w + 30, h: 560 });
+    if (this.sel) rects.push({ x: INSPECT.x - 10, y: INSPECT.y - 10, w: INSPECT.w + 30, h: 620 });
     return rects.some((r) => inRect(v, r));
   }
 
@@ -660,20 +660,31 @@ export class MapEditorScreen implements Screen {
     }
     const p = this.doc.pieces[sel.i];
     const mover = p.kind === "platform" && !!p.motion;
-    const rows = p.kind === "terrain" ? 2 : mover ? 5 : 2;
-    card(ctx, x - 10, y - 10, w + 20, 80 + rows * 74 + 20, INK, false);
+    const main = p.kind === "terrain" && terrainOf(this.doc)[0] === p;
+    // the rows above DUPLICATE / DELETE, then theirs
+    const rows = (p.kind === "terrain" ? (main ? 4 : 3) : mover ? 6 : 3) + 1;
+    card(ctx, x - 10, y - 10, w + 20, 80 + rows * 74, INK, false);
     title(ctx, p.kind === "terrain" ? "TERRAIN" : mover ? "MOVING PLATFORM" : "PLATFORM", x + w / 2, y + 36, 30, INK, "center", w);
+    const surface = (at: number) => {
+      const all = [undefined, ...SURFACES], k = all.indexOf(p.surface);
+      stepper(at, "SURFACE", p.surface ?? "plain", (d) => this.edit(() => {
+        const next = all[(k + d + all.length) % all.length];
+        if (next) p.surface = next; else delete p.surface;
+      }));
+    };
     let i = 0;
     if (p.kind === "terrain") {
       stepper(i++, "WIDTH", `${p.w}`, (d) => this.edit(() => { p.w = Math.max(TERRAIN_MIN.w, p.w + d * 20); }));
       stepper(i++, "HEIGHT", `${p.h}`, (d) => this.edit(() => { p.h = Math.max(TERRAIN_MIN.h, p.h + d * 20); }));
-      if (terrainOf(this.doc)[0] === p) label(ctx, "the main stage: fighters start here", x + w / 2, row(i) + 18, 18, PENCIL);
+      surface(i++);
+      if (main) label(ctx, "the main stage: fighters start here", x + w / 2, row(i++) + 30, 18, PENCIL);
     } else {
       stepper(i++, "WIDTH", `${p.w}`, (d) => this.edit(() => { p.w = Math.max(PLATFORM_MIN_W, p.w + d * 20); }));
       const kinds = ["none", "line", "orbit"] as const;
       const current = p.motion?.kind ?? "none";
       const names = { none: "still", line: "back & forth", orbit: "circle" };
       stepper(i++, "MOVES", names[current], (d) => this.setMotion(p, kinds[(kinds.indexOf(current) + d + 3) % 3]));
+      surface(i++);
       if (p.motion) {
         const m = p.motion;
         stepper(i++, "TRIP", `${(m.period / 60).toFixed(1)}s`, (d) => this.edit(() => { m.period = Math.max(PERIOD_MIN, Math.min(PERIOD_MAX, m.period + d * 60)); }));
