@@ -1,14 +1,10 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { spawn } from "node:child_process";
 import OpenAI, { toFile } from "openai";
-import { tellBen } from "./mod-alerts";
+import { codexBusy, codexFellBack, codexRecovered, drawSheetCodex } from "./codex-sheet";
 import { SPRITE_CELLS } from "../shared/gen/sprite";
 
 export const SHEET_MODEL = "gpt-image-2.5-sunburst";
-/** `codex` draws through Ben's ChatGPT login (codex CLI's image_generation tool); when codex fails the sheet falls back to the paid API and pings Ben. */
-const CODEX_DRIVER = "gpt-6-luna";
 const TEMPLATE = fs.readFileSync(new URL("./SHEET-PROMPT.md", import.meta.url), "utf8");
 
 export interface SheetResult { backend: string; codexError?: string; ms: number; tokens: { text: number; image: number; output: number } | null; costUsd: number | null }
@@ -44,14 +40,20 @@ export async function drawSheet(drawingPath: string, outPath: string, note = "")
   const backend = process.env.FORGE_SHEET_BACKEND ?? "api";
   if (backend === "api") return drawSheetApi(drawingPath, outPath, prompt);
   if (backend !== "codex") throw new Error(`FORGE_SHEET_BACKEND must be api or codex, not ${backend}`);
-  try {
-    return await drawSheetCodex(drawingPath, outPath, prompt);
-  } catch (e) {
-    const codexError = e instanceof Error ? e.message : String(e);
-    console.error(`codex sheet failed, drawing with ${SHEET_MODEL} instead: ${codexError}`);
-    await tellBen(`⚠️ forge sheet fell back from codex to the paid ${SHEET_MODEL} API (\`${path.basename(path.dirname(drawingPath))}\`)\n\`${codexError.slice(0, 300)}\``);
-    return { ...(await drawSheetApi(drawingPath, outPath, prompt)), codexError };
+  // FORGE_SHEET_BACKEND=codex draws through Ben's ChatGPT login; the paid API covers a failed or rationed codex
+  let codexError = await codexBusy();
+  if (!codexError) {
+    try {
+      const r = await drawSheetCodex(drawingPath, outPath, prompt);
+      await codexRecovered();
+      return r;
+    } catch (e) {
+      codexError = e instanceof Error ? e.message : String(e);
+    }
   }
+  console.error(`no codex sheet, drawing with ${SHEET_MODEL} instead: ${codexError}`);
+  await codexFellBack(codexError, SHEET_MODEL);
+  return { ...(await drawSheetApi(drawingPath, outPath, prompt)), codexError };
 }
 
 async function drawSheetApi(drawingPath: string, outPath: string, prompt: string): Promise<SheetResult> {
@@ -72,43 +74,4 @@ async function drawSheetApi(drawingPath: string, outPath: string, prompt: string
   if (!u) return { backend: "api", ms: Date.now() - t0, tokens: null, costUsd: null };
   const tokens = { text: u.input_tokens_details?.text_tokens ?? 0, image: u.input_tokens_details?.image_tokens ?? 0, output: u.output_tokens };
   return { backend: "api", ms: Date.now() - t0, tokens, costUsd: tokens.text * RATE.text + tokens.image * RATE.image + tokens.output * RATE.output };
-}
-
-/** One `codex exec` turn whose only job is a single image_generation call; the image lands in ~/.codex/generated_images/<thread>/. */
-async function drawSheetCodex(drawingPath: string, outPath: string, prompt: string): Promise<SheetResult> {
-  const t0 = Date.now();
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "forge-codex-"));
-  const instructions = `Call your image generation tool to edit the attached image, with the prompt below passed through verbatim. If the call errors, call it again, at most three calls in all. Do not run commands, write files or generate anything else. Then stop.\n\n<prompt>\n${prompt}\n</prompt>`;
-  const args = ["exec", "--json", "--skip-git-repo-check", "--ephemeral", "-s", "read-only", "-m", CODEX_DRIVER, "-c", "model_reasoning_effort=low", "-i", drawingPath, "-"];
-  const { threadId, failure, said } = await new Promise<{ threadId: string; failure: string; said: string }>((resolve, reject) => {
-    const p = spawn("codex", args, { cwd, stdio: ["pipe", "pipe", "pipe"] });
-    const timer = setTimeout(() => p.kill("SIGKILL"), 5 * 60_000);
-    let out = "", err = "";
-    p.stdout.on("data", (d) => (out += d));
-    p.stderr.on("data", (d) => (err += d));
-    p.on("error", reject);
-    p.on("close", (code, signal) => {
-      clearTimeout(timer);
-      let threadId = "", failure = "", said = "";
-      for (const line of out.split("\n").filter(Boolean)) {
-        const e = JSON.parse(line);
-        if (e.type === "thread.started") threadId = e.thread_id;
-        if (e.item?.type === "agent_message" && e.item.text) said = e.item.text;
-        if (e.type === "turn.failed" || e.type === "error") failure = e.error?.message ?? e.message;
-      }
-      if (signal) failure ||= `codex killed by ${signal} after ${((Date.now() - t0) / 1000).toFixed(0)}s`;
-      else if (code !== 0) failure ||= `codex exited ${code}: ${err.trim().split("\n").slice(-3).join(" | ")}`;
-      resolve({ threadId, failure, said });
-    });
-    p.stdin.end(instructions);
-  });
-  fs.rmSync(cwd, { recursive: true });
-  if (!threadId) throw new Error(`codex sheet: ${failure || "codex never started a thread"}`);
-  // the tool often tells the driver it failed when the image did land, so the files are the truth
-  const dir = path.join(process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex"), "generated_images", threadId);
-  const pngs = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith(".png")).map((f) => path.join(dir, f)) : [];
-  if (!pngs.length) throw new Error(`codex sheet: no image${failure ? `: ${failure}` : ""}; codex said: ${said || "(nothing)"}`);
-  fs.copyFileSync(pngs.sort((a, b) => fs.statSync(a).mtimeMs - fs.statSync(b).mtimeMs)[0], outPath);
-  fs.rmSync(dir, { recursive: true });
-  return { backend: "codex", ms: Date.now() - t0, tokens: null, costUsd: 0 };
 }
