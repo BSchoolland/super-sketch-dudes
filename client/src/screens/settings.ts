@@ -12,9 +12,10 @@ import { ControlsPage } from "./controls";
 type SettingsTab = "general" | "controls";
 const TABS: Tabs<SettingsTab> = { left: { id: "general", text: "GENERAL" }, right: { id: "controls", text: "CONTROLS" } };
 
-interface Row { id: string; name: string; get: () => string; step: (d: -1 | 1) => void }
+/** `about`: a line under the rows saying what the focused one does. */
+interface Row { id: string; name: string; get: () => string; step: (d: -1 | 1) => void; about?: () => string }
 const ROW = { x: VIEW_W / 2 - 400, w: 800, h: 80, top: 220, gap: 100 };
-const SIGN_OUT = { w: 300, h: 80, y: 720 };
+const SIGN_OUT = { w: 300, h: 80, y: 760 };
 
 const clamp01 = (v: number): number => Math.max(0, Math.min(1, Math.round(v * 10) / 10));
 
@@ -27,7 +28,10 @@ export class SettingsScreen implements Screen {
     { id: "sound", name: "SOUND VOLUME", get: () => `${Math.round(settings.volume * 100)}%`, step: (d) => { settings.volume = clamp01(settings.volume + d * 0.1); setVolume(settings.volume); } },
     { id: "music", name: "MUSIC VOLUME", get: () => `${Math.round(settings.music * 100)}%`, step: (d) => { settings.music = clamp01(settings.music + d * 0.1); setMusicVolume(settings.music); } },
     { id: "mayhem", name: "MENU MAYHEM", get: () => MAYHEM[settings.mayhem].name, step: (d) => { settings.mayhem = Math.max(0, Math.min(MAYHEM.length - 1, settings.mayhem + d)); } },
-    { id: "stages", name: "EXTRA STAGES", get: () => (settings.extraStages ? "ON" : "OFF"), step: () => { settings.extraStages = !settings.extraStages; } },
+    {
+      id: "stages", name: "EXTRA STAGES", get: () => (settings.extraStages ? "ON" : "OFF"), step: () => { settings.extraStages = !settings.extraStages; },
+      about: () => `${settings.extraStages ? "Four painted stages in the stage list" : "ON adds four painted stages"}: Stadium, Forest, Cliffs, Final Draft`,
+    },
   ];
   constructor(private onBack: () => Screen, private onSignOut: () => Screen) {}
 
@@ -73,6 +77,8 @@ export class SettingsScreen implements Screen {
         label(ctx, r.name, ROW.x + 30, y + 52, 30, INK, "left", 900);
         label(ctx, `◀   ${r.get()}   ▶`, ROW.x + ROW.w - 150, y + 52, 30, INK, "center", 900);
       });
+      const about = this.rows.find((r) => r.id === focused?.id)?.about?.();
+      if (about) label(ctx, about, VIEW_W / 2, ROW.top + this.rows.length * ROW.gap + 26, 26, INK, "center");
       if (account.player) label(ctx, `signed in as ${account.player.name}`, VIEW_W / 2, SIGN_OUT.y - 24, 26, PENCIL, "center", 600);
       this.menu.draw(ctx, buttons);
     }
