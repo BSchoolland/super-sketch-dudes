@@ -2,6 +2,7 @@
 // What the forge spent over a window, at API list prices: Claude agent (session result) + sprite sheets (sheet-cost.jsonl).
 // Usage: node scripts/forge-spend.mjs [--hours 24]
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 
@@ -27,7 +28,8 @@ for (const id of fs.readdirSync(runs)) {
   const sheetLines = fs.existsSync(ledger) ? fs.readFileSync(ledger, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : [];
   const job = jobs.get(id);
   rows.push({ id, player: who(job), name: job?.result?.name ?? job?.hint?.name ?? "?", status: job?.status ?? "?", agent,
-    sheets: sheetLines.reduce((s, r) => s + (r.costUsd ?? 0), 0), sheetCalls: sheetLines.length, blocked: sheetLines.filter((r) => r.error).length, logged: fs.existsSync(ledger) });
+    sheets: sheetLines.reduce((s, r) => s + (r.costUsd ?? 0), 0), sheetCalls: sheetLines.length, blocked: sheetLines.filter((r) => r.error).length,
+    codexSheets: sheetLines.filter((r) => r.backend === "codex").length, codexFallbacks: sheetLines.filter((r) => r.codexError).map((r) => r.codexError), logged: fs.existsSync(ledger) });
 }
 // the auto moderator stops jobs before the forge writes a run, so it's counted from the server's records
 const recent = [...jobs.values()].filter((j) => j.createdAt >= since);
@@ -55,6 +57,8 @@ for (const r of rows) (byPlayer[r.player] ??= { n: 0, usd: 0 }), byPlayer[r.play
 console.log(JSON.stringify({
   hours, forges: rows.length, done: rows.filter((r) => r.status === "done").length, failed: rows.filter((r) => r.status === "failed").length,
   claudeUsd: +sum((r) => r.agent).toFixed(2), sheetUsd: +sum((r) => r.sheets).toFixed(2), sheetCalls: sum((r) => r.sheetCalls), sheetBlocked: sum((r) => r.blocked),
+  // sheets drawn through Ben's ChatGPT login ($0) vs on the paid API because codex failed or the pool was past the forge's cap
+  codex: { sheets: sum((r) => r.codexSheets), fallbacks: rows.flatMap((r) => r.codexFallbacks), weeklyPercent: JSON.parse(execFileSync(path.join(os.homedir(), "Projects/benbot/scripts/codex-limits"), ["--json"], { encoding: "utf8" })).weekly.percent },
   runsWithoutSheetLog: rows.filter((r) => !r.logged).length,
   byPlayer: Object.fromEntries(Object.entries(byPlayer).sort((a, b) => b[1].usd - a[1].usd).map(([p, v]) => [p, { forges: v.n, usd: +v.usd.toFixed(2) }])),
   moderation,
