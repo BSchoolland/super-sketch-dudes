@@ -78,9 +78,9 @@ async function drawSheetApi(drawingPath: string, outPath: string, prompt: string
 async function drawSheetCodex(drawingPath: string, outPath: string, prompt: string): Promise<SheetResult> {
   const t0 = Date.now();
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "forge-codex-"));
-  const instructions = `Call your image generation tool exactly once, editing the attached image with the prompt below passed through verbatim. Do not run commands, write files or generate anything else. Then stop.\n\n<prompt>\n${prompt}\n</prompt>`;
+  const instructions = `Call your image generation tool to edit the attached image, with the prompt below passed through verbatim. If the call errors, call it again, at most three calls in all. Do not run commands, write files or generate anything else. Then stop.\n\n<prompt>\n${prompt}\n</prompt>`;
   const args = ["exec", "--json", "--skip-git-repo-check", "--ephemeral", "-s", "read-only", "-m", CODEX_DRIVER, "-c", "model_reasoning_effort=low", "-i", drawingPath, "-"];
-  const { threadId, failure } = await new Promise<{ threadId: string; failure: string }>((resolve, reject) => {
+  const { threadId, failure, said } = await new Promise<{ threadId: string; failure: string; said: string }>((resolve, reject) => {
     const p = spawn("codex", args, { cwd, stdio: ["pipe", "pipe", "pipe"] });
     const timer = setTimeout(() => p.kill("SIGKILL"), 5 * 60_000);
     let out = "", err = "";
@@ -89,24 +89,26 @@ async function drawSheetCodex(drawingPath: string, outPath: string, prompt: stri
     p.on("error", reject);
     p.on("close", (code, signal) => {
       clearTimeout(timer);
-      let threadId = "", failure = "";
+      let threadId = "", failure = "", said = "";
       for (const line of out.split("\n").filter(Boolean)) {
         const e = JSON.parse(line);
         if (e.type === "thread.started") threadId = e.thread_id;
+        if (e.item?.type === "agent_message" && e.item.text) said = e.item.text;
         if (e.type === "turn.failed" || e.type === "error") failure = e.error?.message ?? e.message;
       }
       if (signal) failure ||= `codex killed by ${signal} after ${((Date.now() - t0) / 1000).toFixed(0)}s`;
       else if (code !== 0) failure ||= `codex exited ${code}: ${err.trim().split("\n").slice(-3).join(" | ")}`;
-      resolve({ threadId, failure });
+      resolve({ threadId, failure, said });
     });
     p.stdin.end(instructions);
   });
   fs.rmSync(cwd, { recursive: true });
-  if (failure) throw new Error(`codex sheet: ${failure}`);
+  if (!threadId) throw new Error(`codex sheet: ${failure || "codex never started a thread"}`);
+  // the tool often tells the driver it failed when the image did land, so the files are the truth
   const dir = path.join(process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex"), "generated_images", threadId);
-  const pngs = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith(".png")) : [];
-  if (pngs.length !== 1) throw new Error(`codex sheet: expected one image in ${dir}, found ${pngs.length}`);
-  fs.copyFileSync(path.join(dir, pngs[0]), outPath);
+  const pngs = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith(".png")).map((f) => path.join(dir, f)) : [];
+  if (!pngs.length) throw new Error(`codex sheet: no image${failure ? `: ${failure}` : ""}; codex said: ${said || "(nothing)"}`);
+  fs.copyFileSync(pngs.sort((a, b) => fs.statSync(a).mtimeMs - fs.statSync(b).mtimeMs)[0], outPath);
   fs.rmSync(dir, { recursive: true });
   return { backend: "codex", ms: Date.now() - t0, tokens: null, costUsd: 0 };
 }
