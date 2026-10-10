@@ -7,7 +7,7 @@ import { tellBen } from "./mod-alerts";
 import { SPRITE_CELLS } from "../shared/gen/sprite";
 
 export const SHEET_MODEL = "gpt-image-2.5-sunburst";
-/** `codex` draws through Ben's ChatGPT login (codex CLI's image_generation tool); when codex fails the sheet falls back to the paid API. */
+/** `codex` draws through Ben's ChatGPT login (codex CLI's image_generation tool); when codex fails the sheet falls back to the paid API and pings Ben. */
 const BACKEND = process.env.FORGE_SHEET_BACKEND ?? "api";
 const CODEX_DRIVER = "gpt-6-luna";
 const TEMPLATE = fs.readFileSync(new URL("./SHEET-PROMPT.md", import.meta.url), "utf8");
@@ -49,6 +49,7 @@ export async function drawSheet(drawingPath: string, outPath: string, note = "")
   } catch (e) {
     const codexError = e instanceof Error ? e.message : String(e);
     console.error(`codex sheet failed, drawing with ${SHEET_MODEL} instead: ${codexError}`);
+    await tellBen(`⚠️ forge sheet fell back from codex to the paid ${SHEET_MODEL} API (\`${path.basename(path.dirname(drawingPath))}\`)\n\`${codexError.slice(0, 300)}\``);
     return { ...(await drawSheetApi(drawingPath, outPath, prompt)), codexError };
   }
 }
