@@ -161,6 +161,10 @@ it (position lerp 0.12, zoom lerp 0.08). Layers: backdrop, far parallax, mid par
 shadows, projectiles, fighters (drawn back-to-front by slot; a hitlag'd fighter jitters),
 effects (additive), particles, hud. Effects and particles run in real time even in hitlag.
 
+Pencil stages draw their platforms as boxes plus scenery (`render/stagedecor.ts`, plain strokes). The art stages
+(`render/stageart.ts`, `ART_THEMES`; Settings > EXTRA STAGES) draw WebP layers from `public/stages/<theme>/`, with
+one stage's full art in memory at a time, and stand each fighter on a paper cut-out of its drawing.
+
 ## Audio
 
 Everything is synthesised in WebAudio (Kessler's approach): hits are noise bursts filtered by
@@ -260,6 +264,7 @@ sqlite dependency to lean on; `server/eventlog.ts` reads it back, newest snapsho
 - URL params for testing: `?quick=1&p2=cpu&cpu=9&f=brick,wick&stage=rooftops&seed=3&boxes=1`
   skips the menus; `&training=1` starts training mode; `?sheet=sable` opens the pose sheet.
 - `npm run check`: typecheck + lint-determinism + vitest.
+- `scripts/stagecheck.ts`: CPU matches per stage, with the share of KOs that were self-destructs.
 - `scripts/deploy.sh`: build, rsync to personal-server:~/sketch-battle, pm2 `sketch-battle` on 3008.
 
 ## Deploy
