@@ -3,15 +3,16 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import OpenAI, { toFile } from "openai";
+import { tellBen } from "./mod-alerts";
 import { SPRITE_CELLS } from "../shared/gen/sprite";
 
 export const SHEET_MODEL = "gpt-image-2.5-sunburst";
-/** `codex` draws through Ben's ChatGPT login (codex CLI's image_generation tool) instead of the paid API. */
+/** `codex` draws through Ben's ChatGPT login (codex CLI's image_generation tool); when codex fails the sheet falls back to the paid API. */
 const BACKEND = process.env.FORGE_SHEET_BACKEND ?? "api";
 const CODEX_DRIVER = "gpt-6-luna";
 const TEMPLATE = fs.readFileSync(new URL("./SHEET-PROMPT.md", import.meta.url), "utf8");
 
-export interface SheetResult { backend: string; ms: number; tokens: { text: number; image: number; output: number } | null; costUsd: number | null }
+export interface SheetResult { backend: string; codexError?: string; ms: number; tokens: { text: number; image: number; output: number } | null; costUsd: number | null }
 
 // $ per token, gpt-image-1 list rates (sunburst's aren't published); the report calls this an estimate
 const RATE = { text: 5e-6, image: 10e-6, output: 40e-6 };
@@ -41,8 +42,18 @@ export function sheetPrompt(): string {
 export async function drawSheet(drawingPath: string, outPath: string, note = ""): Promise<SheetResult> {
   const prompt = note ? `${sheetPrompt()}\n\nAbout this particular drawing: ${note}` : sheetPrompt();
   fs.writeFileSync(path.join(path.dirname(outPath), "sheet-prompt.txt"), prompt);
-  if (BACKEND === "codex") return drawSheetCodex(drawingPath, outPath, prompt);
-  if (BACKEND !== "api") throw new Error(`FORGE_SHEET_BACKEND must be api or codex, not ${BACKEND}`);
+  if (BACKEND === "api") return drawSheetApi(drawingPath, outPath, prompt);
+  if (BACKEND !== "codex") throw new Error(`FORGE_SHEET_BACKEND must be api or codex, not ${BACKEND}`);
+  try {
+    return await drawSheetCodex(drawingPath, outPath, prompt);
+  } catch (e) {
+    const codexError = e instanceof Error ? e.message : String(e);
+    console.error(`codex sheet failed, drawing with ${SHEET_MODEL} instead: ${codexError}`);
+    return { ...(await drawSheetApi(drawingPath, outPath, prompt)), codexError };
+  }
+}
+
+async function drawSheetApi(drawingPath: string, outPath: string, prompt: string): Promise<SheetResult> {
   if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not set (forge/.env)");
   const client = new OpenAI({ timeout: 5 * 60_000, maxRetries: 1 });
   const t0 = Date.now();

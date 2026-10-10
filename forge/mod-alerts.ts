@@ -1,4 +1,4 @@
-// Where the auto moderator tells Ben: flagged characters and unjudged ones go to a Discord channel through BenBot.
+// Where the forge tells Ben: flagged characters, unjudged ones and sheet fallbacks go to a Discord channel through BenBot.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -29,6 +29,11 @@ async function post(s: Submission, text: string): Promise<void> {
   const file = path.join(path.dirname(s.drawing), `SPOILER_${s.fighterId}.png`);
   fs.copyFileSync(s.drawing, file);
   await run(SEND, [config().channel, "--file", file, "--", text]);
+}
+
+/** Anything else the forge needs Ben to hear about, with a ping. */
+export async function tellBen(text: string): Promise<void> {
+  await run(SEND, [config().channel, `<@${config().ping}> ${text}`]);
 }
 
 const title = (s: Submission) => `**${s.name || "(no name)"}** by ${s.playerName} · \`${s.fighterId}\``;
