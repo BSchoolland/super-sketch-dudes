@@ -1,12 +1,17 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { spawn } from "node:child_process";
 import OpenAI, { toFile } from "openai";
 import { SPRITE_CELLS } from "../shared/gen/sprite";
 
 export const SHEET_MODEL = "gpt-image-2.5-sunburst";
+/** `codex` draws through Ben's ChatGPT login (codex CLI's image_generation tool) instead of the paid API. */
+const BACKEND = process.env.FORGE_SHEET_BACKEND ?? "api";
+const CODEX_DRIVER = "gpt-6-luna";
 const TEMPLATE = fs.readFileSync(new URL("./SHEET-PROMPT.md", import.meta.url), "utf8");
 
-export interface SheetResult { ms: number; tokens: { text: number; image: number; output: number } | null; costUsd: number | null }
+export interface SheetResult { backend: string; ms: number; tokens: { text: number; image: number; output: number } | null; costUsd: number | null }
 
 // $ per token, gpt-image-1 list rates (sunburst's aren't published); the report calls this an estimate
 const RATE = { text: 5e-6, image: 10e-6, output: 40e-6 };
@@ -34,10 +39,12 @@ export function sheetPrompt(): string {
 
 /** `note`: what the forge agent saw go wrong in an earlier sheet of this drawing, passed on to the image model. */
 export async function drawSheet(drawingPath: string, outPath: string, note = ""): Promise<SheetResult> {
-  if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not set (forge/.env)");
-  const client = new OpenAI({ timeout: 5 * 60_000, maxRetries: 1 });
   const prompt = note ? `${sheetPrompt()}\n\nAbout this particular drawing: ${note}` : sheetPrompt();
   fs.writeFileSync(path.join(path.dirname(outPath), "sheet-prompt.txt"), prompt);
+  if (BACKEND === "codex") return drawSheetCodex(drawingPath, outPath, prompt);
+  if (BACKEND !== "api") throw new Error(`FORGE_SHEET_BACKEND must be api or codex, not ${BACKEND}`);
+  if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not set (forge/.env)");
+  const client = new OpenAI({ timeout: 5 * 60_000, maxRetries: 1 });
   const t0 = Date.now();
   const res = await client.images.edit({
     model: SHEET_MODEL,
@@ -50,7 +57,44 @@ export async function drawSheet(drawingPath: string, outPath: string, note = "")
   if (!b64) throw new Error(`${SHEET_MODEL} returned no image`);
   fs.writeFileSync(outPath, Buffer.from(b64, "base64"));
   const u = res.usage;
-  if (!u) return { ms: Date.now() - t0, tokens: null, costUsd: null };
+  if (!u) return { backend: "api", ms: Date.now() - t0, tokens: null, costUsd: null };
   const tokens = { text: u.input_tokens_details?.text_tokens ?? 0, image: u.input_tokens_details?.image_tokens ?? 0, output: u.output_tokens };
-  return { ms: Date.now() - t0, tokens, costUsd: tokens.text * RATE.text + tokens.image * RATE.image + tokens.output * RATE.output };
+  return { backend: "api", ms: Date.now() - t0, tokens, costUsd: tokens.text * RATE.text + tokens.image * RATE.image + tokens.output * RATE.output };
+}
+
+/** One `codex exec` turn whose only job is a single image_generation call; the image lands in ~/.codex/generated_images/<thread>/. */
+async function drawSheetCodex(drawingPath: string, outPath: string, prompt: string): Promise<SheetResult> {
+  const t0 = Date.now();
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "forge-codex-"));
+  const instructions = `Call your image generation tool exactly once, editing the attached image with the prompt below passed through verbatim. Do not run commands, write files or generate anything else. Then stop.\n\n<prompt>\n${prompt}\n</prompt>`;
+  const args = ["exec", "--json", "--skip-git-repo-check", "--ephemeral", "-s", "read-only", "-m", CODEX_DRIVER, "-c", "model_reasoning_effort=low", "-i", drawingPath, "-"];
+  const { threadId, failure } = await new Promise<{ threadId: string; failure: string }>((resolve, reject) => {
+    const p = spawn("codex", args, { cwd, stdio: ["pipe", "pipe", "pipe"] });
+    const timer = setTimeout(() => p.kill("SIGKILL"), 5 * 60_000);
+    let out = "", err = "";
+    p.stdout.on("data", (d) => (out += d));
+    p.stderr.on("data", (d) => (err += d));
+    p.on("error", reject);
+    p.on("close", (code, signal) => {
+      clearTimeout(timer);
+      let threadId = "", failure = "";
+      for (const line of out.split("\n").filter(Boolean)) {
+        const e = JSON.parse(line);
+        if (e.type === "thread.started") threadId = e.thread_id;
+        if (e.type === "turn.failed" || e.type === "error") failure = e.error?.message ?? e.message;
+      }
+      if (signal) failure ||= `codex killed by ${signal} after ${((Date.now() - t0) / 1000).toFixed(0)}s`;
+      else if (code !== 0) failure ||= `codex exited ${code}: ${err.trim().split("\n").slice(-3).join(" | ")}`;
+      resolve({ threadId, failure });
+    });
+    p.stdin.end(instructions);
+  });
+  fs.rmSync(cwd, { recursive: true });
+  if (failure) throw new Error(`codex sheet: ${failure}`);
+  const dir = path.join(process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex"), "generated_images", threadId);
+  const pngs = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith(".png")) : [];
+  if (pngs.length !== 1) throw new Error(`codex sheet: expected one image in ${dir}, found ${pngs.length}`);
+  fs.copyFileSync(path.join(dir, pngs[0]), outPath);
+  fs.rmSync(dir, { recursive: true });
+  return { backend: "codex", ms: Date.now() - t0, tokens: null, costUsd: 0 };
 }

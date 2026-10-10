@@ -40,7 +40,7 @@ if (fromDrawing) {
   const ledger = process.env.FORGE_SHEET_LEDGER;
   const record = (row: object) => { if (ledger) fs.appendFileSync(ledger, JSON.stringify({ at: new Date().toISOString(), ...row }) + "\n"); };
   const r = await drawSheet(path.resolve(drawing), sheet, note).catch((e: Error) => { record({ error: e.message }); throw e; });
-  record({ ms: r.ms, tokens: r.tokens, costUsd: r.costUsd });
+  record({ backend: r.backend, ms: r.ms, tokens: r.tokens, costUsd: r.costUsd });
   console.log(`sheet drawn in ${(r.ms / 1000).toFixed(0)}s -> ${sheet}`);
 } else console.log(`sheet already there: ${sheet} (pass --note to redraw)`);
 run("normalize.py", sheet, out, "--mirror", mirror ? "1" : "0");
