@@ -8,7 +8,6 @@ import { SPRITE_CELLS } from "../shared/gen/sprite";
 
 export const SHEET_MODEL = "gpt-image-2.5-sunburst";
 /** `codex` draws through Ben's ChatGPT login (codex CLI's image_generation tool); when codex fails the sheet falls back to the paid API and pings Ben. */
-const BACKEND = process.env.FORGE_SHEET_BACKEND ?? "api";
 const CODEX_DRIVER = "gpt-6-luna";
 const TEMPLATE = fs.readFileSync(new URL("./SHEET-PROMPT.md", import.meta.url), "utf8");
 
@@ -42,8 +41,9 @@ export function sheetPrompt(): string {
 export async function drawSheet(drawingPath: string, outPath: string, note = ""): Promise<SheetResult> {
   const prompt = note ? `${sheetPrompt()}\n\nAbout this particular drawing: ${note}` : sheetPrompt();
   fs.writeFileSync(path.join(path.dirname(outPath), "sheet-prompt.txt"), prompt);
-  if (BACKEND === "api") return drawSheetApi(drawingPath, outPath, prompt);
-  if (BACKEND !== "codex") throw new Error(`FORGE_SHEET_BACKEND must be api or codex, not ${BACKEND}`);
+  const backend = process.env.FORGE_SHEET_BACKEND ?? "api";
+  if (backend === "api") return drawSheetApi(drawingPath, outPath, prompt);
+  if (backend !== "codex") throw new Error(`FORGE_SHEET_BACKEND must be api or codex, not ${backend}`);
   try {
     return await drawSheetCodex(drawingPath, outPath, prompt);
   } catch (e) {
