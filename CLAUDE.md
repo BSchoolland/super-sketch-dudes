@@ -1,6 +1,6 @@
 # Super Sketch Dudes
 
-Deploy only from a clean checkout of master. Anything that needs to ship goes onto master first; a build from a branch or an uncommitted tree gets silently dropped by the next deploy.
+Pushing master is deploying: .github/workflows/deploy.yml runs `scripts/deploy.sh` (check, build, ship) on every push. Don't run deploy.sh by hand for the live game; a push that fails the check doesn't ship, and the run's log is on the repo's Actions tab (`gh run watch`).
 
 Only push master. Old branches and backup/* contain personal data (the school and players' real names); .git/hooks/pre-push refuses anything else.
 

@@ -266,6 +266,7 @@ sqlite dependency to lean on; `server/eventlog.ts` reads it back, newest snapsho
 - `npm run check`: typecheck + lint-determinism + vitest.
 - `scripts/stagecheck.ts`: CPU matches per stage, with the share of KOs that were self-destructs.
 - `scripts/deploy.sh`: build, rsync to personal-server:~/sketch-battle, pm2 `sketch-battle` on 3008.
+  `.github/workflows/deploy.yml` runs it on every push to master, over SSH with the `DEPLOY_SSH_KEY` secret.
 
 ## Deploy
 

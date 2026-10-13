@@ -100,7 +100,7 @@ works, a `srflx` one that STUN does. Try `turns:bschoolland.dev:5349?transport=t
 
 ## 4. Ship
 
-1. Deploy from master as usual (`scripts/deploy.sh`): the relay and the classic page get peer-to-peer.
+1. Push master as usual (CI deploys it): the relay and the classic page get peer-to-peer.
 2. The swappable page (shell.html) runs whatever game bundle is current: push one built from master
    (`scripts/push-game.sh --current`) for its players to get it. Rooms mixing an older bundle still play: those
    players' pairs ride the relay, and the relay doesn't decide anyone away in that match (an older bundle wouldn't
