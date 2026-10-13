@@ -13,8 +13,11 @@ import { CharacterDetail, moveRows, type MoveRow } from "./charcard";
 import type { Nav } from "./nav";
 import { TextField } from "./textfield";
 import { drawCharTabs, otherCharTab } from "./chartabs";
+import { ScrollView, type Rect } from "./scroll";
 
-const COLS = 6, ROWS = 2, ART = 250, GAP = 50, ROW_H = 350, TOP = 270;
+const COLS = 6, ART = 250, GAP = 50, ROW_H = 350, TOP = 250, BOTTOM = VIEW_H - 180;
+/** Room above the first row for the count bursts. */
+const PAD_TOP = 30;
 const X0 = (VIEW_W - (COLS * ART + (COLS - 1) * GAP)) / 2;
 /** The search box, under the tabs on the left; the sorts are words on the right of the same row. */
 const SEARCH = { x: X0, y: 150, w: 720, h: 76 };
@@ -64,7 +67,9 @@ export class CommunityScreen implements Screen {
   private saving = false;
   /** Where to go once a save lands: MINE, with it at the top. */
   private next: Screen | null = null;
-  private scroll = 0;
+  private scroll = new ScrollView({ x: X0, y: TOP, w: COLS * ART + (COLS - 1) * GAP, h: BOTTOM - TOP });
+  /** The focus the scroll last followed: scrolling away from it leaves it be until it moves. */
+  private followed = -1;
   private problem = "";
   private search: TextField | null = null;
   /** What the list was last fetched for; the box is refetched once typing stops. */
@@ -124,7 +129,7 @@ export class CommunityScreen implements Screen {
 
   private reload(): void {
     this.items = null;
-    this.scroll = 0;
+    this.scroll = new ScrollView(this.scroll.view);
     this.menu.focus = 0;
     this.load(0);
   }
@@ -133,16 +138,13 @@ export class CommunityScreen implements Screen {
     return this.items ?? [];
   }
 
+  /** Cell `i` in the scroll's content. */
+  private cell(i: number): Rect {
+    return { x: X0 + (i % COLS) * (ART + GAP), y: PAD_TOP + Math.floor(i / COLS) * ROW_H, w: ART, h: ART };
+  }
+
   private gridButtons(): Button[] {
-    const entries = this.entries;
-    const rows = Math.ceil(entries.length / COLS);
-    const b: Button[] = entries.map((_, i) => {
-      const row = Math.floor(i / COLS) - this.scroll;
-      const visible = row >= 0 && row < ROWS;
-      return { id: `c${i}`, x: X0 + (i % COLS) * (ART + GAP), y: visible ? TOP + row * ROW_H : -9999, w: ART, h: ART, text: "", custom: true };
-    });
-    if (this.scroll > 0) b.push({ id: "up", x: VIEW_W - 110, y: TOP, w: 80, h: 80, text: "▲", size: 40 });
-    if (this.scroll + ROWS < rows) b.push({ id: "down", x: VIEW_W - 110, y: TOP + ROWS * ROW_H - 150, w: 80, h: 80, text: "▼", size: 40 });
+    const b: Button[] = this.entries.map((_, i) => this.scroll.button(`c${i}`, this.cell(i)));
     b.push({ id: "search", ...SEARCH, text: "", custom: true });
     const right = X0 + COLS * ART + (COLS - 1) * GAP;
     COMMUNITY_SORTS.forEach((s, i) => b.push({ id: s, x: right - (COMMUNITY_SORTS.length - i) * SORT_W, y: SORT_Y, w: SORT_W, h: SEARCH.h, text: SORT_NAME[s], custom: true }));
@@ -187,11 +189,10 @@ export class CommunityScreen implements Screen {
     if (this.selected) return this.updateDetail(this.selected, m, taps);
     const buttons = this.gridButtons();
     const pressed = this.menu.update(buttons, this.menu.grid(m, COLS, this.entries.length, buttons.length), taps);
-    this.follow();
+    this.scroll.tick(dt, PAD_TOP + Math.ceil(this.entries.length / COLS) * ROW_H);
+    this.follow(m);
     if (pressed === "back" || m.back) { sfx.menuBack(); return this.nav.title(); }
     if (pressed === "tab") { sfx.menuConfirm(); return this.nav.library(); }
-    if (pressed === "up") this.scroll--;
-    if (pressed === "down") this.scroll++;
     const sort = COMMUNITY_SORTS.find((s) => s === pressed);
     if (sort) this.resort(sort);
     if (pressed === "search") this.search?.el.focus();
@@ -201,8 +202,8 @@ export class CommunityScreen implements Screen {
       this.detail = new CharacterDetail(c, c);
       this.detailMenu.focus = 0;
     }
-    // the next page once the last loaded row is on screen
-    if (!this.loading && this.loaded < this.pages && this.scroll + ROWS >= Math.ceil(this.entries.length / COLS)) this.load(this.loaded);
+    // the next page while the last loaded rows are still a screen away
+    if (!this.loading && this.loaded < this.pages && this.scroll.nearEnd(this.scroll.view.h)) this.load(this.loaded);
     return null;
   }
 
@@ -234,13 +235,14 @@ export class CommunityScreen implements Screen {
     );
   }
 
-  /** Keeps the focused cell's row on screen. */
-  private follow(): void {
+  /** Brings the focused cell on screen when the focus moves or a direction is pressed. */
+  private follow(m: MenuInput): void {
     const f = this.menu.focus;
+    if (f === this.followed && !(m.up || m.down || m.left || m.right)) return;
+    this.followed = f;
     if (f >= this.entries.length) return;
-    const row = Math.floor(f / COLS);
-    if (row < this.scroll) this.scroll = row;
-    if (row >= this.scroll + ROWS) this.scroll = row - ROWS + 1;
+    const c = this.cell(f);
+    this.scroll.reveal(c.y - PAD_TOP, c.y + ROW_H - GAP);
   }
 
   draw(ctx: CanvasRenderingContext2D, dt: number): void {
@@ -256,16 +258,17 @@ export class CommunityScreen implements Screen {
     if (!this.items) label(ctx, "…", VIEW_W / 2, 500, 60, PENCIL);
     else if (!this.items.length) label(ctx, this.query ? `no characters called “${this.query}”` : "nobody has shared a character yet", VIEW_W / 2, 560, 40, PENCIL);
     const focus = this.menu.focus;
-    this.entries.forEach((c, i) => {
-      const b = buttons[i];
-      if (b.y < 0) return;
-      drawCharacterCell(ctx, { ...c, status: "ready", stage: "", error: null }, b.x, b.y, ART, this.t + i * 0.2, i === focus);
+    this.scroll.draw(ctx, () => this.entries.forEach((c, i) => {
+      const r = this.cell(i);
+      if (!this.scroll.shows(r.y - PAD_TOP, ROW_H)) return;
+      const x = r.x, y = this.scroll.at(r.y);
+      drawCharacterCell(ctx, { ...c, status: "ready", stage: "", error: null }, x, y, ART, this.t + i * 0.2, i === focus);
       const count = countOf(c, this.sort);
       if (count.n) {
-        drawCount(ctx, b.x + ART - 30, b.y + 18, count.n);
-        if (count.what) label(ctx, count.what, b.x + ART - 40, b.y + 86, 22, INK, "center", 800);
+        drawCount(ctx, x + ART - 30, y + 18, count.n);
+        if (count.what) label(ctx, count.what, x + ART - 40, y + 86, 22, INK, "center", 800);
       }
-    });
+    }));
     for (const b of buttons) {
       const focused = buttons[focus] === b;
       if (b.id === "search") this.drawSearch(ctx, focused);

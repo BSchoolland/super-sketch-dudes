@@ -13,10 +13,13 @@ import { drawExchange, drawSketch } from "./feedbackcard";
 import { DrawPad } from "./pad";
 import { padPng } from "./padtools";
 import { SketchScreen, SKETCH_PAD } from "./classtime";
+import { ScrollView } from "./scroll";
 
 const day = (id: string): string => new Date(id).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
-const ROWS = 6, ROW_H = 118, ROW_GAP = 16, X = 200, W = VIEW_W - 2 * X - 120, TOP = 170;
+const ROW_H = 118, ROW_GAP = 16, X = 200, W = VIEW_W - 2 * X - 120, TOP = 150, BOTTOM = VIEW_H - 150;
+/** Row `i`'s top in the scroll's content. */
+const rowY = (i: number): number => ROW_GAP + i * (ROW_H + ROW_GAP);
 const BACK = { id: "back", x: 40, y: VIEW_H - 130, w: 240, h: 90, text: "BACK", size: 40 };
 
 /**
@@ -26,7 +29,9 @@ const BACK = { id: "back", x: 40, y: VIEW_H - 130, w: 240, h: 90, text: "BACK", 
 export class FeedbackListScreen implements Screen {
   t = 0;
   private menu = new ButtonMenu();
-  private scroll = 0;
+  private scroll = new ScrollView({ x: X, y: TOP, w: W, h: BOTTOM - TOP });
+  /** The focus the scroll last followed: scrolling away from it leaves it be until it moves. */
+  private followed = -1;
   private unanswered: boolean;
 
   constructor(private items: FeedbackItem[], private admin: boolean, private onBack: () => Screen) {
@@ -39,13 +44,8 @@ export class FeedbackListScreen implements Screen {
 
   private buttons(): Button[] {
     const shown = this.shown;
-    const b: Button[] = shown.map((_, i) => {
-      const row = i - this.scroll;
-      return { id: `f${i}`, x: X, y: row >= 0 && row < ROWS ? TOP + row * (ROW_H + ROW_GAP) : -9999, w: W, h: ROW_H, text: "", custom: true };
-    });
-    if (this.scroll > 0) b.push({ id: "up", x: X + W + 40, y: TOP, w: 80, h: 80, text: "▲", size: 40 });
-    if (this.scroll + ROWS < shown.length) b.push({ id: "down", x: X + W + 40, y: TOP + ROWS * (ROW_H + ROW_GAP) - 96, w: 80, h: 80, text: "▼", size: 40 });
-    if (this.admin) b.push({ id: "filter", x: VIEW_W - 560, y: VIEW_H - 130, w: 520, h: 90, text: this.unanswered ? "UNANSWERED" : "ALL", size: 34, step: () => { this.unanswered = !this.unanswered; this.scroll = 0; } });
+    const b: Button[] = shown.map((_, i) => this.scroll.button(`f${i}`, { x: X, y: rowY(i), w: W, h: ROW_H }));
+    if (this.admin) b.push({ id: "filter", x: VIEW_W - 560, y: VIEW_H - 130, w: 520, h: 90, text: this.unanswered ? "UNANSWERED" : "ALL", size: 34, step: () => { this.unanswered = !this.unanswered; this.scroll = new ScrollView(this.scroll.view); } });
     b.push(BACK);
     return b;
   }
@@ -54,14 +54,13 @@ export class FeedbackListScreen implements Screen {
     this.t += dt;
     const shown = this.shown;
     const pressed = this.menu.update(this.buttons(), m, consumeTaps());
+    this.scroll.tick(dt, rowY(shown.length));
     const f = this.menu.focus;
-    if (f < shown.length) {
-      if (f < this.scroll) this.scroll = f;
-      if (f >= this.scroll + ROWS) this.scroll = f - ROWS + 1;
+    if (f !== this.followed || m.up || m.down || m.left || m.right) {
+      this.followed = f;
+      if (f < shown.length) this.scroll.reveal(rowY(f), rowY(f) + ROW_H, ROW_GAP);
     }
     if (pressed === "back" || m.back) { sfx.menuBack(); return this.onBack(); }
-    if (pressed === "up") this.scroll--;
-    if (pressed === "down") this.scroll++;
     if (pressed?.startsWith("f")) return new FeedbackDetailScreen(shown[Number(pressed.slice(1))], this.admin, () => this);
     return null;
   }
@@ -73,10 +72,10 @@ export class FeedbackListScreen implements Screen {
     const focused = this.menu.focused(buttons)?.id;
     const shown = this.shown;
     if (!shown.length) label(ctx, this.unanswered ? "All answered." : "Nothing here yet.", VIEW_W / 2, VIEW_H / 2, 36, PENCIL);
-    shown.forEach((item, i) => {
-      const b = buttons[i];
-      if (b.y < 0) return;
-      card(ctx, b.x, b.y, b.w, b.h, INK, focused === b.id);
+    this.scroll.draw(ctx, () => shown.forEach((item, i) => {
+      if (!this.scroll.shows(rowY(i), ROW_H)) return;
+      const b = { x: X, y: this.scroll.at(rowY(i)), w: W, h: ROW_H };
+      card(ctx, b.x, b.y, b.w, b.h, INK, focused === `f${i}`);
       let tx = b.x + 24;
       if (item.sketch) { drawSketch(ctx, item.sketch, b.x + 18, b.y + 15, ROW_H - 30); tx += ROW_H; }
       const who = this.admin ? `${item.player?.name ?? "signed out"} · ${day(item.id)}` : day(item.id);
@@ -84,7 +83,7 @@ export class FeedbackListScreen implements Screen {
       label(ctx, item.text.replace(/\s+/g, " ") || "(just a sketch)", tx, b.y + 86, 30, INK, "left", 500, b.x + b.w - tx - 230);
       const tag = !item.response ? (this.admin && item.player ? "needs a response" : "") : !this.admin && !item.response.seenAt ? "NEW RESPONSE" : "responded";
       label(ctx, tag, b.x + b.w - 24, b.y + 70, 26, tag === "NEW RESPONSE" ? RED : PENCIL, "right", 800);
-    });
+    }));
     this.menu.draw(ctx, buttons);
   }
 }

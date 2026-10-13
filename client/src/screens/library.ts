@@ -15,9 +15,12 @@ import { DrawPad } from "./pad";
 import { PAD } from "./create";
 import type { Nav } from "./nav";
 import { drawCharTabs, otherCharTab } from "./chartabs";
+import { ScrollView, type Rect } from "./scroll";
 
-const COLS = 6, ROWS = 2, ART = 250, GAP = 50, ROW_H = 350, TOP = 160;
+const COLS = 6, ART = 250, GAP = 50, ROW_H = 350, TOP = 160, BOTTOM = VIEW_H - 180;
 const X0 = (VIEW_W - (COLS * ART + (COLS - 1) * GAP)) / 2;
+/** Room above the first row for the drawing pinned to a fighter's corner. */
+const PAD_TOP = 30;
 
 /** CHARACTERS, MINE tab: the library as a grid (yours, the ones you saved, the starters); one of them big, with PRACTICE and DELETE. */
 export class LibraryScreen implements Screen {
@@ -29,7 +32,9 @@ export class LibraryScreen implements Screen {
   private device: DeviceId = "kb1";
   /** Seconds since the library was last fetched: while anything is forging it's refetched every few. */
   private sinceFetch = 0;
-  private scroll = 0;
+  private scroll = new ScrollView({ x: X0, y: TOP, w: COLS * ART + (COLS - 1) * GAP, h: BOTTOM - TOP });
+  /** The focus the scroll last followed: scrolling away from it leaves it be until it moves. */
+  private followed = -1;
   private deleteArmed = -1;
   private problem = "";
   private next: Screen | null = null;
@@ -45,16 +50,13 @@ export class LibraryScreen implements Screen {
     return myLibrary.entries ?? [];
   }
 
+  /** Cell `i` in the scroll's content. */
+  private cell(i: number): Rect {
+    return { x: X0 + (i % COLS) * (ART + GAP), y: PAD_TOP + Math.floor(i / COLS) * ROW_H, w: ART, h: ART };
+  }
+
   private gridButtons(): Button[] {
-    const entries = this.entries;
-    const rows = Math.ceil(entries.length / COLS);
-    const b: Button[] = entries.map((e, i) => {
-      const row = Math.floor(i / COLS) - this.scroll;
-      const visible = row >= 0 && row < ROWS;
-      return { id: `c${i}`, x: X0 + (i % COLS) * (ART + GAP), y: visible ? TOP + row * ROW_H : -9999, w: ART, h: ART, text: "", custom: true };
-    });
-    if (this.scroll > 0) b.push({ id: "up", x: VIEW_W - 110, y: TOP, w: 80, h: 80, text: "▲", size: 40 });
-    if (this.scroll + ROWS < rows) b.push({ id: "down", x: VIEW_W - 110, y: TOP + ROWS * ROW_H - 150, w: 80, h: 80, text: "▼", size: 40 });
+    const b: Button[] = this.entries.map((_, i) => this.scroll.button(`c${i}`, this.cell(i)));
     b.push({ id: "new", x: VIEW_W / 2 - 250, y: VIEW_H - 150, w: 500, h: 110, text: "NEW CHARACTER", size: 44 });
     b.push({ id: "back", x: 40, y: VIEW_H - 130, w: 240, h: 90, text: "BACK", size: 40 });
     b.push(otherCharTab("mine"));
@@ -109,12 +111,11 @@ export class LibraryScreen implements Screen {
     const buttons = this.gridButtons();
     const count = this.entries.length;
     const pressed = this.menu.update(buttons, this.menu.grid(m, COLS, count, buttons.length), taps);
-    this.follow();
+    this.scroll.tick(dt, PAD_TOP + Math.ceil(count / COLS) * ROW_H);
+    this.follow(m);
     if (pressed === "new") return this.nav.create();
     if (pressed === "tab") { sfx.menuConfirm(); return this.nav.community(); }
     if (pressed === "back" || m.back) { sfx.menuBack(); return this.nav.title(); }
-    if (pressed === "up") this.scroll--;
-    if (pressed === "down") this.scroll++;
     if (pressed?.startsWith("c")) {
       const e = this.entries[Number(pressed.slice(1))];
       if (e.status === "queued" || e.status === "generating") return this.nav.forge(e, null);
@@ -139,13 +140,14 @@ export class LibraryScreen implements Screen {
     return null;
   }
 
-  /** Keeps the focused cell's row on screen. */
-  private follow(): void {
+  /** Brings the focused cell on screen when the focus moves or a direction is pressed. */
+  private follow(m: MenuInput): void {
     const f = this.menu.focus;
+    if (f === this.followed && !(m.up || m.down || m.left || m.right)) return;
+    this.followed = f;
     if (f >= this.entries.length) return;
-    const row = Math.floor(f / COLS);
-    if (row < this.scroll) this.scroll = row;
-    if (row >= this.scroll + ROWS) this.scroll = row - ROWS + 1;
+    const c = this.cell(f);
+    this.scroll.reveal(c.y - PAD_TOP, c.y + ROW_H - GAP);
   }
 
   private flipPublic(e: LibraryEntry): void {
@@ -183,11 +185,10 @@ export class LibraryScreen implements Screen {
     if (!myLibrary.entries) label(ctx, "…", VIEW_W / 2, 500, 60, PENCIL);
     else if (!this.entries.length) label(ctx, "nothing here yet: draw your first fighter", VIEW_W / 2, 480, 40, PENCIL);
     const focus = this.menu.focus;
-    this.entries.forEach((e, i) => {
-      const b = buttons[i];
-      if (b.y < 0) return;
-      drawCharacterCell(ctx, e, b.x, b.y, ART, this.t + i * 0.2, i === focus);
-    });
+    this.scroll.draw(ctx, () => this.entries.forEach((e, i) => {
+      const c = this.cell(i);
+      if (this.scroll.shows(c.y - PAD_TOP, ROW_H)) drawCharacterCell(ctx, e, c.x, this.scroll.at(c.y), ART, this.t + i * 0.2, i === focus);
+    }));
     this.menu.draw(ctx, buttons);
   }
 

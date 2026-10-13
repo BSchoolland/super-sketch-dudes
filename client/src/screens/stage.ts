@@ -8,7 +8,7 @@ import { stageChoices, type StageChoice } from "../maps";
 import type { MapDoc } from "../../../shared/maps";
 import { bg, card, hint, label, title, hover, clicked, arrows, button, backButton, goTo, type Screen, INK, settings, saveSettings } from "./ui";
 import { drawStageArtThumb, stageArt, stageArtThumb } from "../render/stageart";
-import { wheelSteps } from "../input/pointer";
+import { ScrollView } from "./scroll";
 import { drawStageDecor } from "../render/stagedecor";
 import type { Stage } from "../../../shared/types";
 
@@ -101,9 +101,10 @@ export class StagePicker {
   private stocks = settings.stocks;
   private minutes = settings.time;
   private row = 0; // 0 stage, 1 stocks, 2 time
-  private scroll = 0;
-  /** The selection the scroll last followed: the arrows can scroll it out of view until it moves again. */
+  private scroll = new ScrollView({ x: 0, y: TOP, w: 0, h: 0 });
+  /** The selection the scroll last followed: scrolling can take it out of view until it moves again. */
   private scrolledTo = -1;
+  private drawnAt = -1;
   private artSel = -1;
   private artSince = 0;
   private foreign: MapDoc | null = null;
@@ -165,16 +166,6 @@ export class StagePicker {
     return null;
   }
 
-  /** Scrolls a row; the pick moves along in its column rather than stay picked out of sight. */
-  private scrollBy(d: number, rows: number, rowsShown: number, cards: number): void {
-    this.scroll = Math.max(0, Math.min(rows - rowsShown, this.scroll + d));
-    const selRow = Math.floor(this.sel / COLS);
-    if (this.readOnly || (selRow >= this.scroll && selRow < this.scroll + rowsShown)) return;
-    const row = selRow < this.scroll ? this.scroll : this.scroll + rowsShown - 1;
-    this.sel = this.scrolledTo = Math.min(cards - 1, row * COLS + (this.sel % COLS));
-    this.changed();
-  }
-
   /** `note` replaces the FIGHT button on a read-only picker (who's choosing). */
   draw(ctx: CanvasRenderingContext2D, t: number, note = ""): PickerAction {
     bg(ctx, t);
@@ -189,20 +180,22 @@ export class StagePicker {
     const rowsShown = cards > COLS ? 2 : 1;
     const h = rowsShown === 1 ? 300 : 230;
     const rows = Math.ceil(cards / COLS);
-    const selRow = Math.floor(this.sel / COLS);
-    if (this.sel !== this.scrolledTo) {
-      this.scrolledTo = this.sel;
-      if (selRow < this.scroll) this.scroll = selRow;
-      if (selRow >= this.scroll + rowsShown) this.scroll = selRow - rowsShown + 1;
-    }
     const shown = Math.min(cards, COLS);
     const x0 = (VIEW_W - (shown * CARD_W + (shown - 1) * GAP)) / 2;
-    [...choices, null].forEach((c, i) => {
-      const row = Math.floor(i / COLS) - this.scroll;
-      if (row < 0 || row >= rowsShown) return;
-      const x = x0 + (i % COLS) * (CARD_W + GAP), y = TOP + row * (h + GAP);
-      if (edit && hover(x, y, CARD_W, h)) { this.row = 0; document.body.style.cursor = "pointer"; }
-      if (edit && clicked(x, y, CARD_W, h) && i !== this.sel) { this.sel = i; this.artSel = i; this.artSince = -Infinity; this.changed(); }
+    const scroll = this.scroll, rowTop = (i: number) => GAP / 2 + Math.floor(i / COLS) * (h + GAP);
+    scroll.view = { x: x0, y: TOP - GAP / 2, w: shown * CARD_W + (shown - 1) * GAP, h: rowsShown * (h + GAP) };
+    scroll.tick(this.drawnAt < 0 ? 0 : Math.min(0.1, t - this.drawnAt), rows * (h + GAP));
+    this.drawnAt = t;
+    if (this.sel !== this.scrolledTo) {
+      this.scrolledTo = this.sel;
+      scroll.reveal(rowTop(this.sel), rowTop(this.sel) + h, GAP / 2);
+    }
+    scroll.draw(ctx, () => [...choices, null].forEach((c, i) => {
+      if (!scroll.shows(rowTop(i), h)) return;
+      const x = x0 + (i % COLS) * (CARD_W + GAP), y = scroll.at(rowTop(i));
+      const hit = scroll.button("", { x, y: rowTop(i), w: CARD_W, h });
+      if (edit && hover(hit.x, hit.y, hit.w, hit.h)) { this.row = 0; document.body.style.cursor = "pointer"; }
+      if (edit && clicked(hit.x, hit.y, hit.w, hit.h) && i !== this.sel) { this.sel = this.scrolledTo = i; this.artSel = i; this.artSince = -Infinity; this.changed(); }
       const picked = i === this.sel;
       card(ctx, x, y, CARD_W, h, INK, picked && (this.row === 0 || !edit), picked ? 1 : edit && this.row === 0 ? 0.75 : 0.5);
       const nameInk = picked ? PICKED : INK;
@@ -214,12 +207,7 @@ export class StagePicker {
       drawStageThumb(ctx, c.stage, x + 12, y + 12, CARD_W - 24, h - 70);
       title(ctx, c.stage.name, x + CARD_W / 2, y + h - 18, 30, nameInk, "center", CARD_W - 30);
       if (c.map) label(ctx, c.map.owner === account.player?.id ? "your map" : `${c.map.ownerName}'s map`, x + CARD_W - 14, y + 30, 18, PENCIL, "right");
-    });
-    // more rows above or below: an arrow beside the top or bottom row, or the wheel
-    if (this.scroll > 0 && scrollArrow(ctx, "▲", VIEW_W - 110, TOP + h / 2)) this.scrollBy(-1, rows, rowsShown, cards);
-    if (this.scroll < rows - rowsShown && scrollArrow(ctx, "▼", VIEW_W - 110, TOP + (rowsShown - 1) * (h + GAP) + h / 2)) this.scrollBy(1, rows, rowsShown, cards);
-    const wheel = wheelSteps();
-    if (wheel) this.scrollBy(Math.sign(wheel), rows, rowsShown, cards);
+    }));
     const rowY = TOP + rowsShown * (h + GAP) + 20;
     const rowCard = (r: number, y: number, text: string, value: string) => {
       const sel = edit && this.row === r;
@@ -262,13 +250,4 @@ export class StageScreen implements Screen {
     const next = this.act(this.picker.draw(ctx, this.t));
     if (next) goTo(next);
   }
-}
-
-/** A ▲ or ▼ like `arrows`' glyphs: true on the frame it's clicked. */
-function scrollArrow(ctx: CanvasRenderingContext2D, glyph: string, cx: number, cy: number, size = 40): boolean {
-  const x = cx - size / 2, y = cy - size * 0.9, w = size, h = size * 1.2;
-  const over = hover(x, y, w, h);
-  label(ctx, glyph, cx, cy, size * (over ? 1.15 : 1), over ? PICKED : INK);
-  if (over) document.body.style.cursor = "pointer";
-  return clicked(x, y, w, h);
 }
