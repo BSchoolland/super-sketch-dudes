@@ -55,12 +55,17 @@ export interface CommunityCharacter extends Pick<LibraryEntry, "id" | "name" | "
   creator: Pick<Player, "name">;
   /** Online matches it was picked for: what POPULAR sorts by. */
   plays: number;
+  /** Players who have it saved (MOST SAVED), and how many saved it in the last TRENDING_DAYS (TRENDING). */
+  saves: number;
+  recentSaves: number;
   /** In the caller's library by reference. */
   saved: boolean;
   /** The caller made it. */
   mine: boolean;
 }
-export type CommunitySort = "popular" | "new";
+export type CommunitySort = "popular" | "saved" | "trending" | "new";
+export const COMMUNITY_SORTS: readonly CommunitySort[] = ["popular", "saved", "trending", "new"];
+export const TRENDING_DAYS = 7;
 export const COMMUNITY_PAGE = 36;
 
 /** A fighter in the release card's lineup. */

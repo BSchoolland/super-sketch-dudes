@@ -5,7 +5,7 @@ import { consumeTaps } from "../input/pointer";
 import { sfx } from "../audio/audio";
 import { library, seeNews } from "../account";
 import { refreshDummy, refreshLibrary } from "../fighters";
-import type { CommunityCharacter, CommunitySort } from "../../../shared/account";
+import { COMMUNITY_SORTS, type CommunityCharacter, type CommunitySort } from "../../../shared/account";
 import { bg, card, hover, label, title, type Screen, INK } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
 import { drawCharacterCell, RED } from "./character";
@@ -18,12 +18,17 @@ const COLS = 6, ROWS = 2, ART = 250, GAP = 50, ROW_H = 350, TOP = 270;
 const X0 = (VIEW_W - (COLS * ART + (COLS - 1) * GAP)) / 2;
 /** The search box, under the tabs on the left; the sorts are words on the right of the same row. */
 const SEARCH = { x: X0, y: 150, w: 720, h: 76 };
-const SORT_W = 190, SORT_Y = SEARCH.y;
-const SORTS: CommunitySort[] = ["popular", "new"];
-const SORT_NAME: Record<CommunitySort, string> = { popular: "POPULAR", new: "NEWEST" };
+const SORT_W = 220, SORT_Y = SEARCH.y;
+const SORT_NAME: Record<CommunitySort, string> = { popular: "POPULAR", saved: "MOST SAVED", trending: "TRENDING", new: "NEWEST" };
+/** What the burst on each cell counts, for the sort that ranks by it. */
+function countOf(c: CommunityCharacter, sort: CommunitySort): { n: number; what: string } {
+  if (sort === "saved") return { n: c.saves, what: "saves" };
+  if (sort === "trending") return { n: c.recentSaves, what: "this week" };
+  return { n: c.plays, what: "" };
+}
 
-/** A comic-book burst on a cell's top-right corner with how many online matches the character has been in. */
-function drawPlays(ctx: CanvasRenderingContext2D, x: number, y: number, n: number): void {
+/** A comic-book burst on a cell's top-right corner with the number the list is sorted by. */
+function drawCount(ctx: CanvasRenderingContext2D, x: number, y: number, n: number): void {
   const spikes = 9, outer = 40, inner = 29;
   const pts: [number, number][] = [];
   for (let i = 0; i < spikes * 2; i++) {
@@ -140,7 +145,7 @@ export class CommunityScreen implements Screen {
     if (this.scroll + ROWS < rows) b.push({ id: "down", x: VIEW_W - 110, y: TOP + ROWS * ROW_H - 150, w: 80, h: 80, text: "▼", size: 40 });
     b.push({ id: "search", ...SEARCH, text: "", custom: true });
     const right = X0 + COLS * ART + (COLS - 1) * GAP;
-    SORTS.forEach((s, i) => b.push({ id: s, x: right - (SORTS.length - i) * SORT_W, y: SORT_Y, w: SORT_W, h: SEARCH.h, text: SORT_NAME[s], custom: true }));
+    COMMUNITY_SORTS.forEach((s, i) => b.push({ id: s, x: right - (COMMUNITY_SORTS.length - i) * SORT_W, y: SORT_Y, w: SORT_W, h: SEARCH.h, text: SORT_NAME[s], custom: true }));
     b.push({ id: "back", x: 40, y: VIEW_H - 130, w: 240, h: 90, text: "BACK", size: 40 });
     b.push(otherCharTab("community"));
     return b;
@@ -187,7 +192,8 @@ export class CommunityScreen implements Screen {
     if (pressed === "tab") { sfx.menuConfirm(); return this.nav.library(); }
     if (pressed === "up") this.scroll--;
     if (pressed === "down") this.scroll++;
-    if (pressed === "popular" || pressed === "new") this.resort(pressed);
+    const sort = COMMUNITY_SORTS.find((s) => s === pressed);
+    if (sort) this.resort(sort);
     if (pressed === "search") this.search?.el.focus();
     if (pressed?.startsWith("c")) {
       const c = this.entries[Number(pressed.slice(1))];
@@ -254,12 +260,16 @@ export class CommunityScreen implements Screen {
       const b = buttons[i];
       if (b.y < 0) return;
       drawCharacterCell(ctx, { ...c, status: "ready", stage: "", error: null }, b.x, b.y, ART, this.t + i * 0.2, i === focus);
-      if (c.plays) drawPlays(ctx, b.x + ART - 30, b.y + 18, c.plays);
+      const count = countOf(c, this.sort);
+      if (count.n) {
+        drawCount(ctx, b.x + ART - 30, b.y + 18, count.n);
+        if (count.what) label(ctx, count.what, b.x + ART - 40, b.y + 86, 22, INK, "center", 800);
+      }
     });
     for (const b of buttons) {
       const focused = buttons[focus] === b;
       if (b.id === "search") this.drawSearch(ctx, focused);
-      if (b.id !== "popular" && b.id !== "new") continue;
+      if (!COMMUNITY_SORTS.some((s) => s === b.id)) continue;
       const on = b.id === this.sort;
       title(ctx, b.text, b.x + b.w / 2, b.y + b.h / 2 + 12, on ? 36 : 32, on || focused ? INK : PENCIL);
       if (on || focused) inkLine(ctx, b.x + 40, b.y + b.h - 8, b.x + b.w - 40, b.y + b.h - 11, INK, on ? 4 : 2.4);

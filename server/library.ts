@@ -134,6 +134,14 @@ export function savedOf(owner: string): LibraryEntry[] {
   });
 }
 
+/** Saves made since `since` (ms), per character, across every library. */
+export function savesSince(since: number): Map<string, number> {
+  scanAll();
+  const out = new Map<string, number>();
+  for (const lib of cache.values()) for (const s of lib.saved) if (s.at >= since) out.set(s.id, (out.get(s.id) ?? 0) + 1);
+  return out;
+}
+
 export function saveCount(id: string): number {
   scanAll();
   return saves.get(id) ?? 0;
@@ -173,11 +181,11 @@ export function setPublic(owner: string, id: string, pub: boolean): LibraryEntry
 }
 
 /** Ready characters anyone can find and save: public, not deleted, not a starter (everyone has those). */
-export function communityCharacters(): { entry: LibraryEntry; creator: Player | null; plays: number }[] {
+export function communityCharacters(): { entry: LibraryEntry; creator: Player | null; plays: number; saves: number }[] {
   scanAll();
   return [...cache.values()].flatMap((lib) => lib.characters
     .filter((c) => c.status === "ready" && c.bundleUrl && c.public && !c.held && !c.deleted && !starters.includes(c.id))
-    .map((entry) => ({ entry, creator: lib.player, plays: playCount(entry.id) })));
+    .map((entry) => ({ entry, creator: lib.player, plays: playCount(entry.id), saves: saveCount(entry.id) })));
 }
 
 /** Every library into the cache, once; from then on every owner is in it (new ones arrive through upsertCharacter). */

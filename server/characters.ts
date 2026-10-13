@@ -1,12 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import type express from "express";
-import { COMMUNITY_PAGE, DRAW_PNG_MAX_BYTES, HINT_DESCRIPTION_MAX, HINT_NAME_MAX, FEATURED, FEATURED_PER_CREATOR, type CommunityCharacter, type FeaturedCharacter } from "../shared/account";
+import { COMMUNITY_PAGE, COMMUNITY_SORTS, TRENDING_DAYS, DRAW_PNG_MAX_BYTES, HINT_DESCRIPTION_MAX, HINT_NAME_MAX, FEATURED, FEATURED_PER_CREATOR, type CommunityCharacter, type FeaturedCharacter } from "../shared/account";
 import { playerOf } from "./auth";
 import type { WideEvent } from "../shared/wide";
 import type { LibraryEntry } from "../shared/account";
 import { drawingUrlOf, enqueueJob, entryOf, jobOf, newFighterId, reviseCharacter, storeCharacter } from "./forge";
-import { communityCharacters, dummyEntry, everyCharacter, findCharacter, libraryOf, removeCharacter, saveCharacter, savedOf, setDummy, setPublic, setStarters, starterEntries, starterIds, setHeld, takeDown, unsaveCharacter, upsertCharacter } from "./library";
+import { communityCharacters, savesSince, dummyEntry, everyCharacter, findCharacter, libraryOf, removeCharacter, saveCharacter, savedOf, setDummy, setPublic, setStarters, starterEntries, starterIds, setHeld, takeDown, unsaveCharacter, upsertCharacter } from "./library";
 import { HOUSE_ROSTER } from "../shared/house";
 
 /** The character creator and the library, over HTTP, for signed-in players. */
@@ -47,14 +47,18 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
 
   // everyone's public characters, a page at a time: most played online or newest first; `q` keeps the ones whose name has it in
   api.get("/characters/community", (req, res) => {
-    const sort = req.query.sort === "new" ? "new" : req.query.sort === "popular" || req.query.sort === undefined ? "popular" : null;
-    if (!sort) return res.status(400).json({ error: "sort is popular or new" });
+    const sort = req.query.sort === undefined ? "popular" : COMMUNITY_SORTS.find((s) => s === req.query.sort);
+    if (!sort) return res.status(400).json({ error: `sort is ${COMMUNITY_SORTS.join(", ")}` });
     const page = Math.max(0, Math.floor(Number(req.query.page) || 0));
     const caller = playerOf(req)?.id ?? "";
     const saved = new Set(caller ? savedOf(caller).map((e) => e.id) : []);
     const q = typeof req.query.q === "string" ? req.query.q.trim().toLowerCase() : "";
-    const all = communityCharacters().filter(({ entry }) => !q || (entry.name ?? "").toLowerCase().includes(q)).sort((a, b) => (sort === "popular" ? b.plays - a.plays : 0) || b.entry.createdAt - a.entry.createdAt);
-    const characters = all.slice(page * COMMUNITY_PAGE, (page + 1) * COMMUNITY_PAGE).map((c) => asCommunity(c, caller, saved));
+    const recent = savesSince(Date.now() - TRENDING_DAYS * 86_400_000);
+    const rank = (c: ReturnType<typeof communityCharacters>[number]): number =>
+      sort === "popular" ? c.plays : sort === "saved" ? c.saves : sort === "trending" ? recent.get(c.entry.id) ?? 0 : 0;
+    const all = communityCharacters().filter(({ entry }) => !q || (entry.name ?? "").toLowerCase().includes(q))
+      .sort((a, b) => rank(b) - rank(a) || b.entry.createdAt - a.entry.createdAt);
+    const characters = all.slice(page * COMMUNITY_PAGE, (page + 1) * COMMUNITY_PAGE).map((c) => asCommunity(c, caller, saved, recent));
     res.json({ characters, pages: Math.ceil(all.length / COMMUNITY_PAGE) });
   });
 
@@ -63,7 +67,7 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
     const listed = communityCharacters().find((c) => c.entry.id === req.params.id);
     if (!listed) return res.status(404).json({ error: "no such public character" });
     const caller = playerOf(req)?.id ?? "";
-    res.json({ character: asCommunity(listed, caller, new Set(caller ? savedOf(caller).map((e) => e.id) : [])) });
+    res.json({ character: asCommunity(listed, caller, new Set(caller ? savedOf(caller).map((e) => e.id) : []), savesSince(Date.now() - TRENDING_DAYS * 86_400_000)) });
   });
 
   // the most played community characters, at most FEATURED_PER_CREATOR from any one player, and how many players have made: the release card
@@ -221,9 +225,9 @@ export function decodePng(dataUrl: string): Buffer | null {
   return buf.length > 8 && buf.readUInt32BE(0) === 0x89504e47 ? buf : null;
 }
 
-function asCommunity({ entry: e, creator, plays }: ReturnType<typeof communityCharacters>[number], caller: string, saved: Set<string>): CommunityCharacter {
+function asCommunity({ entry: e, creator, plays, saves }: ReturnType<typeof communityCharacters>[number], caller: string, saved: Set<string>, recent: Map<string, number>): CommunityCharacter {
   return {
     id: e.id, name: e.name, tagline: e.tagline, drawingUrl: e.drawingUrl, bundleUrl: e.bundleUrl!, createdAt: e.createdAt,
-    creator: { name: creator?.name ?? "?" }, plays, saved: saved.has(e.id), mine: e.owner === caller,
+    creator: { name: creator?.name ?? "?" }, plays, saves, recentSaves: recent.get(e.id) ?? 0, saved: saved.has(e.id), mine: e.owner === caller,
   };
 }

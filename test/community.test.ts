@@ -58,6 +58,23 @@ beforeAll(async () => {
 });
 afterAll(() => { server.close(); fs.rmSync(dataDir, { recursive: true, force: true }); });
 
+describe("community save leaderboards", () => {
+  it("MOST SAVED ranks by every save, TRENDING by this week's", async () => {
+    // Cal saved gen-old long ago; two players save gen-mid now
+    const savers = await Promise.all(["Dee", "Eli"].map(signIn));
+    for (const H of savers) expect((await api("/library/saved/gen-mid", { method: "POST", headers: H })).status).toBe(200);
+    const H = await signIn("Fay");
+    const most = await community(H, "saved");
+    expect(most.slice(0, 2).map((c) => [c.id, c.saves])).toEqual([["gen-mid", 2], ["gen-old", 1]]);
+    const trending = await community(H, "trending");
+    expect(trending[0]).toMatchObject({ id: "gen-mid", recentSaves: 2 });
+    expect(trending.find((c) => c.id === "gen-old")).toMatchObject({ saves: 1, recentSaves: 0 });
+    expect((await api("/characters/community?sort=nope", { headers: H })).status).toBe(400);
+    // leave the shared fixtures as the next tests expect them
+    for (const S of savers) await api("/library/saved/gen-mid", { method: "DELETE", headers: S });
+  });
+});
+
 describe("community", () => {
   it("lists public ready characters, with the creator's name only, popular or new first", async () => {
     const bob = await signIn("Bob");
