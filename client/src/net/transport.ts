@@ -66,12 +66,15 @@ export interface RoomMember {
   ready: boolean;
 }
 
+/** A CPU player the host added to the room; bots take the slots after the members'. */
+export interface RoomBot { fighter: string; bundleUrl: string; level: number }
+
 export interface PublicRoom { code: string; host: string; members: string[] }
 
 export type RelayMessage =
   | { t: "hello"; id: number }
   /** `trace` is the room's wide-event trace; absent from servers older than wide events. */
-  | { t: "room"; code: string; trace?: string; host: number; started: boolean; public: boolean; picking: { stage: string; stocks: number; time: number; map?: MapDoc } | null; members: RoomMember[]; game: string | null }
+  | { t: "room"; code: string; trace?: string; host: number; started: boolean; public: boolean; picking: { stage: string; stocks: number; time: number; map?: MapDoc } | null; members: RoomMember[]; game: string | null; bots?: RoomBot[] }
   | { t: "start"; seed: number; config: unknown; members: Pick<RoomMember, "id" | "name" | "slot">[] }
   /** `frame`: the leaver's last input frame at the relay; every client has every input up to it, and drops the slot after it. */
   | { t: "left"; id: number; slot: number; duringMatch: boolean; frame: number }

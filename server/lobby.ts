@@ -2,6 +2,7 @@ import type { WebSocketServer, WebSocket } from "ws";
 import type { IncomingMessage } from "node:http";
 import crypto from "node:crypto";
 import { isBundlePath } from "../shared/account";
+import { CPU_TIERS } from "../shared/cpu-skill";
 import { checkMap, MAP_JSON_MAX, type MapDoc } from "../shared/maps";
 import { matchTrace, TRACE_RE, type WideEvent } from "../shared/wide";
 import { finish, newTrace, openEvent } from "./events";
@@ -42,9 +43,12 @@ export interface Room {
   /** Listed in JOIN ROOM and joinable by QUICK MATCH; private rooms need the code. */ public: boolean;
   /** Set while the host is on the stage screen after START: what they have picked so far, for everyone to watch. */ picking: StagePick | null;
   /** Game bundle hash the room plays on; null = whatever the page loaded. */ game: string | null;
+  /** CPU players the host added: they take the slots after the members'. */ bots: RoomBot[];
   event: WideEvent;
   match: RelayMatch | null;
 }
+export interface RoomBot { fighter: string; bundleUrl: string; level: number }
+
 /** What the relay sees of one match: per slot, how inputs and hashes flowed. */
 /**
  * `forwarded`: the newest real input frame passed on; `filled`: the frames the relay decided away (see checkFills),
@@ -143,7 +147,7 @@ const since = (e: WideEvent): number => Date.now() - e.t0;
 export function newRoom(host: Client, isPublic: boolean): Room {
   const code = makeCode();
   const trace = `r-${code}-${Date.now().toString(36)}`;
-  const room: Room = { code, trace, members: [], started: false, host, seed: 0, config: null, public: isPublic, picking: null, game: null, match: null, event: openEvent("room", trace, host.event.trace) };
+  const room: Room = { code, trace, members: [], started: false, host, seed: 0, config: null, public: isPublic, picking: null, game: null, bots: [], match: null, event: openEvent("room", trace, host.event.trace) };
   room.event.set("room", { code, host: host.name, public: isPublic });
   rooms.set(code, room);
   return room;
@@ -281,6 +285,7 @@ export function dropSilentPlayers(now = Date.now()): void {
 export function broadcast(room: Room, msg: unknown, except?: Client): void {
   for (const m of room.members) if (m !== except) send(m, msg);
 }
+// a bot gives its slot up to a person joining (see joinRoom), so bots never make a room full
 const open = (room: Room): boolean => room.public && !room.started && room.members.length < ROOM_SIZE;
 /** What JOIN ROOM lists: public rooms with a free slot, not mid-match. */
 function publicRooms(): unknown {
@@ -297,6 +302,7 @@ function roomInfo(room: Room): unknown {
     picking: room.picking,
     game: room.game,
     members: room.members.map((m) => ({ id: m.id, name: m.name, slot: m.slot, fighter: m.fighter, bundleUrl: m.bundleUrl, ready: m.ready })),
+    bots: room.bots,
   };
 }
 export function leaveRoom(c: Client): void {
@@ -325,7 +331,7 @@ export function leaveRoom(c: Client): void {
     return;
   }
   if (room.host === c) room.host = room.members[0];
-  if (room.members.length < 2) room.picking = null;
+  if (room.members.length + room.bots.length < 2) room.picking = null;
   // mid-match the relay keeps everyone's slot: the clients carry on without an eliminated player, and the host's "end" reopens the room
   if (!duringMatch) room.members.forEach((m, i) => (m.slot = i));
   broadcast(room, { t: "left", id: c.id, slot, duringMatch, frame });
@@ -338,6 +344,8 @@ export function joinRoom(c: Client, room: Room): void {
   c.slot = room.members.length;
   c.ready = false;
   room.members.push(c);
+  // a person takes the last bot's place when the room is full
+  if (room.members.length + room.bots.length > ROOM_SIZE) room.bots = room.bots.slice(0, ROOM_SIZE - room.members.length);
   room.picking = null;
   pushCapped(room.event.business, "joins", { id: c.id, name: c.name, session: c.event.trace, at: since(room.event) });
   pushCapped(c.event.business, "rooms", room.code);
@@ -476,6 +484,27 @@ export function attachLobby(wss: WebSocketServer): void {
           broadcast(c.room, roomInfo(c.room));
           break;
         }
+        // the host's CPU players: the whole list each time
+        case "bots": {
+          const room = c.room;
+          if (!room || room.host !== c || room.started) break;
+          const bots = roomBots(msg.bots, ROOM_SIZE - room.members.length);
+          if (typeof bots === "string") { send(c, { t: "error", error: bots }); break; }
+          room.bots = bots;
+          room.picking = null;
+          broadcast(room, roomInfo(room));
+          break;
+        }
+        // the host, alone with bots, plays the match on their own computer: the room is busy until their "end"
+        case "local": {
+          const room = c.room;
+          if (!room || room.host !== c || room.started || room.members.length !== 1 || !room.bots.length) break;
+          room.started = true;
+          room.picking = null;
+          pushCapped(room.event.business, "matches", { local: true, bots: room.bots.length, at: since(room.event) });
+          broadcast(room, roomInfo(room));
+          break;
+        }
         // the host moving between the lobby and the stage screen, and every change they make there
         case "picking": {
           const room = c.room;
@@ -487,6 +516,7 @@ export function attachLobby(wss: WebSocketServer): void {
         }
         case "start": {
           const room = c.room;
+          // a host alone with bots plays them locally (see "local"); the relay only runs matches with two people in them
           if (!room || room.host !== c || room.members.length < 2 || room.started) break;
           if (!room.members.every((m) => m.ready)) { send(c, { t: "error", error: "not everyone is ready" }); break; }
           if (!msg.config || typeof msg.config !== "object" || Array.isArray(msg.config)) { send(c, { t: "error", error: "invalid match config" }); break; }
@@ -503,7 +533,7 @@ export function attachLobby(wss: WebSocketServer): void {
           const auto = autoInputDelay(members.map((m) => m.rtt ?? 0), (i, j) => peerRoundTrip(members[i], members[j]));
           requested.inputDelay = auto.delay;
           const unmeasured = room.members.filter((m) => m.rtt === null).map((m) => m.name);
-          room.config = { ...requested, players: room.members.map((m) => ({ fighter: m.fighter, bundleUrl: m.bundleUrl })) };
+          room.config = { ...requested, players: [...room.members.map((m) => ({ fighter: m.fighter, bundleUrl: m.bundleUrl })), ...room.bots.map((b) => ({ fighter: b.fighter, bundleUrl: b.bundleUrl, cpu: b.level }))] };
           startRelayMatch(room, room.seed, room.config, room.members);
           recordPlays(room.members.map((m) => m.fighter));
           room.match?.event.set("inputDelay", auto);
@@ -601,4 +631,19 @@ export function attachLobby(wss: WebSocketServer): void {
       done();
     });
   });
+}
+
+/** A host's bot list, checked: at most `room` of them, each a known bundle at a CPU level. A string is why it's refused. */
+function roomBots(value: unknown, room: number): RoomBot[] | string {
+  if (!Array.isArray(value)) return "bots must be a list";
+  if (value.length > room) return "too many bots for the room";
+  const out: RoomBot[] = [];
+  for (const raw of value) {
+    const b = (raw ?? {}) as Record<string, unknown>;
+    const fighter = String(b.fighter ?? ""), bundleUrl = typeof b.bundleUrl === "string" ? b.bundleUrl : "", level = Number(b.level);
+    if (!isBundlePath(bundleUrl, fighter)) return "unknown bot fighter";
+    if (!Number.isInteger(level) || level < 1 || level > CPU_TIERS.length) return "bad bot level";
+    out.push({ fighter, bundleUrl, level });
+  }
+  return out;
 }

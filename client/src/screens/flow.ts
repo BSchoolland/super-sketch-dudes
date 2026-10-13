@@ -17,22 +17,11 @@ import { ForgeScreen } from "./forging";
 import { LibraryScreen } from "./library";
 import { CommunityScreen } from "./community";
 import { BattleMenuScreen } from "./battle/menu";
-import { BotsScreen } from "./battle/bots";
 import { OnlineScreen } from "./online";
 import { StageScreen, type MatchSetup } from "./stage";
 import { LoadingScreen } from "./loading";
+import { localMatch, type LocalPlayer } from "./localmatch";
 import { VersusScreen } from "./versus";
-
-export interface LocalPlayer { fighter: FighterChoice; source: SlotSource }
-
-/** A local match: loads every fighter, then fights; REMATCH replays the same setup with a new seed. */
-export function localMatch(players: LocalPlayer[], setup: MatchSetup, exit: () => Screen): Screen {
-  const make = (): Screen => {
-    const cfg = { stage: setup.stage, players: players.map((p) => ({ fighter: p.fighter.id, cpu: p.source.cpu })), rules: { stocks: setup.stocks, time: setup.time }, seed: (Math.random() * 0xffffffff) >>> 0, ...(setup.map ? { map: setup.map } : {}) };
-    return new VersusScreen(cfg, players.map((p) => ({ ...p.source })), exit, make);
-  };
-  return new LoadingScreen(players.map((p) => p.fighter.bundleUrl), make, exit);
-}
 
 export function signInScreen(nav: Nav, error = ""): Screen {
   return new SignInScreen(() => nav.title(), error);
@@ -56,12 +45,8 @@ export function menus(): Nav {
     community: (open) => new CommunityScreen(nav, open),
     battle: (fighter) => new BattleMenuScreen((entry) => {
       const menu = () => nav.battle(fighter);
-      if (entry !== "bots") return new OnlineScreen(menu, entry, fighter ?? null);
-      const bots: Screen = new BotsScreen(fighter ?? null, ({ you, device, bots: cpus }) => new StageScreen(
-        (s) => localMatch([{ fighter: you, source: { device, cpu: 0 } }, ...cpus.map((b) => ({ fighter: b.fighter, source: { device: null, cpu: b.level } }))], s, () => nav.title()),
-        () => bots,
-      ), menu);
-      return bots;
+      // VS BOTS is a room like the others: one nobody else can find, started with a bot in it
+      return new OnlineScreen(menu, entry, fighter ?? null);
     }, () => nav.title()),
     practice: (you, device) => {
       const dummy = practiceDummy.choice;

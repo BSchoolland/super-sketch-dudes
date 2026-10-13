@@ -259,3 +259,65 @@ describe("relay events", () => {
     expect(filterEvents(events(), { trace: "s-host" }).map((e) => e.kind).sort()).toEqual(["connection", "room"]);
   });
 });
+
+describe("rooms with bots", () => {
+  const bot = (fighter: string, level = 3) => ({ fighter, bundleUrl: `/house/${fighter}/bundle.json`, level });
+
+  it("a host alone with a bot plays it locally: the room is busy until their end, and nobody can join meanwhile", async () => {
+    const a = new Peer("s-bots-local"), b = new Peer("s-bots-late");
+    await a.open(); await b.open();
+    await a.expect("hello"); await b.expect("hello");
+    a.send({ t: "create", public: false });
+    const room = await a.expect("room");
+    a.send({ t: "bots", bots: [bot("woodstove")] });
+    await a.expect("room", (m) => m.bots?.length === 1);
+    a.send({ t: "pick", fighter: "slugbert", bundleUrl: "/house/slugbert/bundle.json", ready: true });
+    await a.expect("room", (m) => m.members[0].ready);
+    // the relay won't start a match with one person in it; that's the local path
+    a.send({ t: "start", config: { stage: "proving", rules: { stocks: 3, time: 0 } } });
+    a.send({ t: "local" });
+    await a.expect("room", (m) => m.started);
+    expect(a.inbox.some((m) => m.t === "start")).toBe(false);
+    b.send({ t: "join", code: room.code });
+    expect((await b.expect("error")).error).toBe("match in progress");
+    a.send({ t: "end" });
+    await a.expect("room", (m) => !m.started);
+    b.send({ t: "join", code: room.code });
+    await b.expect("room", (m) => m.members.length === 2);
+    a.ws.close(); b.ws.close();
+  });
+
+  it("a person joining a full room takes the last bot's place, and an online start carries the bots as CPU players after the people", async () => {
+    const a = new Peer("s-bots-host"), b = new Peer("s-bots-guest");
+    await a.open(); await b.open();
+    await a.expect("hello"); await b.expect("hello");
+    a.send({ t: "create", public: false });
+    const room = await a.expect("room");
+    a.send({ t: "bots", bots: [bot("woodstove"), bot("rocket", 5), bot("wizard", 1)] });
+    await a.expect("room", (m) => m.bots?.length === 3);
+    b.send({ t: "join", code: room.code });
+    const joined = await a.expect("room", (m) => m.members.length === 2);
+    expect(joined.bots.map((x: any) => x.fighter)).toEqual(["woodstove", "rocket"]);
+    a.send({ t: "pick", fighter: "slugbert", bundleUrl: "/house/slugbert/bundle.json", ready: true });
+    b.send({ t: "pick", fighter: "slugbert", bundleUrl: "/house/slugbert/bundle.json", ready: true });
+    await a.expect("room", (m) => m.members.every((x: any) => x.ready));
+    a.send({ t: "start", config: { stage: "proving", rules: { stocks: 3, time: 0 } } });
+    const start = await b.expect("start");
+    expect(start.config.players.map((p: any) => [p.fighter, p.cpu ?? 0])).toEqual([["slugbert", 0], ["slugbert", 0], ["woodstove", 3], ["rocket", 5]]);
+    a.ws.close(); b.ws.close();
+  });
+
+  it("refuses a bot list too long for the room, or with a bad fighter or level", async () => {
+    const a = new Peer("s-bots-check");
+    await a.open(); await a.expect("hello");
+    a.send({ t: "create", public: false });
+    await a.expect("room");
+    a.send({ t: "bots", bots: [bot("woodstove"), bot("rocket"), bot("wizard"), bot("slugbert")] });
+    expect((await a.expect("error")).error).toBe("too many bots for the room");
+    a.send({ t: "bots", bots: [{ fighter: "woodstove", bundleUrl: "/evil.json", level: 3 }] });
+    expect((await a.expect("error")).error).toBe("unknown bot fighter");
+    a.send({ t: "bots", bots: [bot("woodstove", 9)] });
+    expect((await a.expect("error")).error).toBe("bad bot level");
+    a.ws.close();
+  });
+});

@@ -43,7 +43,8 @@ export function startConfig(value: unknown, seed: number): { match: MatchConfig;
     if (bundleUrl && !isBundlePath(bundleUrl, fighter)) throw new Error(`online start has a bad bundle for ${fighter}: ${bundleUrl}`);
     if (!bundleUrl && !roster[fighter]) throw new Error(`online start has unknown fighter ${fighter}`);
     bundles.push(bundleUrl);
-    return { fighter };
+    const cpu = Number(p.cpu ?? 0) | 0;
+    return cpu > 0 ? { fighter, cpu } : { fighter };
   });
   if (!raw.rules || typeof raw.rules !== "object") throw new Error("online start has invalid rules");
   const rules = raw.rules as MatchConfig["rules"];
@@ -122,7 +123,8 @@ export class NetVersusScreen extends VersusScreen {
       onDesync: (info) => telemetry.issue("error", "desync", `frame ${info.frame}: local ${info.localHash} ≠ slot ${info.remoteSlot} ${info.remoteHash}`),
     });
     const driver = new RollbackMatch(session, opts.device);
-    const names = opts.config.players.map((_, slot) => {
+    const names = opts.config.players.map((player, slot) => {
+      if (player.cpu) return "CPU";
       const member = opts.members.find((candidate) => candidate.slot === slot);
       if (!member) throw new Error(`start message omitted slot ${slot}`);
       return member.name;
