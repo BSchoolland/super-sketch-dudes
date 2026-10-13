@@ -31,7 +31,7 @@ interface Callout { name: string; note?: string; x: number; y: number; w: number
 
 const NAME = 40, NOTE = 25;
 /** The list: one row per action, its keys as caps after the name, the note after the caps. */
-const LIST = { top: 250, rowH: 82, nameX: 620, capsX: 660, capH: 66, gap: 14, noteGap: 36 };
+const LIST = { top: 250, rowH: 82, nameX: 620, capsX: 660, capH: 66, gap: 14, orGap: 64, noteGap: 36 };
 /** What a cap says: punctuation by name (a lone "." is hard to see), the spacebar as SPACE. */
 const WORDS: Record<string, string> = { Space: "SPACE", Period: ". PERIOD", Comma: ", COMMA", Slash: "/ SLASH", Semicolon: "; SEMICOLON", Quote: "' QUOTE", ShiftLeft: "SHIFT", ShiftRight: "RIGHT SHIFT" };
 const capText = (code: string): string => WORDS[code] ?? (legendOf(code, keyName(code)) || keyName(code));
@@ -122,11 +122,14 @@ export class ControlsPage {
       let x = LIST.capsX;
       const y = LIST.top + group * LIST.rowH;
       for (const action of g.actions) {
-        for (const code of b[action].length ? b[action] : [null]) {
+        const keys = b[action].length ? b[action] : [null];
+        keys.forEach((code, i) => {
+          // a second key for the same action is an alternative: "or" goes in the gap (MOVE's four are different directions)
+          if (i > 0) x += LIST.orGap - LIST.gap;
           const w = capWidth(code);
           out.push({ action, code, group, rect: { x, y, w, h: LIST.capH }, row: group, mouse: code !== null && code in MOUSE_BUTTONS });
           x += w + LIST.gap;
-        }
+        });
       }
     });
     return out;
@@ -263,7 +266,11 @@ export class ControlsPage {
       const y = LIST.top + group * LIST.rowH, mid = y + LIST.capH / 2;
       const asking = !!waiting && mine.includes(waiting);
       title(ctx, g.name, LIST.nameX, mid + 14, NAME, asking ? RED : INK, "right");
-      for (const s of mine) drawKey(ctx, s.rect, s.code ? capText(s.code) : "—", lookOf(s), s.code && ARROW_KEYS.has(s.code) ? "" : MARK[s.action]);
+      mine.forEach((s, i) => {
+        drawKey(ctx, s.rect, s.code ? capText(s.code) : "—", lookOf(s), s.code && ARROW_KEYS.has(s.code) ? "" : MARK[s.action]);
+        const prev = mine[i - 1];
+        if (prev?.action === s.action) label(ctx, "or", s.rect.x - LIST.orGap / 2, mid + 9, NOTE, PENCIL, "center", 700);
+      });
       const end = Math.max(...mine.map((s) => s.rect.x + s.rect.w));
       const note = asking ? (MARK[waiting!.action] ? `press the key for ${MARK[waiting!.action]}` : "press the new key") : g.note;
       if (note) label(ctx, note, end + LIST.noteGap, mid + 9, NOTE, asking ? RED : PENCIL, "left", 600);
