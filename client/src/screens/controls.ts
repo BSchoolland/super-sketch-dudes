@@ -6,19 +6,19 @@ import { pointer, type ViewPoint } from "../input/pointer";
 import { sfx } from "../audio/audio";
 import { ButtonMenu, inside, type Button } from "./buttons";
 import { label, title, settings, saveSettings } from "./ui";
-import { KEYS, MOUSE_BUTTONS, RED, drawBoard, drawKey, drawMouse, legendOf, spareKey, type KeyLook, type Rect } from "./keyboardmap";
+import { MOUSE_BUTTONS, RED, drawKey, legendOf, type KeyLook, type Rect } from "./keyboardmap";
 import { PAD_PARTS, drawGamepad, padStyleOf, partPoint } from "./gamepadmap";
 
 type Pt = { x: number; y: number };
 
 /** A keyboard player's actions as the drawing names them; MOVE's four keys share a label. Pause stays on Esc. */
 const GROUPS: { name: string; note?: string; actions: KeyAction[] }[] = [
-  { name: "MOVE", note: "aims attacks and specials", actions: ["up", "left", "down", "right"] },
-  { name: "JUMP", note: "again in the air", actions: ["jump"] },
+  { name: "MOVE", note: "also aims attacks and specials", actions: ["up", "left", "down", "right"] },
+  { name: "JUMP", note: "press again in the air to double jump", actions: ["jump"] },
   { name: "ATTACK", note: "hold it to SMASH", actions: ["attack"] },
-  { name: "SMASH", note: "+ a direction, right away", actions: ["smash"] },
   { name: "SPECIAL", note: "up + special flies you back", actions: ["special"] },
   { name: "SHIELD", note: "+ a direction: dodge", actions: ["shield"] },
+  { name: "SMASH", note: "+ a direction: smash right away", actions: ["smash"] },
   { name: "TAUNT", actions: ["taunt"] },
 ];
 const MARK: Partial<Record<KeyAction, string>> = { up: "▲", left: "◀", down: "▼", right: "▶" };
@@ -30,7 +30,13 @@ interface Slot { action: KeyAction; code: string | null; group: number; rect: Re
 interface Callout { name: string; note?: string; x: number; y: number; w: number; above: boolean; slots: Slot[]; to: Pt[]; box: Rect }
 
 const NAME = 40, NOTE = 25;
-const ABOVE_Y = 300, BELOW_Y = 830;
+/** The list: one row per action, its keys as caps after the name, the note after the caps. */
+const LIST = { top: 250, rowH: 82, nameX: 620, capsX: 660, capH: 66, gap: 14, noteGap: 36 };
+/** What a cap says: punctuation by name (a lone "." is hard to see), the spacebar as SPACE. */
+const WORDS: Record<string, string> = { Space: "SPACE", Period: ". PERIOD", Comma: ", COMMA", Slash: "/ SLASH", Semicolon: "; SEMICOLON", Quote: "' QUOTE", ShiftLeft: "SHIFT", ShiftRight: "RIGHT SHIFT" };
+const capText = (code: string): string => WORDS[code] ?? (legendOf(code, keyName(code)) || keyName(code));
+const capWidth = (code: string | null): number => (code === null ? 90 : Math.max(70, 34 + capText(code).length * 19));
+const ARROW_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
 
 const PAD_CALLOUTS: { name: string; note?: string; x: number; y: number; parts: (keyof typeof PAD_PARTS)[] }[] = [
   { name: "SHIELD", x: 560, y: 250, parts: ["lt", "lb"] },
@@ -48,18 +54,6 @@ const CHECKS = { y: 860, h: 80 };
 const PLAYER_TABS = { y: 150, w: 260, h: 70, gap: 30 };
 const SETTINGS_KEY: Record<Keyboard, "keys" | "keys2"> = { kb1: "keys", kb2: "keys2" };
 const OTHER: Record<Keyboard, Keyboard> = { kb1: "kb2", kb2: "kb1" };
-
-/** Pushes labels on one line apart so none overlap, keeping them inside lo..hi. */
-function spread(items: { x: number; w: number }[], lo: number, hi: number, gap = 40): void {
-  items.sort((a, b) => a.x - b.x);
-  for (let pass = 0; pass < 80; pass++) {
-    for (let i = 1; i < items.length; i++) {
-      const a = items[i - 1], b = items[i], over = a.x + a.w / 2 + gap - (b.x - b.w / 2);
-      if (over > 0) { a.x -= over / 2; b.x += over / 2; }
-    }
-    for (const it of items) it.x = Math.max(lo + it.w / 2, Math.min(hi - it.w / 2, it.x));
-  }
-}
 
 function textWidth(ctx: CanvasRenderingContext2D, text: string, size: number, weight: number): number {
   ctx.save();
@@ -124,14 +118,14 @@ export class ControlsPage {
   private slots(): Slot[] {
     const b = bindingsOf(this.player);
     const out: Slot[] = [];
-    let spare = 0;
     GROUPS.forEach((g, group) => {
+      let x = LIST.capsX;
+      const y = LIST.top + group * LIST.rowH;
       for (const action of g.actions) {
         for (const code of b[action].length ? b[action] : [null]) {
-          const mouse = code !== null && code in MOUSE_BUTTONS;
-          const at = code === null ? null : mouse ? { ...MOUSE_BUTTONS[code], row: 0 } : KEYS.get(code);
-          const rect = at ?? spareKey(spare++);
-          out.push({ action, code, group, rect, row: rect.row, mouse });
+          const w = capWidth(code);
+          out.push({ action, code, group, rect: { x, y, w, h: LIST.capH }, row: group, mouse: code !== null && code in MOUSE_BUTTONS });
+          x += w + LIST.gap;
         }
       }
     });
@@ -263,46 +257,20 @@ export class ControlsPage {
     }
     const focus = !this.waiting && focused?.id.startsWith("slot:") ? slots[Number(focused.id.slice(5))] : null;
     const lookOf = (s: Slot): KeyLook => (s === waiting ? "waiting" : s === focus ? "focused" : "bound");
-    const looks = new Map<string, KeyLook>(), marks = new Map<string, string>();
-    for (const s of slots) if (s.code) {
-      looks.set(s.code, lookOf(s));
-      if (MARK[s.action]) marks.set(s.code, MARK[s.action]!);
-    }
-    drawBoard(ctx, looks, marks);
-    for (const s of slots) if (!s.mouse && !(s.code && KEYS.has(s.code))) drawKey(ctx, s.rect, s.code ? legendOf(s.code, keyName(s.code)) : "", lookOf(s), MARK[s.action]);
-    if (slots.some((s) => s.mouse)) drawMouse(ctx, looks);
-    this.callouts = this.layout(ctx, slots);
-    for (const c of this.callouts) {
-      const on = (s: Slot | null) => !!s && c.slots.includes(s);
-      const from = { x: c.x, y: c.above ? c.y + (c.note ? 46 : 14) : c.y - NAME };
-      const note = on(waiting) ? (MARK[waiting!.action] ? `press a key for ${MARK[waiting!.action]}` : "press a key") : c.note;
-      drawCallout(ctx, { ...c, note }, from, c.to, on(waiting) ? RED : INK, on(focus));
-    }
-  }
-
-  /** One label per action per device (keyboard or mouse), above the board for the top rows and below for the rest. */
-  private layout(ctx: CanvasRenderingContext2D, slots: Slot[]): Callout[] {
-    const out: Callout[] = [];
-    // a group's note goes with its first key's label only
-    const first = new Map<number, Slot>();
-    for (const s of slots) if (!first.has(s.group)) first.set(s.group, s);
-    for (const g of GROUPS.keys()) for (const mouse of [false, true]) {
-      const mine = slots.filter((s) => s.group === g && s.mouse === mouse);
-      if (!mine.length) continue;
-      const above = mouse || mine.reduce((n, s) => n + s.row, 0) / mine.length < 1.5;
-      const note = mine.includes(first.get(g)!) ? GROUPS[g].note : undefined;
-      const w = Math.max(textWidth(ctx, GROUPS[g].name, NAME, 900), note ? textWidth(ctx, note, NOTE, 600) : 0);
-      // a key hidden behind another of the same label (W behind S, from below) gets no line of its own
-      const hidden = (s: Slot) => mine.some((o) => o !== s && (above ? o.rect.y < s.rect.y : o.rect.y > s.rect.y) && o.rect.x < s.rect.x + s.rect.w * 0.7 && o.rect.x + o.rect.w > s.rect.x + s.rect.w * 0.3);
-      const to = mine.filter((s) => !hidden(s)).map((s) => ({
-        x: s.rect.x + s.rect.w / 2,
-        y: s.mouse ? s.rect.y + s.rect.h * 0.55 : above ? s.rect.y + 6 : s.rect.y + s.rect.h - 6,
-      }));
-      out.push({ name: GROUPS[g].name, note, x: to.reduce((n, p) => n + p.x, 0) / to.length, y: above ? ABOVE_Y : BELOW_Y, w, above, slots: mine, to, box: { x: 0, y: 0, w: 0, h: 0 } });
-    }
-    for (const above of [true, false]) spread(out.filter((c) => c.above === above), 60, VIEW_W - 60);
-    for (const c of out) c.box = { x: c.x - c.w / 2 - 12, y: c.y - NAME, w: c.w + 24, h: c.note ? NAME + 46 : NAME + 14 };
-    return out;
+    this.callouts = [];
+    GROUPS.forEach((g, group) => {
+      const mine = slots.filter((s) => s.group === group);
+      const y = LIST.top + group * LIST.rowH, mid = y + LIST.capH / 2;
+      const asking = !!waiting && mine.includes(waiting);
+      title(ctx, g.name, LIST.nameX, mid + 14, NAME, asking ? RED : INK, "right");
+      for (const s of mine) drawKey(ctx, s.rect, s.code ? capText(s.code) : "—", lookOf(s), s.code && ARROW_KEYS.has(s.code) ? "" : MARK[s.action]);
+      const end = Math.max(...mine.map((s) => s.rect.x + s.rect.w));
+      const note = asking ? (MARK[waiting!.action] ? `press the key for ${MARK[waiting!.action]}` : "press the new key") : g.note;
+      if (note) label(ctx, note, end + LIST.noteGap, mid + 9, NOTE, asking ? RED : PENCIL, "left", 600);
+      // the name is clickable too: MOVE asks for all four keys in turn
+      const w = textWidth(ctx, g.name, NAME, 900);
+      this.callouts.push({ name: g.name, x: LIST.nameX - w / 2, y: mid, w, above: false, slots: mine, to: [], box: { x: LIST.nameX - w - 12, y, w: w + 24, h: LIST.capH } });
+    });
   }
 
   private padId(): string {
