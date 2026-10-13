@@ -73,7 +73,7 @@ export function readDevice(dev: DeviceId, opts: { tapJump: boolean; mouse?: bool
     if (down(b.attack) || smashing) bits |= B.ATTACK;
     if (down(b.special)) bits |= B.SPECIAL;
     if (down(b.shield)) bits |= B.SHIELD;
-    if (down(b.taunt)) bits |= B.TAUNT;
+    if (down(b.practice)) bits |= B.PRACTICE;
     if (down(b.pause)) bits |= B.PAUSE;
     return { x, y, cx, cy, b: bits };
   }
@@ -90,7 +90,7 @@ export function readDevice(dev: DeviceId, opts: { tapJump: boolean; mouse?: bool
   if (btn(1)) bits |= B.SPECIAL;
   if (btn(2) || btn(3)) bits |= B.JUMP;
   if (btn(4) || btn(5) || btn(6) || btn(7)) bits |= B.SHIELD;
-  if (btn(8)) bits |= B.TAUNT;
+  if (btn(8)) bits |= B.PRACTICE;
   if (btn(9)) bits |= B.PAUSE;
   // tap jump: a stick flick up counts as a jump press for 2 frames and holds while the stick stays up
   if (opts.tapJump) {

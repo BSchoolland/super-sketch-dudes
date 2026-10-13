@@ -21,8 +21,8 @@ describe("rebinding keyboard 1", () => {
   });
 
   it("an action with no key gets one", () => {
-    const b = rebind({ ...KB1_DEFAULT, taunt: [] }, "taunt", null, "KeyG");
-    expect(b.taunt).toEqual(["KeyG"]);
+    const b = rebind({ ...KB1_DEFAULT, smash: [] }, "smash", null, "KeyG");
+    expect(b.smash).toEqual(["KeyG"]);
   });
 
   it("the defaults have nothing to save", () => {

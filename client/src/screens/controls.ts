@@ -19,7 +19,6 @@ const GROUPS: { name: string; note?: string; actions: KeyAction[] }[] = [
   { name: "SPECIAL", note: "up + special flies you back", actions: ["special"] },
   { name: "SHIELD", note: "+ a direction: dodge", actions: ["shield"] },
   { name: "SMASH", note: "+ a direction: smash right away", actions: ["smash"] },
-  { name: "TAUNT", actions: ["taunt"] },
 ];
 const MARK: Partial<Record<KeyAction, string>> = { up: "▲", left: "◀", down: "▼", right: "▶" };
 
@@ -40,7 +39,7 @@ const ARROW_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
 
 const PAD_CALLOUTS: { name: string; note?: string; x: number; y: number; parts: (keyof typeof PAD_PARTS)[] }[] = [
   { name: "SHIELD", x: 560, y: 250, parts: ["lt", "lb"] },
-  { name: "TAUNT", x: 850, y: 250, parts: ["back"] },
+  { name: "PRACTICE KEY", note: "only in practice", x: 850, y: 250, parts: ["back"] },
   { name: "PAUSE", x: 1070, y: 250, parts: ["start"] },
   { name: "SHIELD", x: 1360, y: 250, parts: ["rt", "rb"] },
   { name: "MOVE", note: "flick it with ATTACK: SMASH", x: 330, y: 500, parts: ["lstick", "dpad"] },

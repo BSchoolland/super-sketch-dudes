@@ -182,7 +182,6 @@ export default function make(api) {
       { hook: "rise", helpless: true, ledgeOk: true, cells: [[0, "jump"], [5, "atk-fwd"], [9, "block"], [13, "atk-fwd"], [17, "block"], [21, "atk-fwd"], [23, "atk-up"]] }),
     ledgeAttack: mv("ledgeAttack", 40, [cap([12, 15], 10, -50, 110, -46, 18, 9, 40, 38, 70, { fx: "cut" })], [key(0, { rot: -8 }), key(12, { rot: 14, sx: 1.1 }, true), key(40, rest)], { cell: "atk-fwd" }),
     getupAttack: mv("getupAttack", 44, [cap([12, 15], 10, -30, 100, -20, 18, 7, 45, 40, 60, { fx: "cut", group: 0 }), cap([20, 23], -10, -30, -100, -20, 18, 7, 45, 40, 60, { fx: "cut", group: 1 })], [key(0, rest), key(12, { rot: 12 }), key(20, { rot: -12 }), key(44, rest)], { cell: "atk-down" }),
-    taunt: mv("taunt", 50, [], [key(0, rest), key(10, { dy: -10, sy: 1.1 }), key(20, rest), key(30, { dy: -10, sy: 1.1 }), key(50, rest)], { cell: "atk-up" }),
   };
 
   const BLADE_OUT = 16, BLADE_BACK = 0.6;

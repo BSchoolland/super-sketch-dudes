@@ -14,7 +14,8 @@ export const B = {
   SHIELD: 8,
   /** Keyboard: directions are on/off, so a key press is never a smash flick; holding attack makes the smash instead. */
   DIGITAL: 16,
-  TAUNT: 32,
+  /** Practice mode's helper key (T, gamepad Back); the sim ignores it. */
+  PRACTICE: 32,
   PAUSE: 64,
   /** Online only: the relay decided this player away for the frame (their inputs stopped reaching it). Never a button. */
   AWAY: 256,

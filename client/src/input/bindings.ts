@@ -1,20 +1,22 @@
 /** Keyboard layouts: which keys (KeyboardEvent.code, or Mouse<button>) do each action. */
 export interface KeyBindings {
   left: string[]; right: string[]; up: string[]; down: string[];
-  jump: string[]; attack: string[]; special: string[]; shield: string[]; taunt: string[]; pause: string[];
+  jump: string[]; attack: string[]; special: string[]; shield: string[]; pause: string[];
+  /** Practice mode's helper key: with shield it resets, with up/down it sets the dummy's %, with special it toggles the CPU. */
+  practice: string[];
   /** Smash right away in the direction held (no direction: the way you last moved), as a right-stick flick. */
   smash: string[];
 }
 export type KeyAction = keyof KeyBindings;
 export const KB1_DEFAULT: Readonly<KeyBindings> = {
   left: ["KeyA"], right: ["KeyD"], up: ["KeyW"], down: ["KeyS"],
-  jump: ["Space"], attack: ["Mouse0", "KeyF"], special: ["KeyE", "Mouse2"], shield: ["ShiftLeft"], taunt: ["KeyT"], pause: ["Escape"], smash: ["KeyR"],
+  jump: ["Space"], attack: ["Mouse0", "KeyF"], special: ["KeyE", "Mouse2"], shield: ["ShiftLeft"], pause: ["Escape"], practice: ["KeyT"], smash: ["KeyR"],
 };
 const KEY_ACTIONS = Object.keys(KB1_DEFAULT) as KeyAction[];
 export const KB2_DEFAULT: Readonly<KeyBindings> = {
   left: ["ArrowLeft"], right: ["ArrowRight"], up: ["ArrowUp"], down: ["ArrowDown"],
   // the keys right of the letters, so two can share a laptop with keyboard 1 on the left
-  jump: ["Slash"], attack: ["Period"], special: ["Comma"], shield: ["ShiftRight"], taunt: ["Quote"], pause: ["Escape"], smash: ["Semicolon"],
+  jump: ["Slash"], attack: ["Period"], special: ["Comma"], shield: ["ShiftRight"], pause: ["Escape"], practice: ["Quote"], smash: ["Semicolon"],
 };
 
 /** The two keyboard players: 1 on the left of the keyboard (and the mouse), 2 on the right. */

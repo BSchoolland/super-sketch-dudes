@@ -256,11 +256,6 @@ function tryGroundActions(state: State, f: Fighter, def: FighterDef, input: Inpu
         return true;
       }
     }
-    if (buffered(f, e, B.TAUNT) && f.tauntCooldown === 0) {
-      consume(f, B.TAUNT);
-      setAction(f, "taunt");
-      return true;
-    }
   }
   return false;
 }
@@ -448,12 +443,11 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
   const e = edges(input, prev);
 
   // buffers and timers run even in hitlag so a press during freeze comes out on the first free frame
-  if (e.pressed) { f.buf |= e.pressed & (B.JUMP | B.ATTACK | B.SPECIAL | B.SHIELD | B.TAUNT); f.bufAge = 0; }
+  if (e.pressed) { f.buf |= e.pressed & (B.JUMP | B.ATTACK | B.SPECIAL | B.SHIELD); f.bufAge = 0; }
   else if (f.buf) { f.bufAge++; if (f.bufAge > C.BUFFER) f.buf = 0; }
   updateFlicks(f, input, prev);
   if (f.invuln > 0) f.invuln--;
   if (f.ledgeCooldown > 0) f.ledgeCooldown--;
-  if (f.tauntCooldown > 0) f.tauntCooldown--;
   if (f.dropTimer > 0) f.dropTimer--;
   if (f.techWindow > 0) f.techWindow--;
   if ((e.pressed & B.SHIELD) && !f.grounded) f.techWindow = C.TECH_WINDOW;
@@ -829,11 +823,6 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
       const g = state.fighters[f.grabbedBy];
       if (!g || g.grabbing !== f.slot) { f.grabbedBy = -1; setAction(f, f.grounded ? "idle" : "air"); }
       f.vx = 0; f.vy = 0;
-      break;
-    }
-    case "taunt": {
-      groundFriction(f, def, stage, 2);
-      if (f.frame >= C.TAUNT) { setAction(f, "idle"); f.tauntCooldown = 30; }
       break;
     }
     default:

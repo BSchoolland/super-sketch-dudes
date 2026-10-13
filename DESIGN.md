@@ -65,7 +65,7 @@ look became pencil and ink, and the name followed.
   percent decide. Sudden death at 300% if tied.
 - **Ground moves**: jab (3-hit rapid), forward/up/down tilt, forward/up/down smash (chargeable
   up to 60 frames for 1.4x), dash attack. **Aerials**: neutral, forward, back, up, down.
-  **Specials**: neutral, side, up, down. 17 attacks per fighter, plus ledge attack, get-up attack and taunt.
+  **Specials**: neutral, side, up, down. 17 attacks per fighter, plus ledge attack and get-up attack.
 - **Movement**: walk, run (initial dash 12 frames, dash-dance by reversing), jump squat 3
   frames, short hop (release jump within squat), full hop, double jump, fast fall (hold down at
   apex or after), crouch, wall jump for the fighters marked for it, footstool.
@@ -116,7 +116,7 @@ character select screen by pressing a button on it.
 | Special | E / right click | Numpad 2 | B |
 | Shield | Shift | Numpad 3 / Right Shift | LB, RB, LT, RT |
 | Smash (c-stick) | — | — | Right stick |
-| Taunt | T | Numpad 5 | Back |
+| Practice helper (practice only) | T | ' | Back |
 | Pause | Esc | Esc | Start |
 
 Tilts are attack with a direction held; smashes are a direction tapped (flicked) within 4 frames

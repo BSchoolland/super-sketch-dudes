@@ -158,7 +158,6 @@ export default function make(api) {
       cap([12, 15], 10, -14, 100, -12, 18, 7, 45, 40, 60, { fx: "wave", group: 0 }),
       cap([20, 23], -10, -14, -100, -12, 18, 7, 45, 40, 60, { fx: "wave", group: 1 }),
     ], [key(0, rest), key(12, { rot: 10 }), key(20, { rot: -10 }), key(44, rest)], { cell: "atk-down" }),
-    taunt: mv("taunt", 50, [], [key(0, rest), key(10, { dy: -10, sy: 1.1 }), key(20, rest), key(30, { dy: -10, sy: 1.1 }), key(50, rest)], { cell: "atk-up" }),
   };
 
   const FIREBALLS_MAX = 3, FEED_MAX = 48, GREAT_AT = 30;

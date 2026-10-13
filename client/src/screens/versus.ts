@@ -90,17 +90,17 @@ export class VersusScreen implements Screen {
       }
     }
     st = this.match.state;
-    // training helpers: reset with taunt+shield, dummy CPU toggles with taunt+special
+    // training helpers: reset with practice+shield, dummy CPU toggles with practice+special
     if (this.training) {
       const inp = this.match.lastInputs[0];
-      if ((inp.b & B.TAUNT) && (inp.b & B.SHIELD)) this.resetTraining();
+      if ((inp.b & B.PRACTICE) && (inp.b & B.SHIELD)) this.resetTraining();
       const d = st.fighters[1];
-      if (d && (inp.b & B.TAUNT) && !(inp.b & B.SHIELD)) {
+      if (d && (inp.b & B.PRACTICE) && !(inp.b & B.SHIELD)) {
         if (inp.y <= -60) d.percent = Math.min(999, d.percent + 1);
         if (inp.y >= 60) d.percent = Math.max(0, d.percent - 1);
       }
-      if (d && (inp.b & B.TAUNT) && (inp.b & B.SPECIAL) && !this.dummyToggled) { const on = !this.match.sources[1].cpu; this.match.sources[1].cpu = on ? DEFAULT_TIER : 0; d.cpu = on ? DEFAULT_TIER : 0; this.renderer.names[1] = on ? "CPU" : "DUMMY"; this.dummyToggled = true; }
-      if (!((inp.b & B.TAUNT) && (inp.b & B.SPECIAL))) this.dummyToggled = false;
+      if (d && (inp.b & B.PRACTICE) && (inp.b & B.SPECIAL) && !this.dummyToggled) { const on = !this.match.sources[1].cpu; this.match.sources[1].cpu = on ? DEFAULT_TIER : 0; d.cpu = on ? DEFAULT_TIER : 0; this.renderer.names[1] = on ? "CPU" : "DUMMY"; this.dummyToggled = true; }
+      if (!((inp.b & B.PRACTICE) && (inp.b & B.SPECIAL))) this.dummyToggled = false;
     }
     const events = this.match.takeEvents();
     if (events.some((e) => e.t === "suddenDeath")) this.suddenT = 2.5;
@@ -172,7 +172,7 @@ export class VersusScreen implements Screen {
       ctx.scale(s, s);
       title(ctx, text, 0, 40, 140, INK);
       ctx.restore();
-      if (this.training) label(ctx, "PRACTICE: taunt+shield resets · taunt+up/down sets dummy % · taunt+special toggles dummy CPU · F2 hitboxes + frame data", VIEW_W / 2, VIEW_H / 2 + 80, 22, INK);
+      if (this.training) label(ctx, "PRACTICE: T+shield resets · T+up/down sets dummy % · T+special toggles dummy CPU · F2 hitboxes + frame data", VIEW_W / 2, VIEW_H / 2 + 80, 22, INK);
     } else if (this.training && this.renderer.showHitboxes) {
       this.drawTrainingOverlay(ctx);
     }

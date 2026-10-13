@@ -62,7 +62,6 @@ export function animFor(f: Fighter, def: FighterDef): AnimPick {
     case "grabHold": return pick("grabHold");
     case "grabbed": return pick("grabbed");
     case "respawn": return pick("respawn");
-    case "taunt": return pick("taunt");
     case "dead": return pick("dead");
     default: return pick("idle");
   }

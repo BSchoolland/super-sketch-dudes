@@ -36,7 +36,7 @@ export type MoveId =
   | "nair" | "fair" | "bair" | "uair" | "dair"
   | "grab" | "dashGrab" | "pummel" | "fthrow" | "bthrow" | "uthrow" | "dthrow"
   | "nspecial" | "sspecial" | "uspecial" | "dspecial"
-  | "ledgeAttack" | "getupAttack" | "taunt"
+  | "ledgeAttack" | "getupAttack"
   | (string & {});
 
 export interface Hitbox {
@@ -334,7 +334,7 @@ export type Action =
   | "hitstun" | "tumble" | "knockdown" | "getup" | "getupRoll" | "tech" | "techRoll" | "wallTech"
   | "ledgeGrab" | "ledgeHang" | "ledgeClimb" | "ledgeRoll" | "ledgeJump" | "ledgeAttack" | "ledgeDrop"
   | "grabHold" | "grabbed" | "thrown"
-  | "respawn" | "dead" | "taunt" | "shieldDrop";
+  | "respawn" | "dead" | "shieldDrop";
 
 export interface PendingKb {
   vx: number;
@@ -424,7 +424,6 @@ export interface Fighter {
   streakLast: number;
   /** Last damage taken, for the HUD shake. */
   lastDamage: number;
-  tauntCooldown: number;
   landed: boolean;
 }
 
