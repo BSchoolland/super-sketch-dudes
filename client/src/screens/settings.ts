@@ -15,6 +15,8 @@ const TABS: Tabs<SettingsTab> = { left: { id: "general", text: "GENERAL" }, righ
 /** `about`: a line under the rows saying what the focused one does. */
 interface Row { id: string; name: string; get: () => string; step: (d: -1 | 1) => void; about?: () => string }
 const ROW = { x: VIEW_W / 2 - 400, w: 800, h: 80, top: 220, gap: 100 };
+/** The centre of a row's ◀ value ▶. */
+const VALUE_X = ROW.x + ROW.w - 150;
 const SIGN_OUT = { w: 300, h: 80, y: 760 };
 
 const clamp01 = (v: number): number => Math.max(0, Math.min(1, Math.round(v * 10) / 10));
@@ -37,7 +39,7 @@ export class SettingsScreen implements Screen {
 
   private buttons(): Button[] {
     const b: Button[] = this.rows.map((r, i) => ({
-      id: r.id, x: ROW.x, y: ROW.top + i * ROW.gap, w: ROW.w, h: ROW.h, text: r.name, custom: true,
+      id: r.id, x: ROW.x, y: ROW.top + i * ROW.gap, w: ROW.w, h: ROW.h, text: r.name, custom: true, stepAt: VALUE_X,
       step: (d) => { r.step(d); saveSettings(); },
     }));
     b.push({ id: "signout", x: VIEW_W / 2 - SIGN_OUT.w / 2, y: SIGN_OUT.y, w: SIGN_OUT.w, h: SIGN_OUT.h, text: "SIGN OUT", size: 32 });
@@ -75,7 +77,7 @@ export class SettingsScreen implements Screen {
         const y = ROW.top + i * ROW.gap;
         card(ctx, ROW.x, y, ROW.w, ROW.h, INK, focused?.id === r.id);
         label(ctx, r.name, ROW.x + 30, y + 52, 30, INK, "left", 900);
-        label(ctx, `◀   ${r.get()}   ▶`, ROW.x + ROW.w - 150, y + 52, 30, INK, "center", 900);
+        label(ctx, `◀   ${r.get()}   ▶`, VALUE_X, y + 52, 30, INK, "center", 900);
       });
       const about = this.rows.find((r) => r.id === focused?.id)?.about?.();
       if (about) label(ctx, about, VIEW_W / 2, ROW.top + this.rows.length * ROW.gap + 26, 26, INK, "center");

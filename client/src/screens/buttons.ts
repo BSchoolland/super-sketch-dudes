@@ -11,6 +11,8 @@ export interface Button {
   size?: number;
   /** Left/right (or tapping the button's left/right half) steps a value instead of pressing. */
   step?: (dir: -1 | 1) => void;
+  /** Where a tap stops stepping -1 and starts stepping +1; the button's middle by default. */
+  stepAt?: number;
   /** Drawn by the caller; the menu only focuses and hit-tests it. */
   custom?: boolean;
   disabled?: boolean;
@@ -31,7 +33,7 @@ export class ButtonMenu {
       const b = live.find((candidate) => inside(tap, candidate));
       if (!b) continue;
       this.focus = buttons.indexOf(b);
-      if (b.step) { b.step(tap.x < b.x + b.w / 2 ? -1 : 1); sfx.menuMove(); continue; }
+      if (b.step) { b.step(tap.x < (b.stepAt ?? b.x + b.w / 2) ? -1 : 1); sfx.menuMove(); continue; }
       sfx.menuConfirm();
       return b.id;
     }
