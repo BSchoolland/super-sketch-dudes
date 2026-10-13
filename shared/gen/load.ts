@@ -159,14 +159,14 @@ function checkMoves(moves: Record<string, Move>, def: FighterDef, cells: Set<str
   }
 }
 
-function checkAnims(anims: Record<string, string>, cells: Set<string>, p: string[], at: string): void {
+function checkAnims(anims: Record<string, string>, cells: Set<string>, p: string[], at: string, strict: boolean): void {
   for (const [anim, cell] of Object.entries(anims)) {
-    if (!(anim in STATE_CELLS)) p.push(`${at}.${anim} is not a state animation`);
+    if (!(anim in STATE_CELLS)) { if (strict) p.push(`${at}.${anim} is not a state animation`); continue; }
     if (!cells.has(cell)) p.push(`${at}.${anim} -> "${cell}" which the sheet doesn't have`);
   }
 }
 
-/** `strict` (the forge) also rejects hitbox fx names that are neither a family nor a look; the loader lets old fighters through. */
+/** `strict` (the forge) also rejects hitbox fx names that are neither a family nor a look, and anims for states that don't exist (or no longer do, like taunt); the loader lets old fighters through. */
 export function validateGenerated(def: FighterDef, { strict = false } = {}): string[] {
   const p: string[] = [];
   if (typeof def.name !== "string" || !def.name.trim()) p.push("name missing");
@@ -183,7 +183,7 @@ export function validateGenerated(def: FighterDef, { strict = false } = {}): str
   for (const c of SPRITE_CELLS) if (!cells.has(c)) p.push(`sprite is missing cell ${c}`);
   if (def.looks !== undefined) checkLooks(def.looks, cells, def.sprite?.px ?? 512, p);
   checkMoves(def.moves, def, cells, p, "", strict);
-  checkAnims(def.sprite?.anims ?? {}, cells, p, "sprite.anims");
+  checkAnims(def.sprite?.anims ?? {}, cells, p, "sprite.anims", strict);
   if (def.forms !== undefined || def.form !== undefined) {
     if (!def.forms || typeof def.forms !== "object") p.push("forms must be an object of form overlays");
     else if (typeof def.form !== "function") p.push("form must be a function when forms are defined");
@@ -196,7 +196,7 @@ export function validateGenerated(def: FighterDef, { strict = false } = {}): str
         else if (v < lo || v > hi) p.push(`forms.${name}.stats.${k}=${v} outside ${lo}..${hi}`);
       }
       if (o.moves) checkMoves(o.moves, merged, cells, p, `forms.${name}.`, strict);
-      checkAnims(o.anims ?? {}, cells, p, `forms.${name}.anims`);
+      checkAnims(o.anims ?? {}, cells, p, `forms.${name}.anims`, strict);
     }
   }
   if (typeof def.special !== "function") p.push("special must be a function returning a plain object of numbers");

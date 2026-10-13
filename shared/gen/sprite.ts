@@ -66,6 +66,8 @@ export function spriteAnims(): Record<string, PoseKey[]> {
     grabHold: [key(0, P({ rot: 6 }))],
     grabbed: [key(0, P({ rot: -12, sx: 0.94 }))],
     dead: [key(0, P({}))],
+    // No state plays it any more, but saved fighters still remap anims.taunt.
+    taunt: [key(0, P({}))],
     respawn: [key(0, P({}))],
     spotDodge: [key(0, P({ sy: 0.7, sx: 1.1 }))],
     roll: [key(0, P({ rot: 40 })), key(16, P({ rot: 400 })), key(32, P({ rot: 720 }))],

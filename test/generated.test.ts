@@ -84,6 +84,12 @@ describe("generated fighters", () => {
     expect(validateGenerated(def, { strict: true })).toEqual([]);
   });
 
+  it("loads fighters that animate a state since retired, and the forge still rejects new ones", async () => {
+    const def = await buildGenerated({ id: "gen-old", source, sprite: { ...sprite, anims: { ...sprite.anims, taunt: "idle" } }, player: "test", description: "" });
+    expect(validateGenerated(def)).toEqual([]);
+    expect(validateGenerated(def, { strict: true })).toEqual(["sprite.anims.taunt is not a state animation"]);
+  });
+
   it("rejects sources that reach outside the sim or would desync", () => {
     expect(lintGeneratedSource("export default function make(api) { return Math.random(); }")).toHaveLength(1);
     expect(lintGeneratedSource("export default function make(api) { fetch('x'); }")).toHaveLength(1);
