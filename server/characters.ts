@@ -54,11 +54,16 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
     const saved = new Set(caller ? savedOf(caller).map((e) => e.id) : []);
     const q = typeof req.query.q === "string" ? req.query.q.trim().toLowerCase() : "";
     const all = communityCharacters().filter(({ entry }) => !q || (entry.name ?? "").toLowerCase().includes(q)).sort((a, b) => (sort === "popular" ? b.plays - a.plays : 0) || b.entry.createdAt - a.entry.createdAt);
-    const characters: CommunityCharacter[] = all.slice(page * COMMUNITY_PAGE, (page + 1) * COMMUNITY_PAGE).map(({ entry: e, creator, plays }) => ({
-      id: e.id, name: e.name, tagline: e.tagline, drawingUrl: e.drawingUrl, bundleUrl: e.bundleUrl!, createdAt: e.createdAt,
-      creator: { name: creator?.name ?? "?" }, plays, saved: saved.has(e.id), mine: e.owner === caller,
-    }));
+    const characters = all.slice(page * COMMUNITY_PAGE, (page + 1) * COMMUNITY_PAGE).map((c) => asCommunity(c, caller, saved));
     res.json({ characters, pages: Math.ceil(all.length / COMMUNITY_PAGE) });
+  });
+
+  // one public character, for a fighter clicked in the title-screen brawl
+  api.get("/characters/community/:id", (req, res) => {
+    const listed = communityCharacters().find((c) => c.entry.id === req.params.id);
+    if (!listed) return res.status(404).json({ error: "no such public character" });
+    const caller = playerOf(req)?.id ?? "";
+    res.json({ character: asCommunity(listed, caller, new Set(caller ? savedOf(caller).map((e) => e.id) : [])) });
   });
 
   // the most played community characters, at most FEATURED_PER_CREATOR from any one player, and how many players have made: the release card
@@ -214,4 +219,11 @@ export function decodePng(dataUrl: string): Buffer | null {
   if (!m) return null;
   const buf = Buffer.from(m[1], "base64");
   return buf.length > 8 && buf.readUInt32BE(0) === 0x89504e47 ? buf : null;
+}
+
+function asCommunity({ entry: e, creator, plays }: ReturnType<typeof communityCharacters>[number], caller: string, saved: Set<string>): CommunityCharacter {
+  return {
+    id: e.id, name: e.name, tagline: e.tagline, drawingUrl: e.drawingUrl, bundleUrl: e.bundleUrl!, createdAt: e.createdAt,
+    creator: { name: creator?.name ?? "?" }, plays, saved: saved.has(e.id), mine: e.owner === caller,
+  };
 }

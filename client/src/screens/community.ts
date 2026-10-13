@@ -66,7 +66,8 @@ export class CommunityScreen implements Screen {
   private query = "";
   private typedAt = 0;
 
-  constructor(private nav: Nav) {}
+  /** `open`: a character to show straight away (clicked in the title-screen brawl); BACK from it goes to the title. */
+  constructor(private nav: Nav, private open?: string) {}
 
   enter(): void {
     this.search = new TextField({
@@ -78,6 +79,16 @@ export class CommunityScreen implements Screen {
     seeNews("community");
     void refreshDummy();
     this.load(0);
+    if (this.open) {
+      library.communityOne(this.open).then(
+        ({ character }) => { this.selected = character; this.detail = new CharacterDetail(character, character); this.detailMenu.focus = 0; },
+        (error: unknown) => {
+          console.error(`community character ${this.open} failed`, error);
+          this.open = undefined;
+          this.problem = "that character isn't shared anymore";
+        },
+      );
+    }
   }
 
   private load(page: number): void {
@@ -192,7 +203,11 @@ export class CommunityScreen implements Screen {
   private updateDetail(c: CommunityCharacter, m: MenuInput, taps: ReturnType<typeof consumeTaps>): Screen | null {
     const pressed = this.detailMenu.update(this.detailButtons(c), m, taps);
     if (pressed === "save") this.toggleSave(c);
-    if (pressed === "back" || m.back) { sfx.menuBack(); this.selected = null; }
+    if (pressed === "back" || m.back) {
+      sfx.menuBack();
+      this.selected = null;
+      if (this.open) { this.search?.remove(); return this.nav.title(); }
+    }
     return null;
   }
 

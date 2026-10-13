@@ -163,6 +163,8 @@ export const library = {
   setPublic: (id: string, pub: boolean) => api<{ character: LibraryEntry }>(`/library/${id}`, { method: "PATCH", body: JSON.stringify({ public: pub }) }),
   save: (id: string) => api<{ saved: boolean }>(`/library/saved/${id}`, { method: "POST" }),
   unsave: (id: string) => api<{ saved: boolean }>(`/library/saved/${id}`, { method: "DELETE" }),
+  /** One public character, by id: 404 once it's private, held or gone. */
+  communityOne: (id: string) => api<{ character: CommunityCharacter }>(`/characters/community/${id}`),
   community: (sort: CommunitySort, page: number, q = "") => api<{ characters: CommunityCharacter[]; pages: number }>(`/characters/community?sort=${sort}&page=${page}&q=${encodeURIComponent(q)}`),
   featured: () => api<{ characters: FeaturedCharacter[]; made: number }>("/characters/featured"),
   /** `hint` is what the player typed on the describe page; the forge's design pass reads it. */

@@ -8,6 +8,8 @@ import { houseChoice } from "../fighters";
 import { tallyKo } from "./brawl-tally";
 import { MAYHEM, settings } from "./ui";
 import { C } from "../../../shared/config";
+import { card, label, INK } from "./ui";
+import { PAPER } from "../render/paper";
 
 const STEP = 1000 / 60;
 /** Contenders asked for at a time, when fewer than LOW loaded ones are waiting to drop in. */
@@ -30,6 +32,8 @@ export class MenuBrawl {
   private loads = new Map<string, { url: string; load: FighterLoad }>();
   /** KO'd, to unload once their slot is taken. */
   private fallen = new Set<string>();
+  /** Players' public characters (not house fighters) by id, with their names: the ones a click can open. */
+  private shared = new Map<string, string>();
 
   private ready(): string[] {
     return [...this.loads.entries()].filter(([id, l]) => l.load.state === "ready" && roster[id]).map(([id]) => id);
@@ -48,6 +52,7 @@ export class MenuBrawl {
         if (this.loads.has(c.id)) continue;
         const url = c.bundleUrl ?? houseChoice(c.id as HouseId, c.name ?? c.id).bundleUrl;
         this.loads.set(c.id, { url, load: fighterLoad(url) });
+        if (c.bundleUrl) this.shared.set(c.id, c.name ?? "?");
         got++;
       }
     } catch (error) {
@@ -65,6 +70,7 @@ export class MenuBrawl {
       unloadFighter(this.loads.get(id)!.url, id);
       this.loads.delete(id);
       this.fallen.delete(id);
+      this.shared.delete(id);
     }
   }
 
@@ -101,5 +107,33 @@ export class MenuBrawl {
     const st = this.brawl.state;
     if (!st || !this.renderer) return;
     this.renderer.draw(ctx, st, this.acc / STEP, dt);
+  }
+
+  /** The player-made fighter whose body is under a view point, with its box, or null. */
+  at(x: number, y: number): { id: string; name: string; box: { x: number; y: number; w: number; h: number } } | null {
+    const st = this.brawl.state;
+    if (!st || !this.renderer) return null;
+    for (const f of st.fighters) {
+      const name = this.shared.get(f.id);
+      const def = roster[f.id];
+      if (name === undefined || !def) continue;
+      // the camera is fixed, so this is the fighter's feet on screen
+      const feet = this.renderer.cam.toScreen(f.x, f.y);
+      // generous: they're moving targets
+      const w = Math.max(60, def.stats.width) + 40, h = def.stats.height + 30;
+      const box = { x: feet.x - w / 2, y: feet.y - h + 10, w, h };
+      if (x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h) return { id: f.id, name, box };
+    }
+    return null;
+  }
+
+  /** The name over a hovered fighter, and what clicking it does. */
+  drawHover(ctx: CanvasRenderingContext2D, hit: NonNullable<ReturnType<MenuBrawl["at"]>>): void {
+    const cx = hit.box.x + hit.box.w / 2, w = Math.max(220, hit.name.length * 18 + 40), top = hit.box.y - 84;
+    ctx.fillStyle = PAPER;
+    ctx.fillRect(cx - w / 2, top, w, 70);
+    card(ctx, cx - w / 2, top, w, 70, "", true);
+    label(ctx, hit.name, cx, top + 32, 26, INK, "center", 900, w - 20);
+    label(ctx, "click to see · save", cx, top + 56, 18, "rgba(41,39,34,0.75)", "center", 700);
   }
 }

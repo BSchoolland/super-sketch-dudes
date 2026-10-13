@@ -48,12 +48,12 @@ export function menus(): Nav {
       if (mode === "maps") return nav.maps();
       if (mode === "feedback") return new FeedbackScreen(() => nav.title());
       return new SettingsScreen(() => nav.title(), () => { signOut(); forgetLibrary(); forgetMaps(); return signInScreen(nav); });
-    }),
+    }, (id) => nav.community(id)),
     create: (pad, hint) => new CreateScreen(nav, pad, hint),
     describe: (pad, hint) => new DescribeScreen(nav, pad, hint),
     forge: (entry, pad) => new ForgeScreen(nav, entry, pad),
     library: () => new LibraryScreen(nav),
-    community: () => new CommunityScreen(nav),
+    community: (open) => new CommunityScreen(nav, open),
     battle: (fighter) => new BattleMenuScreen((entry) => {
       const menu = () => nav.battle(fighter);
       if (entry !== "bots") return new OnlineScreen(menu, entry, fighter ?? null);

@@ -6,6 +6,7 @@ import { account, isNew, seeNews, unseenReleases } from "../account";
 import { refreshLibrary } from "../fighters";
 import { myMaps, refreshMaps } from "../maps";
 import { bg, card, hint, label, title, hover, clicked, goTo, type Screen, INK } from "./ui";
+import { pointer } from "../input/pointer";
 import { drawAvatar } from "./images";
 import { MenuBrawl } from "./brawl";
 import { drawNewSticker } from "./sticker";
@@ -75,7 +76,8 @@ export class TitleScreen implements Screen {
   private whatsNew: UpdateCard | null = unseenReleases.length ? new UpdateCard(unseenReleases.splice(0)) : null;
   /** Ben's responses to their feedback they haven't seen, after what's new. */
   private responses: FeedbackResponseCard | null = null;
-  constructor(private onPick: (m: Mode) => Screen) {}
+  /** `onInspect`: a player's character clicked in the brawl, to see and save. */
+  constructor(private onPick: (m: Mode) => Screen, private onInspect: (id: string) => Screen) {}
   enter(): void {
     void refreshLibrary();
     void refreshMaps();
@@ -110,11 +112,15 @@ export class TitleScreen implements Screen {
     bg(ctx, this.t);
     drawLogo(ctx, 170);
     const live = !this.whatsNew && !this.responses;
+    // a fighter in the brawl is on top of the cards it stands on: it takes the hover and the click
+    const under = live && pointer.present && this.brawl ? this.brawl.at(pointer.x, pointer.y) : null;
+    const tapped = live && pointer.clicked && this.brawl ? this.brawl.at(pointer.tapX, pointer.tapY) : null;
+    if (tapped) { sfx.menuConfirm(); goTo(this.onInspect(tapped.id)); }
     const x = MENU_CARD.x, w = MENU_CARD.w, h = MENU_CARD.h;
     this.items.forEach((it, i) => {
       const y = MENU_Y + i * MENU_STEP;
-      if (live && hover(x, y, w, h)) { this.sel = i; document.body.style.cursor = "pointer"; }
-      if (live && clicked(x, y, w, h)) goTo(this.pick(it.id));
+      if (live && !under && hover(x, y, w, h)) { this.sel = i; document.body.style.cursor = "pointer"; }
+      if (live && !tapped && clicked(x, y, w, h)) goTo(this.pick(it.id));
       card(ctx, x, y, w, h, "", i === this.sel);
       title(ctx, it.name, x + w / 2, y + 60, 42, INK);
       if (it.id === "library" && isNew("characters")) drawNewSticker(ctx, x + w - 20, y + 8);
@@ -129,6 +135,7 @@ export class TitleScreen implements Screen {
     label(ctx, desc, VIEW_W / 2, MENU_Y + this.items.length * MENU_STEP + 30, 26, INK, "center");
     hint(ctx, "click, or arrows + Enter · gamepad: stick + A");
     label(ctx, `build ${__BUILD__}`, VIEW_W - 20, VIEW_H - 16, 14, "rgba(41,39,34,0.5)", "right", 400);
+    if (under) { this.brawl!.drawHover(ctx, under); document.body.style.cursor = "pointer"; }
     if (this.whatsNew) this.whatsNew.draw(ctx, dt);
     else this.responses?.draw(ctx);
   }
