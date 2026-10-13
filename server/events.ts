@@ -67,19 +67,38 @@ export function flushOpen(): void {
   for (const e of open) if (written.get(e) !== fingerprint(e)) write(e);
 }
 
+/** The last snapshot of an event the next process carries on (see resumeEvent): it stays open, under the same id. */
+export function handOver(e: WideEvent): WideEventRecord {
+  if (!open.has(e)) throw new Error(`handing over ${e.kind} ${e.trace}, which isn't open`);
+  open.delete(e);
+  const r = e.snapshot();
+  append([r]);
+  return r;
+}
+
+/** An event the previous process handed over, open again here. */
+export function resumeEvent(r: WideEventRecord): WideEvent {
+  const e = WideEvent.from(r, Date.now);
+  e.server = tier;
+  open.add(e);
+  write(e);
+  return e;
+}
+
 /** Everything still open ends with the process. */
 export function finishOpen(exit: string): void {
   for (const e of [...open]) { e.business.exit ??= exit; finish(e); }
 }
 
 /** The process itself is a unit of work: boot to exit, with the crash that ended it if one did. */
-export function watchProcess(details: Record<string, unknown>): WideEvent {
+/** `onSignal` runs first when SIGINT or SIGTERM ends the process (pm2 restart sends SIGINT). */
+export function watchProcess(details: Record<string, unknown>, onSignal: () => void = () => {}): WideEvent {
   const e = openEvent("process", newTrace("p")).set("boot", details);
   process.on("uncaughtExceptionMonitor", (err, origin) => {
     e.issue("error", origin, err.message, err.stack);
     finishOpen("crash");
   });
-  for (const signal of ["SIGINT", "SIGTERM"] as const) process.once(signal, () => { finishOpen(signal); process.exit(0); });
+  for (const signal of ["SIGINT", "SIGTERM"] as const) process.once(signal, () => { onSignal(); finishOpen(signal); process.exit(0); });
   return e;
 }
 

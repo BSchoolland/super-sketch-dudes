@@ -9,7 +9,10 @@ npm run check
 SKETCHBATTLE_BASE=$BASE npm run build
 BUILD=$(git rev-parse --short HEAD)
 ssh ssd-server "mkdir -p ~/$NAME/dist"
-rsync -az --delete dist/ ssd-server:~/$NAME/dist/
+# a page from the previous build can still be mid-match and fetch its hashed assets (music): those stay a week
+rsync -az --delete --exclude /client/assets/ dist/ ssd-server:~/$NAME/dist/
+rsync -az dist/client/assets/ ssd-server:~/$NAME/dist/client/assets/
+ssh ssd-server "find ~/$NAME/dist/client/assets -type f -mtime +7 -delete"
 rsync -az package.json package-lock.json ssd-server:~/$NAME/
 ssh ssd-server "cd ~/$NAME && npm install --omit=dev --no-audit --no-fund >/dev/null && set -a && [ -f .env ] && . ./.env; set +a; export PORT=$PORT BUILD=$BUILD SKETCHBATTLE_BASE=$BASE && (pm2 describe $NAME >/dev/null 2>&1 && pm2 restart $NAME --update-env || pm2 start dist/server.mjs --name $NAME) && pm2 save >/dev/null"
 echo "deployed: https://bschoolland.dev$BASE"

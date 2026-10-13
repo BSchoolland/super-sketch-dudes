@@ -17,6 +17,7 @@ import { attachMaps, initMaps } from "./maps";
 import { attachBrawlStats } from "./brawl-stats";
 import { attachEvents, initEvents, requestErrors, requestEvents, watchProcess } from "./events";
 import { iceConfigured } from "./ice";
+import { restoreHandoff, saveHandoff } from "./handoff";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
@@ -25,7 +26,7 @@ const BASE = (process.env.SKETCHBATTLE_BASE ?? "/sketch-battle/").replace(/\/$/,
 const DATA_DIR = process.env.SKETCHBATTLE_DATA ?? path.join(root, "server-data");
 fs.mkdirSync(DATA_DIR, { recursive: true });
 initEvents(DATA_DIR);
-watchProcess({ port: PORT, base: BASE, node: process.version });
+const processEvent = watchProcess({ port: PORT, base: BASE, node: process.version }, () => saveHandoff(DATA_DIR));
 
 const app = express();
 // forge completions carry nine PNG cells + a sheet as base64; a new character carries its drawing
@@ -94,5 +95,6 @@ server.on("upgrade", (req, socket, head) => {
   } else socket.destroy();
 });
 attachLobby(wss);
+restoreHandoff(DATA_DIR, processEvent);
 
 server.listen(PORT, () => console.log(`sketch-battle on :${PORT} serving ${clientDir}`));

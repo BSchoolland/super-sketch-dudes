@@ -131,6 +131,8 @@ export class WebSocketTransport {
   private connecting: { ws: WebSocket; at: number }[] = [];
   private resuming: { ws: WebSocket; at: number } | null = null;
   private stuckAt: number | null = null;
+  /** Outside a match nothing ticks `watch`: this does while a broken link heals. */
+  private healing: ReturnType<typeof setInterval> | null = null;
   private closed = false;
 
   constructor(private url = relayWebSocketUrl()) {
@@ -168,11 +170,15 @@ export class WebSocketTransport {
     return removeListener(this.resumeListeners, cb);
   }
 
-  /** Every tick mid-match: a stuck or broken link gets fresh sockets, one more each RETRY_MS until one connects. */
+  /**
+   * Every tick mid-match, and on a timer while a link that broke outside a match heals (the relay keeps a room's
+   * players across a deploy): a stuck or broken link gets fresh sockets, one more each RETRY_MS until one connects.
+   */
   watch(now = performance.now()): void {
-    if (!this.match || this.closed || !this.id) return;
-    const oldest = this.unconfirmed.length ? now - this.unconfirmed[0][1] : 0;
+    if (this.closed || !this.id) return;
     if (this.stuckAt === null) {
+      if (!this.match) return;
+      const oldest = this.unconfirmed.length ? now - this.unconfirmed[0][1] : 0;
       if (oldest < STUCK_MS && this.ws.readyState === WebSocket.OPEN) return;
       this.stuckAt = now - Math.max(0, oldest);
     }
@@ -192,11 +198,11 @@ export class WebSocketTransport {
     this.connecting.push(attempt);
     ws.addEventListener("open", () => {
       this.connecting = this.connecting.filter((a) => a !== attempt);
-      if (this.resuming || this.closed || !this.match) { ws.close(1000); return; }
+      if (this.resuming || this.closed) { ws.close(1000); return; }
       for (const a of this.connecting) a.ws.close(1000);
       this.connecting = [];
       this.resuming = { ws, at: performance.now() };
-      ws.send(JSON.stringify({ t: "resume", id: this.id, token: this.token, final: this.match() }));
+      ws.send(JSON.stringify({ t: "resume", id: this.id, token: this.token, final: this.match?.() ?? [] }));
     }, { once: true });
     this.listen(ws);
   }
@@ -240,6 +246,7 @@ export class WebSocketTransport {
   close(): void {
     this.closed = true;
     this.queued.length = 0;
+    this.stopHealing();
     this.dropAttempts();
     this.ws.close();
   }
@@ -251,9 +258,15 @@ export class WebSocketTransport {
     this.resuming = null;
   }
 
+  private stopHealing(): void {
+    if (this.healing !== null) clearInterval(this.healing);
+    this.healing = null;
+  }
+
   private fail(): void {
     if (this.closed) return;
     this.closed = true;
+    this.stopHealing();
     this.dropAttempts();
     for (const listener of this.closeListeners) listener();
   }
@@ -268,8 +281,12 @@ export class WebSocketTransport {
         return;
       }
       if (ws !== this.ws || this.closed || event.code === CLOSE_SUPERSEDED) return;
-      // mid-match a broken socket is replaced (see watch); the relay's own verdicts and a clean close end it
-      if (this.match && event.code !== 1000 && event.code !== 4001) { this.stuckAt ??= performance.now(); return; }
+      // a broken socket is replaced (see watch); the relay's own verdicts and a clean close end it
+      if (this.id && event.code !== 1000 && event.code !== 4001) {
+        this.stuckAt ??= performance.now();
+        if (!this.match) this.healing ??= setInterval(() => this.watch(), 250);
+        return;
+      }
       this.closed = true;
       for (const listener of this.closeListeners) listener();
     });
@@ -287,6 +304,8 @@ export class WebSocketTransport {
     }
     // a broken link mid-match: inputs go again after the resume; hashes and pings are only missed
     if (this.match && !this.closed) return;
+    // outside a match, what's said while the link heals goes once it has
+    if (this.stuckAt !== null && !this.closed) { this.queued.push(encoded); return; }
     throw new Error("cannot send on a closed websocket");
   }
 
@@ -346,7 +365,10 @@ export class WebSocketTransport {
     this.linkStats.resumes++;
     if (this.stuckAt !== null) this.linkStats.longestStuckMs = Math.max(this.linkStats.longestStuckMs, Math.round(now - this.stuckAt));
     this.stuckAt = null;
+    this.stopHealing();
     this.unconfirmed.length = 0;
+    for (const message of this.queued) ws.send(message);
+    this.queued.length = 0;
     for (const listener of this.resumeListeners) listener(ack);
   }
 }

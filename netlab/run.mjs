@@ -8,6 +8,8 @@
 //   --at: mid-match events: `block <Name> <mode>`, `unblock <Name>`, `cut <Name>` (all of its game traffic dropped:
 //         the connection is gone), `leave <Name>` (closes the page, like quitting the tab).
 //   --leave-out: a player whose fighter is out of stocks closes its page (the others carry on without them).
+//   --at "<sec>:restart": restarts the relay mid-match the way a deploy does (SIGTERM, then a fresh process on the
+//            same data dir): the match should carry on after its players resume.
 //   --shell: players load the swappable page (shell.html) on a game bundle built from this checkout; `--at <sec>:swap`
 //            switches the room to a second copy of it mid-match, the way scripts/push-game.sh --room does.
 // Needs Docker (the sketchbattle-netlab image builds itself) and production's event log + fighters cached:
@@ -50,8 +52,10 @@ const blockOverrides = Object.fromEntries(opts("--block").map((kv) => kv.split("
 const atEvents = opts("--at").map((spec) => {
   const swapAt = /^(\d+(?:\.\d+)?):swap$/.exec(spec);
   if (swapAt) return { atMs: Number(swapAt[1]) * 1000, action: "swap", name: null, mode: null };
+  const restartAt = /^(\d+(?:\.\d+)?):restart$/.exec(spec);
+  if (restartAt) return { atMs: Number(restartAt[1]) * 1000, action: "restart", name: null, mode: null };
   const m = /^(\d+(?:\.\d+)?):(block|unblock|cut|leave) (\S+)(?: (p2p|webrtc))?$/.exec(spec);
-  if (!m || (m[2] === "block") !== !!m[4]) throw new Error(`--at "${spec}": want "<sec>:block <Name> p2p|webrtc", "<sec>:unblock|cut|leave <Name>", "<sec>:swap"`);
+  if (!m || (m[2] === "block") !== !!m[4]) throw new Error(`--at "${spec}": want "<sec>:block <Name> p2p|webrtc", "<sec>:unblock|cut|leave <Name>", "<sec>:swap", "<sec>:restart"`);
   return { atMs: Number(m[1]) * 1000, action: m[2], name: m[3], mode: m[4] ?? null };
 });
 const stocks = Number(opt("--stocks", "99"));
@@ -276,6 +280,11 @@ try {
         const out = docker("exec", relayName, "node", "-e", `fetch("http://localhost:${PORT}${BASE}api/rooms/${code}/game",{method:"POST",headers:{"content-type":"application/json","x-forge-token":"${TURN_SECRET}"},body:${JSON.stringify(body)}}).then(async r=>{console.log(r.status, await r.text())})`);
         report.swap = { atMs: Date.now() - startedAt, relay: out };
         log(`swap: ${out}`);
+      } else if (e.action === "restart") {
+        const t0 = Date.now();
+        docker("restart", "-t", "10", relayName);
+        report.restart = { atMs: t0 - startedAt, downMs: Date.now() - t0 };
+        log(`relay restarted in ${report.restart.downMs} ms`);
       } else if (e.action === "leave") pending.push(leave(i, "left the page"));
       else {
         if (e.action === "cut") cut.add(i);

@@ -220,6 +220,15 @@ reopens the room and takes everyone back to it; a guest quitting mid-match close
 see them leave rather than wait on them. The relay drops a player it has not heard inputs from for 20 s after the
 go, or who hasn't loaded 20 s after the start.
 
+Deploys don't end anything (`server/handoff.ts`). On SIGINT/SIGTERM the relay writes every client, room and running
+match (with the inputs it forwarded) to `server-data/handoff.json`; the next process loads it and treats every
+socket as just broken, so clients resume the way they do after a wifi dropout, in a match or out of one (a lobby, a
+VS BOTS game). Their wide events carry on under the same ids. Until every player of a handed-over match has sent
+inputs again (3 s at most) nobody is played away. `HANDOFF_VERSION` goes up when the saved shape or the relay
+protocol changes in a way the next process can't take; a file from another version is dropped. Checks:
+`test/handoff.test.ts`, `scripts/handoffcheck.mjs` (VS BOTS and a lobby in real pages), `netlab/run.mjs --at
+"40:restart"`.
+
 ## Wide events
 
 `shared/wide.ts` is the model: one record per unit of work with typed tiers (`client`: session,

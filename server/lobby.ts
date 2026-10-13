@@ -58,19 +58,27 @@ export interface RoomBot { fighter: string; bundleUrl: string; level: number; de
  * through which this player said it holds that slot's inputs; `fillRanges` the frames decided away (below a fill
  * there can be real frames the relay doesn't have yet, vouched for by a player who got them over a link).
  */
-interface SlotRelay { inputs: number; newest: number; hashes: number; lastHashFrame: number; maxGapMs: number; stalls: number; lastAt: number; forwarded: number; filled: number; fills: number; filledFrames: number; finalSent: number; acks: number[]; fillRanges: [number, number][]; history: Map<number, unknown> }
+export interface SlotRelay { inputs: number; newest: number; hashes: number; lastHashFrame: number; maxGapMs: number; stalls: number; lastAt: number; forwarded: number; filled: number; fills: number; filledFrames: number; finalSent: number; acks: number[]; fillRanges: [number, number][]; history: Map<number, unknown> }
 /**
  * `loaded`: members whose match screen is up; `go` is sent once they all are, and starts everyone's countdown together.
  * `fills`: whether the relay may decide a silent player away (every member said it understands fills, and no bundle
  * swap is under way: a bundle from before fills would desync on one); `fillers` the members that said so.
  */
-export interface RelayMatch { event: WideEvent; slots: SlotRelay[]; hashes: Map<number, { hash: number; slot: number }>; loaded: Set<Client>; goAt: number; fillers: Set<Client>; fills: boolean; left: Map<number, { id: number; frame: number }> }
+/**
+ * `handoff`: a match the previous process handed over decides nobody away until `until` while `players` (those who
+ * haven't sent inputs since) is not empty: everyone resumes at once after a deploy, and their inputs from the gap
+ * arrive one player at a time.
+ */
+export interface RelayMatch { event: WideEvent; slots: SlotRelay[]; hashes: Map<number, { hash: number; slot: number }>; loaded: Set<Client>; goAt: number; fillers: Set<Client>; fills: boolean; left: Map<number, { id: number; frame: number }>; handoff?: { until: number; players: Set<Client> } }
 /** Each slot's forwarded inputs are kept this many frames back, for catching up a resumed client. */
 const HISTORY_FRAMES = 60 * 20;
 
 let nextId = 1;
+/** Client ids go on from `id`: a handed-over match's players keep theirs (see handoff.ts). */
+export function idsFrom(id: number): void { nextId = Math.max(nextId, id); }
+export const nextClientId = (): number => nextId;
 /** Every connected client by id, so a fresh socket can resume one. */
-const clients = new Map<number, Client>();
+export const clients = new Map<number, Client>();
 export const rooms = new Map<string, Room>();
 const ROOM_SIZE = MAX_PLAYERS;
 /** `map` is the player-made map `stage` names, so guests can see and later play it. */
@@ -221,6 +229,7 @@ const vouched = (m: RelayMatch, slot: number, live: Client[]): number => {
 export function checkFills(room: Room): void {
   const m = room.match;
   if (!m || !m.fills || !m.goAt) return;
+  if (m.handoff?.players.size && Date.now() < m.handoff.until) return;
   const live = room.members.filter((c) => m.slots[c.slot]);
   if (live.length < 2) return;
   for (const c of live) {
@@ -319,6 +328,7 @@ export function leaveRoom(c: Client): void {
   // the last input frame the relay has from the leaver: everyone has every input up to it, delivered before this message
   const frame = room.match?.slots[slot] ? frontier(room.match.slots[slot]) : 0;
   if (room.match && duringMatch) {
+    room.match.handoff?.players.delete(c);
     room.match.left.set(slot, { id: c.id, frame });
     room.match.event.issue("warn", "left", `${c.name} (slot ${slot}) left mid-match at relay frame ${frame}`);
     pushCapped(room.match.event.business, "left", { id: c.id, name: c.name, slot, at: since(room.match.event), newest: frame });
@@ -352,6 +362,19 @@ export function joinRoom(c: Client, room: Room): void {
   pushCapped(room.event.business, "joins", { id: c.id, name: c.name, session: c.event.trace, at: since(room.event) });
   pushCapped(c.event.business, "rooms", room.code);
   broadcast(room, roomInfo(room));
+}
+
+/** A client gone for good: out of its room, its connection event finished. */
+function dropClient(c: Client, exit: unknown, summary: string): void {
+  clients.delete(c.id);
+  leaveRoom(c);
+  c.event.set("exit", exit).set("summary", { message: `${c.name} · rooms ${((c.event.business.rooms as string[] | undefined) ?? []).join(" ") || "none"} · ${summary}` });
+  finish(c.event);
+}
+/** Keeps the client's slot RESUME_GRACE_MS for a fresh socket to resume it; dropped after that unless one did. */
+export function holdForResume(c: Client, exit: unknown, summary: string): void {
+  const ws = c.ws;
+  c.grace = setTimeout(() => { c.grace = null; if (c.ws === ws) dropClient(c, exit, summary); }, RESUME_GRACE_MS);
 }
 
 /** Keeps what was forwarded, for resends to a client that resumes (see catchUp). */
@@ -425,18 +448,19 @@ export function attachLobby(wss: WebSocketServer): void {
       switch (msg.t) {
         case "name": c.name = String(msg.name ?? "").replace(/[^\w \-.!?]/g, "").slice(0, 14) || c.name; event.set("name", c.name); if (c.room) broadcast(c.room, roomInfo(c.room)); break;
         case "ping": send(c, { t: "pong", at: msg.at }); break;
-        // a fresh socket taking over a client whose link broke or stuck mid-match: catch it up, then it's that client
+        // a fresh socket taking over a client whose link broke or stuck (mid-match, or across a deploy: see handoff.ts)
         case "resume": {
           const old = clients.get(Number(msg.id) | 0);
-          const m = old?.room?.match;
           const final = Array.isArray(msg.final) ? msg.final.map((f: unknown) => Number(f) | 0) : null;
-          const missed = old && m && old.room?.started && m.slots[old.slot] && final && old.token === msg.token && c.room === null ? catchUp(m, old.slot, final) : null;
-          if (!old || !m || !missed) {
+          const m = old?.room?.started ? old.room.match : null;
+          const s = old && m ? m.slots[old.slot] : undefined;
+          // mid-match it has to be caught up; outside one the socket just changes
+          const missed = !old || old.token !== msg.token || c.room !== null ? null : m ? (s && final ? catchUp(m, old.slot, final) : null) : [];
+          if (!old || !missed) {
             event.issue("warn", "resume", `couldn't resume client ${Number(msg.id) | 0}`);
             ws.close(CLOSE_CANNOT_RESUME, "cannot resume");
             break;
           }
-          const s = m.slots[old.slot];
           const previous = old.ws;
           if (old.grace) clearTimeout(old.grace);
           old.grace = null;
@@ -444,11 +468,16 @@ export function attachLobby(wss: WebSocketServer): void {
           old.rtt = c.rtt;
           clients.delete(c.id);
           finish(event.set("exit", { resumed: old.id }).set("summary", { message: `resumed ${old.name} (client ${old.id})` }));
-          pushCapped(m.event.business, "resumes", { slot: old.slot, at: since(m.event), resent: missed.length });
+          if (m) pushCapped(m.event.business, "resumes", { slot: old.slot, at: since(m.event), resent: missed.length });
           pushCapped(old.event.business, "resumes", since(old.event));
           c = old;
           event = old.event;
           if (previous.readyState === previous.OPEN || previous.readyState === previous.CONNECTING) previous.close(CLOSE_SUPERSEDED, "resumed on another socket");
+          if (!s) {
+            send(c, { t: "resumed", ack: 0 });
+            if (c.room) send(c, roomInfo(c.room));
+            break;
+          }
           // "resumed" first: the client only takes messages on this socket once it knows it's the link now
           send(c, { t: "resumed", ack: frontier(s) });
           for (const message of missed) send(c, message);
@@ -551,6 +580,7 @@ export function attachLobby(wss: WebSocketServer): void {
           const inputs: unknown[] = msg.inputs;
           if (m) {
             relayInput(m, c.slot, frame);
+            m.handoff?.players.delete(c);
             // a client from before the start barrier never says it loaded: its first inputs say it
             if (!m.loaded.has(c)) { m.loaded.add(c); checkGo(c.room); }
           }
@@ -616,22 +646,15 @@ export function attachLobby(wss: WebSocketServer): void {
     ws.on("close", (code, reason) => {
       // a socket a resume replaced
       if (c.ws !== ws) return;
-      const done = () => {
-        clients.delete(c.id);
-        leaveRoom(c);
-        event.set("exit", { code, reason: String(reason).slice(0, 120) });
-        event.set("summary", { message: `${c.name} · rooms ${((event.business.rooms as string[] | undefined) ?? []).join(" ") || "none"} · closed ${code}` });
-        finish(event);
-      };
+      const exit = { code, reason: String(reason).slice(0, 120) };
       // mid-match a broken socket keeps its slot for a while: a fresh socket can resume it (the others play on meanwhile)
       const m = c.room?.match;
       if (c.room?.started && m?.slots[c.slot] && code !== 1000 && code !== 4001) {
         pushCapped(m.event.business, "broken", { slot: c.slot, at: since(m.event), code });
-        const client = c;
-        client.grace = setTimeout(() => { client.grace = null; if (client.ws === ws) done(); }, RESUME_GRACE_MS);
+        holdForResume(c, exit, `closed ${code}`);
         return;
       }
-      done();
+      dropClient(c, exit, `closed ${code}`);
     });
   });
 }

@@ -63,8 +63,18 @@ export class WideEvent {
   final = false;
   readonly t0: number;
 
-  constructor(readonly id: string, readonly kind: EventKind, readonly source: "client" | "server", readonly trace: string, readonly parent: string | null, private clock: () => number) {
-    this.t0 = clock();
+  constructor(readonly id: string, readonly kind: EventKind, readonly source: "client" | "server", readonly trace: string, readonly parent: string | null, private clock: () => number, t0 = clock()) {
+    this.t0 = t0;
+  }
+
+  /** The event a snapshot was taken of, carried on (a server handing its open events to the next process). */
+  static from(r: WideEventRecord, clock: () => number): WideEvent {
+    const e = new WideEvent(r.id, r.kind, r.source, r.trace, r.parent, clock, r.t0);
+    e.level = r.level;
+    e.issues = r.issues;
+    e.business = r.business;
+    e.seq = r.seq;
+    return e;
   }
 
   escalate(level: EventLevel): this {
