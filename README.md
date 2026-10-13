@@ -77,7 +77,7 @@ npm run events -- --trace s-8d51f9a50963          # one page session and everyth
 npm run events -- --level error --since 1d        # what went wrong today
 npm run events -- --kind match --grep Kirill -v   # any match Kirill was in
 npm run events -- --json --since 30m | jq …       # raw records
-ssh personal-server 'cd ~/sketch-battle && node dist/events.mjs --since 2h'   # on the server
+ssh ssd-server 'cd ~/sketch-battle && node dist/events.mjs --since 2h'   # on the server
 ```
 
 `--data <dir>` reads another data dir; `--legacy` also prints the old one-line `client-log.jsonl`

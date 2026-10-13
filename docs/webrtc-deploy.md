@@ -76,7 +76,7 @@ sudo firewall-cmd --reload
 
 ## 2. Point the game at it
 
-Append to `~/sketch-battle/.env` on personal-server (deploy.sh sources it before pm2 restarts):
+Append to `/home/ssd/sketch-battle/.env` on personal-server (deploy.sh sources it before pm2 restarts):
 
 ```
 RTC_STUN=stun:bschoolland.dev:3478

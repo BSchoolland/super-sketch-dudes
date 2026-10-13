@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const PROD_CACHE = path.join(HERE, ".cache", "prod");
-const HOST = process.env.NETLAB_PROD_HOST ?? "personal-server";
+const HOST = process.env.NETLAB_PROD_HOST ?? "ssd-server";
 const DATA = process.env.NETLAB_PROD_DATA ?? "sketch-battle/server-data";
 
 export function syncEvents() {

@@ -20,10 +20,10 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - name: SSH to personal-server
+      - name: SSH to personal-server as ssd
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
           echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
-          printf 'Host personal-server\n  HostName 89.116.157.62\n  User root\n  IdentityFile ~/.ssh/deploy\n  IdentitiesOnly yes\n' > ~/.ssh/config
+          printf 'Host ssd-server\n  HostName 89.116.157.62\n  User ssd\n  IdentityFile ~/.ssh/deploy\n  IdentitiesOnly yes\n' > ~/.ssh/config
       - run: scripts/deploy.sh

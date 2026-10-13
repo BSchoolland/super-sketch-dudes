@@ -10,7 +10,7 @@ const i = process.argv.indexOf("--hours");
 const hours = i > 0 ? Number(process.argv[i + 1]) : 24;
 const since = Date.now() - hours * 36e5;
 const runs = path.join(path.dirname(new URL(import.meta.url).pathname), "..", "forge", "runs");
-const jobs = new Map(JSON.parse(execFileSync("ssh", ["personal-server", "cat ~/sketch-battle/server-data/forge-jobs.json"], { encoding: "utf8" })).map((j) => [j.id, j]));
+const jobs = new Map(JSON.parse(execFileSync("ssh", ["ssd-server", "cat ~/sketch-battle/server-data/forge-jobs.json"], { encoding: "utf8" })).map((j) => [j.id, j]));
 
 // players are named by display name, with an account suffix (the one in their fighter ids) where two share a name
 const owners = new Map();
@@ -33,7 +33,7 @@ for (const id of fs.readdirSync(runs)) {
 }
 // the auto moderator stops jobs before the forge writes a run, so it's counted from the server's records
 const recent = [...jobs.values()].filter((j) => j.createdAt >= since);
-const judged = execFileSync("ssh", ["personal-server", "cat ~/sketch-battle/server-data/moderation.jsonl 2>/dev/null || true"], { encoding: "utf8" })
+const judged = execFileSync("ssh", ["ssd-server", "cat ~/sketch-battle/server-data/moderation.jsonl 2>/dev/null || true"], { encoding: "utf8" })
   .split("\n").filter(Boolean).map((l) => JSON.parse(l)).filter((d) => d.at >= since);
 // every judge run in the window, blocked jobs included (they never write a prompt.txt)
 let judgeUsd = 0;
