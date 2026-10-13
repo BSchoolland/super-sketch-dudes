@@ -1,5 +1,5 @@
 import { B, EMPTY_INPUT, type InputFrame } from "../../../shared/input";
-import { KB2, kb1Bindings } from "./bindings";
+import { bindingsOf } from "./bindings";
 
 export type DeviceId = "kb1" | "kb2" | `pad${number}`;
 
@@ -56,7 +56,7 @@ const q = (v: number): number => Math.round(v * 100);
 /** Reads a device into a sim input frame. Call once per sim frame. */
 export function readDevice(dev: DeviceId, opts: { tapJump: boolean; mouse?: boolean } = { tapJump: true }): InputFrame {
   if (dev === "kb1" || dev === "kb2") {
-    const b = dev === "kb1" ? kb1Bindings() : KB2;
+    const b = bindingsOf(dev);
     // a tap that started and ended between two frames still counts for one frame
     const down = (list: string[]) => list.some((k) => (opts.mouse !== false || !isMouse(k)) && (keys.has(k) || pressedThisFrame.has(k)));
     const x = (down(b.right) ? 100 : 0) - (down(b.left) ? 100 : 0);

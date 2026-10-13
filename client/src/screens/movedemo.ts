@@ -9,7 +9,7 @@ import { PAPER, inkRect, INK } from "../render/paper";
 import { Renderer } from "../render/render";
 import { label } from "./ui";
 import { drawKeyIcons, type KeyIcon } from "./keyicons";
-import { kb1Bindings, keyName } from "../input/bindings";
+import { bindingsOf, keyName } from "../input/bindings";
 import { C } from "../../../shared/config";
 
 type Dir = "n" | "f" | "u" | "d";
@@ -312,7 +312,7 @@ export class MoveDemo {
     if (this.move) {
       // what keyboard player 1 presses for it (facing right, so forward is D)
       const icons: KeyIcon[] = [];
-      const b = kb1Bindings();
+      const b = bindingsOf("kb1");
       const icon = (keys: string[]): KeyIcon => keys[0] === "Space" ? { space: true } : keys[0] === "Mouse0" ? { mouse: "left" } : keys[0] === "Mouse2" ? { mouse: "right" } : { key: keyName(keys[0] ?? "") };
       if (this.jumps) icons.push(icon(b.jump));
       if (this.dir !== "n") icons.push(icon(b[({ f: "right", u: "up", d: "down" } as const)[this.dir]]));

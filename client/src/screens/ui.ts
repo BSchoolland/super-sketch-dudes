@@ -3,7 +3,7 @@ import { drawPaper, paperCard, INK, FONT } from "../render/paper";
 export { INK, FONT } from "../render/paper";
 import { VIEW_H, VIEW_W } from "../render/camera";
 import type { MenuInput } from "../input/devices";
-import { kb1Bindings, kb1OverridesOf, setKb1Overrides, type KeyBindings } from "../input/bindings";
+import { bindingsOf, overridesOf, setOverrides, type KeyBindings } from "../input/bindings";
 import { noteControls } from "../telemetry/events";
 import { pointer } from "../input/pointer";
 
@@ -71,12 +71,14 @@ export interface Settings {
   extraStages: boolean;
   /** Keyboard player 1's rebound actions; everything else keeps its default key. */
   keys: Partial<KeyBindings>;
+  /** Keyboard player 2's, the same way. */
+  keys2: Partial<KeyBindings>;
 }
 /** MENU MAYHEM's steps: seconds between fighters dropping into the title screen fight. */
 export const MAYHEM: { name: string; seconds: number }[] = [
   { name: "CALM", seconds: 20 }, { name: "LIVELY", seconds: 10 }, { name: "ROWDY", seconds: 6 }, { name: "MAYHEM", seconds: 3 },
 ];
-export const settings: Settings = { volume: 0.8, music: 0.5, mayhem: 3, tapJump: true, rumble: true, stocks: 3, time: 0, cpuTier: DEFAULT_TIER, advanced: false, extraStages: false, keys: {} };
+export const settings: Settings = { volume: 0.8, music: 0.5, mayhem: 3, tapJump: true, rumble: true, stocks: 3, time: 0, cpuTier: DEFAULT_TIER, advanced: false, extraStages: false, keys: {}, keys2: {} };
 export function loadSettings(): void {
   try { Object.assign(settings, JSON.parse(localStorage.getItem("sketchbattle.settings") ?? "{}")); } catch { /* ignore */ }
   applyKeys();
@@ -86,10 +88,12 @@ export function saveSettings(): void {
   applyKeys();
 }
 function applyKeys(): void {
-  setKb1Overrides(settings.keys);
+  setOverrides("kb1", settings.keys);
+  setOverrides("kb2", settings.keys2);
   // drops keys saved for actions that are gone
-  settings.keys = kb1OverridesOf(kb1Bindings());
-  noteControls(settings.keys);
+  settings.keys = overridesOf("kb1", bindingsOf("kb1"));
+  settings.keys2 = overridesOf("kb2", bindingsOf("kb2"));
+  noteControls(settings.keys, settings.keys2);
 }
 
 export function hover(x: number, y: number, w: number, h: number): boolean {

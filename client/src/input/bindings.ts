@@ -11,27 +11,38 @@ export const KB1_DEFAULT: Readonly<KeyBindings> = {
   jump: ["Space"], attack: ["Mouse0", "KeyF"], special: ["KeyE", "Mouse2"], shield: ["ShiftLeft"], taunt: ["KeyT"], pause: ["Escape"], smash: ["KeyR"],
 };
 const KEY_ACTIONS = Object.keys(KB1_DEFAULT) as KeyAction[];
-export const KB2: Readonly<KeyBindings> = {
+export const KB2_DEFAULT: Readonly<KeyBindings> = {
   left: ["ArrowLeft"], right: ["ArrowRight"], up: ["ArrowUp"], down: ["ArrowDown"],
-  // the numpad, or the keys right of the letters for a laptop shared with keyboard 1
-  jump: ["Numpad0", "Slash"], attack: ["Numpad1", "Period"], special: ["Numpad2", "Comma"], shield: ["Numpad3", "ShiftRight"], taunt: ["Numpad5"], pause: ["Escape"], smash: ["Numpad6", "Semicolon"],
+  // the keys right of the letters, so two can share a laptop with keyboard 1 on the left
+  jump: ["Slash"], attack: ["Period"], special: ["Comma"], shield: ["ShiftRight"], taunt: ["Quote"], pause: ["Escape"], smash: ["Semicolon"],
 };
 
-/** Keyboard player 1's bindings: the defaults with the player's overrides from settings on top. */
-let kb1: KeyBindings = withOverrides({});
-function withOverrides(overrides: Partial<KeyBindings>): KeyBindings {
+/** The two keyboard players: 1 on the left of the keyboard (and the mouse), 2 on the right. */
+export type Keyboard = "kb1" | "kb2";
+const DEFAULTS: Record<Keyboard, Readonly<KeyBindings>> = { kb1: KB1_DEFAULT, kb2: KB2_DEFAULT };
+
+/** Each keyboard player's bindings: the defaults with the player's overrides from settings on top. */
+const current: Record<Keyboard, KeyBindings> = { kb1: withOverrides("kb1", {}), kb2: withOverrides("kb2", {}) };
+function withOverrides(kb: Keyboard, overrides: Partial<KeyBindings>): KeyBindings {
   const out = {} as KeyBindings;
-  for (const a of KEY_ACTIONS) out[a] = [...(overrides[a] ?? KB1_DEFAULT[a])];
+  for (const a of KEY_ACTIONS) out[a] = [...(overrides[a] ?? DEFAULTS[kb][a])];
   return out;
 }
-export function kb1Bindings(): Readonly<KeyBindings> { return kb1; }
-export function setKb1Overrides(overrides: Partial<KeyBindings>): void { kb1 = withOverrides(overrides); }
+export function bindingsOf(kb: Keyboard): Readonly<KeyBindings> { return current[kb]; }
+export function setOverrides(kb: Keyboard, overrides: Partial<KeyBindings>): void { current[kb] = withOverrides(kb, overrides); }
 
-/** The actions whose keys differ from keyboard 1's defaults (what settings keep). */
-export function kb1OverridesOf(b: Readonly<KeyBindings>): Partial<KeyBindings> {
+/** The actions whose keys differ from that keyboard's defaults (what settings keep). */
+export function overridesOf(kb: Keyboard, b: Readonly<KeyBindings>): Partial<KeyBindings> {
   const out: Partial<KeyBindings> = {};
-  for (const a of KEY_ACTIONS) if (b[a].join() !== KB1_DEFAULT[a].join()) out[a] = [...b[a]];
+  for (const a of KEY_ACTIONS) if (b[a].join() !== DEFAULTS[kb][a].join()) out[a] = [...b[a]];
   return out;
+}
+
+/** `b` without `code` anywhere: the other keyboard player taking a key. */
+export function release(b: Readonly<KeyBindings>, code: string): KeyBindings {
+  const next = {} as KeyBindings;
+  for (const a of KEY_ACTIONS) next[a] = b[a].filter((k) => k !== code);
+  return next;
 }
 
 /**

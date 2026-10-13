@@ -1,7 +1,7 @@
 import { VIEW_H, VIEW_W } from "../render/camera";
 import { FONT, INK, PENCIL, inkLine } from "../render/paper";
 import { keyHeld, rumble, takeKeyPress, type DeviceId, type MenuInput } from "../input/devices";
-import { kb1Bindings, kb1OverridesOf, keyName, rebind, type KeyAction } from "../input/bindings";
+import { bindingsOf, keyName, overridesOf, rebind, release, type KeyAction, type Keyboard } from "../input/bindings";
 import { pointer, type ViewPoint } from "../input/pointer";
 import { sfx } from "../audio/audio";
 import { ButtonMenu, inside, type Button } from "./buttons";
@@ -11,7 +11,7 @@ import { PAD_PARTS, drawGamepad, padStyleOf, partPoint } from "./gamepadmap";
 
 type Pt = { x: number; y: number };
 
-/** Keyboard 1's actions as the drawing names them; MOVE's four keys share a label. Pause stays on Esc. */
+/** A keyboard player's actions as the drawing names them; MOVE's four keys share a label. Pause stays on Esc. */
 const GROUPS: { name: string; note?: string; actions: KeyAction[] }[] = [
   { name: "MOVE", note: "aims attacks and specials", actions: ["up", "left", "down", "right"] },
   { name: "JUMP", note: "again in the air", actions: ["jump"] },
@@ -44,6 +44,10 @@ const PAD_CALLOUTS: { name: string; note?: string; x: number; y: number; parts: 
   { name: "SMASH", note: "in the air: air attacks", x: 1600, y: 715, parts: ["rstick"] },
 ];
 const CHECKS = { y: 860, h: 80 };
+/** PLAYER 1 / PLAYER 2: whose keys the drawing shows and changes. */
+const PLAYER_TABS = { y: 150, w: 260, h: 70, gap: 30 };
+const SETTINGS_KEY: Record<Keyboard, "keys" | "keys2"> = { kb1: "keys", kb2: "keys2" };
+const OTHER: Record<Keyboard, Keyboard> = { kb1: "kb2", kb2: "kb1" };
 
 /** Pushes labels on one line apart so none overlap, keeping them inside lo..hi. */
 function spread(items: { x: number; w: number }[], lo: number, hi: number, gap = 40): void {
@@ -85,6 +89,8 @@ export class ControlsPage {
   private menu = new ButtonMenu();
   private view: "keys" | "pad" = "keys";
   private pad: DeviceId = "pad0";
+  /** Whose keys the keyboard drawing is. */
+  private player: Keyboard = "kb1";
   /** Keys still to press, in order (MOVE's label asks for all four); `old` is the key being replaced. */
   private waiting: { queue: { action: KeyAction; old: string | null }[]; armed: boolean } | null = null;
   /** A mouse button just bound: the click it makes is ignored until it lets go. */
@@ -116,7 +122,7 @@ export class ControlsPage {
   }
 
   private slots(): Slot[] {
-    const b = kb1Bindings();
+    const b = bindingsOf(this.player);
     const out: Slot[] = [];
     let spare = 0;
     GROUPS.forEach((g, group) => {
@@ -141,7 +147,10 @@ export class ControlsPage {
       ];
     }
     const out: Button[] = this.slots().map((s, i) => ({ id: `slot:${i}`, ...s.rect, text: "", custom: true }));
-    if (Object.keys(settings.keys).length) out.push({ id: "reset", x: VIEW_W - 340, y: VIEW_H - 100, w: 300, h: 64, text: "RESET KEYS", size: 26 });
+    const { y, w, h, gap } = PLAYER_TABS;
+    out.push({ id: "p:kb1", x: VIEW_W / 2 - w - gap / 2, y, w, h, text: "PLAYER 1", custom: true });
+    out.push({ id: "p:kb2", x: VIEW_W / 2 + gap / 2, y, w, h, text: "PLAYER 2", custom: true });
+    if (Object.keys(settings[SETTINGS_KEY[this.player]]).length) out.push({ id: "reset", x: VIEW_W - 340, y: VIEW_H - 100, w: 300, h: 64, text: "RESET KEYS", size: 26 });
     out.push(tab);
     return out;
   }
@@ -171,7 +180,8 @@ export class ControlsPage {
       const s = this.slots()[Number(pressed.slice(5))];
       this.wait([{ action: s.action, old: s.code }]);
     }
-    if (pressed === "reset") { settings.keys = {}; saveSettings(); this.menu.focus = 0; }
+    if (pressed === "p:kb1" || pressed === "p:kb2") { this.player = pressed.slice(2) as Keyboard; sfx.menuMove(); }
+    if (pressed === "reset") { settings[SETTINGS_KEY[this.player]] = {}; saveSettings(); this.menu.focus = 0; }
     if (pressed === "tapJump") { settings.tapJump = !settings.tapJump; saveSettings(); }
     if (pressed === "rumble") {
       settings.rumble = !settings.rumble;
@@ -201,7 +211,7 @@ export class ControlsPage {
   /** The key the next press replaces: the one asked for, or the action's first if an earlier press in the queue took it. */
   private replacing(): { action: KeyAction; old: string | null } {
     const { action, old } = this.waiting!.queue[0];
-    const keys = kb1Bindings()[action];
+    const keys = bindingsOf(this.player)[action];
     return { action, old: old !== null && keys.includes(old) ? old : keys[0] ?? null };
   }
 
@@ -214,7 +224,10 @@ export class ControlsPage {
     if (code === "Escape" || (!code && m.back)) { this.waiting = null; sfx.menuBack(); return; }
     if (!code) return;
     const next = this.replacing();
-    settings.keys = kb1OverridesOf(rebind(kb1Bindings(), next.action, next.old, code));
+    // a key does one thing for one player: the other player loses it if they had it
+    settings[SETTINGS_KEY[this.player]] = overridesOf(this.player, rebind(bindingsOf(this.player), next.action, next.old, code));
+    const other = OTHER[this.player];
+    settings[SETTINGS_KEY[other]] = overridesOf(other, release(bindingsOf(other), code));
     saveSettings();
     sfx.menuMove();
     if (code.startsWith("Mouse")) this.eating = code;
@@ -227,7 +240,14 @@ export class ControlsPage {
 
   draw(ctx: CanvasRenderingContext2D, tab: Button): void {
     const buttons = this.buttons(tab);
-    if (this.view === "keys") this.drawKeys(ctx, this.menu.focused(buttons));
+    if (this.view === "keys") {
+      this.drawKeys(ctx, this.menu.focused(buttons));
+      for (const b of buttons) if (b.id.startsWith("p:")) {
+        const on = b.id === `p:${this.player}`, focused = this.menu.focused(buttons) === b;
+        title(ctx, b.text, b.x + b.w / 2, b.y + b.h / 2 + 12, on ? 36 : 30, on || focused ? INK : PENCIL);
+        if (on || focused) inkLine(ctx, b.x + 30, b.y + b.h - 6, b.x + b.w - 30, b.y + b.h - 9, INK, on ? 4 : 2.4);
+      }
+    }
     else this.drawPad(ctx);
     this.menu.draw(ctx, buttons);
     const over = buttons.some((b) => inside(pointer, b)) || (this.view === "keys" && this.callouts.some((c) => inside(pointer, c.box)));
@@ -250,7 +270,7 @@ export class ControlsPage {
     }
     drawBoard(ctx, looks, marks);
     for (const s of slots) if (!s.mouse && !(s.code && KEYS.has(s.code))) drawKey(ctx, s.rect, s.code ? legendOf(s.code, keyName(s.code)) : "", lookOf(s), MARK[s.action]);
-    drawMouse(ctx, looks);
+    if (slots.some((s) => s.mouse)) drawMouse(ctx, looks);
     this.callouts = this.layout(ctx, slots);
     for (const c of this.callouts) {
       const on = (s: Slot | null) => !!s && c.slots.includes(s);
