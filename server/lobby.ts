@@ -3,6 +3,7 @@ import type { IncomingMessage } from "node:http";
 import crypto from "node:crypto";
 import { isBundlePath } from "../shared/account";
 import { CPU_TIERS } from "../shared/cpu-skill";
+import { MAX_PLAYERS } from "../shared/sim";
 import { checkMap, MAP_JSON_MAX, type MapDoc } from "../shared/maps";
 import { matchTrace, TRACE_RE, type WideEvent } from "../shared/wide";
 import { finish, newTrace, openEvent } from "./events";
@@ -70,7 +71,7 @@ let nextId = 1;
 /** Every connected client by id, so a fresh socket can resume one. */
 const clients = new Map<number, Client>();
 export const rooms = new Map<string, Room>();
-const ROOM_SIZE = 4;
+const ROOM_SIZE = MAX_PLAYERS;
 /** `map` is the player-made map `stage` names, so guests can see and later play it. */
 export interface StagePick { stage: string; stocks: number; time: number; map?: MapDoc }
 function stagePick(v: unknown): StagePick | null {

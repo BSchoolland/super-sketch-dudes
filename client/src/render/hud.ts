@@ -4,7 +4,7 @@ import { roster } from "../../../shared/fighters/index";
 import { tierName } from "../../../shared/cpu-skill";
 import { VIEW_H, VIEW_W } from "./camera";
 
-export const SLOT_COLORS = ["#e4483f", "#287ad4", "#ddb51d", "#329854"];
+export const SLOT_COLORS = ["#e4483f", "#287ad4", "#ddb51d", "#329854", "#e98a2d", "#7b4fb8"];
 
 export interface HudState { bump: number[]; lastPercent: number[]; cards: ({ key: string; canvas: HTMLCanvasElement } | null)[] }
 export function createHud(n: number): HudState { return { bump: new Array(n).fill(0), lastPercent: new Array(n).fill(0), cards: new Array(n).fill(null) }; }
@@ -47,8 +47,11 @@ export function drawHud(ctx: CanvasRenderingContext2D, state: State, hud: HudSta
   const total = n * cardW + (n - 1) * gap;
   const x0 = (VIEW_W - total) / 2;
   const y = VIEW_H - 150;
-  const s = Math.min(2, Math.max(0.5, Math.round(ctx.getTransform().a * 4) / 4));
+  // five or six cards don't fit the width at full size: the row shrinks about its bottom middle
+  const k = Math.min(1, (VIEW_W - 60) / total);
   ctx.save();
+  if (k < 1) { ctx.translate(VIEW_W / 2, VIEW_H - 20); ctx.scale(k, k); ctx.translate(-VIEW_W / 2, -(VIEW_H - 20)); }
+  const s = Math.min(2, Math.max(0.5, Math.round(ctx.getTransform().a * 4) / 4));
   ctx.textAlign = "left";
   state.fighters.forEach((f, i) => {
     const def = roster[f.id];

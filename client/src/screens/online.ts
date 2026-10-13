@@ -7,7 +7,7 @@ import { fighterLoad } from "../gen";
 import type { FighterChoice } from "../fighters";
 import { CharacterShelf } from "./shelf";
 import { StagePicker, type MatchSetup, type PickerAction } from "./stage";
-import { ACTION_Y, SETUP, drawEmptySlot, drawSlotCard, slotX, type SlotFighter } from "./battle/slots";
+import { ACTION_Y, SETUP, drawEmptySlot, drawSlotCard, slotWidth, slotX, type SlotFighter } from "./battle/slots";
 import { PENCIL } from "../render/paper";
 import { VIEW_H, VIEW_W } from "../render/camera";
 import { consumeTypedChars, type DeviceId, type MenuInput } from "../input/devices";
@@ -53,7 +53,7 @@ function adoptMesh(h: Handoff, context: OnlineContext): PeerMesh | null {
 }
 
 type Focus = "fighter" | "ready" | `botFighter:${number}` | `botLevel:${number}` | "addBot" | "start" | "leave";
-const SLOTS = 4;
+const SLOTS = 6;
 
 export class OnlineScreen implements Screen {
   t = 0;
@@ -545,7 +545,7 @@ export class OnlineScreen implements Screen {
     const me = room.members.find((candidate) => candidate.id === this.context.id);
     const picked = this.shelf.draw(ctx, this.t, me?.fighter ?? null, !me || me.ready || this.phase !== "lobby");
     if (picked) { this.pick(picked); this.focus = "fighter"; sfx.menuMove(); }
-    const { slotY, slotW, slotH } = SETUP;
+    const { slotY, slotH } = SETUP, slotW = slotWidth(SLOTS);
     const bots = room.bots ?? [];
     const hosting = room.host === this.context.id && this.phase === "lobby";
     for (let slot = 0; slot < SLOTS; slot++) {
@@ -555,11 +555,11 @@ export class OnlineScreen implements Screen {
       if (!member) {
         // the first free slot is where the host adds a bot; people joining take bots' places
         if (hosting && slot === room.members.length + bots.length) {
-          if (button(ctx, slotX(slot), slotY, slotW, slotH, "+ ADD BOT", { size: 34, focused: this.focus === "addBot" })) this.addBot();
-        } else drawEmptySlot(ctx, slot, this.context.hidden ? "" : "WAITING");
+          if (button(ctx, slotX(slot, SLOTS), slotY, slotW, slotH, "+ ADD BOT", { size: 30, focused: this.focus === "addBot" })) this.addBot();
+        } else drawEmptySlot(ctx, slot, this.context.hidden ? "" : "WAITING", SLOTS);
         continue;
       }
-      const x = drawSlotCard(ctx, slot, `${member.name}${member.id === room.host && room.members.length > 1 ? " · HOST" : ""}`, this.slotFighter(member), { ready: member.ready, focused: member.id === this.context.id && this.focus === "fighter" });
+      const x = drawSlotCard(ctx, slot, `${member.name}${member.id === room.host && room.members.length > 1 ? " · HOST" : ""}`, this.slotFighter(member), { ready: member.ready, focused: member.id === this.context.id && this.focus === "fighter", count: SLOTS });
       const mine = member.id === this.context.id && this.phase === "lobby";
       if (mine && !this.alone()) {
         if (button(ctx, x + 40, slotY + slotH - 84, slotW - 80, 64, member.ready ? "UNREADY" : "READY", { key: "Enter", size: 26, focused: this.focus === "ready" })) this.toggleReady();
@@ -582,14 +582,14 @@ export class OnlineScreen implements Screen {
 
   /** A bot's card: the host steps its fighter and level and can remove it; everyone else just sees it. */
   private drawBot(ctx: CanvasRenderingContext2D, slot: number, i: number, bot: RoomBot, isHost: boolean): void {
-    const { slotY, slotW, slotH } = SETUP;
-    const x = drawSlotCard(ctx, slot, `CPU ${i + 1}`, this.botFighter(bot), { focused: isHost && this.focus === `botFighter:${i}` });
+    const { slotY, slotH } = SETUP, slotW = slotWidth(SLOTS);
+    const x = drawSlotCard(ctx, slot, `CPU ${i + 1}`, this.botFighter(bot), { focused: isHost && this.focus === `botFighter:${i}`, count: SLOTS });
     const ly = slotY + 392;
     label(ctx, tierName(bot.level), x + slotW / 2, ly, 26, isHost && this.focus === `botLevel:${i}` ? INK : PENCIL, "center", 900);
     if (!isHost) return;
     const d = arrows(ctx, x + slotW / 2, slotY + 180, slotW / 2 - 34, 40);
     if (d) { this.focus = `botFighter:${i}`; this.stepBotFighter(i, d); }
-    const l = arrows(ctx, x + slotW / 2, ly, 120, 30);
+    const l = arrows(ctx, x + slotW / 2, ly, slotW / 2 - 40, 30);
     if (l) { this.focus = `botLevel:${i}`; this.stepBotLevel(i, l); }
     if (button(ctx, x + slotW / 2 - 80, slotY + slotH - 58, 160, 44, "REMOVE", { size: 20 })) this.removeBot(i);
   }

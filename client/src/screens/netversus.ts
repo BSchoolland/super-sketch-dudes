@@ -2,7 +2,7 @@ import type { FighterId, StageId } from "../../../shared/types";
 import { roster } from "../../../shared/fighters/index";
 import { stageList } from "../../../shared/stages/index";
 import { checkMap, type MapDoc } from "../../../shared/maps";
-import type { MatchConfig } from "../../../shared/sim";
+import { MAX_PLAYERS, type MatchConfig } from "../../../shared/sim";
 import { VIEW_W } from "../render/camera";
 import { drawBanner } from "../render/hud";
 import type { DeviceId, MenuInput } from "../input/devices";
@@ -34,7 +34,7 @@ export function startConfig(value: unknown, seed: number): { match: MatchConfig;
     map = raw.map as MapDoc;
     if (map.id !== stage) throw new Error(`online start plays ${stage} but carries map ${map.id}`);
   } else if (!stageList.some((s) => s.id === stage)) throw new Error(`online start has unknown stage ${stage}`);
-  if (!Array.isArray(raw.players) || raw.players.length < 2 || raw.players.length > 4) throw new Error("online start has invalid players");
+  if (!Array.isArray(raw.players) || raw.players.length < 2 || raw.players.length > MAX_PLAYERS) throw new Error("online start has invalid players");
   const bundles: string[] = [];
   const players = raw.players.map((player) => {
     const p = player as Record<string, unknown>;

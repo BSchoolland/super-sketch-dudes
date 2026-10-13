@@ -1,4 +1,5 @@
 import type { InputFrame } from "../../../shared/input";
+import { MAX_PLAYERS } from "../../../shared/sim";
 
 /**
  * Binary packets on the peer-to-peer data channels. An input packet is a run of consecutive frames of the
@@ -63,7 +64,7 @@ export function decodeInputs(buf: ArrayBuffer): InputPacket {
   const v = new DataView(buf);
   if (buf.byteLength < HEADER || v.getUint8(0) !== KIND_INPUTS) throw new Error("not an input packet");
   const slot = v.getUint8(1), first = v.getUint32(2, true), count = v.getUint16(6, true), slots = v.getUint8(8);
-  if (count < 1 || count > MAX_FRAMES || slots > 4) throw new Error(`input packet with ${count} frames for ${slots} slots`);
+  if (count < 1 || count > MAX_FRAMES || slots > MAX_PLAYERS) throw new Error(`input packet with ${count} frames for ${slots} slots`);
   const ahead: number[] = [], acks: number[] = [];
   let o = HEADER;
   for (let s = 0; s < slots; s++) {

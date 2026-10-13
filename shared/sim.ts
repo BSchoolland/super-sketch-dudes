@@ -26,10 +26,38 @@ export function stageOf(state: State): Stage {
   return stages[state.stage];
 }
 
+/** The most fighters a match takes. */
+export const MAX_PLAYERS = 6;
+
+/**
+ * Where slot `slot` starts. Stages have four spawns; slots past them start halfway from one that does toward
+ * another (the fifth from the first toward the third, the sixth from the second toward the fourth), facing the same
+ * way, but on the first one's platform: a player map's spawns can stand on islands with a pit between them.
+ */
+export function spawnFor(stage: Stage, slot: number): Stage["spawns"][number] {
+  const n = stage.spawns.length;
+  if (slot < n) return stage.spawns[slot];
+  const a = stage.spawns[(slot - n) % n], b = stage.spawns[(slot - n + 2) % n];
+  const mid = Math.round((a.x + b.x) / 2);
+  const ground = (x: number) => stage.platforms.filter((p) => !p.motion && p.y >= a.y && x >= p.x1 && x <= p.x2).sort((p, q) => p.y - q.y)[0];
+  // `from` stays reachable on `p` even when it's nearer the end than SPAWN_EDGE
+  const onto = (p: Stage["platforms"][number], from: number) => {
+    const lo = Math.min(from, p.x1 + SPAWN_EDGE), hi = Math.max(from, p.x2 - SPAWN_EDGE);
+    return { x: Math.max(lo, Math.min(hi, mid)), y: p.y, facing: a.facing };
+  };
+  const under = ground(a.x);
+  if (under) return onto(under, a.x);
+  // the paired spawn is on something moving: just beside it, unless the midpoint has ground of its own
+  const g = ground(mid);
+  return g ? onto(g, (g.x1 + g.x2) / 2) : { x: a.x + Math.sign(mid - a.x) * Math.min(40, Math.abs(mid - a.x)), y: a.y, facing: a.facing };
+}
+/** How far from a platform's end an extra spawn stays. */
+const SPAWN_EDGE = 50;
+
 export function createFighter(slot: number, id: FighterId, stage: Stage, rules: Rules, team: number, cpu: number): Fighter {
   const def = roster[id];
   if (!def) throw new Error(`unknown fighter ${id}`);
-  const sp = stage.spawns[slot % stage.spawns.length];
+  const sp = spawnFor(stage, slot);
   return {
     slot, id, team,
     x: sp.x, y: sp.y, vx: 0, vy: 0, facing: sp.facing,
@@ -60,6 +88,7 @@ export function createMatch(cfg: MatchConfig): State {
   }
   const stage = stages[cfg.stage];
   if (!stage) throw new Error(`unknown stage ${cfg.stage}`);
+  if (cfg.players.length > MAX_PLAYERS) throw new Error(`a match takes at most ${MAX_PLAYERS} players, not ${cfg.players.length}`);
   const rules: Rules = { ...DEFAULT_RULES, ...cfg.rules };
   const state: State = {
     frame: 0, rng: (cfg.seed >>> 0) || 1, seed: cfg.seed, rules, stage: cfg.stage,
