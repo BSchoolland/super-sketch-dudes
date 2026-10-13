@@ -21,7 +21,7 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "Backspace") typedThisFrame.push("\b");
   if (e.key === "Enter") typedThisFrame.push("\n");
   anyPress = true;
-  if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Tab"].includes(e.code)) e.preventDefault();
+  if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Tab", "Slash"].includes(e.code)) e.preventDefault();
 });
 window.addEventListener("keyup", (e) => keys.delete(e.code));
 // mouse buttons are keys named Mouse<button>; menus and join prompts leave them alone (`mouse: false`)

@@ -16,7 +16,7 @@ describe("rebinding keyboard 1", () => {
 
   it("a key taken from an action's only key swaps the two", () => {
     const b = rebind(KB1_DEFAULT, "attack", "Mouse0", "Space");
-    expect(b.attack).toEqual(["Space"]);
+    expect(b.attack).toEqual(["Space", "KeyF"]);
     expect(b.jump).toEqual(["Mouse0"]);
   });
 

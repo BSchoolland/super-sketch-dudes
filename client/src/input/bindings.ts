@@ -8,12 +8,13 @@ export interface KeyBindings {
 export type KeyAction = keyof KeyBindings;
 export const KB1_DEFAULT: Readonly<KeyBindings> = {
   left: ["KeyA"], right: ["KeyD"], up: ["KeyW"], down: ["KeyS"],
-  jump: ["Space"], attack: ["Mouse0"], special: ["KeyE", "Mouse2"], shield: ["ShiftLeft"], taunt: ["KeyT"], pause: ["Escape"], smash: ["KeyR"],
+  jump: ["Space"], attack: ["Mouse0", "KeyF"], special: ["KeyE", "Mouse2"], shield: ["ShiftLeft"], taunt: ["KeyT"], pause: ["Escape"], smash: ["KeyR"],
 };
 const KEY_ACTIONS = Object.keys(KB1_DEFAULT) as KeyAction[];
 export const KB2: Readonly<KeyBindings> = {
   left: ["ArrowLeft"], right: ["ArrowRight"], up: ["ArrowUp"], down: ["ArrowDown"],
-  jump: ["Numpad0"], attack: ["Numpad1"], special: ["Numpad2"], shield: ["Numpad3", "ShiftRight"], taunt: ["Numpad5"], pause: ["Escape"], smash: ["Numpad6"],
+  // the numpad, or the keys right of the letters for a laptop shared with keyboard 1
+  jump: ["Numpad0", "Slash"], attack: ["Numpad1", "Period"], special: ["Numpad2", "Comma"], shield: ["Numpad3", "ShiftRight"], taunt: ["Numpad5"], pause: ["Escape"], smash: ["Numpad6", "Semicolon"],
 };
 
 /** Keyboard player 1's bindings: the defaults with the player's overrides from settings on top. */
