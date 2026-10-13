@@ -16,6 +16,7 @@ import { WebSocketTransport, type PublicRoom, type RelayMessage, type RoomBot, t
 import { allChoices } from "../fighters";
 import { CPU_TIERS, DEFAULT_TIER, tierName } from "../../../shared/cpu-skill";
 import { localMatch } from "./localmatch";
+import { bindingsOf, keyName } from "../input/bindings";
 import { NetVersusScreen, startConfig } from "./netversus";
 import { MatchTelemetry } from "../telemetry/match";
 import { swap, type Handoff } from "../handoff";
@@ -151,7 +152,8 @@ export class OnlineScreen implements Screen {
 
   update(dt: number, m: MenuInput): Screen | null {
     this.t += dt;
-    if (m.from) this.device = m.from;
+    // the arrows (keyboard 2) are a friend's side of the keyboard: whoever uses them in the menus is still keyboard 1
+    if (m.from && !this.friendDevice(m.from)) this.device = m.from === "kb2" ? "kb1" : m.from;
     if (this.nextScreen) {
       const next = this.nextScreen;
       this.nextScreen = null;
@@ -237,13 +239,14 @@ export class OnlineScreen implements Screen {
     const member = room.members.find((candidate) => candidate.id === this.context.id);
     if (!member) throw new Error("local member missing from room");
     if (this.picker) { this.onPicker(this.picker.update(m)); return null; }
+    if (this.friendInput(m)) return null;
     this.bringFighter();
     const canStart = this.canStart();
     const isHost = room.host === this.context.id;
     const bots = room.bots ?? [];
     const items: Focus[] = this.alone() ? ["fighter"] : ["fighter", "ready"];
     if (isHost) {
-      bots.forEach((_, i) => items.push(`botFighter:${i}`, `botLevel:${i}`));
+      bots.forEach((b, i) => { items.push(`botFighter:${i}`); if (b.level > 0) items.push(`botLevel:${i}`); });
       if (room.members.length + bots.length < SLOTS) items.push("addBot");
       if (canStart) items.push("start");
     }
@@ -273,10 +276,42 @@ export class OnlineScreen implements Screen {
     return null;
   }
 
-  /** Two fighters at least, bots counting, and every person ready. */
+  /** Two fighters at least, bots and friends counting, and every person ready; friends here can't go online yet. */
   canStart(): boolean {
     const room = this.context.room;
-    return !!room && room.members.length + (room.bots?.length ?? 0) >= 2 && (this.alone() || room.members.every((candidate) => candidate.ready));
+    if (!room) return false;
+    if (!this.alone() && (room.bots ?? []).some((b) => b.level === 0)) return false;
+    return room.members.length + (room.bots?.length ?? 0) >= 2 && (this.alone() || room.members.every((candidate) => candidate.ready));
+  }
+
+  /** The friend on this computer playing with `device`, if any. */
+  private friendDevice(device: DeviceId): RoomBot | undefined {
+    return (this.context.room?.bots ?? []).find((b) => b.level === 0 && b.device === device);
+  }
+
+  /**
+   * Keyboard 2 and the pads belong to friends on this computer: attack or jump on one nobody has drops a friend in;
+   * a friend's left/right picks their fighter, and a pad's B takes them out. True when the input was a friend's.
+   */
+  private friendInput(m: MenuInput): boolean {
+    const room = this.context.room;
+    const from = m.from;
+    if (!room || room.host !== this.context.id || !from || from === this.device) return false;
+    if (from !== "kb2" && !from.startsWith("pad")) return false;
+    const bots = room.bots ?? [];
+    const i = bots.findIndex((b) => b.level === 0 && b.device === from);
+    if (i < 0) {
+      if (!m.confirm) return false;
+      if (room.members.length + bots.length >= SLOTS) return true;
+      const used = [...room.members.map((x) => x.fighter), ...bots.map((b) => b.fighter)];
+      const choices = this.botChoices();
+      const pick = choices.find((c) => !used.includes(c.id)) ?? choices[0];
+      if (pick) { this.sendBots([...bots, { fighter: pick.id, bundleUrl: pick.bundleUrl, level: 0, device: from }]); sfx.menuConfirm(); }
+      return true;
+    }
+    if (m.left || m.right) this.stepBotFighter(i, m.right ? 1 : -1);
+    if (m.back) this.removeBot(i);
+    return m.left || m.right || m.back || m.up || m.down || m.confirm;
   }
 
   /** Nobody else in the room: READY means nothing, START is enough. */
@@ -406,7 +441,7 @@ export class OnlineScreen implements Screen {
     const choices = this.botChoices();
     const bots = (room.bots ?? []).map((b) => ({
       fighter: choices.find((c) => c.id === b.fighter) ?? { id: b.fighter, name: "", bundleUrl: b.bundleUrl, house: false, entry: null },
-      source: { device: null, cpu: b.level },
+      source: b.level === 0 ? { device: (b.device ?? "kb2") as DeviceId, cpu: 0 } : { device: null, cpu: b.level },
     }));
     this.context.transport.sendLobby({ t: "local" });
     sfx.go();
@@ -577,14 +612,30 @@ export class OnlineScreen implements Screen {
     } else label(ctx, canStart ? "waiting for the host to press START" : "everyone readies up, then the host starts", VIEW_W / 2, by + 52, 24, INK);
     if (button(ctx, 40, VIEW_H - 100, 200, 64, this.context.hidden ? "BACK" : "LEAVE", { key: "Esc", size: 26, focused: this.focus === "leave" })) this.leave();
     const fighters = room.members.length + bots.length;
-    hint(ctx, isHost && !canStart ? (fighters < 2 ? "add a bot, or wait for someone to join" : "START unlocks when everyone is ready") : "click a character, or left/right, to pick");
+    const friends = bots.some((b) => b.level === 0);
+    const kb2 = bots.some((b) => b.level === 0 && b.device === "kb2");
+    hint(ctx, friends && !this.alone() ? "friends on this computer can only play local games for now: remove them to play online"
+      : kb2 ? p2Keys()
+      : isHost && !canStart ? (fighters < 2 ? "add a bot, or a friend: press . (keyboard 2) or A on another controller" : "START unlocks when everyone is ready")
+      : isHost && room.members.length + bots.length < SLOTS ? "a friend here can join: press . (keyboard 2) or A on another controller" : "click a character, or left/right, to pick");
   }
 
   /** A bot's card: the host steps its fighter and level and can remove it; everyone else just sees it. */
   private drawBot(ctx: CanvasRenderingContext2D, slot: number, i: number, bot: RoomBot, isHost: boolean): void {
     const { slotY, slotH } = SETUP, slotW = slotWidth(SLOTS);
-    const x = drawSlotCard(ctx, slot, `CPU ${i + 1}`, this.botFighter(bot), { focused: isHost && this.focus === `botFighter:${i}`, count: SLOTS });
+    const friend = bot.level === 0;
+    const who = friend ? `PLAYER ${slot + 1}` : `CPU ${(this.context.room?.bots ?? []).slice(0, i + 1).filter((b) => b.level > 0).length}`;
+    const x = drawSlotCard(ctx, slot, who, this.botFighter(bot), { focused: isHost && this.focus === `botFighter:${i}`, count: SLOTS });
     const ly = slotY + 392;
+    if (friend) {
+      label(ctx, bot.device === "kb2" ? "keyboard 2" : `pad ${Number(bot.device?.slice(3) ?? 0) + 1}`, x + slotW / 2, ly, 24, PENCIL, "center", 800);
+      if (isHost) {
+        const d = arrows(ctx, x + slotW / 2, slotY + 180, slotW / 2 - 34, 40);
+        if (d) this.stepBotFighter(i, d);
+        if (button(ctx, x + slotW / 2 - 80, slotY + slotH - 58, 160, 44, "REMOVE", { size: 20 })) this.removeBot(i);
+      }
+      return;
+    }
     label(ctx, tierName(bot.level), x + slotW / 2, ly, 26, isHost && this.focus === `botLevel:${i}` ? INK : PENCIL, "center", 900);
     if (!isHost) return;
     const d = arrows(ctx, x + slotW / 2, slotY + 180, slotW / 2 - 34, 40);
@@ -630,3 +681,10 @@ export class OnlineScreen implements Screen {
   }
 }
 
+/** Keyboard 2's keys as bound now (they can change them in SETTINGS > CONTROLS). */
+function p2Keys(): string {
+  const b = bindingsOf("kb2");
+  const k = (keys: string[]) => keys.map(keyName).join("/") || "—";
+  const arrowKeys = b.up.join() === "ArrowUp" && b.left.join() === "ArrowLeft" && b.down.join() === "ArrowDown" && b.right.join() === "ArrowRight";
+  return `keyboard 2: ${arrowKeys ? "arrows" : `${k(b.up)} ${k(b.left)} ${k(b.down)} ${k(b.right)}`} move · ${k(b.jump)} jump · ${k(b.attack)} attack · ${k(b.special)} special · ${k(b.shield)} shield`;
+}

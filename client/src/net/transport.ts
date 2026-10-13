@@ -67,7 +67,7 @@ export interface RoomMember {
 }
 
 /** A CPU player the host added to the room; bots take the slots after the members'. */
-export interface RoomBot { fighter: string; bundleUrl: string; level: number }
+export interface RoomBot { fighter: string; bundleUrl: string; level: number; device?: string }
 
 export interface PublicRoom { code: string; host: string; members: string[] }
 

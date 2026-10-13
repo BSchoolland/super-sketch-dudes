@@ -48,7 +48,8 @@ export interface Room {
   event: WideEvent;
   match: RelayMatch | null;
 }
-export interface RoomBot { fighter: string; bundleUrl: string; level: number }
+/** A CPU at `level`, or (level 0) a friend playing on the host's computer with `device` (keyboard 2, a pad). */
+export interface RoomBot { fighter: string; bundleUrl: string; level: number; device?: string }
 
 /** What the relay sees of one match: per slot, how inputs and hashes flowed. */
 /**
@@ -520,6 +521,7 @@ export function attachLobby(wss: WebSocketServer): void {
           // a host alone with bots plays them locally (see "local"); the relay only runs matches with two people in them
           if (!room || room.host !== c || room.members.length < 2 || room.started) break;
           if (!room.members.every((m) => m.ready)) { send(c, { t: "error", error: "not everyone is ready" }); break; }
+          if (room.bots.some((b) => b.level === 0)) { send(c, { t: "error", error: "friends on the host's computer can only play local games" }); break; }
           if (!msg.config || typeof msg.config !== "object" || Array.isArray(msg.config)) { send(c, { t: "error", error: "invalid match config" }); break; }
           const requested = msg.config as Record<string, unknown>;
           if (requested.map !== undefined) {
@@ -643,8 +645,12 @@ function roomBots(value: unknown, room: number): RoomBot[] | string {
     const b = (raw ?? {}) as Record<string, unknown>;
     const fighter = String(b.fighter ?? ""), bundleUrl = typeof b.bundleUrl === "string" ? b.bundleUrl : "", level = Number(b.level);
     if (!isBundlePath(bundleUrl, fighter)) return "unknown bot fighter";
-    if (!Number.isInteger(level) || level < 1 || level > CPU_TIERS.length) return "bad bot level";
-    out.push({ fighter, bundleUrl, level });
+    if (!Number.isInteger(level) || level < 0 || level > CPU_TIERS.length) return "bad bot level";
+    if (level === 0) {
+      const device = String(b.device ?? "");
+      if (!/^(kb2|pad\d)$/.test(device)) return "bad device for a friend";
+      out.push({ fighter, bundleUrl, level, device });
+    } else out.push({ fighter, bundleUrl, level });
   }
   return out;
 }
