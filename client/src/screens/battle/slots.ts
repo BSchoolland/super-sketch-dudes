@@ -6,8 +6,13 @@ import { drawFighterPortrait } from "../portrait";
 import { SHELF_H } from "../shelf";
 import { card, label, title, INK } from "../ui";
 
-/** The battle setups (a lobby, BOTS & FRIENDS): title, your shelf, four slot cards (six, narrower, locally), one row of actions. */
-export const SETUP = { titleY: 80, shelfY: 120, slotY: 120 + SHELF_H + 30, slotW: 380, slotH: 470, gap: 36 } as const;
+/**
+ * The battle setups (a lobby, BOTS & FRIENDS): title, your shelf, four slot cards (six, narrower, locally), one row of actions.
+ * Inside a card, from its top: the fighter's portrait, its name, and a line under it (a bot's level, a friend's device).
+ */
+export const SETUP = { titleY: 80, shelfY: 120, slotY: 120 + SHELF_H + 20, slotW: 380, slotH: 350, gap: 36, portraitY: 56, portraitH: 160, nameY: 244, lineY: 284 } as const;
+/** The middle of a card's portrait, where its fighter arrows sit. */
+export const PORTRAIT_MID = SETUP.portraitY + SETUP.portraitH / 2;
 export const ACTION_Y = SETUP.slotY + SETUP.slotH + 24;
 /** Card width when `count` cards share the row: four at full width, more squeezed in. */
 export const slotWidth = (count = 4): number => (count <= 4 ? SETUP.slotW : (VIEW_W - 160 - (count - 1) * 20) / count);
@@ -34,9 +39,9 @@ export function drawSlotCard(ctx: CanvasRenderingContext2D, i: number, who: stri
   }
   label(ctx, who, x + w / 2, y + 42, 24, color, "center", 900);
   if (!fighter) return x;
-  if (fighter.def) drawFighterPortrait(ctx, fighter.def, `slot${i}`, { x: x + 16, y: y + 64, w: w - 32, h: 240 }, { ready: opts.ready, cheerOnArrival: true, fidget: true });
-  else label(ctx, fighter.pending ?? "…", x + w / 2, y + 190, 28, fighter.pending === "didn't load" ? "#c0392b" : PENCIL);
-  title(ctx, fighter.name, x + w / 2, y + 348, count > 4 ? 30 : 38, INK, "center", w - 32);
+  if (fighter.def) drawFighterPortrait(ctx, fighter.def, `slot${i}`, { x: x + 16, y: y + SETUP.portraitY, w: w - 32, h: SETUP.portraitH }, { ready: opts.ready, cheerOnArrival: true, fidget: true });
+  else label(ctx, fighter.pending ?? "…", x + w / 2, y + PORTRAIT_MID + 10, 28, fighter.pending === "didn't load" ? "#c0392b" : PENCIL);
+  title(ctx, fighter.name, x + w / 2, y + SETUP.nameY, count > 4 ? 30 : 38, INK, "center", w - 32);
   return x;
 }
 

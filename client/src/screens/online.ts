@@ -7,7 +7,7 @@ import { fighterLoad } from "../gen";
 import type { FighterChoice } from "../fighters";
 import { CharacterShelf } from "./shelf";
 import { StagePicker, type MatchSetup, type PickerAction } from "./stage";
-import { ACTION_Y, SETUP, drawEmptySlot, drawSlotCard, slotWidth, slotX, type SlotFighter } from "./battle/slots";
+import { ACTION_Y, PORTRAIT_MID, SETUP, drawEmptySlot, drawSlotCard, slotWidth, slotX, type SlotFighter } from "./battle/slots";
 import { PENCIL } from "../render/paper";
 import { VIEW_H, VIEW_W } from "../render/camera";
 import { consumeTypedChars, type DeviceId, type MenuInput } from "../input/devices";
@@ -626,23 +626,23 @@ export class OnlineScreen implements Screen {
     const friend = bot.level === 0;
     const who = friend ? `PLAYER ${slot + 1}` : `CPU ${(this.context.room?.bots ?? []).slice(0, i + 1).filter((b) => b.level > 0).length}`;
     const x = drawSlotCard(ctx, slot, who, this.botFighter(bot), { focused: isHost && this.focus === `botFighter:${i}`, count: SLOTS });
-    const ly = slotY + 392;
+    const ly = slotY + SETUP.lineY;
     if (friend) {
       label(ctx, bot.device === "kb2" ? "keyboard 2" : `pad ${Number(bot.device?.slice(3) ?? 0) + 1}`, x + slotW / 2, ly, 24, PENCIL, "center", 800);
       if (isHost) {
-        const d = arrows(ctx, x + slotW / 2, slotY + 180, slotW / 2 - 34, 40);
+        const d = arrows(ctx, x + slotW / 2, slotY + PORTRAIT_MID + 14, slotW / 2 - 34, 40);
         if (d) this.stepBotFighter(i, d);
-        if (button(ctx, x + slotW / 2 - 80, slotY + slotH - 58, 160, 44, "REMOVE", { size: 20 })) this.removeBot(i);
+        if (button(ctx, x + slotW / 2 - 80, slotY + slotH - 52, 160, 40, "REMOVE", { size: 20 })) this.removeBot(i);
       }
       return;
     }
     label(ctx, tierName(bot.level), x + slotW / 2, ly, 26, isHost && this.focus === `botLevel:${i}` ? INK : PENCIL, "center", 900);
     if (!isHost) return;
-    const d = arrows(ctx, x + slotW / 2, slotY + 180, slotW / 2 - 34, 40);
+    const d = arrows(ctx, x + slotW / 2, slotY + PORTRAIT_MID + 14, slotW / 2 - 34, 40);
     if (d) { this.focus = `botFighter:${i}`; this.stepBotFighter(i, d); }
     const l = arrows(ctx, x + slotW / 2, ly, slotW / 2 - 40, 30);
     if (l) { this.focus = `botLevel:${i}`; this.stepBotLevel(i, l); }
-    if (button(ctx, x + slotW / 2 - 80, slotY + slotH - 58, 160, 44, "REMOVE", { size: 20 })) this.removeBot(i);
+    if (button(ctx, x + slotW / 2 - 80, slotY + slotH - 52, 160, 40, "REMOVE", { size: 20 })) this.removeBot(i);
   }
 
   private botFighter(bot: RoomBot): SlotFighter {
