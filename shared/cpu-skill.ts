@@ -17,10 +17,10 @@ export interface Skill {
 }
 
 const SKILLS: Skill[] = [
+  { delay: 36, predict: 0, slack: 60, idle: 70, c: 0 },
   { delay: 26, predict: 0, slack: 40, idle: 50, c: 0 },
   { delay: 17, predict: 0.5, slack: 22, idle: 25, c: 0.35 },
   { delay: 8, predict: 1, slack: 6, idle: 6, c: 0.7 },
-  { delay: 5, predict: 1, slack: 2, idle: 2, c: 0.9 },
   // past the top of every odds range: it shields, punishes and confirms more often than any person could
   { delay: 0, predict: 1, slack: 0, idle: 0, c: 1.2 },
 ];
