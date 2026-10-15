@@ -181,7 +181,7 @@ export class NetVersusScreen extends VersusScreen {
   override update(dt: number, menu: MenuInput): Screen | null {
     if (this.handedOff) return null;
     this.opts.transport.watch?.();
-    this.opts.telemetry.tick(this.opts.transport.rtt(), this.session.waiting && !this.failure);
+    this.opts.telemetry.tick(this.link.rtt(), this.opts.transport.rtt(), this.session.waiting && !this.failure);
     this.pingTime += dt;
     if (this.pingTime >= 1 && !this.failure) {
       this.pingTime -= 1;

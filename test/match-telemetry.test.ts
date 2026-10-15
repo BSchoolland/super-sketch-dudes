@@ -24,8 +24,8 @@ function telemetry() {
   (t as unknown as { session: RollbackSession }).session = session as unknown as RollbackSession;
   let now = 1000;
   vi.spyOn(performance, "now").mockImplementation(() => now);
-  const tick = (ms: number, waitingOn: number[] | null) => { now += ms; missing = waitingOn ?? []; t.tick(50, waitingOn !== null); };
-  const net = () => t.event.business.net as { waitingMs: number; waits: number; unattributedWaitMs: number; waitedOn: Record<number, { name: string; waitingMs: number; waits: number; longestWaitMs: number }> };
+  const tick = (ms: number, waitingOn: number[] | null) => { now += ms; missing = waitingOn ?? []; t.tick(20, 50, waitingOn !== null); };
+  const net = () => t.event.business.net as { rtt: { avg: number; n: number }; relayRtt: { avg: number; n: number }; waitingMs: number; waits: number; unattributedWaitMs: number; waitedOn: Record<number, { name: string; waitingMs: number; waits: number; longestWaitMs: number }> };
   return { t, tick, net };
 }
 
@@ -56,5 +56,13 @@ describe("match telemetry wait attribution", () => {
     t.finish("done");
     expect(t.event.issues[0].message).toBe("a WAITING stall longer than 3 s, waiting on Kirill");
     expect((t.event.business.summary as { message: string }).message).toContain("most on Kirill, 3.5 s");
+  });
+
+  it("records the match's round trip apart from our own to the relay", () => {
+    const { tick, net } = telemetry();
+    tick(16, null);
+    tick(1500, null);
+    expect(net().rtt).toMatchObject({ avg: 20, n: 2 });
+    expect(net().relayRtt).toMatchObject({ avg: 50, n: 2 });
   });
 });

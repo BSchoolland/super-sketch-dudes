@@ -41,7 +41,7 @@ export class MatchTelemetry {
   private link: NetLink | null = null;
   private renderer: Renderer | null = null;
   private readonly net = {
-    frames: 0, confirmed: 0, maxLead: 0, waitingMs: 0, waits: 0, longestWaitMs: 0, rtt: { min: 0, max: 0, avg: 0, n: 0 },
+    frames: 0, confirmed: 0, maxLead: 0, waitingMs: 0, waits: 0, longestWaitMs: 0, rtt: { min: 0, max: 0, avg: 0, n: 0 }, relayRtt: { min: 0, max: 0, avg: 0, n: 0 },
     /** Per remote slot: WAITING time spent missing that player's input. Overlaps when two are missing at once. */
     waitedOn: {} as Record<number, PeerWaits>,
     /** WAITING time with every input in hand (a rollback deeper than the window). */
@@ -58,6 +58,7 @@ export class MatchTelemetry {
   /** The current WAITING stall, per remote slot it has been missing. */
   private waitBySlot = new Map<number, number>();
   private rttSum = 0;
+  private relayRttSum = 0;
   private secondAt = 0;
   private offscreenRun = 0;
   private probeAt = 0;
@@ -120,8 +121,11 @@ export class MatchTelemetry {
     renderer.afterWorld = (ctx) => { if (performance.now() >= this.probeAt) this.probe(ctx); };
   }
 
-  /** Every update: frames, confirmation, WAITING time (`stalled`: waiting on remote inputs, not on a failure banner), round trip. */
-  tick(rtt: number, stalled: boolean): void {
+  /**
+   * Every update: frames, confirmation, WAITING time (`stalled`: waiting on remote inputs, not on a failure banner), and two
+   * round trips: `rtt`, the slowest player's over whatever path the match is using, and `relayRtt`, ours to the relay.
+   */
+  tick(rtt: number, relayRtt: number, stalled: boolean): void {
     const s = this.session;
     if (!s) return;
     const now = performance.now();
@@ -140,14 +144,8 @@ export class MatchTelemetry {
     this.secondAt = now;
     if (this.link) this.event.set("paths", this.link.pathStats()).set("relayLink", this.link.relayLink());
     this.summarize(s.state.ended ? "ended" : "playing");
-    if (rtt > 0) {
-      const r = this.net.rtt;
-      r.min = r.n ? Math.min(r.min, rtt) : rtt;
-      r.max = Math.max(r.max, rtt);
-      this.rttSum += rtt;
-      r.n++;
-      r.avg = Math.round(this.rttSum / r.n);
-    }
+    if (rtt > 0) this.rttSum = sample(this.net.rtt, this.rttSum, rtt);
+    if (relayRtt > 0) this.relayRttSum = sample(this.net.relayRtt, this.relayRttSum, relayRtt);
   }
 
   private endWait(): void {
@@ -267,4 +265,13 @@ export class MatchTelemetry {
     const p2p = linked ? ` · p2p ${linked.open}/${linked.of}` : "";
     this.event.set("summary", { message: `${this.start.config.players.length}p ${this.start.config.stage} · slot ${this.start.localSlot} · ${this.net.frames} frames · ${state}${p2p}${waited}` });
   }
+}
+
+/** Folds one round trip into `r` and returns the new running sum. */
+function sample(r: { min: number; max: number; avg: number; n: number }, sum: number, ms: number): number {
+  r.min = r.n ? Math.min(r.min, ms) : ms;
+  r.max = Math.max(r.max, ms);
+  r.n++;
+  r.avg = Math.round((sum + ms) / r.n);
+  return sum + ms;
 }
