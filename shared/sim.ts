@@ -28,6 +28,14 @@ export function stageOf(state: State): Stage {
 
 /** The most fighters a match takes. */
 export const MAX_PLAYERS = 6;
+/** How many sides a team battle can have: red, blue and green. */
+export const TEAMS = 3;
+
+/** Where someone arriving goes, given everyone's team: red or blue, whichever has fewer (green is only ever picked). */
+export function smallestTeam(sides: number[]): number {
+  const count = (t: number) => sides.filter((s) => s === t).length;
+  return count(1) < count(0) ? 1 : 0;
+}
 
 /**
  * Where slot `slot` starts. Stages have four spawns; slots past them start halfway from one that does toward

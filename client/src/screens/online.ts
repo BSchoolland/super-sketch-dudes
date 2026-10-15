@@ -1,4 +1,4 @@
-import type { MatchConfig } from "../../../shared/sim";
+import { TEAMS, smallestTeam, type MatchConfig } from "../../../shared/sim";
 import type { SessionHandoff } from "../net/rollback";
 import { roster } from "../../../shared/fighters/index";
 import { isBundlePath } from "../../../shared/account";
@@ -7,7 +7,8 @@ import { fighterLoad } from "../gen";
 import type { FighterChoice } from "../fighters";
 import { CharacterShelf } from "./shelf";
 import { StagePicker, type MatchSetup, type PickerAction } from "./stage";
-import { ACTION_Y, PORTRAIT_MID, SETUP, drawEmptySlot, drawSlotCard, slotWidth, slotX, type SlotFighter } from "./battle/slots";
+import { ACTION_Y, PORTRAIT_MID, SETUP, drawEmptySlot, drawSlotCard, drawTeamTag, slotWidth, slotX, type SlotFighter } from "./battle/slots";
+import { TEAM_COLORS } from "../render/hud";
 import { PENCIL } from "../render/paper";
 import { VIEW_H, VIEW_W } from "../render/camera";
 import { consumeTypedChars, type DeviceId, type MenuInput } from "../input/devices";
@@ -53,7 +54,7 @@ function adoptMesh(h: Handoff, context: OnlineContext): PeerMesh | null {
   return newMesh(context);
 }
 
-type Focus = "fighter" | "ready" | `botFighter:${number}` | `botLevel:${number}` | "addBot" | "start" | "leave";
+type Focus = "fighter" | "team" | "ready" | `botFighter:${number}` | `botTeam:${number}` | `botLevel:${number}` | "addBot" | "teams" | "start" | "leave";
 const SLOTS = 6;
 
 export class OnlineScreen implements Screen {
@@ -68,7 +69,7 @@ export class OnlineScreen implements Screen {
   /** The stage screen after the host's START: theirs to edit, everyone else's to watch. */
   private picker: StagePicker | null = null;
   error = "";
-  /** Keyboard focus in the lobby: your fighter, READY, a bot's fighter or level, + ADD BOT, START (host), LEAVE. */
+  /** Keyboard focus in the lobby: your fighter, team and READY, a bot's fighter, team or level, + ADD BOT, TEAMS and START (host), LEAVE. */
   focus: Focus = "ready";
   nextScreen: Screen | null = null;
   private context: OnlineContext;
@@ -244,10 +245,11 @@ export class OnlineScreen implements Screen {
     const canStart = this.canStart();
     const isHost = room.host === this.context.id;
     const bots = room.bots ?? [];
-    const items: Focus[] = this.alone() ? ["fighter"] : ["fighter", "ready"];
+    const items: Focus[] = ["fighter", ...(room.teams ? ["team" as const] : []), ...(this.alone() ? [] : ["ready" as const])];
     if (isHost) {
-      bots.forEach((b, i) => { items.push(`botFighter:${i}`); if (b.level > 0) items.push(`botLevel:${i}`); });
+      bots.forEach((b, i) => { items.push(`botFighter:${i}`); if (room.teams) items.push(`botTeam:${i}`); if (b.level > 0) items.push(`botLevel:${i}`); });
       if (room.members.length + bots.length < SLOTS) items.push("addBot");
+      items.push("teams");
       if (canStart) items.push("start");
     }
     items.push("leave");
@@ -261,7 +263,10 @@ export class OnlineScreen implements Screen {
       const d = m.right ? 1 : -1;
       const [kind, n] = this.focus.split(":");
       if (kind === "botFighter") this.stepBotFighter(Number(n), d);
+      else if (kind === "botTeam") this.stepBotTeam(Number(n), d);
       else if (kind === "botLevel") this.stepBotLevel(Number(n), d);
+      else if (kind === "team") this.stepTeam(d);
+      else if (kind === "teams") this.toggleTeams();
       else if (!member.ready) this.pickFighter(d);
     }
     if (isHost && canStart && this.focus === "ready" && member.ready) this.focus = "start";
@@ -269,6 +274,9 @@ export class OnlineScreen implements Screen {
       if (this.focus === "leave") this.leave();
       else if (this.focus === "start" && isHost && canStart) this.openStagePick();
       else if (this.focus === "addBot") this.addBot();
+      else if (this.focus === "teams") this.toggleTeams();
+      else if (this.focus === "team") this.stepTeam(1);
+      else if (this.focus.startsWith("botTeam:")) this.stepBotTeam(Number(this.focus.split(":")[1]), 1);
       else if (this.alone()) { if (canStart) this.openStagePick(); }
       else if (this.focus === "fighter" || this.focus === "ready") this.toggleReady();
     }
@@ -276,11 +284,12 @@ export class OnlineScreen implements Screen {
     return null;
   }
 
-  /** Two fighters at least, bots and friends counting, and every person ready; friends here can't go online yet. */
+  /** Two fighters at least, bots and friends counting, on two teams at least in a team battle, and every person ready; friends here can't go online yet. */
   canStart(): boolean {
     const room = this.context.room;
     if (!room) return false;
     if (!this.alone() && (room.bots ?? []).some((b) => b.level === 0)) return false;
+    if (room.teams && this.oneTeam()) return false;
     return room.members.length + (room.bots?.length ?? 0) >= 2 && (this.alone() || room.members.every((candidate) => candidate.ready));
   }
 
@@ -306,12 +315,50 @@ export class OnlineScreen implements Screen {
       const used = [...room.members.map((x) => x.fighter), ...bots.map((b) => b.fighter)];
       const choices = this.botChoices();
       const pick = choices.find((c) => !used.includes(c.id)) ?? choices[0];
-      if (pick) { this.sendBots([...bots, { fighter: pick.id, bundleUrl: pick.bundleUrl, level: 0, device: from }]); sfx.menuConfirm(); }
+      if (pick) { this.sendBots([...bots, { fighter: pick.id, bundleUrl: pick.bundleUrl, level: 0, team: this.arrivingTeam(), device: from }]); sfx.menuConfirm(); }
       return true;
     }
     if (m.left || m.right) this.stepBotFighter(i, m.right ? 1 : -1);
     if (m.back) this.removeBot(i);
     return m.left || m.right || m.back || m.up || m.down || m.confirm;
+  }
+
+  /** A team battle with everyone on the same side. */
+  private oneTeam(): boolean {
+    const room = this.context.room;
+    if (!room) return false;
+    return new Set([...room.members.map((m) => m.team), ...(room.bots ?? []).map((b) => b.team)]).size < 2;
+  }
+
+  /** The side for a bot or friend arriving in a team battle (see smallestTeam); red outside one. */
+  private arrivingTeam(): number {
+    const room = this.context.room;
+    if (!room?.teams) return 0;
+    return smallestTeam([...room.members.map((m) => m.team), ...(room.bots ?? []).map((b) => b.team)]);
+  }
+
+  /** The host turns team battle on (everyone split red and blue) or off. */
+  toggleTeams(): void {
+    const room = this.context.room;
+    if (!room || room.host !== this.context.id) return;
+    this.context.transport.sendLobby({ t: "teams", on: !room.teams });
+    sfx.menuConfirm();
+  }
+
+  /** Moves this player to the next (or previous) team. */
+  private stepTeam(d: number): void {
+    const me = this.context.room?.members.find((m) => m.id === this.context.id);
+    if (!me) return;
+    this.context.transport.sendLobby({ t: "team", team: (me.team + d + TEAMS) % TEAMS });
+    sfx.menuMove();
+  }
+
+  private stepBotTeam(i: number, d: number): void {
+    const bots = [...(this.context.room?.bots ?? [])];
+    if (!bots[i]) return;
+    bots[i] = { ...bots[i], team: (bots[i].team + d + TEAMS) % TEAMS };
+    this.sendBots(bots);
+    sfx.menuMove();
   }
 
   /** Nobody else in the room: READY means nothing, START is enough. */
@@ -339,7 +386,7 @@ export class OnlineScreen implements Screen {
     const choices = this.botChoices();
     const fresh = choices.find((c) => !used.includes(c.id)) ?? choices[0];
     if (!fresh) return;
-    this.sendBots([...bots, { fighter: fresh.id, bundleUrl: fresh.bundleUrl, level: settings.cpuTier || DEFAULT_TIER }]);
+    this.sendBots([...bots, { fighter: fresh.id, bundleUrl: fresh.bundleUrl, level: settings.cpuTier || DEFAULT_TIER, team: this.arrivingTeam() }]);
     sfx.menuConfirm();
   }
 
@@ -439,17 +486,20 @@ export class OnlineScreen implements Screen {
   private startLocal(room: RoomState, setup: MatchSetup): void {
     if (!this.mine) throw new Error("local start without a fighter");
     const choices = this.botChoices();
+    const me = room.members.find((m) => m.id === this.context.id);
+    if (!me) throw new Error("local start without the host in the room");
     const bots = (room.bots ?? []).map((b) => ({
       fighter: choices.find((c) => c.id === b.fighter) ?? { id: b.fighter, name: "", bundleUrl: b.bundleUrl, house: false, entry: null },
       source: b.level === 0 ? { device: (b.device ?? "kb2") as DeviceId, cpu: 0 } : { device: null, cpu: b.level },
+      team: b.team,
     }));
     this.context.transport.sendLobby({ t: "local" });
     sfx.go();
     const context = this.context, onExit = this.onExit;
-    this.nextScreen = localMatch([{ fighter: this.mine, source: { device: this.device, cpu: 0 } }, ...bots], setup, () => {
+    this.nextScreen = localMatch([{ fighter: this.mine, source: { device: this.device, cpu: 0 }, team: me.team }, ...bots], setup, () => {
       context.transport.sendLobby({ t: "end" });
       return new OnlineScreen(onExit, null, null, context);
-    });
+    }, room.teams);
   }
 
   /** Follows the room onto and off the stage screen; the host's own picker is the one being mirrored. */
@@ -594,8 +644,10 @@ export class OnlineScreen implements Screen {
         } else drawEmptySlot(ctx, slot, this.context.hidden ? "" : "WAITING", SLOTS);
         continue;
       }
-      const x = drawSlotCard(ctx, slot, `${member.name}${member.id === room.host && room.members.length > 1 ? " · HOST" : ""}`, this.slotFighter(member), { ready: member.ready, focused: member.id === this.context.id && this.focus === "fighter", count: SLOTS });
+      const who = `${member.name}${member.id === room.host && room.members.length > 1 ? " · HOST" : ""}`;
       const mine = member.id === this.context.id && this.phase === "lobby";
+      const x = drawSlotCard(ctx, slot, room.teams ? "" : who, this.slotFighter(member), { ready: member.ready, focused: member.id === this.context.id && this.focus === "fighter", count: SLOTS, ...this.teamLook(member.team) });
+      if (room.teams && drawTeamTag(ctx, slot, member.team, who, { count: SLOTS, canSwitch: mine, focused: mine && this.focus === "team" })) { this.focus = "team"; this.stepTeam(1); }
       if (mine && !this.alone()) {
         if (button(ctx, x + 40, slotY + slotH - 84, slotW - 80, 64, member.ready ? "UNREADY" : "READY", { key: "Enter", size: 26, focused: this.focus === "ready" })) this.toggleReady();
       } else if (!mine) label(ctx, member.ready ? "READY" : "CHOOSING", x + slotW / 2, slotY + slotH - 42, 24);
@@ -609,6 +661,7 @@ export class OnlineScreen implements Screen {
     const by = ACTION_Y;
     if (isHost) {
       if (button(ctx, VIEW_W / 2 - 170, by, 340, 84, "START", { key: "Enter", size: 36, focused: this.focus === "start", disabled: !canStart })) this.openStagePick();
+      if (button(ctx, VIEW_W / 2 + 200, by + 10, 260, 64, room.teams ? "TEAMS: ON" : "TEAMS: OFF", { size: 26, focused: this.focus === "teams" })) { this.focus = "teams"; this.toggleTeams(); }
     } else label(ctx, canStart ? "waiting for the host to press START" : "everyone readies up, then the host starts", VIEW_W / 2, by + 52, 24, INK);
     if (button(ctx, 40, VIEW_H - 100, 200, 64, this.context.hidden ? "BACK" : "LEAVE", { key: "Esc", size: 26, focused: this.focus === "leave" })) this.leave();
     const fighters = room.members.length + bots.length;
@@ -616,6 +669,7 @@ export class OnlineScreen implements Screen {
     const kb2 = bots.some((b) => b.level === 0 && b.device === "kb2");
     hint(ctx, friends && !this.alone() ? "friends on this computer can only play local games for now: remove them to play online"
       : kb2 ? p2Keys()
+      : room.teams && fighters >= 2 && this.oneTeam() ? "everyone's on one team: click a team to switch sides"
       : isHost && !canStart ? (fighters < 2 ? "add a bot, or a friend: press . (keyboard 2) or A on another controller" : "START unlocks when everyone is ready")
       : isHost && room.members.length + bots.length < SLOTS ? "a friend here can join: press . (keyboard 2) or A on another controller" : "click a character, or left/right, to pick");
   }
@@ -625,7 +679,9 @@ export class OnlineScreen implements Screen {
     const { slotY, slotH } = SETUP, slotW = slotWidth(SLOTS);
     const friend = bot.level === 0;
     const who = friend ? `PLAYER ${slot + 1}` : `CPU ${(this.context.room?.bots ?? []).slice(0, i + 1).filter((b) => b.level > 0).length}`;
-    const x = drawSlotCard(ctx, slot, who, this.botFighter(bot), { focused: isHost && this.focus === `botFighter:${i}`, count: SLOTS });
+    const teams = !!this.context.room?.teams;
+    const x = drawSlotCard(ctx, slot, teams ? "" : who, this.botFighter(bot), { focused: isHost && this.focus === `botFighter:${i}`, count: SLOTS, ...this.teamLook(bot.team) });
+    if (teams && drawTeamTag(ctx, slot, bot.team, who, { count: SLOTS, canSwitch: isHost, focused: isHost && this.focus === `botTeam:${i}` })) { this.focus = `botTeam:${i}`; this.stepBotTeam(i, 1); }
     const ly = slotY + SETUP.lineY;
     if (friend) {
       label(ctx, bot.device === "kb2" ? "keyboard 2" : `pad ${Number(bot.device?.slice(3) ?? 0) + 1}`, x + slotW / 2, ly, 24, PENCIL, "center", 800);
@@ -643,6 +699,11 @@ export class OnlineScreen implements Screen {
     const l = arrows(ctx, x + slotW / 2, ly, slotW / 2 - 40, 30);
     if (l) { this.focus = `botLevel:${i}`; this.stepBotLevel(i, l); }
     if (button(ctx, x + slotW / 2 - 80, slotY + slotH - 52, 160, 40, "REMOVE", { size: 20 })) this.removeBot(i);
+  }
+
+  /** A card's colour in a team battle: its team's, washed over the card. */
+  private teamLook(team: number): { color?: string; team?: boolean } {
+    return this.context.room?.teams ? { color: TEAM_COLORS[team], team: true } : {};
   }
 
   private botFighter(bot: RoomBot): SlotFighter {

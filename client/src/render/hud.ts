@@ -5,6 +5,14 @@ import { tierName } from "../../../shared/cpu-skill";
 import { VIEW_H, VIEW_W } from "./camera";
 
 export const SLOT_COLORS = ["#e4483f", "#287ad4", "#ddb51d", "#329854", "#e98a2d", "#7b4fb8"];
+/** Red, blue and green: TEAMS of them. */
+export const TEAM_COLORS = [SLOT_COLORS[0], SLOT_COLORS[1], SLOT_COLORS[3]];
+export const TEAM_NAMES = ["RED", "BLUE", "GREEN"];
+
+/** Each fighter's colour: its team's in a team battle, else its slot's. */
+export function fighterColors(state: State): string[] {
+  return state.fighters.map((f) => (state.rules.teams ? TEAM_COLORS[f.team] : SLOT_COLORS[f.slot]));
+}
 
 export interface HudState { bump: number[]; lastPercent: number[]; cards: ({ key: string; canvas: HTMLCanvasElement } | null)[] }
 export function createHud(n: number): HudState { return { bump: new Array(n).fill(0), lastPercent: new Array(n).fill(0), cards: new Array(n).fill(null) }; }
@@ -16,7 +24,7 @@ const CARD_W = 300, CARD_H = 120, CARD_PAD = 12;
  * bitmap at the canvas scale and blitted; the wobbly card border and dot rings cost more per frame than
  * the fight did. The live percent and bars go on top.
  */
-function playerCard(hud: HudState, i: number, key: string, s: number, name: string, fighter: string, stocks: number): HTMLCanvasElement {
+function playerCard(hud: HudState, i: number, key: string, s: number, name: string, fighter: string, stocks: number, color: string): HTMLCanvasElement {
   const have = hud.cards[i];
   if (have && have.key === key) return have.canvas;
   const [canvas, g] = canvas2d(Math.ceil((CARD_W + CARD_PAD * 2) * s), Math.ceil((CARD_H + CARD_PAD * 2) * s));
@@ -24,7 +32,7 @@ function playerCard(hud: HudState, i: number, key: string, s: number, name: stri
   g.translate(CARD_PAD, CARD_PAD);
   paperCard(g, 0, 0, CARD_W, CARD_H);
   g.textAlign = "left";
-  g.fillStyle = SLOT_COLORS[i] ?? "#fff";
+  g.fillStyle = color;
   g.font = `700 20px ${FONT}`;
   g.fillText(name, 20, 34);
   g.fillStyle = INK;
@@ -32,7 +40,7 @@ function playerCard(hud: HudState, i: number, key: string, s: number, name: stri
   g.fillText(fighter, 20, 54, CARD_W - 40);
   const dots = Math.min(5, stocks);
   for (let d = 0; d < dots; d++) {
-    g.fillStyle = SLOT_COLORS[i];
+    g.fillStyle = color;
     g.beginPath(); g.arc(28 + d * 24, 88, 8, 0, Math.PI * 2); g.fill();
     inkArc(g, 28 + d * 24, 88, 8, 0, Math.PI * 2, INK, 1.5);
   }
@@ -43,6 +51,7 @@ function playerCard(hud: HudState, i: number, key: string, s: number, name: stri
 
 export function drawHud(ctx: CanvasRenderingContext2D, state: State, hud: HudState, dt: number, names: string[]): void {
   const n = state.fighters.length;
+  const colors = fighterColors(state);
   const cardW = CARD_W, gap = 40;
   const total = n * cardW + (n - 1) * gap;
   const x0 = (VIEW_W - total) / 2;
@@ -62,7 +71,7 @@ export function drawHud(ctx: CanvasRenderingContext2D, state: State, hud: HudSta
     const dead = f.stocks <= 0;
     ctx.globalAlpha = dead ? 0.35 : 1;
     const name = names[i] ?? `P${i + 1}`;
-    const card = playerCard(hud, i, `${name}|${def.name}|${f.stocks}|${s}`, s, name, def.name, f.stocks);
+    const card = playerCard(hud, i, `${name}|${def.name}|${f.stocks}|${s}`, s, name, def.name, f.stocks, colors[i]);
     ctx.drawImage(card, x - CARD_PAD, y - CARD_PAD, CARD_W + CARD_PAD * 2, CARD_H + CARD_PAD * 2);
     // percent
     const shake = b * 6;
@@ -84,8 +93,8 @@ export function drawHud(ctx: CanvasRenderingContext2D, state: State, hud: HudSta
       if (b.show && !b.show(f)) continue;
       const mx = x + 20, my = y + 104 - mi++ * 9;
       ctx.fillStyle = INK; ctx.fillRect(mx - 1, my - 1, 122, 7);
-      ctx.fillStyle = f.tripped[k] ? PAPER : SLOT_COLORS[i]; ctx.fillRect(mx, my, 120 * Math.max(0, Math.min(1, f.bars[k] / b.max)), 5);
-      ctx.fillStyle = SLOT_COLORS[i]; ctx.font = `700 9px ${FONT}`; ctx.textAlign = "left";
+      ctx.fillStyle = f.tripped[k] ? PAPER : colors[i]; ctx.fillRect(mx, my, 120 * Math.max(0, Math.min(1, f.bars[k] / b.max)), 5);
+      ctx.fillStyle = colors[i]; ctx.font = `700 9px ${FONT}`; ctx.textAlign = "left";
       ctx.fillText(b.label, mx + 124, my + 6);
     }
     if (f.cpu) { ctx.fillStyle = INK; ctx.font = `600 12px ${FONT}`; ctx.textAlign = "left"; ctx.fillText(tierName(f.cpu), x + 120, y + 34); }

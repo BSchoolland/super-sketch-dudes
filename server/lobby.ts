@@ -3,7 +3,7 @@ import type { IncomingMessage } from "node:http";
 import crypto from "node:crypto";
 import { isBundlePath } from "../shared/account";
 import { CPU_TIERS } from "../shared/cpu-skill";
-import { MAX_PLAYERS } from "../shared/sim";
+import { MAX_PLAYERS, TEAMS, smallestTeam } from "../shared/sim";
 import { checkMap, MAP_JSON_MAX, type MapDoc } from "../shared/maps";
 import { matchTrace, TRACE_RE, type WideEvent } from "../shared/wide";
 import { finish, newTrace, openEvent } from "./events";
@@ -30,6 +30,8 @@ export interface Client {
   fighter: string;
   bundleUrl: string;
   ready: boolean;
+  /** Their side when the room plays teams. */
+  team: number;
   /** This connection's wide event, traced by the page session that opened it. */
   event: WideEvent;
   /** Round trips this client measured over its peer-to-peer links, by member id: what auto input delay uses for those pairs. */
@@ -45,11 +47,12 @@ export interface Room {
   /** Set while the host is on the stage screen after START: what they have picked so far, for everyone to watch. */ picking: StagePick | null;
   /** Game bundle hash the room plays on; null = whatever the page loaded. */ game: string | null;
   /** CPU players the host added: they take the slots after the members'. */ bots: RoomBot[];
+  /** Team battle: members and bots fight on their `team`'s side. */ teams: boolean;
   event: WideEvent;
   match: RelayMatch | null;
 }
 /** A CPU at `level`, or (level 0) a friend playing on the host's computer with `device` (keyboard 2, a pad). */
-export interface RoomBot { fighter: string; bundleUrl: string; level: number; device?: string }
+export interface RoomBot { fighter: string; bundleUrl: string; level: number; team: number; device?: string }
 
 /** What the relay sees of one match: per slot, how inputs and hashes flowed. */
 /**
@@ -157,7 +160,7 @@ const since = (e: WideEvent): number => Date.now() - e.t0;
 export function newRoom(host: Client, isPublic: boolean): Room {
   const code = makeCode();
   const trace = `r-${code}-${Date.now().toString(36)}`;
-  const room: Room = { code, trace, members: [], started: false, host, seed: 0, config: null, public: isPublic, picking: null, game: null, bots: [], match: null, event: openEvent("room", trace, host.event.trace) };
+  const room: Room = { code, trace, members: [], started: false, host, seed: 0, config: null, public: isPublic, picking: null, game: null, bots: [], teams: false, match: null, event: openEvent("room", trace, host.event.trace) };
   room.event.set("room", { code, host: host.name, public: isPublic });
   rooms.set(code, room);
   return room;
@@ -312,10 +315,12 @@ function roomInfo(room: Room): unknown {
     public: room.public,
     picking: room.picking,
     game: room.game,
-    members: room.members.map((m) => ({ id: m.id, name: m.name, slot: m.slot, fighter: m.fighter, bundleUrl: m.bundleUrl, ready: m.ready })),
+    members: room.members.map((m) => ({ id: m.id, name: m.name, slot: m.slot, fighter: m.fighter, bundleUrl: m.bundleUrl, ready: m.ready, team: m.team })),
     bots: room.bots,
+    teams: room.teams,
   };
 }
+
 export function leaveRoom(c: Client): void {
   const room = c.room;
   if (!room) return;
@@ -355,6 +360,7 @@ export function joinRoom(c: Client, room: Room): void {
   c.room = room;
   c.slot = room.members.length;
   c.ready = false;
+  c.team = smallestTeam([...room.members.map((m) => m.team), ...room.bots.map((b) => b.team)]);
   room.members.push(c);
   // a person takes the last bot's place when the room is full
   if (room.members.length + room.bots.length > ROOM_SIZE) room.bots = room.bots.slice(0, ROOM_SIZE - room.members.length);
@@ -425,7 +431,7 @@ export function attachLobby(wss: WebSocketServer): void {
     const msgs: Record<string, number> = {};
     event.set("connection", { id, ua: String(req.headers["user-agent"] ?? "").slice(0, 200) }).set("msgs", msgs);
     // `c` becomes another client if this socket resumes one mid-match
-    let c: Client = { ws, id, name: `guest${id}`, room: null, slot: 0, lastPing: Date.now(), rtt: null, fighter: "", bundleUrl: "", ready: false, event, peerRtt: new Map(), token: crypto.randomBytes(12).toString("base64url"), grace: null };
+    let c: Client = { ws, id, name: `guest${id}`, room: null, slot: 0, lastPing: Date.now(), rtt: null, fighter: "", bundleUrl: "", ready: false, team: 0, event, peerRtt: new Map(), token: crypto.randomBytes(12).toString("base64url"), grace: null };
     clients.set(id, c);
     let pingAt = 0;
     ws.on("pong", () => {
@@ -526,6 +532,30 @@ export function attachLobby(wss: WebSocketServer): void {
           broadcast(room, roomInfo(room));
           break;
         }
+        // the host turns team battle on or off; on, everyone is split between red and blue to start
+        case "teams": {
+          const room = c.room;
+          if (!room || room.host !== c || room.started) break;
+          room.teams = !!msg.on;
+          if (room.teams) {
+            room.members.forEach((m, i) => (m.team = i % 2));
+            room.bots.forEach((b, i) => (b.team = (room.members.length + i) % 2));
+          }
+          room.picking = null;
+          broadcast(room, roomInfo(room));
+          break;
+        }
+        // a member picking their own side
+        case "team": {
+          const room = c.room;
+          const team = Number(msg.team);
+          if (!room || room.started) break;
+          if (!Number.isInteger(team) || team < 0 || team >= TEAMS) { send(c, { t: "error", error: "bad team" }); break; }
+          c.team = team;
+          room.picking = null;
+          broadcast(room, roomInfo(room));
+          break;
+        }
         // the host, alone with bots, plays the match on their own computer: the room is busy until their "end"
         case "local": {
           const room = c.room;
@@ -551,6 +581,7 @@ export function attachLobby(wss: WebSocketServer): void {
           if (!room || room.host !== c || room.members.length < 2 || room.started) break;
           if (!room.members.every((m) => m.ready)) { send(c, { t: "error", error: "not everyone is ready" }); break; }
           if (room.bots.some((b) => b.level === 0)) { send(c, { t: "error", error: "friends on the host's computer can only play local games" }); break; }
+          if (room.teams && new Set([...room.members.map((m) => m.team), ...room.bots.map((b) => b.team)]).size < 2) { send(c, { t: "error", error: "everyone is on one team" }); break; }
           if (!msg.config || typeof msg.config !== "object" || Array.isArray(msg.config)) { send(c, { t: "error", error: "invalid match config" }); break; }
           const requested = msg.config as Record<string, unknown>;
           if (requested.map !== undefined) {
@@ -565,7 +596,12 @@ export function attachLobby(wss: WebSocketServer): void {
           const auto = autoInputDelay(members.map((m) => m.rtt ?? 0), (i, j) => peerRoundTrip(members[i], members[j]));
           requested.inputDelay = auto.delay;
           const unmeasured = room.members.filter((m) => m.rtt === null).map((m) => m.name);
-          room.config = { ...requested, players: [...room.members.map((m) => ({ fighter: m.fighter, bundleUrl: m.bundleUrl })), ...room.bots.map((b) => ({ fighter: b.fighter, bundleUrl: b.bundleUrl, cpu: b.level }))] };
+          const team = (t: number) => (room.teams ? { team: t } : {});
+          room.config = {
+            ...requested,
+            rules: { ...(requested.rules as object), teams: room.teams },
+            players: [...room.members.map((m) => ({ fighter: m.fighter, bundleUrl: m.bundleUrl, ...team(m.team) })), ...room.bots.map((b) => ({ fighter: b.fighter, bundleUrl: b.bundleUrl, cpu: b.level, ...team(b.team) }))],
+          };
           startRelayMatch(room, room.seed, room.config, room.members);
           recordPlays(room.members.map((m) => m.fighter));
           room.match?.event.set("inputDelay", auto);
@@ -666,14 +702,15 @@ function roomBots(value: unknown, room: number): RoomBot[] | string {
   const out: RoomBot[] = [];
   for (const raw of value) {
     const b = (raw ?? {}) as Record<string, unknown>;
-    const fighter = String(b.fighter ?? ""), bundleUrl = typeof b.bundleUrl === "string" ? b.bundleUrl : "", level = Number(b.level);
+    const fighter = String(b.fighter ?? ""), bundleUrl = typeof b.bundleUrl === "string" ? b.bundleUrl : "", level = Number(b.level), team = Number(b.team ?? 0);
     if (!isBundlePath(bundleUrl, fighter)) return "unknown bot fighter";
     if (!Number.isInteger(level) || level < 0 || level > CPU_TIERS.length) return "bad bot level";
+    if (!Number.isInteger(team) || team < 0 || team >= TEAMS) return "bad bot team";
     if (level === 0) {
       const device = String(b.device ?? "");
       if (!/^(kb2|pad\d)$/.test(device)) return "bad device for a friend";
-      out.push({ fighter, bundleUrl, level, device });
-    } else out.push({ fighter, bundleUrl, level });
+      out.push({ fighter, bundleUrl, level, team, device });
+    } else out.push({ fighter, bundleUrl, level, team });
   }
   return out;
 }

@@ -12,7 +12,7 @@ import { cellFor } from "../../../shared/gen/sprite";
 import type { FighterDef, Look, Pose } from "../../../shared/types";
 import { drawBackdrop, drawShadow, drawStage } from "./stage";
 import { ART_THEMES, drawStageArt, stageArt } from "./stageart";
-import { SLOT_COLORS, createHud, drawHud, type HudState } from "./hud";
+import { createHud, drawHud, fighterColors, type HudState } from "./hud";
 import { drawStrikes, inWindup } from "./strikes";
 import { drawLook, lookColor, lookOf, type LookAt } from "./looks";
 import type { Projectile } from "../../../shared/types";
@@ -35,6 +35,8 @@ export class Renderer {
   /** Backdrop, HUD and the slot markers over heads; the title screen's brawl draws fighters only. */
   chrome = true;
   names: string[];
+  /** Each fighter's colour, by slot: its team's in a team battle. */
+  colors: string[] = [];
   /** Runs once the world layer is on the canvas, before screen effects and the HUD. */
   afterWorld: ((ctx: CanvasRenderingContext2D) => void) | null = null;
   private prevPos: { x: number; y: number }[] = [];
@@ -45,7 +47,7 @@ export class Renderer {
   private curProj: Map<number, { x: number; y: number }> = new Map();
 
   constructor(state: State, names: string[]) {
-    this.fx = new Fx(SLOT_COLORS);
+    this.fx = new Fx(this.colors);
     this.hud = createHud(state.fighters.length);
     this.names = names;
     if (ART_THEMES.has(stageOf(state).theme)) for (const f of state.fighters) prepareCards(defOf(f));
@@ -68,6 +70,8 @@ export class Renderer {
 
   /** Call after every sim step. */
   snapshot(state: State): void {
+    // in place: the fx share the list, and the title screen's brawl adds fighters as it goes
+    this.colors.splice(0, this.colors.length, ...fighterColors(state));
     this.prevPos = this.curPos;
     this.curPos = state.fighters.map((f) => ({ x: f.x, y: f.y }));
     this.prevProj = this.curProj;
@@ -78,7 +82,7 @@ export class Renderer {
       const look = lookOf(def, p.kind);
       if (!look) continue;
       const trail = look.trail ?? (look.cell ? "none" : "streak");
-      const color = lookColor(look, SLOT_COLORS[p.owner] ?? "#fff");
+      const color = lookColor(look, this.colors[p.owner] ?? "#fff");
       const ang = Math.atan2(p.vy, p.vx);
       if (trail === "ghost" && state.frame % 2 === 0) this.projGhosts.push({ def, look, at: this.projAt(p, p.x, p.y, true), age: 0 });
       else if (trail === "streak") this.fx.streak(p.x, p.y, ang, Math.hypot(p.vx, p.vy) * 3, color);
@@ -152,12 +156,12 @@ export class Renderer {
       const def = defOf(state.fighters[p.from]);
       const look = lookOf(def, p.kind);
       if (look) drawLook(ctx, def, look, this.projAt(p, x, y));
-      else drawProjectile(ctx, x, y, p.vx, p.vy, p.hb.r, SLOT_COLORS[p.owner] ?? "#fff");
+      else drawProjectile(ctx, x, y, p.vx, p.vy, p.hb.r, this.colors[p.owner] ?? "#fff");
     }
     // fighters, back to front by slot (the one who was hit last draws on top)
     const order = state.fighters.map((f) => f).sort((a, b) => a.lastHitFrame - b.lastHitFrame);
     for (const f of order) this.drawFighter(ctx, state, f, interp[f.slot]);
-    for (const f of order) if (f.action === "attack") drawStrikes(ctx, f, interp[f.slot], SLOT_COLORS[f.slot] ?? "#fff", this.time);
+    for (const f of order) if (f.action === "attack") drawStrikes(ctx, f, interp[f.slot], this.colors[f.slot] ?? "#fff", this.time);
     this.fx.drawWorld(ctx);
     if (this.showHitboxes) this.drawBoxes(ctx, state);
     ctx.restore();
@@ -230,7 +234,7 @@ export class Renderer {
       const sc = shieldCircle(f);
       ctx.save();
       ctx.globalAlpha = 0.45;
-      const c = SLOT_COLORS[f.slot] ?? "#fff";
+      const c = this.colors[f.slot] ?? "#fff";
       ctx.fillStyle = c;
       ctx.beginPath(); ctx.arc(pos.x + (sc.x - f.x), pos.y + (sc.y - f.y), sc.r, 0, Math.PI * 2); ctx.fill();
       ctx.globalAlpha = 0.9;
@@ -246,14 +250,14 @@ export class Renderer {
       const y = pos.y - def.stats.height - 30 - row++ * 10;
       ctx.save();
       ctx.fillStyle = INK; ctx.fillRect(pos.x - 32, y, 64, 8);
-      ctx.fillStyle = f.tripped[k] ? PAPER : SLOT_COLORS[f.slot] ?? "#fff";
+      ctx.fillStyle = f.tripped[k] ? PAPER : this.colors[f.slot] ?? "#fff";
       ctx.fillRect(pos.x - 30, y + 2, 60 * Math.max(0, Math.min(1, f.bars[k] / b.max)), 4);
       ctx.restore();
     }
     if (!this.chrome) return;
     // slot marker above the head
     ctx.save();
-    ctx.fillStyle = SLOT_COLORS[f.slot] ?? "#fff";
+    ctx.fillStyle = this.colors[f.slot] ?? "#fff";
     ctx.strokeStyle = "#12101a"; ctx.lineWidth = 3;
     const my = pos.y - def.stats.height - 22 - Math.sin(this.time * 6 + f.slot) * 3;
     ctx.beginPath(); ctx.moveTo(pos.x - 9, my - 12); ctx.lineTo(pos.x + 9, my - 12); ctx.lineTo(pos.x, my); ctx.closePath(); ctx.fill(); ctx.stroke();

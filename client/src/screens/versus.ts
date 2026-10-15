@@ -4,10 +4,11 @@ import type { MenuInput } from "../input/devices";
 import { rumble } from "../input/devices";
 import { LocalMatch, type MatchDriver, type SlotSource } from "../match";
 import { Renderer } from "../render/render";
-import { drawBanner, SLOT_COLORS } from "../render/hud";
+import { drawBanner, TEAM_COLORS, TEAM_NAMES } from "../render/hud";
 import { music, StateSounds, playEvents, sfx } from "../audio/audio";
 import { card, label, title, button, goTo, type Screen, INK, settings } from "./ui";
 import type { MatchConfig } from "../../../shared/sim";
+import type { Fighter } from "../../../shared/types";
 import { B } from "../../../shared/input";
 import { roster } from "../../../shared/fighters/index";
 import { currentMove } from "../../../shared/fighter";
@@ -180,14 +181,17 @@ export class VersusScreen implements Screen {
     if (this.hookErr && !st.ended) drawBanner(ctx, this.hookErr.text, this.hookErr.detail, "#ff4d2e", Math.min(1, this.hookErr.t * 2 + 0.2));
     if (st.ended) {
       this.bannerT += dt;
-      const w = st.winner;
-      drawBanner(ctx, w >= 0 ? "GAME!" : "DRAW", w >= 0 ? `${this.renderer.names[w]} wins` : "", w >= 0 ? SLOT_COLORS[w] : INK, this.bannerT);
+      // a team battle's winner is a team
+      const w = st.winner, teams = st.rules.teams, colors = this.renderer.colors;
+      const won = (f: Fighter): boolean => w >= 0 && (teams ? f.team === w : f.slot === w);
+      const who = teams ? `${TEAM_NAMES[w]} TEAM` : this.renderer.names[w];
+      drawBanner(ctx, w >= 0 ? "GAME!" : "DRAW", w >= 0 ? `${who} wins` : "", w >= 0 ? (teams ? TEAM_COLORS[w] : colors[w]) : INK, this.bannerT);
       if (this.endedFor > 1.2) {
         // results
         const y = VIEW_H / 2 + 90;
         st.fighters.forEach((f, i) => {
           const x = VIEW_W / 2 - (st.fighters.length * 220) / 2 + i * 220;
-          card(ctx, x, y, 200, 130, SLOT_COLORS[i], i === w);
+          card(ctx, x, y, 200, 130, colors[i], won(f));
           label(ctx, this.renderer.names[i], x + 100, y + 32, 22, INK, "center", 900);
           label(ctx, roster[f.id].name, x + 100, y + 56, 16, INK, "center", 700, 184);
           label(ctx, `KOs ${f.kos}   falls ${f.falls}`, x + 100, y + 86, 18, INK);

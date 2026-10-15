@@ -1,10 +1,10 @@
 import { VIEW_W } from "../../render/camera";
 import { PENCIL } from "../../render/paper";
-import { SLOT_COLORS } from "../../render/hud";
+import { SLOT_COLORS, TEAM_COLORS, TEAM_NAMES } from "../../render/hud";
 import type { FighterDef } from "../../../../shared/types";
 import { drawFighterPortrait } from "../portrait";
 import { SHELF_H } from "../shelf";
-import { card, label, title, INK } from "../ui";
+import { card, clicked, hover, label, title, INK } from "../ui";
 
 /**
  * The battle setups (a lobby, BOTS & FRIENDS): title, your shelf, four slot cards (six, narrower, locally), one row of actions.
@@ -43,6 +43,23 @@ export function drawSlotCard(ctx: CanvasRenderingContext2D, i: number, who: stri
   else label(ctx, fighter.pending ?? "…", x + w / 2, y + PORTRAIT_MID + 10, 28, fighter.pending === "didn't load" ? "#c0392b" : PENCIL);
   title(ctx, fighter.name, x + w / 2, y + SETUP.nameY, count > 4 ? 30 : 38, INK, "center", w - 32);
   return x;
+}
+
+/**
+ * A team battle card's header: a pill in the team's colour with who holds the slot. `canSwitch`: it's theirs to
+ * change, so it takes the pointer. True when clicked.
+ */
+export function drawTeamTag(ctx: CanvasRenderingContext2D, i: number, team: number, who: string, opts: { count: number; canSwitch: boolean; focused: boolean }): boolean {
+  const w = slotWidth(opts.count) - 28, x = slotX(i, opts.count) + 14, y = SETUP.slotY + 12, h = 46;
+  const over = opts.canSwitch && hover(x, y, w, h);
+  if (over) document.body.style.cursor = "pointer";
+  ctx.save();
+  ctx.fillStyle = TEAM_COLORS[team];
+  ctx.beginPath(); ctx.roundRect(x, y, w, h, 23); ctx.fill();
+  if (opts.focused || over) { ctx.lineWidth = 4; ctx.strokeStyle = INK; ctx.stroke(); }
+  ctx.restore();
+  label(ctx, `${TEAM_NAMES[team]}${opts.canSwitch ? " ▸" : ""} · ${who}`, x + w / 2, y + 32, 22, "#fff", "center", 900, w - 24);
+  return opts.canSwitch && clicked(x, y, w, h);
 }
 
 /** A slot nobody holds. */
