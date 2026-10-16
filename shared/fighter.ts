@@ -194,8 +194,10 @@ function specialFromInput(f: Fighter, input: InputFrame, e: Edges): string | nul
   return "nspecial";
 }
 
-function jump(state: State, f: Fighter, def: FighterDef, full: boolean, double: boolean): void {
+/** Jumping, first or double, turns you to face the way you're holding (`x`): the only turn there is in the air. */
+function jump(state: State, f: Fighter, def: FighterDef, full: boolean, double: boolean, x: number): void {
   const s = def.stats;
+  if (Math.abs(x) >= STICK_RUN) f.facing = sign(x) as 1 | -1;
   f.vy = -(double ? s.doubleJump : full ? s.fullHop : s.shortHop);
   f.grounded = false;
   f.platform = -1;
@@ -263,7 +265,7 @@ function tryGroundActions(state: State, f: Fighter, def: FighterDef, input: Inpu
 function tryAirActions(state: State, f: Fighter, def: FighterDef, input: InputFrame, e: Edges): boolean {
   if (buffered(f, e, B.JUMP) && f.jumpsLeft > 0) {
     consume(f, B.JUMP);
-    jump(state, f, def, true, true);
+    jump(state, f, def, true, true, input.x);
     return true;
   }
   if (buffered(f, e, B.SHIELD) && !f.airDodged) {
@@ -559,7 +561,7 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
       groundFriction(f, def, stage, 0.5);
       if (f.frame >= C.JUMP_SQUAT) {
         const full = (e.held & B.JUMP) !== 0;
-        jump(state, f, def, full, false);
+        jump(state, f, def, full, false, input.x);
         // carry ground speed, plus a little stick control
         if (Math.abs(input.x) >= STICK_DEAD) f.vx = clamp(f.vx + (input.x / 100) * 1.5, -Math.max(Math.abs(f.vx), s.airSpeed), Math.max(Math.abs(f.vx), s.airSpeed));
       }
@@ -569,7 +571,6 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
       if (tryAirActions(state, f, def, input, e)) break;
       airControl(f, def, input);
       applyGravity(f, def, input, stage);
-      if (Math.abs(input.x) >= STICK_DEAD && f.frame > 2) f.facing = f.facing; // facing locks in the air
       break;
     }
     case "helpless": {

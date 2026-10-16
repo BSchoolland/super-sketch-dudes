@@ -151,3 +151,50 @@ describe("edges", () => {
     }
   });
 });
+
+describe("facing in the air", () => {
+  /** Fighter 0 airborne facing right, its double jump unused. */
+  const airborne = () => {
+    const s = two();
+    const f = s.fighters[0];
+    run(s, 2, inp({ b: B.JUMP }));
+    run(s, 12);
+    expect(f.grounded).toBe(false);
+    expect(f.facing).toBe(1);
+    return { s, f };
+  };
+
+  it("holding the other way doesn't turn you, and back + attack is still a back air", () => {
+    const { s, f } = airborne();
+    run(s, 10, inp({ x: -100 }));
+    expect(f.facing).toBe(1);
+    step(s, [inp({ x: -100, b: B.ATTACK }), EMPTY_INPUT]);
+    expect(f.move).toBe("bair");
+    expect(f.facing).toBe(1);
+  });
+
+  it("a double jump turns you to face the way you're holding", () => {
+    const { s, f } = airborne();
+    run(s, 2, inp({ x: -100 }));
+    const jumps = f.jumpsLeft;
+    step(s, [inp({ x: -100, b: B.JUMP }), EMPTY_INPUT]);
+    expect(f.jumpsLeft).toBe(jumps - 1);
+    expect(f.facing).toBe(-1);
+    step(s, [inp({ x: -100, b: B.ATTACK }), EMPTY_INPUT]);
+    expect(f.move).toBe("fair");
+  });
+
+  it("taking off while holding the other way turns you; a slight tilt doesn't", () => {
+    const s = two();
+    const f = s.fighters[0];
+    f.facing = 1;
+    run(s, C.JUMP_SQUAT + 3, inp({ x: -100, b: B.JUMP }));
+    expect(f.grounded).toBe(false);
+    expect(f.facing).toBe(-1);
+    const t = two();
+    t.fighters[0].facing = 1;
+    run(t, 1, inp({ b: B.JUMP }));
+    run(t, C.JUMP_SQUAT + 2, inp({ x: -40 }));
+    expect(t.fighters[0].facing).toBe(1);
+  });
+});
