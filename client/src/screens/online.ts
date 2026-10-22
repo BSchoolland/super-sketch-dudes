@@ -17,7 +17,7 @@ import { WebSocketTransport, type PublicRoom, type RelayMessage, type RoomBot, t
 import { allChoices } from "../fighters";
 import { CPU_TIERS, DEFAULT_TIER, tierName } from "../../../shared/cpu-skill";
 import { localMatch } from "./localmatch";
-import { bindingsOf, keyName } from "../input/bindings";
+import { bindingsOf, keyName, type Keyboard } from "../input/bindings";
 import { NetVersusScreen, startConfig } from "./netversus";
 import { MatchTelemetry } from "../telemetry/match";
 import { swap, type Handoff } from "../handoff";
@@ -28,8 +28,11 @@ import { bg, card, hint, label, title, hover, clicked, button, backButton, goTo,
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const LIST_Y = 170, ROW_H = 84, LIST_MAX = 5, CODE_Y = LIST_Y + LIST_MAX * ROW_H + 60;
 
-/** How BATTLE sent you here. VS BOTS ("bots") is a private room that never shows its code; "call" is the Discord Activity's room. */
-export type OnlineEntry = "call" | "quick" | "create" | "join" | "bots";
+/**
+ * How BATTLE sent you here. VS BOTS ("bots") and SAME KEYBOARD ("local") are private rooms that never show their code;
+ * "call" is the Discord Activity's room.
+ */
+export type OnlineEntry = "call" | "quick" | "create" | "join" | "bots" | "local";
 
 type RoomState = Extract<RelayMessage, { t: "room" }>;
 interface OnlineContext {
@@ -38,8 +41,8 @@ interface OnlineContext {
   mesh: PeerMesh | null;
   id: number;
   room: RoomState | null;
-  /** VS BOTS: the room's code isn't shown, and it starts with a bot in it. */
-  hidden?: boolean;
+  /** VS BOTS or SAME KEYBOARD: the room's code isn't shown, and it starts with a bot, or a friend on keyboard 2, in it. */
+  hidden?: "bots" | "local";
 }
 
 /** The links a swap handed over, if this bundle speaks their version; else fresh ones (the old ones close). */
@@ -140,7 +143,7 @@ export class OnlineScreen implements Screen {
       this.phase = "waiting";
     } else if (entry === "quick") { this.context.transport.sendLobby({ t: "quick" }); this.phase = "waiting"; }
     else if (entry === "create") this.phase = "create";
-    else if (entry === "bots") { this.context.hidden = true; this.context.transport.sendLobby({ t: "create", public: false }); this.phase = "waiting"; }
+    else if (entry === "bots" || entry === "local") { this.context.hidden = entry; this.context.transport.sendLobby({ t: "create", public: false }); this.phase = "waiting"; }
     else if (entry === "join") { consumeTypedChars(); this.phase = "join"; }
     else throw new Error("online screen with neither a room nor a way in");
     this.unsubscribers.push(
@@ -315,11 +318,7 @@ export class OnlineScreen implements Screen {
     const i = bots.findIndex((b) => b.level === 0 && b.device === from);
     if (i < 0) {
       if (!m.confirm) return false;
-      if (room.members.length + bots.length >= SLOTS) return true;
-      const used = [...room.members.map((x) => x.fighter), ...bots.map((b) => b.fighter)];
-      const choices = this.botChoices();
-      const pick = choices.find((c) => !used.includes(c.id)) ?? choices[0];
-      if (pick) { this.sendBots([...bots, { fighter: pick.id, bundleUrl: pick.bundleUrl, level: 0, team: this.arrivingTeam(), device: from }]); sfx.menuConfirm(); }
+      this.addFriend(from);
       return true;
     }
     if (m.left || m.right) this.stepBotFighter(i, m.right ? 1 : -1);
@@ -363,6 +362,20 @@ export class OnlineScreen implements Screen {
     bots[i] = { ...bots[i], team: (bots[i].team + d + TEAMS) % TEAMS };
     this.sendBots(bots);
     sfx.menuMove();
+  }
+
+  /** A friend on this computer playing with `device`, on whoever's in the room least. */
+  private addFriend(device: DeviceId): void {
+    const room = this.context.room;
+    if (!room || room.host !== this.context.id) return;
+    const bots = room.bots ?? [];
+    if (room.members.length + bots.length >= SLOTS) return;
+    const used = [...room.members.map((x) => x.fighter), ...bots.map((b) => b.fighter)];
+    const choices = this.botChoices();
+    const pick = choices.find((c) => !used.includes(c.id)) ?? choices[0];
+    if (!pick) return;
+    this.sendBots([...bots, { fighter: pick.id, bundleUrl: pick.bundleUrl, level: 0, team: this.arrivingTeam(), device }]);
+    sfx.menuConfirm();
   }
 
   /** Nobody else in the room: READY means nothing, START is enough. */
@@ -524,8 +537,11 @@ export class OnlineScreen implements Screen {
   private onMessage(message: RelayMessage): void {
     if (message.t === "hello") this.context.id = message.id;
     if (message.t === "room") {
-      // VS BOTS opens with one bot waiting
-      if (this.context.hidden && !this.context.room && message.host === this.context.id && !message.bots?.length) queueMicrotask(() => this.addBot());
+      // VS BOTS opens with one bot waiting, SAME KEYBOARD with a friend on keyboard 2
+      if (this.context.hidden && !this.context.room && message.host === this.context.id && !message.bots?.length) {
+        const hidden = this.context.hidden;
+        queueMicrotask(() => (hidden === "local" ? this.addFriend("kb2") : this.addBot()));
+      }
       this.context.room = message;
       this.context.mesh?.members(message.members.map((m) => m.id));
       if (this.phase !== "loading") this.phase = "lobby";
@@ -536,7 +552,7 @@ export class OnlineScreen implements Screen {
     if (message.t === "waiting") this.waitingFor = "MATCH IN PROGRESS";
     // more people opened the game than a room holds: this one plays bots on their own
     if (message.t === "full") {
-      this.context.hidden = true;
+      this.context.hidden = "bots";
       this.notice = "the call's room is full";
       this.context.transport.sendLobby({ t: "create", public: false });
     }
@@ -635,7 +651,7 @@ export class OnlineScreen implements Screen {
       return;
     }
     if (this.context.hidden) {
-      title(ctx, "VS BOTS", VIEW_W / 2, SETUP.titleY, 52);
+      title(ctx, this.context.hidden === "local" ? "SAME KEYBOARD" : "VS BOTS", VIEW_W / 2, SETUP.titleY, 52);
       if (this.notice) label(ctx, this.notice, VIEW_W / 2 + 160, SETUP.titleY - 4, 24, PENCIL, "left");
     } else if (room.call) {
       title(ctx, "THIS CALL", VIEW_W / 2, SETUP.titleY, 52);
@@ -684,8 +700,14 @@ export class OnlineScreen implements Screen {
     const fighters = room.members.length + bots.length;
     const friends = bots.some((b) => b.level === 0);
     const kb2 = bots.some((b) => b.level === 0 && b.device === "kb2");
+    // with a friend on keyboard 2, both players' keys under START: who uses which side
+    if (kb2 && this.alone()) {
+      label(ctx, keysOf("kb1"), VIEW_W / 2, VIEW_H - 40, 20, "rgba(41,39,34,0.8)");
+      label(ctx, keysOf("kb2"), VIEW_W / 2, VIEW_H - 14, 20, "rgba(41,39,34,0.8)");
+      return;
+    }
     hint(ctx, friends && !this.alone() ? "friends on this computer can only play local games for now: remove them to play online"
-      : kb2 ? p2Keys()
+      : kb2 ? keysOf("kb2")
       : room.teams && fighters >= 2 && this.oneTeam() ? "everyone's on one team: click a team to switch sides"
       : isHost && !canStart ? (fighters < 2 ? "add a bot, or a friend: press . (keyboard 2) or A on another controller" : "START unlocks when everyone is ready")
       : isHost && room.members.length + bots.length < SLOTS ? "a friend here can join: press . (keyboard 2) or A on another controller" : "click a character, or left/right, to pick");
@@ -759,10 +781,11 @@ export class OnlineScreen implements Screen {
   }
 }
 
-/** Keyboard 2's keys as bound now (they can change them in SETTINGS > CONTROLS). */
-function p2Keys(): string {
-  const b = bindingsOf("kb2");
+/** A keyboard player's keys as bound now (they can change them in SETTINGS > CONTROLS). */
+function keysOf(kb: Keyboard): string {
+  const b = bindingsOf(kb);
   const k = (keys: string[]) => keys.map(keyName).join("/") || "—";
-  const arrowKeys = b.up.join() === "ArrowUp" && b.left.join() === "ArrowLeft" && b.down.join() === "ArrowDown" && b.right.join() === "ArrowRight";
-  return `keyboard 2: ${arrowKeys ? "arrows" : `${k(b.up)} ${k(b.left)} ${k(b.down)} ${k(b.right)}`} move · ${k(b.jump)} jump · ${k(b.attack)} attack · ${k(b.special)} special · ${k(b.shield)} shield`;
+  const move = [b.up, b.left, b.down, b.right].map((keys) => keys.join()).join();
+  const moveKeys = move === "ArrowUp,ArrowLeft,ArrowDown,ArrowRight" ? "arrows" : move === "KeyW,KeyA,KeyS,KeyD" ? "WASD" : `${k(b.up)} ${k(b.left)} ${k(b.down)} ${k(b.right)}`;
+  return `keyboard ${kb === "kb1" ? 1 : 2}: ${moveKeys} move · ${k(b.jump)} jump · ${k(b.attack)} attack · ${k(b.special)} special · ${k(b.shield)} shield`;
 }

@@ -4,7 +4,7 @@ import { sfx } from "../../audio/audio";
 import { bg, card, hint, label, title, hover, clicked, backButton, goTo, type Screen, INK } from "../ui";
 import { activity } from "../../activity";
 
-export type BattleEntry = "call" | "quick" | "create" | "join" | "bots";
+export type BattleEntry = "call" | "quick" | "create" | "join" | "bots" | "local";
 
 const CALL = { id: "call" as const, name: "THIS CALL", desc: "Everyone in the voice channel who opened the game" };
 const ONLINE: { id: BattleEntry; name: string; desc: string }[] = [
@@ -13,15 +13,16 @@ const ONLINE: { id: BattleEntry; name: string; desc: string }[] = [
   { id: "join", name: "JOIN ROOM", desc: "Pick a public lobby, or enter a room code" },
   { id: "bots", name: "VS BOTS", desc: "Play against bots" },
 ];
+const LOCAL = { id: "local" as const, name: "SAME KEYBOARD", desc: "Fight a friend on this computer: one of you on each side of the keyboard" };
 
-const X = VIEW_W / 2 - 360, W = 720, H = 130, Y0 = 220, STEP = 170, CALL_STEP = 150;
+const X = VIEW_W / 2 - 360, W = 720, H = 130, Y0 = 220, STEP = 150;
 
 /** BATTLE: how you want to fight. Your fighter is picked on the next screen. */
 export class BattleMenuScreen implements Screen {
   t = 0;
   sel = 0;
-  private items = activity ? [CALL, ...ONLINE] : ONLINE;
-  private step = activity ? CALL_STEP : STEP;
+  /** Inside Discord the call's room comes first; outside it, a friend on the same keyboard comes last. */
+  private items = activity ? [CALL, ...ONLINE] : [...ONLINE, LOCAL];
 
   constructor(private onPick: (entry: BattleEntry) => Screen, private onBack: () => Screen) {}
 
@@ -39,7 +40,7 @@ export class BattleMenuScreen implements Screen {
     bg(ctx, this.t);
     title(ctx, "BATTLE", VIEW_W / 2, 110, 72);
     this.items.forEach((it, i) => {
-      const y = Y0 + i * this.step;
+      const y = Y0 + i * STEP;
       if (hover(X, y, W, H)) { this.sel = i; document.body.style.cursor = "pointer"; }
       if (clicked(X, y, W, H)) { sfx.menuConfirm(); goTo(this.onPick(it.id)); }
       const selected = i === this.sel;
