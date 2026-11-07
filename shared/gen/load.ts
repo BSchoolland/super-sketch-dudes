@@ -153,6 +153,7 @@ function checkMoves(moves: Record<string, Move>, def: FighterDef, cells: Set<str
       if (!Number.isInteger(from) || from < 0) p.push(`${at}${id}.cells has a bad frame ${from}`);
       if (!cells.has(c)) p.push(`${at}${id}.cells names cell "${c}" which the sheet doesn't have`);
     }
+    if (mv.draw !== undefined && typeof def.draws?.[mv.draw] !== "function") p.push(`${at}${id} names draw "${mv.draw}" which isn't a function in draws`);
     if (mv.hook && typeof def.hooks?.[mv.hook] !== "function") p.push(`${at}${id} names hook "${mv.hook}" which isn't a function`);
     if (mv.next && !def.moves[mv.next]) p.push(`${at}${id}.next names unknown move ${mv.next}`);
     if (mv.counter && !def.moves[mv.counter.move]) p.push(`${at}${id}.counter.move names unknown move ${mv.counter.move}`);
@@ -205,6 +206,10 @@ export function validateGenerated(def: FighterDef, { strict = false } = {}): str
     try { sp = def.special(); } catch (e) { p.push(`special() threw: ${e instanceof Error ? e.message : e}`); }
     if (sp && typeof sp === "object") { for (const [k, v] of Object.entries(sp)) if (typeof v !== "number") p.push(`special().${k} must be a number`); }
     else if (sp !== undefined) p.push("special() must return an object");
+  }
+  if (def.draws !== undefined) {
+    if (!def.draws || typeof def.draws !== "object") p.push("draws must be an object of functions");
+    else for (const [k, v] of Object.entries(def.draws)) if (typeof v !== "function") p.push(`draws.${k} is not a function`);
   }
   if (!def.hooks || typeof def.hooks !== "object") p.push("hooks must be an object (may be empty)");
   else for (const [k, v] of Object.entries(def.hooks)) if (typeof v !== "function") p.push(`hooks.${k} is not a function`);

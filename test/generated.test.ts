@@ -71,7 +71,7 @@ describe("generated fighters", () => {
 
   it("validates looks and the hitbox fx that name them", async () => {
     const def = await buildGenerated({ id: "gen-look", source, sprite, player: "test", description: "" });
-    expect(def.looks?.blade.crop).toEqual([298, 290, 132, 50]);
+    expect(def.looks?.blade.color).toBe("#3f6fb5");
     const bad = { ...def, looks: { ...def.looks, weird: { cell: "nope", crop: [0, 0, 600, 10], shape: "cube", texture: "fur", trail: "rainbow", size: 2 } } } as unknown as typeof def;
     const problems = validateGenerated(bad, { strict: true });
     expect(problems).toEqual(expect.arrayContaining([
@@ -82,6 +82,16 @@ describe("generated fighters", () => {
     expect(validateGenerated(orphan, { strict: true }).some((m) => m.includes('jab1.hitboxes[0].fx "missing"'))).toBe(true);
     expect(validateGenerated(orphan)).toEqual([]);
     expect(validateGenerated(def, { strict: true })).toEqual([]);
+  });
+
+  it("validates draws and the moves that name them", async () => {
+    const def = await buildGenerated({ id: "gen-draw", source, sprite, player: "test", description: "" });
+    expect(def.moves.fsmash.draw).toBe("fsmash");
+    expect(typeof def.draws?.blade).toBe("function");
+    const unnamed = { ...def, moves: { ...def.moves, jab1: { ...def.moves.jab1, draw: "missing" } } };
+    expect(validateGenerated(unnamed)).toEqual(['jab1 names draw "missing" which isn\'t a function in draws']);
+    const notFn = { ...def, draws: { ...def.draws, blade: 3 } } as unknown as typeof def;
+    expect(validateGenerated(notFn)).toEqual(["draws.blade is not a function"]);
   });
 
   it("loads fighters that animate a state since retired, and the forge still rejects new ones", async () => {

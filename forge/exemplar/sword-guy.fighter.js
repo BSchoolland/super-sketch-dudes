@@ -8,9 +8,10 @@
 //   The drawing's part does the work. The sword is long, so his reach is long and his tip matters: the
 //   point is a sweet spot on the moves where a real sword would have one (fsmash, usmash, fair, bair,
 //   dash attack) and the shaft is sour. A short part gets short moves; a heavy part gets slow ones.
-//   Every strike has a look. Tilts are a thin steel crescent (cut), stabs are a glowing line along the
-//   blade (skewer), smashes are heavier hatched steel (chop, sweep), the fire special is a bolt that is
-//   nothing like the sword. A player should be able to tell the moves apart from the shape alone.
+//   Every strike is drawn (see `draws` at the bottom). Cuts are a steel crescent swept through the hitbox,
+//   arriving as it comes out and thinning away after; level swings are an oval round him; stabs shoot out
+//   along the blade; smashes are heavier hatched steel; the drive is fire pouring off the blade, nothing like
+//   the sword. A player should be able to tell the moves apart from the shape alone.
 //   Poses sell it. Each move has its own keys (wind-up, snap into the hit, settle), and the smashes
 //   and specials switch cells mid-move (`cells`) so a chop winds up overhead and comes down forward.
 //
@@ -42,7 +43,7 @@
 //   `fx(state, f, kind, x, y, n, color)` bursts particles (sparks, smoke, ring). The DRIVE charge
 //   below is built from both.
 export default function make(api) {
-  const { hb, cap, key, mv, throwMove, spawnProjectile, spriteAnims, spriteLoops, clamp, sign, fx, B } = api;
+  const { hb, cap, key, mv, throwMove, spawnProjectile, spriteAnims, spriteLoops, clamp, sign, fx, B, sinDeg, cosDeg, atan2Deg } = api;
 
   const stats = {
     weight: 92, walk: 3.4, run: 6.2, dashInit: 7, airSpeed: 4.4, airAccel: 0.22,
@@ -57,22 +58,11 @@ export default function make(api) {
     key(Math.min(total - 1, hit + 6), { rot: lean * 0.7, sx: 1.04, sy: 0.98, ...extra }),
     key(total, rest),
   ];
+  // draws (at the bottom) draw every move; a look only names a hitbox's `fx` and colours its hit sparks
   const looks = {
-    // the sword itself, cut out of the lunge drawing, spinning end over end
-    blade: { cell: "atk-fwd", crop: [298, 290, 132, 50], size: 100, spin: -26, trail: "ghost" },
-    // every tilt and aerial: a thin crescent of steel with a blue edge
-    cut: { shape: "slash", color: "#dce6f2", ink: "#3f6fb5", texture: "solid" },
-    // the point: full blue, for the sweet spots
-    point: { shape: "slash", color: "#3f6fb5", ink: "#24221e", texture: "solid" },
-    // smashes: heavy hatched steel, twice the size of a tilt's cut; skewer is also the line of every straight stab
-    chop: { shape: "slash", color: "#7fa3d9", ink: "#24221e", texture: "hatch", size: 190 },
-    skewer: { shape: "bolt", color: "#3f6fb5", ink: "#24221e", texture: "glow", size: 34 },
-    sweep: { shape: "slash", color: "#7fa3d9", ink: "#24221e", texture: "hatch", size: 150 },
-    // the DRIVE: a bolt of fire, nothing like the sword
-    drive: { shape: "bolt", color: "#ff8a2a", ink: "#c93a1c", texture: "flame", size: 90 },
-    // the TORNADO: a scribbled whirl around him, spinning
-    tornado: { shape: "cloud", color: "#e8eef8", ink: "#3f6fb5", texture: "scribble", size: 190, spin: 32, aim: false },
-    tornadoBurst: { shape: "star", color: "#bcd0ee", ink: "#3f6fb5", texture: "glow", size: 220, spin: 12, aim: false },
+    blade: { color: "#3f6fb5" },
+    cut: { color: "#dce6f2" }, point: { color: "#3f6fb5" }, chop: { color: "#7fa3d9" }, skewer: { color: "#3f6fb5" },
+    sweep: { color: "#7fa3d9" }, drive: { color: "#ff8a2a" }, tornado: { color: "#e8eef8" }, tornadoBurst: { color: "#bcd0ee" },
   };
 
   const GRAB = { total: 36, hit: 7, damage: 9 };
@@ -186,6 +176,201 @@ export default function make(api) {
 
   const BLADE_OUT = 16, BLADE_BACK = 0.6;
   const DRIVE_CHARGE_MAX = 45, DRIVE_FRAMES = 18;
+
+  // HOW HIS MOVES ARE DRAWN. Each draw runs every frame of the move named the same, with g (see DrawKit):
+  // the move's hitboxes in world space, pose() for a pixel of the cell on screen, and a pencil-and-marker brush.
+  // The sword's arcs are swept through the hitbox they cut with, so what you see is what hits.
+  const STEEL = "#dce6f2", BLUE = "#3f6fb5", INKC = "#24221e", FIRE = "#ff8a2a", EMBER = "#c93a1c", CORE = "#fff2a8";
+  const ease = (t) => 1 - (1 - t) * (1 - t);
+  const angTo = (g, p, q) => atan2Deg(-(q[1] - p[1]), (q[0] - p[0]) * g.facing);
+  const dist = (p, q) => Math.sqrt((q[0] - p[0]) * (q[0] - p[0]) + (q[1] - p[1]) * (q[1] - p[1]));
+  const bump = (t) => sinDeg(180 * clamp(t, 0, 1));
+  const far = (h) => [h.x2, h.y2];
+  // a blade swept along a path from angle a to b: the head sweeps in over the frames before s and reaches b as the
+  // hitbox goes live; the cut hangs there while it's live, then thins and fades as the tail draws in.
+  // `path(deg, off)` is a point on the path, `off` units outward from it.
+  const sweep = (g, path, a, b, s, e, o = {}) => {
+    const w = o.width ?? 26, lag = o.lag ?? 8, lead = o.lead ?? 4;
+    const head = ease(g.span(s - lead, s)), fade = g.span(e, e + lag);
+    if (head <= 0 || fade >= 1) return;
+    const tail = Math.max(head - (o.len ?? 1), fade * 0.6);
+    const ha = a + (b - a) * head, ta = a + (b - a) * tail;
+    const along = (from, to, off, n) => { const pts = []; for (let k = 0; k <= n; k++) pts.push(path(from + (to - from) * k / n, off)); return pts; };
+    const thin = (1 - fade) * (1 - fade);
+    g.ribbon(along(ta, ha, -w * 0.35, 30), { width: (t) => w * thin * bump(t * Math.sqrt(t)), color: o.color ?? STEEL, ink: o.ink ?? BLUE, hatch: o.hatch, core: o.core ?? "#ffffff", alpha: 1 - fade });
+    const span = ha - ta;
+    for (const k of [-1, 1]) g.line(along(ta + span * 0.3, ha - span * 0.1, -w * 0.35 + k * w * 0.8, 18), { color: o.ink ?? BLUE, width: 1.6, alpha: 0.8 * thin });
+  };
+  const swing = (g, pivot, r, a, b, s, e, o) => sweep(g, (deg, off) => g.toward(pivot, deg, r + off), a, b, s, e, o);
+  // a level swing seen from the side: an oval round (cx, cy) in fighter space, behind him to in front
+  const level = (g, cx, cy, rx, ry, a, b, s, e, o) => sweep(g, (deg, off) => g.at(cx + cosDeg(deg) * (rx + off), cy - sinDeg(deg) * (ry + off * ry / rx)), a, b, s, e, o);
+  // a straight thrust along hitbox i: shoots out from its near end, then pulls in from behind
+  const thrust = (g, i, o = {}) => {
+    const h = g.hit(i), [s, e] = h.frames, lag = o.lag ?? 6;
+    if (g.frame < s - 2) return;
+    const fade = g.span(e, e + lag);
+    if (fade >= 1) return;
+    const a = [h.x1, h.y1], b = [h.x2, h.y2], len = dist(a, b) || 1;
+    const d = [(b[0] - a[0]) / len, (b[1] - a[1]) / len], n = [-d[1], d[0]];
+    const tip = [b[0] + d[0] * h.r * 0.9, b[1] + d[1] * h.r * 0.9];
+    const head = g.lerp(a, tip, ease(g.span(s - 2, s))), base = g.lerp(a, head, fade);
+    const pts = []; for (let k = 0; k <= 8; k++) pts.push(g.lerp(base, head, k / 8));
+    const w = o.width ?? h.r * 1.1;
+    g.ribbon(pts, { width: (t) => w * (1 - fade * 0.6) * (t < 0.8 ? 0.35 + t * 0.8 : (1 - t) * 5), color: o.color ?? STEEL, ink: o.ink ?? BLUE, core: o.core ?? "#ffffff", hatch: o.hatch });
+    for (let k = -2; k <= 2; k++) {
+      if (!k) continue;
+      const off = k * w * 0.42, back = len * (0.25 + g.noise(k * 7 + s) * 0.35);
+      const p0 = [base[0] + n[0] * off - d[0] * back, base[1] + n[1] * off - d[1] * back];
+      const p1 = g.lerp(p0, [head[0] + n[0] * off * 0.6, head[1] + n[1] * off * 0.6], 0.55);
+      g.line([p0, p1], { color: o.ink ?? BLUE, width: 1.5, alpha: 0.75 * (1 - fade) });
+    }
+  };
+  // the point landing: a pop of ink dashes where hitbox i's far end is
+  const pop = (g, i, o = {}) => {
+    const h = g.hit(i), s = h.frames[0];
+    g.flecks(far(h), { t: g.span(s, s + (o.frames ?? 10)), n: o.n ?? 9, dist: o.dist ?? 46, len: o.len ?? 16, color: o.color ?? BLUE, width: 2.4, seed: s * 13 });
+    if (g.frame >= s && g.frame <= s + 2) g.blob(far(h), h.r * (0.6 + 0.25 * (g.frame - s)), { color: o.flash ?? "#ffffff", ink: o.color ?? BLUE, alpha: 0.9 });
+  };
+  // a cut swept round pivot through hitbox i's far end, `sweep` degrees long (sign = direction)
+  const cutThrough = (g, i, pivot, sweep, o = {}) => {
+    const h = g.hit(i), end = angTo(g, pivot, far(h)), r = dist(pivot, far(h)) + h.r * 0.6;
+    swing(g, pivot, r, end + sweep, end - (o.over ?? 12) * Math.sign(sweep), h.frames[0], h.frames[1], { width: h.r * 1.5, ...o });
+  };
+  // ground dust: pale puffs that swell and fade along the floor
+  const dust = (g, x0, x1, s, n = 4) => {
+    const t = g.span(s, s + 16);
+    if (t <= 0 || t >= 1) return;
+    for (let k = 0; k < n; k++) g.blob(g.at(x0 + (x1 - x0) * k / (n - 1), -6 - t * 8), 5 + t * 9 + g.noise(k * 5) * 4, { color: "#efe9dc", ink: "#b3ab9a", alpha: 0.6 * (1 - t), seed: k * 31 + s });
+  };
+  // a whirl of rings round c, spinning: the far half of each ring passes behind him, the near half in front
+  const whirl = (g, c, rx, height, alpha, o = {}) => {
+    const rings = o.rings ?? 4;
+    for (let k = 0; k < rings; k++) {
+      const y = c[1] - height / 2 + height * k / (rings - 1), r = rx * (0.75 + 0.35 * k / rings);
+      const a0 = g.frame * (o.spin ?? 38) + k * 83;
+      const at = (a) => [c[0] + cosDeg(a) * r, y + sinDeg(a) * r * 0.28];
+      // split the 220-degree stroke where it crosses from the far side (sin < 0) to the near side
+      let run = [], far = sinDeg(a0) < 0;
+      const flush = (n) => {
+        if (run.length < 2) return;
+        const pts = run, mark = () => g.ribbon(pts, { width: (t) => (o.width ?? 12) * bump(t), color: o.color ?? "#eef3fa", ink: o.ink ?? BLUE, alpha: alpha * (far ? 0.7 : 1) });
+        far ? g.under(mark) : mark();
+      };
+      for (let j = 0; j <= 20; j++) {
+        const a = a0 + j * 11, side = sinDeg(a) < 0;
+        if (side !== far) { run.push(at(a)); flush(); run = [at(a)]; far = side; } else run.push(at(a));
+      }
+      flush();
+    }
+  };
+  // fire pouring back from `tip` to `tail`: tongues that lick and flicker, a hot core, each boiling on its own
+  const flame = (g, tail, tip, w, alpha, seed) => {
+    const len = dist(tail, tip) || 1, d = [(tip[0] - tail[0]) / len, (tip[1] - tail[1]) / len], n = [-d[1], d[0]];
+    const tongue = (k, scale, color, ink) => {
+      const pts = [], wob = w * 0.5 * scale, start = 0.12 * k;
+      for (let j = 0; j <= 12; j++) {
+        const t = start + (1 - start) * j / 12;
+        const side = (g.noise(seed + k * 71 + j * 13 + g.frame * 29) - 0.5) * wob * (1 - t) * 2 + (k - 1.5) * w * 0.18 * (1 - t);
+        const p = g.lerp(tail, tip, t);
+        pts.push([p[0] + n[0] * side, p[1] + n[1] * side]);
+      }
+      g.ribbon(pts, { width: (t) => w * scale * Math.sqrt(t) * (t > 0.85 ? (1 - t) / 0.15 : 1), color, ink, alpha });
+    };
+    for (let k = 0; k < 4; k++) tongue(k, 0.55 - k * 0.06, FIRE, EMBER);
+    tongue(1, 0.42, "#ffb43a", "#ff8a2a");
+    tongue(2, 0.26, CORE, "#ffb43a");
+  };
+
+  const draws = {
+    // the thrown sword (a projectile: frame is its age, at() measures from it): the blade cut out of the lunge
+    // cell, spinning end over end inside a whirl of its own swipes
+    blade: (g) => {
+      const c = g.at(0, 0), spin = -26 * g.frame;
+      for (let k = 1; k <= 2; k++) g.line(g.arc(c, 46 + k * 4, spin + 40 * k, spin + 40 * k + 120, 14), { color: BLUE, width: 2.2 - k * 0.6, alpha: 0.7 / k });
+      g.cell("atk-fwd", c, { crop: [298, 290, 132, 50], size: 100, deg: spin });
+    },
+    jab1: (g) => { thrust(g, 0, { width: 16 }); pop(g, 0, { n: 5, dist: 26 }); },
+    jab2: (g) => { const h = g.hit(0); level(g, 50, -60, 66, 34, 160, 330, h.frames[0], h.frames[1], { width: 24 }); },
+    ftilt: (g) => { if (g.hit(0).live) g.smear({ count: 2 }); const h = g.hit(0); level(g, 40, -58, 92, 30, 230, 345, h.frames[0], h.frames[1], { width: 30, lead: 5 }); },
+    dashAttack: (g) => { g.smear({ count: 4, alpha: 0.5 }); thrust(g, 1, { width: 22 }); pop(g, 0, { dist: 60 }); dust(g, -60, 0, 9, 3); },
+    utilt: (g) => {
+      // one arc over his head, front to back, cut through both hitboxes
+      const p = g.at(0, -70), a = g.hit(0), b = g.hit(1);
+      const r = dist(p, [b.x1, b.y1]) + 10;
+      swing(g, p, r, angTo(g, p, [a.x1, a.y1]) - 10, angTo(g, p, [b.x2, b.y2]) + 10, b.frames[0], b.frames[1], { width: 30, lead: b.frames[0] - a.frames[0] + 3 });
+    },
+    dtilt: (g) => { const h = g.hit(0); level(g, 56, -16, 66, 12, 215, 350, h.frames[0], h.frames[1], { width: 22 }); dust(g, 40, 120, 8); },
+    nair: (g) => {
+      // a full turn: the cut starts in front, comes over the top and finishes behind
+      const p = g.at(0, -62), a = g.hit(0), b = g.hit(1);
+      if (a.live || b.live) g.smear({ count: 3 });
+      swing(g, p, 108, -10, 190, b.frames[0], b.frames[1], { width: 28, len: 0.6, lead: b.frames[0] - a.frames[0] + 3 });
+    },
+    fair: (g) => {
+      const hand = g.frame >= 11 ? g.pose(312, 317) : g.at(10, -90);
+      cutThrough(g, 0, hand, 130, { width: 40, color: "#b9cdee", hatch: true, ink: INKC });
+      if (g.hit(0).live) g.smear({ count: 3 });
+      pop(g, 0, { color: INKC });
+    },
+    bair: (g) => { thrust(g, 1, { width: 22 }); pop(g, 0, { dist: 56, color: INKC }); },
+    uair: (g) => { thrust(g, 1, { width: 24 }); pop(g, 0, { dist: 56 }); },
+    dair: (g) => { for (let i = 0; i < 3; i++) thrust(g, i, { width: i === 2 ? 30 : 18, lag: 4, color: i === 2 ? "#b9cdee" : STEEL, ink: i === 2 ? INKC : BLUE }); pop(g, 2, { color: INKC, dist: 60 }); },
+    fsmash: (g) => {
+      // CHOP: overhead to forward through the tip; the pivot is the hand as drawn, so the arc rides his lunge
+      const hand = g.frame >= 18 ? g.pose(312, 317) : g.pose(317, 210);
+      if (g.frame >= 17 && g.frame <= 24) g.smear({ count: 4, alpha: 0.55 });
+      cutThrough(g, 0, hand, 150, { width: 52, color: "#b9cdee", hatch: true, ink: INKC, lag: 10 });
+      pop(g, 0, { n: 12, dist: 80, len: 22, color: INKC });
+      dust(g, 60, 160, 20, 3);
+    },
+    usmash: (g) => {
+      thrust(g, 1, { width: 36, color: "#b9cdee", ink: INKC, hatch: true, lag: 8 });
+      pop(g, 0, { n: 12, dist: 70, len: 20, color: INKC });
+      if (g.frame >= 15 && g.frame <= 20) g.smear({ count: 3 });
+      dust(g, -50, 50, 15, 3);
+    },
+    dsmash: (g) => {
+      // a low ring round his feet: the near side forward, then the far side back
+      const a = g.hit(0), b = g.hit(1), heavy = { width: 30, color: "#b9cdee", hatch: true, ink: INKC, lead: 5 };
+      level(g, 0, -18, 128, 20, 200, 355, a.frames[0], a.frames[1], heavy);
+      level(g, 0, -18, 128, 20, 20, 175, b.frames[0], b.frames[1], heavy);
+      dust(g, 30, 150, 16); dust(g, -30, -150, 24);
+    },
+    sspecial: (g) => {
+      const c = (g.bars.drive ?? 0) / DRIVE_CHARGE_MAX, tip = g.pose(420, 303), hilt = g.pose(312, 317);
+      if (g.frame <= 14) {
+        // charging: the blade catches, burning brighter the longer it's held
+        if (c > 0) flame(g, g.lerp(hilt, tip, 0.2), g.lerp(hilt, tip, 1.1), 10 + c * 16, 0.6 + c * 0.4, 3);
+        return;
+      }
+      const h = g.hit(0), fade = g.span(h.frames[1], h.frames[1] + 10);
+      if (fade >= 1) return;
+      g.smear({ count: 4, alpha: 0.5 });
+      // the blade is the flame's tip; it streams back past him, and he's drawn over it
+      g.under(() => flame(g, g.at(-110 - c * 60, -50), [h.x2 + h.r * 0.6 * g.facing, h.y2], h.r * 1.6 * (1 - fade * 0.8), 1 - fade, 11));
+      g.flecks(g.at(-20, -60), { t: (g.frame % 8) / 8, n: 5, dist: 70, deg: 170, spread: 60, len: 10, color: EMBER, seed: Math.floor(g.frame / 8) });
+    },
+    dspecial: (g) => {
+      const spin = g.hit(0), burst = g.hit(1), c = g.at(0, -66);
+      if (g.frame >= 5 && g.frame <= 36) whirl(g, c, spin.r * 1.05, 120, Math.min(1, g.span(5, 9)) * (1 - g.span(34, 37)), { spin: 34 });
+      if (g.frame >= 5 && g.frame <= 34) g.smear({ count: 2, alpha: 0.35 });
+      const t = g.span(burst.frames[0], burst.frames[0] + 14);
+      if (t > 0 && t < 1) {
+        g.ribbon(g.arc(c, burst.r * (0.6 + 0.5 * ease(t)), 0, 360, 36), { width: 18 * (1 - t), color: STEEL, ink: BLUE, alpha: 1 - t });
+        g.flecks(c, { t, n: 14, dist: burst.r * 1.4, len: 24, color: BLUE, seed: 5 });
+        dust(g, -110, 110, burst.frames[0], 5);
+      }
+    },
+    uspecial: (g) => {
+      const c = g.at(0, -66), spin = g.hit(0);
+      if (g.frame >= 5 && g.frame <= 23) { whirl(g, c, spin.r, 140, g.span(5, 8) * (1 - g.span(21, 24)), { spin: -40, rings: 3 }); g.smear({ count: 3, alpha: 0.35 }); }
+      thrust(g, 2, { width: 26 }); pop(g, 1, { dist: 60 });
+    },
+    ledgeAttack: (g) => { cutThrough(g, 0, g.at(0, -60), 80); },
+    getupAttack: (g) => { cutThrough(g, 0, g.at(0, -40), -50); cutThrough(g, 1, g.at(0, -40), 50); },
+  };
+  // a draw named after a move draws that move; the rest (blade) are projectile kinds
+  for (const id of Object.keys(draws)) if (moves[id]) moves[id].draw = id;
   return {
     id: "sword-guy",
     name: "SWORD GUY",
@@ -195,6 +380,7 @@ export default function make(api) {
     rig: { anims: spriteAnims(), loops: spriteLoops },
     palette: { colors: { marker: "#3f6fb5" }, outline: "#24221e" },
     looks,
+    draws,
     special: () => ({ drop: 0 }),
     bars: {
       sword: { label: "SWORD", color: "#3f6fb5", max: 1, start: 1 },
