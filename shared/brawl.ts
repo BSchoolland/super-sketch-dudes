@@ -10,7 +10,7 @@ export const SPAWN_EVERY = 20 * C.FPS;
 /** How soon to look again when nobody is ready to drop in, or there's no room. */
 const RETRY = C.FPS;
 const MAX_FIGHTERS = 6;
-/** Fighters who drop in as soon as they're ready, before the SPAWN_EVERY cadence takes over. */
+/** Fighters who stand on their spawns as soon as they're ready, before the SPAWN_EVERY cadence drops the rest in. */
 const OPENING = 2;
 const CPU_TIERS = [3, 4, 5];
 
@@ -19,7 +19,7 @@ export interface BrawlKo { victim: string; killer: string | null; survivedSec: n
 
 /**
  * The fight under the title screen, without the drawing: the stage is up from the first frame, the first
- * OPENING fighters drop in the moment each is `ready`, then a new one every SPAWN_EVERY frames into a fallen
+ * OPENING fighters appear standing on their spawns the moment each is `ready`, then a new one every SPAWN_EVERY frames into a fallen
  * fighter's slot or a free one, one stock each (the fallen stay fallen). A full arena waits for a KO; nobody
  * alive is pushed out. The title screen and scripts/brawl-bench.ts both run this.
  */
@@ -54,7 +54,7 @@ export class Brawl {
     const opening = st.fighters.length < OPENING;
     if (opening || --this.spawnT <= 0) {
       const id = this.full() ? null : this.pick();
-      if (id) { this.spawn(id); this.spawnT = this.spawnEvery(); }
+      if (id) { this.spawn(id, !opening); this.spawnT = this.spawnEvery(); }
       else this.spawnT = RETRY;
     }
     for (let i = 0; i < st.fighters.length; i++) this.inputs[i] = cpuInput(st, i, this.cpus[i]);
@@ -76,8 +76,8 @@ export class Brawl {
     return st.fighters.length >= MAX_FIGHTERS && st.fighters.every((f) => f.stocks > 0);
   }
 
-  /** Drops a fighter in from the top: a dead fighter's slot first, else a new slot. */
-  private spawn(id: string): void {
+  /** A fighter joins in a dead fighter's slot first, else a new slot: dropped in from the top, or standing on its slot's spawn. */
+  private spawn(id: string, drop: boolean): void {
     const st = this.state;
     const stage = stageOf(st);
     const cpu = CPU_TIERS[this.rand(CPU_TIERS.length)];
@@ -97,6 +97,15 @@ export class Brawl {
     }
     this.born[slot] = st.frame;
     const f = st.fighters[slot];
+    if (!drop) {
+      const i = stage.platforms.findIndex((p) => f.x >= p.x1 && f.x <= p.x2 && p.y === f.y);
+      if (i < 0) throw new Error(`brawl: spawn ${slot} of ${stage.id} is not on a platform`);
+      f.grounded = true; f.platform = i;
+      f.x += st.platOffsets[i].dx; f.y += st.platOffsets[i].dy;
+      setAction(f, "idle");
+      profileOf(defOf(f));
+      return;
+    }
     f.x = stage.respawn.x + (this.rand(600) - 300); f.y = stage.respawn.y;
     f.grounded = false; f.platform = -1; f.facing = f.x < 960 ? 1 : -1;
     f.invuln = C.RESPAWN_INVULN;
