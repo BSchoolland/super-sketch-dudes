@@ -1,4 +1,4 @@
-import { createFighter, createMatch, stageOf, step, type MatchConfig } from "./sim";
+import { createFighter, createMatch, stageOf, step } from "./sim";
 import { cpuInput } from "./cpu";
 import { profileOf } from "./cpu-profile";
 import { defOf, setAction } from "./fighter";
@@ -10,28 +10,30 @@ export const SPAWN_EVERY = 20 * C.FPS;
 /** How soon to look again when nobody is ready to drop in, or there's no room. */
 const RETRY = C.FPS;
 const MAX_FIGHTERS = 6;
+/** Fighters who drop in as soon as they're ready, before the SPAWN_EVERY cadence takes over. */
+const OPENING = 2;
 const CPU_TIERS = [3, 4, 5];
 
 /** A fighter's life ended: who fell, who gets the kill (null for a self-destruct), how long it lasted and what it dealt. */
 export interface BrawlKo { victim: string; killer: string | null; survivedSec: number; dealt: number }
 
 /**
- * The fight under the title screen, without the drawing: CPUs dropped in one at a time from whoever is
- * `ready`, one stock each (the fallen stay fallen), a new one every SPAWN_EVERY frames into a fallen
- * fighter's slot or a free one. A full arena waits for a KO; nobody alive is pushed out. The title screen
- * and scripts/brawl-bench.ts both run this.
+ * The fight under the title screen, without the drawing: the stage is up from the first frame, the first
+ * OPENING fighters drop in the moment each is `ready`, then a new one every SPAWN_EVERY frames into a fallen
+ * fighter's slot or a free one, one stock each (the fallen stay fallen). A full arena waits for a KO; nobody
+ * alive is pushed out. The title screen and scripts/brawl-bench.ts both run this.
  */
 export class Brawl {
-  state: State | null = null;
+  readonly state: State;
   private cpus: number[] = [];
   /** Sim frame each slot's fighter dropped in on. */
   private born: number[] = [];
   private inputs: InputFrame[] = [];
-  private spawnT: number;
+  private spawnT = 0;
 
   /** `ready` lists every fighter id that could drop in right now (registered in the roster); `spawnEvery` is in frames and may change. */
   constructor(private ready: () => string[], private rng: number, private spawnEvery: () => number = () => SPAWN_EVERY) {
-    this.spawnT = spawnEvery();
+    this.state = createMatch({ stage: "menu", players: [], rules: { stocks: 1, time: 0 }, seed: rng });
   }
 
   rand(n: number): number {
@@ -39,23 +41,18 @@ export class Brawl {
     return (this.rng >>> 8) % n;
   }
 
-  /** A ready fighter not already in the fight (nor in `but`), if any. */
-  private pick(but: string[] = []): string | null {
-    const fighting = new Set([...but, ...(this.state?.fighters.map((f) => f.id) ?? [])]);
+  /** A ready fighter not already in the fight, if any. */
+  private pick(): string | null {
+    const fighting = new Set(this.state.fighters.map((f) => f.id));
     const ready = this.ready().filter((id) => !fighting.has(id));
     return ready.length ? ready[this.rand(ready.length)] : null;
   }
 
-  /** One sim frame, starting the fight first if two fighters are ready. Returns the frame's events and the lives it ended. */
+  /** One sim frame. Returns the frame's events and the lives it ended. */
   step(): { events: GameEvent[]; kos: BrawlKo[] } {
-    if (!this.state) {
-      const a = this.pick();
-      const b = a ? this.pick([a]) : null;
-      if (a && b) this.begin(a, b);
-      return { events: [], kos: [] };
-    }
     const st = this.state;
-    if (--this.spawnT <= 0) {
+    const opening = st.fighters.length < OPENING;
+    if (opening || --this.spawnT <= 0) {
       const id = this.full() ? null : this.pick();
       if (id) { this.spawn(id); this.spawnT = this.spawnEvery(); }
       else this.spawnT = RETRY;
@@ -74,23 +71,14 @@ export class Brawl {
     return { events, kos };
   }
 
-  private begin(a: string, b: string): void {
-    const cfg: MatchConfig = { stage: "menu", players: [a, b].map((fighter) => ({ fighter, cpu: CPU_TIERS[this.rand(CPU_TIERS.length)] })), rules: { stocks: 1, time: 0 }, seed: this.rng };
-    this.state = createMatch(cfg);
-    this.cpus = this.state.fighters.map((f) => f.cpu);
-    this.born = this.state.fighters.map(() => 0);
-    this.inputs = this.state.fighters.map(() => cloneInput(EMPTY_INPUT));
-    for (const f of this.state.fighters) profileOf(defOf(f));
-  }
-
   private full(): boolean {
-    const st = this.state!;
+    const st = this.state;
     return st.fighters.length >= MAX_FIGHTERS && st.fighters.every((f) => f.stocks > 0);
   }
 
   /** Drops a fighter in from the top: a dead fighter's slot first, else a new slot. */
   private spawn(id: string): void {
-    const st = this.state!;
+    const st = this.state;
     const stage = stageOf(st);
     const cpu = CPU_TIERS[this.rand(CPU_TIERS.length)];
     let slot: number;

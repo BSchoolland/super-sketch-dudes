@@ -40,7 +40,7 @@ function run(ids: string[], seed: number): Totals {
   const seen = new Set<object>();
   for (let frame = 0; frame < MINUTES * 60 * C.FPS; frame++) {
     const { kos } = brawl.step();
-    for (const f of brawl.state?.fighters ?? []) if (!seen.has(f)) { seen.add(f); row(f.id).drops++; }
+    for (const f of brawl.state.fighters) if (!seen.has(f)) { seen.add(f); row(f.id).drops++; }
     for (const k of kos) {
       const v = row(k.victim);
       v.deaths++; v.survivedSec += k.survivedSec; v.dealt += k.dealt;

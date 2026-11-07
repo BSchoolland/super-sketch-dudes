@@ -24,7 +24,7 @@ const ASK_EVERY = 2, ASK_AGAIN = 10;
  */
 export class MenuBrawl {
   private brawl = new Brawl(() => this.ready(), (Math.random() * 0x7fffffff) | 0, () => MAYHEM[settings.mayhem].seconds * C.FPS);
-  private renderer: Renderer | null = null;
+  private renderer = new Renderer(this.brawl.state, []);
   private acc = 0;
   private askT = 0;
   private asking = false;
@@ -35,12 +35,17 @@ export class MenuBrawl {
   /** Players' public characters (not house fighters) by id, with their names: the ones a click can open. */
   private shared = new Map<string, string>();
 
+  constructor() {
+    this.renderer.chrome = false;
+    this.renderer.cam.fixed = true;
+  }
+
   private ready(): string[] {
     return [...this.loads.entries()].filter(([id, l]) => l.load.state === "ready" && roster[id]).map(([id]) => id);
   }
 
   private fighting(): Set<string> {
-    return new Set(this.brawl.state?.fighters.map((f) => f.id) ?? []);
+    return new Set(this.brawl.state.fighters.map((f) => f.id));
   }
 
   private async ask(): Promise<void> {
@@ -86,15 +91,8 @@ export class MenuBrawl {
     while (this.acc >= STEP && n < 4) {
       const { events, kos } = this.brawl.step();
       const st = this.brawl.state;
-      if (st) {
-        if (!this.renderer) {
-          this.renderer = new Renderer(st, []);
-          this.renderer.chrome = false;
-          this.renderer.cam.fixed = true;
-        }
-        this.renderer.snapshot(st);
-        this.renderer.fx.consume(st, events, this.renderer.cam);
-      }
+      this.renderer.snapshot(st);
+      this.renderer.fx.consume(st, events, this.renderer.cam);
       for (const k of kos) { tallyKo(k.victim, k.killer, k.survivedSec, k.dealt); this.fallen.add(k.victim); }
       this.acc -= STEP;
       n++;
@@ -104,16 +102,12 @@ export class MenuBrawl {
   }
 
   draw(ctx: CanvasRenderingContext2D, dt: number): void {
-    const st = this.brawl.state;
-    if (!st || !this.renderer) return;
-    this.renderer.draw(ctx, st, this.acc / STEP, dt);
+    this.renderer.draw(ctx, this.brawl.state, this.acc / STEP, dt);
   }
 
   /** The player-made fighter whose body is under a view point, with its box, or null. */
   at(x: number, y: number): { id: string; name: string; box: { x: number; y: number; w: number; h: number } } | null {
-    const st = this.brawl.state;
-    if (!st || !this.renderer) return null;
-    for (const f of st.fighters) {
+    for (const f of this.brawl.state.fighters) {
       const name = this.shared.get(f.id);
       const def = roster[f.id];
       if (name === undefined || !def) continue;
