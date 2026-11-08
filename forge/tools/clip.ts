@@ -3,7 +3,8 @@
 // the hitboxes drawn over it. Default also writes <out>: a video, as played on the left and with hitboxes on the
 // right, each move at full speed then at a third.
 // --fast: only the sheets, and only the strike (a few frames before the first hitbox to ten after the last).
-// Usage: npx tsx forge/tools/clip.ts <fighter.js> <cellsDir> [--out <file.mp4>] [--moves a,b,c] [--fast]
+// --bars gear=1: set those bars before every move, to film a form other than the first.
+// Usage: npx tsx forge/tools/clip.ts <fighter.js> <cellsDir> [--out <file.mp4>] [--moves a,b,c] [--fast] [--bars k=v,...]
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -20,6 +21,8 @@ if (!js || !cellsDir) { console.error("usage: npx tsx forge/tools/clip.ts <fight
 const out = path.resolve(opt("out") ?? path.join(path.dirname(path.resolve(cellsDir)), "moves.mp4"));
 const only = opt("moves")?.split(",").filter(Boolean) ?? null;
 const fast = args.includes("--fast");
+// --bars gear=1,ammo=3: set before every move, to film a form other than the first
+const bars = Object.fromEntries((opt("bars") ?? "").split(",").filter(Boolean).map((kv) => { const [k, v] = kv.split("="); return [k, Number(v)]; }));
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "clip-"));
 const sheets = out.replace(/\.mp4$/, "") + "-frames";
 fs.mkdirSync(sheets, { recursive: true });
@@ -72,12 +75,14 @@ async function openGame(): Promise<P> {
 
 /** Plays one move a frame at a time and writes its frames: a%03d.jpg as played, b%03d.jpg with hitboxes. */
 async function capture(page: P, id: string, info: MoveInfo, dir: string): Promise<{ n: number; from: number; count: number }> {
-  await page.evaluate(({ aerial }) => {
+  await page.evaluate(({ aerial, bars }) => {
     const p = (window as any).sketchbattle.preview, s = p.stage();
     p.pose(0, s.cx - 80, aerial ? s.floorY - 170 : s.floorY, 1, aerial);
     p.pose(1, s.cx + 90, s.floorY, -1, false);
+    p.bars(0, bars);
     p.step(1);
-  }, { aerial: info.aerial });
+    p.bars(0, bars);
+  }, { aerial: info.aerial, bars });
   // let the camera settle on the new spot before framing it
   await page.waitForTimeout(700);
   // fast: just the strike, as played; otherwise the whole move twice over (as played, with hitboxes)
@@ -108,8 +113,8 @@ async function capture(page: P, id: string, info: MoveInfo, dir: string): Promis
 }
 
 const first = await openGame();
-const moves = await first.evaluate(() => (window as any).sketchbattle.preview.moves(0) as Record<string, MoveInfo>);
-const ids = only ?? Object.keys(moves).filter((m) => moves[m].first !== null && !/grab|throw|pummel/i.test(m));
+const moves = await first.evaluate((bars) => { const p = (window as any).sketchbattle.preview; p.bars(0, bars); return p.moves(0) as Record<string, MoveInfo>; }, bars);
+const ids = only ?? Object.keys(moves).filter((m) => !/grab|throw|pummel/i.test(m));
 for (const id of ids) if (!moves[id]) throw new Error(`no move ${id}`);
 const pages = [first, ...await Promise.all(Array.from({ length: Math.min(PAGES, ids.length) - 1 }, openGame))];
 const segments = new Map<string, string[]>();
