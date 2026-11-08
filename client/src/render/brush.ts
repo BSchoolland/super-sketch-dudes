@@ -2,6 +2,7 @@ import type { Fighter, FighterDef, Move, Projectile } from "../../../shared/type
 import { hitboxWorld } from "../../../shared/hits";
 import { hatch, inkPath, INK, PAPER, noise } from "./paper";
 import { cellImages } from "./sprite";
+import { strokes, type Strokes } from "./strokes";
 
 export type Pt = [number, number];
 
@@ -25,7 +26,7 @@ interface FillOpts extends MarkOpts { ink?: string; hatch?: boolean }
  * units and world space; angles are degrees the way hitboxes take them (0 forward, 90 up), already
  * mirrored for facing. Marks boil (redraw their wobble) every few frames, like hand-drawn animation.
  */
-export interface DrawKit {
+export interface BrushKit {
   frame: number;
   total: number;
   facing: 1 | -1;
@@ -66,6 +67,9 @@ export interface DrawKit {
   /** Pencil echoes of the fighter's last few frames of this move, drawn behind it. */
   smear(o?: { count?: number; alpha?: number }): void;
 }
+
+/** Everything a draw gets: the brush and the ready-made strokes built on it (strokes.ts). */
+export type DrawKit = BrushKit & Strokes;
 
 /** What a draw is drawing: a move (frames of the move, its hitboxes) or a projectile (its age, its one hitbox). */
 export interface DrawSource {
@@ -145,7 +149,7 @@ export function runDraw(ctx: CanvasRenderingContext2D, def: FighterDef, name: st
     ctx.restore();
   };
 
-  const g: DrawKit = {
+  const g: BrushKit = {
     frame: src.frame,
     total: src.total,
     facing,
@@ -257,5 +261,5 @@ export function runDraw(ctx: CanvasRenderingContext2D, def: FighterDef, name: st
       });
     },
   };
-  draw(g);
+  draw(Object.assign(g, strokes(g)));
 }
