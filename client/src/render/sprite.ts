@@ -2,6 +2,7 @@ import type { FighterDef, Pose } from "../../../shared/types";
 import { PAPER, PENCIL } from "./paper";
 import { roster } from "../../../shared/fighters/index";
 import { drawHealth } from "./health";
+import { site } from "../base";
 
 /**
  * Drawn fighters: one image per sheet cell, tinted variants built once. Cells are square PNGs
@@ -71,7 +72,8 @@ export function cellImages(url: string): CellImages {
   const img = new Image();
   img.onload = () => { e!.bounds = inkBounds(img); e!.src = img; ensureSize(e!, Math.min(img.naturalWidth, 256)); };
   img.onerror = () => { e!.failed = true; drawHealth.failedCells.add(url); console.error(`sprite cell failed to load: ${url}`); };
-  img.src = url;
+  // house cells are paths relative to the site, wherever this page sits (the Discord Activity's is /)
+  img.src = new URL(url, new URL(site.base, location.href)).href;
   return e;
 }
 
