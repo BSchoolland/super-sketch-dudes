@@ -21,14 +21,15 @@ import { bindingsOf, keyName } from "../input/bindings";
 import { NetVersusScreen, startConfig } from "./netversus";
 import { MatchTelemetry } from "../telemetry/match";
 import { swap, type Handoff } from "../handoff";
-import { MESH_VERSION, PeerMesh } from "../net/mesh";
+import { MESH_VERSION, roomMesh, type PeerMesh } from "../net/mesh";
+import { activity } from "../activity";
 import { bg, card, hint, label, title, hover, clicked, button, backButton, goTo, arrows, settings, saveSettings, type Screen, INK } from "./ui";
 
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const LIST_Y = 170, ROW_H = 84, LIST_MAX = 5, CODE_Y = LIST_Y + LIST_MAX * ROW_H + 60;
 
-/** How BATTLE sent you here. VS BOTS ("bots") is a private room that never shows its code. */
-export type OnlineEntry = "quick" | "create" | "join" | "bots";
+/** How BATTLE sent you here. VS BOTS ("bots") is a private room that never shows its code; "call" is the Discord Activity's room. */
+export type OnlineEntry = "call" | "quick" | "create" | "join" | "bots";
 
 type RoomState = Extract<RelayMessage, { t: "room" }>;
 interface OnlineContext {
@@ -41,17 +42,12 @@ interface OnlineContext {
   hidden?: boolean;
 }
 
-function newMesh(context: OnlineContext): PeerMesh | null {
-  if (typeof RTCPeerConnection === "undefined") return null;
-  return new PeerMesh(context.transport, () => context.id);
-}
-
 /** The links a swap handed over, if this bundle speaks their version; else fresh ones (the old ones close). */
 function adoptMesh(h: Handoff, context: OnlineContext): PeerMesh | null {
   const handed = h.mesh;
   if (handed && handed.version === MESH_VERSION) { handed.adopt(); return handed; }
   handed?.close();
-  return newMesh(context);
+  return roomMesh(context.transport, () => context.id);
 }
 
 type Focus = "fighter" | "team" | "ready" | `botFighter:${number}` | `botTeam:${number}` | `botLevel:${number}` | "addBot" | "teams" | "start" | "leave";
@@ -69,6 +65,10 @@ export class OnlineScreen implements Screen {
   /** The stage screen after the host's START: theirs to edit, everyone else's to watch. */
   private picker: StagePicker | null = null;
   error = "";
+  /** What "waiting" is waiting on. */
+  private waitingFor = "CONNECTING…";
+  /** Why this VS BOTS room isn't the call's (it was full). */
+  private notice = "";
   /** Keyboard focus in the lobby: your fighter, team and READY, a bot's fighter, team or level, + ADD BOT, TEAMS and START (host), LEAVE. */
   focus: Focus = "ready";
   nextScreen: Screen | null = null;
@@ -131,10 +131,14 @@ export class OnlineScreen implements Screen {
     if (context) this.context = context;
     else {
       this.context = { transport: new WebSocketTransport(), mesh: null, id: 0, room: null };
-      this.context.mesh = newMesh(this.context);
+      this.context.mesh = roomMesh(this.context.transport, () => this.context.id);
     }
     if (this.context.room) this.phase = "lobby";
-    else if (entry === "quick") { this.context.transport.sendLobby({ t: "quick" }); this.phase = "waiting"; }
+    else if (entry === "call") {
+      if (!activity) throw new Error("the call's room outside the Discord Activity");
+      this.context.transport.sendLobby({ t: "call", key: activity.key });
+      this.phase = "waiting";
+    } else if (entry === "quick") { this.context.transport.sendLobby({ t: "quick" }); this.phase = "waiting"; }
     else if (entry === "create") this.phase = "create";
     else if (entry === "bots") { this.context.hidden = true; this.context.transport.sendLobby({ t: "create", public: false }); this.phase = "waiting"; }
     else if (entry === "join") { consumeTypedChars(); this.phase = "join"; }
@@ -529,6 +533,13 @@ export class OnlineScreen implements Screen {
       this.bringFighter();
     }
     if (message.t === "rooms") this.rooms = message.rooms;
+    if (message.t === "waiting") this.waitingFor = "MATCH IN PROGRESS";
+    // more people opened the game than a room holds: this one plays bots on their own
+    if (message.t === "full") {
+      this.context.hidden = true;
+      this.notice = "the call's room is full";
+      this.context.transport.sendLobby({ t: "create", public: false });
+    }
     if (message.t === "error") {
       this.error = message.error.toUpperCase();
       this.phase = "error";
@@ -610,8 +621,9 @@ export class OnlineScreen implements Screen {
   }
 
   private drawWaiting(ctx: CanvasRenderingContext2D): void {
-    title(ctx, "CONNECTING…", VIEW_W / 2, VIEW_H / 2, 70, INK);
-    if (button(ctx, VIEW_W / 2 - 120, VIEW_H / 2 + 80, 240, 70, "CANCEL", { key: "Esc", size: 26 })) goTo(this.exit());
+    title(ctx, this.waitingFor, VIEW_W / 2, VIEW_H / 2, 70, INK);
+    if (this.waitingFor !== "CONNECTING…") label(ctx, "you're in when it ends", VIEW_W / 2, VIEW_H / 2 + 50, 28, PENCIL);
+    if (button(ctx, VIEW_W / 2 - 120, VIEW_H / 2 + 100, 240, 70, "CANCEL", { key: "Esc", size: 26 })) goTo(this.exit());
   }
 
   private drawLobby(ctx: CanvasRenderingContext2D): void {
@@ -622,8 +634,13 @@ export class OnlineScreen implements Screen {
       this.onPicker(this.picker.draw(ctx, this.t, `${host?.name ?? "the host"} is picking the stage`));
       return;
     }
-    if (this.context.hidden) title(ctx, "VS BOTS", VIEW_W / 2, SETUP.titleY, 52);
-    else {
+    if (this.context.hidden) {
+      title(ctx, "VS BOTS", VIEW_W / 2, SETUP.titleY, 52);
+      if (this.notice) label(ctx, this.notice, VIEW_W / 2 + 160, SETUP.titleY - 4, 24, PENCIL, "left");
+    } else if (room.call) {
+      title(ctx, "THIS CALL", VIEW_W / 2, SETUP.titleY, 52);
+      label(ctx, `room ${room.code}`, VIEW_W / 2 + 200, SETUP.titleY - 4, 24, PENCIL, "left");
+    } else {
       title(ctx, `ROOM ${room.code}`, VIEW_W / 2, SETUP.titleY, 52);
       label(ctx, room.public ? "public" : "private", VIEW_W / 2 + 190, SETUP.titleY - 4, 24, PENCIL, "left");
     }
@@ -663,7 +680,7 @@ export class OnlineScreen implements Screen {
       if (button(ctx, VIEW_W / 2 - 170, by, 340, 84, "START", { key: "Enter", size: 36, focused: this.focus === "start", disabled: !canStart })) this.openStagePick();
       if (button(ctx, VIEW_W / 2 + 200, by + 10, 260, 64, room.teams ? "TEAMS: ON" : "TEAMS: OFF", { size: 26, focused: this.focus === "teams" })) { this.focus = "teams"; this.toggleTeams(); }
     } else label(ctx, canStart ? "waiting for the host to press START" : "everyone readies up, then the host starts", VIEW_W / 2, by + 52, 24, INK);
-    if (button(ctx, 40, VIEW_H - 100, 200, 64, this.context.hidden ? "BACK" : "LEAVE", { key: "Esc", size: 26, focused: this.focus === "leave" })) this.leave();
+    if (button(ctx, 40, VIEW_H - 100, 200, 64, this.context.hidden ? "BACK" : room.call ? "MENU" : "LEAVE", { key: "Esc", size: 26, focused: this.focus === "leave" })) this.leave();
     const fighters = room.members.length + bots.length;
     const friends = bots.some((b) => b.level === 0);
     const kb2 = bots.some((b) => b.level === 0 && b.device === "kb2");

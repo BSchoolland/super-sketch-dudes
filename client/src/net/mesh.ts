@@ -1,5 +1,6 @@
 import { encodePing, KIND_PING, KIND_PONG, packetKind, pingTime } from "./wire";
 import type { Unsubscribe } from "./transport";
+import { activity } from "../activity";
 
 /**
  * Peer-to-peer links between the members of a room: one RTCPeerConnection per pair with one unordered,
@@ -70,6 +71,15 @@ const BACKED_UP_BYTES = 16_384;
 /** A mesh handed to a bundle that never adopts it (one from before the mesh) closes itself after this long. */
 const ORPHAN_MS = 30_000;
 const ICE_REFRESH_MS = 6 * 3600_000;
+
+/**
+ * The room's links, or none: without WebRTC in the browser, or inside the Discord Activity, whose proxy carries no
+ * WebRTC (nothing is tried there, not even the ICE servers: every input goes by the relay).
+ */
+export function roomMesh(relay: RelaySignal, selfId: () => number): PeerMesh | null {
+  if (typeof RTCPeerConnection === "undefined" || activity) return null;
+  return new PeerMesh(relay, selfId);
+}
 
 export class PeerMesh {
   readonly version = MESH_VERSION;

@@ -229,6 +229,30 @@ protocol changes in a way the next process can't take; a file from another versi
 `test/handoff.test.ts`, `scripts/handoffcheck.mjs` (VS BOTS and a lobby in real pages), `netlab/run.mjs --at
 "40:restart"`.
 
+## Discord Activity
+
+The same page runs inside Discord as an Activity (`client/src/activity.ts`), in Discord's iframe on
+`<app id>.discordsays.com`, where every request goes through Discord's proxy. It switches on only when the page has
+Discord's launch parameters (`frame_id`, `instance_id`, `platform`) on that domain; the Embedded App SDK is loaded
+then and never on the website. Sign-in has no screen: on every launch the SDK's `authorize` (scope `identify`) gives a
+one-time code and `POST /api/auth/discord/activity` trades it with the app's client secret (`DISCORD_CLIENT_SECRET`;
+no `redirect_uri`, as the authorize had none) for the same Discord player the website's sign-in makes. Everyone who
+opens the game in one launch lands in its room ("call" in lobby.ts), keyed by a digest of the SDK's `instanceId`
+(the id itself names the server and channel, so it never leaves the page): the first one hosts, a mid-match arrival
+waits and joins when the room reopens, past six people (waiting counts) the rest get VS BOTS of their own. The rest
+of the game is reached through MENU. Discord's proxy carries no WebRTC, so no peer link is tried: every input goes
+by the relay. The session's `source` ref is `discord-activity`, and `activity` holds the launch digest and platform.
+
+URL mappings (Developer Portal, Activities > URL Mappings), in this order:
+
+```
+/sketch-battle  ->  bschoolland.dev/sketch-battle          the API, the relay, fighters, assets (the build's /sketch-battle/ base)
+/               ->  bschoolland.dev/sketch-battle/discord   the page Discord loads (the server sends index.html for /discord)
+```
+
+`node scripts/activitycheck.mjs` plays it end to end with Discord stubbed: `?activity=stub&instance=<launch>&as=<name>`
+on a dev build, against a DEV_LOGIN server whose `DISCORD_API` is `scripts/fake-discord.mjs`.
+
 ## Wide events
 
 `shared/wide.ts` is the model: one record per unit of work with typed tiers (`client`: session,

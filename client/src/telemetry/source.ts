@@ -3,7 +3,8 @@ import { arrivalProblem, PARAM_MAX, visitProblem, type Arrival, type VisitSource
 const VISIT_KEY = "sketchbattle.visit";
 const FIRST_KEY = "sketchbattle.firstVisit";
 
-export interface Page { referrer: string; url: string }
+/** `launch`: what opened the page when its URL can't say (the Discord Activity), counted as the `ref`. */
+export interface Page { referrer: string; url: string; launch?: string }
 
 /**
  * This tab's arrival and this browser's first one. Each is captured once and read back after, so a
@@ -15,7 +16,7 @@ export function visitSource(page: Page, tab: Storage, browser: Storage, session:
   const param = (key: string): string | null => url.searchParams.get(key)?.slice(0, PARAM_MAX) || null;
   const arrival: Arrival = {
     referrer: page.referrer ? new URL(page.referrer).host || null : null,
-    ref: param("ref"),
+    ref: page.launch ?? param("ref"),
     utm: { source: param("utm_source"), medium: param("utm_medium"), campaign: param("utm_campaign") },
     landing: url.pathname.slice(0, 200),
     at: now,

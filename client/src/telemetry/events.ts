@@ -121,6 +121,8 @@ export interface TelemetryStart {
   bundle: string;
   /** The session trace of the bundle that handed over to this one. */
   continues?: string;
+  /** See Page.launch. */
+  launch?: string;
 }
 
 /** Starts the page session's event and the page hooks; the returned stop ends it (the bundle is being swapped out). */
@@ -133,7 +135,7 @@ export function startTelemetry(opts: TelemetryStart): () => void {
   const s = session;
   const nav = navigator as Navigator & { deviceMemory?: number };
   s.set("device", { platform: nav.platform, lang: nav.language, cores: nav.hardwareConcurrency, memory: nav.deviceMemory ?? null, touch: nav.maxTouchPoints, pads: navigator.getGamepads?.().filter(Boolean).length ?? 0 });
-  s.set("source", visitSource({ referrer: document.referrer, url: location.href }, sessionStorage, localStorage, trace, Date.now(), (key, problem) => s.issue("warn", "source", `${key} in storage was ${problem}; this page's arrival replaced it`)));
+  s.set("source", visitSource({ referrer: document.referrer, url: location.href, launch: opts.launch }, sessionStorage, localStorage, trace, Date.now(), (key, problem) => s.issue("warn", "source", `${key} in storage was ${problem}; this page's arrival replaced it`)));
   s.set("view", view);
   if (opts.continues) s.set("continues", true);
   const hidden = { count: 0, ms: 0, since: 0 };
@@ -202,6 +204,12 @@ export function noteView(next: View): void {
 export function noteControls(keys: object, keys2: object): void {
   if (!session) throw new Error("wide events used before startTelemetry");
   session.set("controls", { custom: Object.keys(keys), keys, custom2: Object.keys(keys2), keys2 });
+}
+
+/** This page is the Discord Activity: which launch (the opaque key everyone in the voice channel shares) and on what. */
+export function noteActivity(a: { key: string; platform: string }): void {
+  if (!session) throw new Error("wide events used before startTelemetry");
+  session.set("activity", { instance: a.key, platform: a.platform });
 }
 
 export function noteScreen(name: string): void {

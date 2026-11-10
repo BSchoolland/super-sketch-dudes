@@ -1,5 +1,6 @@
 import type { SlotSource } from "../match";
 import { signOut } from "../account";
+import { activity } from "../activity";
 import { allChoices, forgetLibrary, practiceDummy, type FighterChoice } from "../fighters";
 import { forgetMaps } from "../maps";
 import { MapsScreen } from "./maps";
@@ -24,7 +25,7 @@ import { localMatch, type LocalPlayer } from "./localmatch";
 import { VersusScreen } from "./versus";
 
 export function signInScreen(nav: Nav, error = ""): Screen {
-  return new SignInScreen(() => nav.title(), error);
+  return new SignInScreen(() => (activity ? nav.call() : nav.title()), error);
 }
 
 /** Every menu path of the signed-in game, from the title down. */
@@ -43,6 +44,7 @@ export function menus(): Nav {
     forge: (entry, pad) => new ForgeScreen(nav, entry, pad),
     library: () => new LibraryScreen(nav),
     community: (open) => new CommunityScreen(nav, open),
+    call: () => new OnlineScreen(() => nav.title(), "call", null),
     battle: (fighter) => new BattleMenuScreen((entry) => {
       const menu = () => nav.battle(fighter);
       // VS BOTS is a room like the others: one nobody else can find, started with a bot in it

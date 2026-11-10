@@ -3,7 +3,8 @@ import { PENCIL } from "../render/paper";
 import type { MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
 import { sfx } from "../audio/audio";
-import { emailSignIn, emailSignUp, oauthSignInUrl } from "../account";
+import { activitySignIn, emailSignIn, emailSignUp, oauthSignInUrl } from "../account";
+import { activity, discordCode } from "../activity";
 import { sessionList } from "../telemetry/events";
 import { bg, card, label, type Screen, INK } from "./ui";
 import { RED } from "./character";
@@ -16,6 +17,8 @@ const DOOR: Button[] = [
   { id: "google", x: VIEW_W / 2 - 330, y: 665, w: 660, h: 110, text: "SIGN IN WITH GOOGLE", size: 42 },
   { id: "email", x: VIEW_W / 2 - 330, y: 800, w: 660, h: 80, text: "EMAIL & PASSWORD", size: 30 },
 ];
+/** Inside the Discord Activity the page can't leave for Discord or Google: DISCORD asks the Discord client again. */
+const ACTIVITY_DOOR: Button[] = [DOOR[0], { ...DOOR[2], y: DOOR[1].y }];
 const FIELD_X = VIEW_W / 2 - 420, FIELD_W = 840, FIELD_H = 80, FIELD_GAP = 130, FIELD_TOP = 330;
 
 type Mode = "door" | "signin" | "signup";
@@ -40,7 +43,7 @@ export class SignInScreen implements Screen {
   }
 
   private buttons(): Button[] {
-    if (this.mode === "door") return DOOR;
+    if (this.mode === "door") return activity ? ACTIVITY_DOOR : DOOR;
     const y = FIELD_TOP + (this.mode === "signup" ? 3 : 2) * FIELD_GAP + 10;
     return [
       { id: "submit", x: FIELD_X, y, w: 400, h: 100, text: this.sending ? "…" : this.mode === "signup" ? "CREATE ACCOUNT" : "SIGN IN", size: 34, disabled: this.sending },
@@ -55,7 +58,8 @@ export class SignInScreen implements Screen {
     const pressed = this.menu.update(this.buttons(), m, consumeTaps());
     if (this.mode === "door") {
       if (pressed) sessionList("signIn", pressed);
-      if (pressed === "discord" || pressed === "google") location.href = oauthSignInUrl(pressed);
+      if (pressed === "discord" && activity) { if (!this.sending) this.signInWith(discordCode().then(activitySignIn)); }
+      else if (pressed === "discord" || pressed === "google") location.href = oauthSignInUrl(pressed);
       else if (pressed === "email") this.openForm("signin");
       return null;
     }
@@ -69,7 +73,7 @@ export class SignInScreen implements Screen {
     bg(ctx, this.t);
     if (this.mode === "door") {
       drawLogo(ctx, 300);
-      this.menu.draw(ctx, DOOR);
+      this.menu.draw(ctx, this.buttons());
       if (this.error) label(ctx, this.error, VIEW_W / 2, 940, 28, RED);
       return;
     }
@@ -121,13 +125,16 @@ export class SignInScreen implements Screen {
   private submit(): void {
     if (this.sending || !this.fields) return;
     const email = this.fields.email.value.trim(), password = this.fields.password.value;
-    const done = this.mode === "signup" ? emailSignUp(email, password, this.fields.name!.value.trim()) : emailSignIn(email, password);
+    this.signInWith(this.mode === "signup" ? emailSignUp(email, password, this.fields.name!.value.trim()) : emailSignIn(email, password));
+  }
+
+  private signInWith(done: Promise<void>): void {
     this.sending = true;
     this.error = "";
     done.then(
       () => { sfx.menuConfirm(); this.next = this.home(); },
       (error: unknown) => {
-        console.error("email sign-in failed", error);
+        console.error("sign-in failed", error);
         this.error = error instanceof Error ? error.message : String(error);
         this.sending = false;
       },

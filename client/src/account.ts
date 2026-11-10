@@ -1,5 +1,5 @@
 import { site } from "./base";
-import { GAME_VERSION, GOOGLE_CLIENT_ID, SESSION_HEADER, type CommunityCharacter, type CommunitySort, type FeaturedCharacter, type LastPlayed, type News, type Player, type LibraryEntry } from "../../shared/account";
+import { DISCORD_APP_ID, GAME_VERSION, GOOGLE_CLIENT_ID, SESSION_HEADER, type CommunityCharacter, type CommunitySort, type FeaturedCharacter, type LastPlayed, type News, type Player, type LibraryEntry } from "../../shared/account";
 import { FRESH_MS, releasesSince, type Fresh, type Release } from "../../shared/releases";
 import { sessionTrace } from "./telemetry/events";
 
@@ -39,7 +39,6 @@ export function seeNews(what: Fresh): void {
 const KEY = "sketchbattle.account";
 const NONCE_KEY = "sketchbattle.googleNonce";
 const PENDING_KEY = "sketchbattle.signingIn";
-export const DISCORD_APP_ID = "1506034935838937201";
 
 /** True when a saved session was restored. */
 export function loadAccount(): boolean {
@@ -136,8 +135,23 @@ export const emailSignUp = (email: string, password: string, name: string): Prom
 /** Local testing only: the server accepts a name when it runs with DEV_LOGIN=1. */
 export const devSignIn = (name: string): Promise<void> => authenticate("dev", { name });
 
+/**
+ * Inside the Discord Activity: Discord hands over a one-time code (no redirect, no sign-in screen) and the server
+ * trades it for the same Discord player the website's sign-in makes. Done on every launch; a session this browser
+ * kept from an earlier launch is ended, so launches don't pile sessions up on the server.
+ */
+export async function activitySignIn(code: string): Promise<void> {
+  const earlier = account.session;
+  await authenticate("discord/activity", { code });
+  if (earlier) endSession(earlier);
+}
+
+function endSession(token: string): void {
+  void fetch(`${site.base}api/auth/logout`, { method: "POST", headers: { [SESSION_HEADER]: token, "x-trace-id": sessionTrace() } }).catch((error: unknown) => console.error("sign-out request failed", error));
+}
+
 export function signOut(): void {
-  if (account.session) void fetch(`${site.base}api/auth/logout`, { method: "POST", headers: { [SESSION_HEADER]: account.session, "x-trace-id": sessionTrace() } }).catch((error: unknown) => console.error("sign-out request failed", error));
+  if (account.session) endSession(account.session);
   account.session = null; account.player = null;
   lastPlayed = undefined; news = null; unseenReleases = [];
   localStorage.removeItem(KEY);

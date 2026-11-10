@@ -16,9 +16,10 @@ import { music, setMusicVolume, setVolume } from "./audio/audio";
 import { classTime, watchClassTime } from "./classtime";
 import { ClassScreen, FeedbackScreen, SketchScreen } from "./screens/classtime";
 import { FeedbackDetailScreen, FeedbackListScreen } from "./screens/feedbacklist";
-import { everywhere, noteScreen, noteView, sessionTrace, startTelemetry } from "./telemetry/events";
+import { everywhere, noteActivity, noteScreen, noteView, sessionTrace, startTelemetry } from "./telemetry/events";
 import { loadGeneratedFighter } from "./gen";
-import { devSignIn, finishSignIn, loadAccount, markPlayed, signedIn, unfinishedSignIn } from "./account";
+import { activitySignIn, devSignIn, finishSignIn, loadAccount, markPlayed, signedIn, unfinishedSignIn } from "./account";
+import { activityLaunch, discordCode, startActivity } from "./activity";
 import { forgetLibrary } from "./fighters";
 import { forgetMaps } from "./maps";
 import { loadFighters, quickMatch } from "./quick";
@@ -52,7 +53,8 @@ export async function mount(opts: MountOptions): Promise<AppController> {
   const shellSwap = opts.swap;
   if (shellSwap) swap.request = (hash, handoff) => shellSwap(hash, { ...handoff, session: sessionTrace() });
   const canvas = opts.canvas;
-  const stopTelemetry = startTelemetry({ canvas, bundle: swap.hash, continues: opts.resume?.session });
+  const launch = activityLaunch(opts.params, location.host, import.meta.env.DEV);
+  const stopTelemetry = startTelemetry({ canvas, bundle: swap.hash, continues: opts.resume?.session, ...(launch ? { launch: "discord-activity" } : {}) });
   const stopClassTime = watchClassTime();
   loadSettings();
   setVolume(settings.volume);
@@ -82,16 +84,25 @@ export async function mount(opts: MountOptions): Promise<AppController> {
 
   const nav = menus();
   const params = opts.params;
-  // back from Discord or Google (a token, a refusal, or nothing: the trip died), or ?dev=<name> against a DEV_LOGIN server
   const restored = loadAccount();
-  let signInError = "", fresh = false;
-  try { fresh = await finishSignIn(); } catch (error) { console.error(error); signInError = error instanceof Error ? error.message : String(error); }
-  const unfinished = unfinishedSignIn();
-  if (unfinished) { everywhere("warn", "sign-in", unfinished); signInError = unfinished; }
-  if (!signedIn() && params.get("dev")) await devSignIn(params.get("dev")!);
-  // a fresh sign-in already told the server; a 401 here signs a stale session out
-  if (restored && !fresh) await markPlayed().catch((error: unknown) => everywhere("warn", "played", `marking this visit failed: ${error instanceof Error ? error.message : String(error)}`));
-  const home = (): Screen => (signedIn() ? nav.title() : signInScreen(nav, signInError));
+  let signInError = "";
+  if (launch) {
+    // the Activity signs in from Discord on every launch, whatever this browser kept: storage in Discord's iframe is
+    // partitioned and may not last, and the Discord account in the client may not be the one that signed in before
+    noteActivity(await startActivity(launch, params));
+    try { await activitySignIn(await discordCode()); } catch (error) { console.error(error); signInError = error instanceof Error ? error.message : String(error); }
+  } else {
+    // back from Discord or Google (a token, a refusal, or nothing: the trip died), or ?dev=<name> against a DEV_LOGIN server
+    let fresh = false;
+    try { fresh = await finishSignIn(); } catch (error) { console.error(error); signInError = error instanceof Error ? error.message : String(error); }
+    const unfinished = unfinishedSignIn();
+    if (unfinished) { everywhere("warn", "sign-in", unfinished); signInError = unfinished; }
+    if (!signedIn() && params.get("dev")) await devSignIn(params.get("dev")!);
+    // a fresh sign-in already told the server; a 401 here signs a stale session out
+    if (restored && !fresh) await markPlayed().catch((error: unknown) => everywhere("warn", "played", `marking this visit failed: ${error instanceof Error ? error.message : String(error)}`));
+  }
+  // the Activity opens on the voice channel's room
+  const home = (): Screen => (!signedIn() ? signInScreen(nav, signInError) : launch ? nav.call() : nav.title());
 
   // ?gen=<bundle url>[,<bundle url>] loads drawn fighters before the quick start / sheet below.
   for (const u of (params.get("gen") ?? "").split(",").filter(Boolean)) await loadGeneratedFighter(u);
