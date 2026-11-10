@@ -41,3 +41,27 @@ export class LoadingScreen implements Screen {
     label(ctx, `loading ${".".repeat(1 + (Math.floor(this.t * 3) % 3))}`, VIEW_W / 2, VIEW_H / 2, 48, PENCIL);
   }
 }
+
+/** Waits on some work the next screen needs (a guest's session), then goes on; a failure goes to `failed` with why. */
+export class WaitScreen implements Screen {
+  t = 0;
+  private outcome: { error: string } | null = null;
+
+  constructor(work: Promise<void>, private done: () => Screen, private failed: (error: string) => Screen) {
+    work.then(
+      () => { this.outcome = { error: "" }; },
+      (error: unknown) => { console.error(error); this.outcome = { error: error instanceof Error ? error.message : String(error) }; },
+    );
+  }
+
+  update(dt: number): Screen | null {
+    this.t += dt;
+    if (!this.outcome) return null;
+    return this.outcome.error ? this.failed(this.outcome.error) : this.done();
+  }
+
+  draw(ctx: CanvasRenderingContext2D): void {
+    bg(ctx, this.t);
+    label(ctx, `loading ${".".repeat(1 + (Math.floor(this.t * 3) % 3))}`, VIEW_W / 2, VIEW_H / 2, 48, PENCIL);
+  }
+}

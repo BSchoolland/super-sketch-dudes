@@ -3,31 +3,58 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f4efe4">
 <title>Super Sketch Dudes: privacy</title>
-<style>
-  body { background: #f4efe4; color: #2a2622; font: 18px/1.55 system-ui, sans-serif; max-width: 42rem; margin: 3rem auto; padding: 0 1.25rem; }
-  h1 { font-size: 1.8rem; margin-bottom: .25rem; }
-  h2 { font-size: 1.15rem; margin-top: 2rem; }
-  a { color: inherit; }
-</style>
+<link rel="icon" href="icon.png">
+<link rel="stylesheet" href="legal.css">
 </head>
 <body>
-<h1>Super Sketch Dudes: privacy</h1>
-<p>Super Sketch Dudes is a small hobby game run by Benjamin Schoolland. This is everything it keeps about you.</p>
+<main>
+<h1>Privacy</h1>
+<p class="lede">Super Sketch Dudes is a small game made and run by one person, called "the developer" here. This page says what the game keeps about you, why, and for how long.</p>
 
-<h2>When you sign in</h2>
-<p>With <b>Discord</b> or <b>Google</b>, the game asks for your basic profile only and keeps your account ID, display name and avatar picture. It never sees your password, email, contacts, or anything else in those accounts.</p>
-<p>With an <b>email and password</b>, it keeps your email, your chosen name, and a salted scrypt hash of your password (never the password itself).</p>
+<h2>Playing as a guest</h2>
+<p>You can play everything without an account. The game asks for nothing about you (no name, email or age): it makes up a guest name like "Brave Otter" and remembers you in this browser only.</p>
+<p>If a guest doesn't play for <b>60 days</b>, everything that guest made is deleted. A guest who never drew or saved a character is deleted after <b>7 days</b>.</p>
 
-<h2>While you play</h2>
-<p>Characters you draw, what the game generates from them, and match and error logs used to fix bugs and balance fighters. Other players see your name, avatar and fighters.</p>
+<h2>Accounts</h2>
+<p>Accounts are for people <b>13 and older</b>. Younger players can play as guests.</p>
+<ul>
+<li><b>Discord or Google:</b> the game gets your account ID, display name and profile picture, nothing else. It never sees your password, email or contacts.</li>
+<li><b>Email and password:</b> the game keeps your email, the name you pick and a scrambled (hashed) version of your password, never the password itself. Before you make one, it asks the year you were born. That answer stays in your browser and is never sent to the game's server. If it shows you're under 13, the browser remembers only that, so the question isn't asked again.</li>
+</ul>
+<p>Signing in as a guest who made things moves them to the account.</p>
 
-<h2>What it doesn't do</h2>
-<p>No ads, no tracking across other sites, and nothing is sold or shared with anyone. Drawings are sent to an AI model to turn them into fighters; nothing else about you is.</p>
+<h2>What the game keeps</h2>
+<ul>
+<li><b>Your characters:</b> the drawing, the name and description you typed, and the fighter made from it. Other players see your player name and the characters you share. Guests' characters are never shown to others.</li>
+<li><b>Maps</b> you build, and characters you save from other players.</li>
+<li><b>Feedback</b> you send, with any sketch.</li>
+<li><b>How the game is used:</b> the screens you visit, matches, errors, your browser and device type, screen size, language and which website sent you (just its name, like itch.io, not the page). This is for fixing bugs and making the game better.</li>
+<li><b>In your browser:</b> your sign-in, your settings and when you first visited. The game uses no cookies and no trackers.</li>
+</ul>
+<p>The game's own records don't include your IP address. It uses it for a moment to stop floods of sign-ups or feedback, and the web server keeps the standard access logs every website has. In online matches, players' browsers may connect directly, which lets them see each other's network address.</p>
+
+<h2>Who else sees it</h2>
+<ul>
+<li><b>Anthropic</b> (Claude) and <b>OpenAI</b> (image generation): your drawing, and what you typed about it, are sent to them to build the fighter.</li>
+<li><b>An automatic moderator</b> (also Claude) checks every drawing and its name, normally before the fighter is made, and the developer can take any character down. If the moderator flags one, the drawing, its name and your player name go to the developer's private Discord channel for a person to look at.</li>
+<li><b>Discord</b> or <b>Google</b>, only if you choose to sign in with them.</li>
+</ul>
+<p>Nothing is sold, and nothing is used for ads.</p>
+
+<h2>How long</h2>
+<ul>
+<li>Guests: as above, 7 or 60 days after the last visit.</li>
+<li>Accounts, characters, maps and feedback: until you delete them or ask the developer to.</li>
+<li>Sign-ins: until you sign out.</li>
+<li>Usage records: the log has a fixed size and old records are deleted as new ones arrive (at the moment, after about two months).</li>
+</ul>
 
 <h2>Deleting your data</h2>
-<p>Email <a href="mailto:bschoolland@gmail.com">bschoolland@gmail.com</a> and your account and everything tied to it will be deleted.</p>
+<p>You can delete your characters and maps in the game. To delete your account and everything tied to it, or to ask what the game has about you, email <b>CONTACT_EMAIL</b> and say which player name it is. A parent can ask on a child's behalf.</p>
 
-<p><a href="./">Back to the game</a></p>
+<p class="back"><a href="./">Back to the game</a> · <a href="terms">Terms</a></p>
+</main>
 </body>
 </html>

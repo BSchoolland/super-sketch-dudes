@@ -1,8 +1,10 @@
-import { inkLine, inkPath } from "../render/paper";
+import { FONT, PENCIL, inkLine, inkPath } from "../render/paper";
 import { VIEW_H, VIEW_W } from "../render/camera";
 import type { MenuInput } from "../input/devices";
 import { sfx } from "../audio/audio";
-import { account, isNew, seeNews, unseenReleases } from "../account";
+import { account, isNew, playingAsGuest, seeNews, unseenReleases } from "../account";
+import { site } from "../base";
+import { activity } from "../activity";
 import { myLibrary, refreshLibrary } from "../fighters";
 import { forgeWords } from "./character";
 import { PENCIL } from "../render/paper";
@@ -22,8 +24,9 @@ const MENU_Y = MENU_CARD.y0, MENU_STEP = MENU_CARD.step;
 export type Mode = "battle" | "library" | "create" | "maps" | "settings" | "feedback";
 
 const NOTE = { x: 36, y: 24, w: 290, h: 120 };
-/** `sel` for the FEEDBACK note in the top left, above the menu. */
-const FEEDBACK = -1;
+/** `sel` for the FEEDBACK note in the top left, above the menu, and a guest's SIGN IN in the top right. */
+const FEEDBACK = -1, SIGN_IN = -2;
+const SIGN_IN_BOX = { x: VIEW_W - 40 - 220, y: 30, w: 220, h: 76 };
 
 function drawFeedbackNote(ctx: CanvasRenderingContext2D, sel: boolean): void {
   const { x, y, w, h } = NOTE;
@@ -50,13 +53,37 @@ export function drawLogo(ctx: CanvasRenderingContext2D, y: number): void {
   ctx.restore();
 }
 
-/** Who's signed in, top right: the Discord avatar in a circle and the name. */
-export function drawPlayerBadge(ctx: CanvasRenderingContext2D): void {
+/** Who's signed in, top right: the Discord avatar in a circle and the name. A guest has SIGN IN there, beside the name they play under. */
+function drawPlayerBadge(ctx: CanvasRenderingContext2D, signInFocused: boolean): void {
   const p = account.player;
   if (!p) return;
+  if (playingAsGuest()) {
+    const b = SIGN_IN_BOX;
+    card(ctx, b.x, b.y, b.w, b.h, "", signInFocused);
+    title(ctx, "SIGN IN", b.x + b.w / 2, b.y + 52, 38, INK);
+    label(ctx, p.name, b.x - 18, b.y + 50, 28, PENCIL, "right", 700);
+    return;
+  }
   const r = 30, cx = VIEW_W - 40 - r, cy = 30 + r;
   drawAvatar(ctx, p, cx, cy, r);
   label(ctx, p.name, cx - r - 16, cy + 10, 30, INK, "right", 800);
+}
+
+/** The privacy notice and terms, small in the bottom left; a click opens one in place of the game. False: `live` is off. */
+export function drawLegalLinks(ctx: CanvasRenderingContext2D, live: boolean): void {
+  const y = VIEW_H - 16, size = 18;
+  ctx.save();
+  ctx.font = `700 ${size}px ${FONT}`;
+  let x = 22;
+  for (const [text, page] of [["privacy", "privacy"], ["terms", "terms"]] as const) {
+    const w = ctx.measureText(text).width;
+    const over = live && hover(x - 4, y - size, w + 8, size + 10);
+    label(ctx, text, x, y, size, over ? INK : "rgba(41,39,34,0.5)", "left", 700);
+    if (over) { inkLine(ctx, x, y + 4, x + w, y + 4, INK, 1.2); document.body.style.cursor = "pointer"; }
+    if (live && clicked(x - 4, y - size, w + 8, size + 10)) location.href = `${site.base}${page}`;
+    x += w + 22;
+  }
+  ctx.restore();
 }
 
 export class TitleScreen implements Screen {
@@ -82,8 +109,8 @@ export class TitleScreen implements Screen {
   private whatsNew: UpdateCard | null = unseenReleases.length ? new UpdateCard(unseenReleases.splice(0)) : null;
   /** Ben's responses to their feedback they haven't seen, after what's new. */
   private responses: FeedbackResponseCard | null = null;
-  /** `onInspect`: a player's character clicked in the brawl, to see and save. */
-  constructor(private onPick: (m: Mode) => Screen, private onInspect: (id: string) => Screen) {}
+  /** `onInspect`: a player's character clicked in the brawl, to see and save; `onSignIn`: a guest's SIGN IN. */
+  constructor(private onPick: (m: Mode) => Screen, private onInspect: (id: string) => Screen, private onSignIn: () => Screen) {}
   enter(): void {
     void refreshLibrary();
     void refreshMaps();
@@ -108,9 +135,14 @@ export class TitleScreen implements Screen {
       return null;
     }
     const n = this.items.length;
-    if (m.up) { this.sel = this.sel === FEEDBACK ? n - 1 : this.sel === 0 ? FEEDBACK : this.sel - 1; sfx.menuMove(); }
-    if (m.down) { this.sel = this.sel === FEEDBACK ? 0 : (this.sel + 1) % n; sfx.menuMove(); }
-    if (m.confirm || m.start) return this.pick(this.sel === FEEDBACK ? "feedback" : this.items[this.sel].id);
+    if (this.sel === SIGN_IN && !playingAsGuest()) this.sel = 0;
+    if (m.up) { this.sel = this.sel < 0 ? n - 1 : this.sel === 0 ? FEEDBACK : this.sel - 1; sfx.menuMove(); }
+    if (m.down) { this.sel = this.sel < 0 ? 0 : (this.sel + 1) % n; sfx.menuMove(); }
+    if ((m.left || m.right) && this.sel < 0 && playingAsGuest()) { this.sel = this.sel === FEEDBACK ? SIGN_IN : FEEDBACK; sfx.menuMove(); }
+    if (m.confirm || m.start) {
+      if (this.sel === SIGN_IN) { sfx.menuConfirm(); return this.onSignIn(); }
+      return this.pick(this.sel === FEEDBACK ? "feedback" : this.items[this.sel].id);
+    }
     return null;
   }
   draw(ctx: CanvasRenderingContext2D, dt: number): void {
@@ -139,11 +171,17 @@ export class TitleScreen implements Screen {
     if (live && hover(NOTE.x, NOTE.y, NOTE.w, NOTE.h)) { this.sel = FEEDBACK; document.body.style.cursor = "pointer"; }
     if (live && clicked(NOTE.x, NOTE.y, NOTE.w, NOTE.h)) goTo(this.pick("feedback"));
     drawFeedbackNote(ctx, this.sel === FEEDBACK);
-    drawPlayerBadge(ctx);
-    const desc = this.sel === FEEDBACK ? "Ideas, bugs, anything: Ben reads these" : this.items[this.sel].desc;
+    if (playingAsGuest()) {
+      const b = SIGN_IN_BOX;
+      if (live && !under && hover(b.x, b.y, b.w, b.h)) { this.sel = SIGN_IN; document.body.style.cursor = "pointer"; }
+      if (live && !tapped && clicked(b.x, b.y, b.w, b.h)) { sfx.menuConfirm(); goTo(this.onSignIn()); }
+    }
+    drawPlayerBadge(ctx, this.sel === SIGN_IN);
+    const desc = this.sel === FEEDBACK ? "Ideas, bugs, anything: Ben reads these" : this.sel === SIGN_IN ? "Keep your characters on any device, with Discord or Google" : this.items[this.sel].desc;
     label(ctx, desc, VIEW_W / 2, MENU_Y + this.items.length * MENU_STEP + 30, 26, INK, "center");
     hint(ctx, "click, or arrows + Enter · gamepad: stick + A");
     label(ctx, `build ${__BUILD__}`, VIEW_W - 20, VIEW_H - 16, 14, "rgba(41,39,34,0.5)", "right", 400);
+    if (!activity) drawLegalLinks(ctx, live && !under && !tapped);
     if (under) { this.brawl!.drawHover(ctx, under); document.body.style.cursor = "pointer"; }
     if (this.whatsNew) this.whatsNew.draw(ctx, dt);
     else this.responses?.draw(ctx);

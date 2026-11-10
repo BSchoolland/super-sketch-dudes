@@ -3,7 +3,7 @@ import { PENCIL } from "../render/paper";
 import type { DeviceId, MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
 import { sfx } from "../audio/audio";
-import { library } from "../account";
+import { library, playingAsGuest } from "../account";
 import { libraryChoices, myLibrary, practiceDummy, refreshDummy, refreshLibrary } from "../fighters";
 import type { LibraryEntry } from "../../../shared/account";
 import { bg, hover, label, title, type Screen } from "./ui";
@@ -76,7 +76,7 @@ export class LibraryScreen implements Screen {
     b.forEach((btn, i) => { btn.x = x0 + i * (w + gap); });
     // your own character's sharing sits under its moves, in the right column
     const rows = this.rows(e), last = rows[rows.length - 1];
-    if (!e.starter && !e.saved && e.status === "ready" && last) b.push({ id: "public", x: COL_X, y: last.y + last.h + 36, w: COL_W, h: 80, text: "SHARE WITH EVERYONE", size: 32, checked: !!e.public });
+    if (!e.starter && !e.saved && e.status === "ready" && last && !playingAsGuest()) b.push({ id: "public", x: COL_X, y: last.y + last.h + 36, w: COL_W, h: 80, text: "SHARE WITH EVERYONE", size: 32, checked: !!e.public });
     // the moves come after the row, so focus starts on it and the preview starts out standing still
     for (const r of this.rows(e)) b.push({ id: `m${r.i}`, x: r.x, y: r.y, w: r.w, h: r.h, text: "", custom: true });
     return b;
@@ -213,6 +213,8 @@ export class LibraryScreen implements Screen {
       const focused = this.detailMenu.focused(this.detailButtons(e));
       const active = rows.find((r) => hover(r.x, r.y, r.w, r.h)) ?? rows.find((r) => focused?.id === `m${r.i}`) ?? null;
       this.detail.draw(ctx, rows, active, dt);
+      const last = rows[rows.length - 1];
+      if (!e.starter && !e.saved && e.status === "ready" && last && playingAsGuest()) label(ctx, "sign in to share it with everyone", COL_X, last.y + last.h + 70, 28, PENCIL, "left", 700);
     } else {
       drawCharacterArt(ctx, e, 160, 110, 640, this.t);
       title(ctx, "FAILED", 870, 200, 96, RED, "left");

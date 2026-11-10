@@ -10,6 +10,7 @@ import { NetVersusScreen } from "./screens/netversus";
 import { VersusScreen } from "./screens/versus";
 import { SheetScreen } from "./screens/sheet";
 import { SignInScreen } from "./screens/signin";
+import { WaitScreen } from "./screens/loading";
 import { menus, signInScreen } from "./screens/flow";
 import { loadSettings, settings, takeHandoff, type Screen } from "./screens/ui";
 import { music, setMusicVolume, setVolume } from "./audio/audio";
@@ -18,7 +19,7 @@ import { ClassScreen, FeedbackScreen, SketchScreen } from "./screens/classtime";
 import { FeedbackDetailScreen, FeedbackListScreen } from "./screens/feedbacklist";
 import { everywhere, noteActivity, noteScreen, noteView, sessionTrace, startTelemetry } from "./telemetry/events";
 import { loadGeneratedFighter } from "./gen";
-import { activitySignIn, devSignIn, finishSignIn, loadAccount, markPlayed, signedIn, unfinishedSignIn } from "./account";
+import { activitySignIn, devSignIn, finishSignIn, guestSignIn, loadAccount, markPlayed, signedIn, unfinishedSignIn } from "./account";
 import { activityLaunch, discordCode, startActivity } from "./activity";
 import { forgetLibrary } from "./fighters";
 import { forgetMaps } from "./maps";
@@ -100,9 +101,15 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     if (!signedIn() && params.get("dev")) await devSignIn(params.get("dev")!);
     // a fresh sign-in already told the server; a 401 here signs a stale session out
     if (restored && !fresh) await markPlayed().catch((error: unknown) => everywhere("warn", "played", `marking this visit failed: ${error instanceof Error ? error.message : String(error)}`));
+    if (!signedIn()) await guestSignIn().catch((error: unknown) => { console.error("guest sign-in failed", error); signInError = error instanceof Error ? error.message : String(error); });
   }
-  // the Activity opens on the voice channel's room
-  const home = (): Screen => (!signedIn() ? signInScreen(nav, signInError) : launch ? nav.call() : nav.title());
+  // the Activity opens on the voice channel's room; the website on the title, or once on why a sign-in didn't work
+  const home = (): Screen => {
+    if (launch) return signedIn() ? nav.call() : signInScreen(nav, signInError);
+    const error = signInError;
+    signInError = "";
+    return error ? signInScreen(nav, error) : signedIn() ? nav.title() : nav.guest();
+  };
 
   // ?gen=<bundle url>[,<bundle url>] loads drawn fighters before the quick start / sheet below.
   for (const u of (params.get("gen") ?? "").split(",").filter(Boolean)) await loadGeneratedFighter(u);
@@ -143,7 +150,7 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     last = now;
     const menu = readMenu(allDevices());
     let next = screen.update(dt, menu) ?? takeHandoff();
-    // signed out (a 401 anywhere, or SIGN OUT): back to the door, except mid-match or on a no-account page
+    // signed out (a 401 anywhere): a fresh guest on the website, the door in the Activity, except mid-match or on a no-account page
     const current = next ?? screen;
     // class time takes over anywhere but a match in progress
     if (classTime.blocked && !(current instanceof VersusScreen || current instanceof ClassScreen || current instanceof FeedbackScreen || current instanceof SketchScreen || current instanceof FeedbackListScreen || current instanceof FeedbackDetailScreen)) {
@@ -151,11 +158,11 @@ export async function mount(opts: MountOptions): Promise<AppController> {
       next = new ClassScreen(() => nav.title());
     }
     const shown = next ?? screen;
-    if (!signedIn() && !(shown instanceof SignInScreen || shown instanceof VersusScreen || shown instanceof SheetScreen || shown instanceof ClassScreen || shown instanceof FeedbackScreen || shown instanceof SketchScreen)) {
+    if (!signedIn() && !(shown instanceof SignInScreen || shown instanceof WaitScreen || shown instanceof VersusScreen || shown instanceof SheetScreen || shown instanceof ClassScreen || shown instanceof FeedbackScreen || shown instanceof SketchScreen)) {
       shown.abandon?.();
       forgetLibrary();
       forgetMaps();
-      next = signInScreen(nav);
+      next = launch ? signInScreen(nav) : nav.guest();
     }
     if (next) { screen = next; screen.enter?.(); noteScreen(screen.constructor.name); }
     music.follow(screen instanceof VersusScreen ? screen : null);

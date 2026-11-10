@@ -1,0 +1,12 @@
+@font-face { font-family: "Patrick Hand"; src: url("fonts/PatrickHand-Regular.ttf") format("truetype"); font-display: swap; }
+:root { color-scheme: light; }
+html { background: #f4efe4; }
+body { margin: 0; color: #292722; font: 1.25rem/1.5 "Patrick Hand", "Comic Sans MS", cursive; }
+main { max-width: 40rem; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
+h1 { font-size: 3rem; line-height: 1; margin: 0 0 .5rem; letter-spacing: .02em; border-bottom: 3px solid #292722; padding-bottom: .3rem; }
+h2 { font-size: 1.6rem; margin: 2rem 0 .3rem; }
+p, li { margin: .4rem 0; }
+ul { padding-left: 1.3rem; }
+.lede { color: #777267; }
+a { color: inherit; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.back { margin-top: 2.5rem; color: #777267; }

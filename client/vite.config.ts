@@ -6,9 +6,22 @@ let build = "dev";
 try { build = execSync("git rev-parse --short HEAD").toString().trim(); } catch { /* no git */ }
 const serverTarget = process.env.SKETCHBATTLE_SERVER ?? "http://localhost:3008";
 
+const base = process.env.SKETCHBATTLE_BASE ?? "/sketch-battle/";
+
 export default defineConfig({
   root: path.resolve(__dirname),
-  base: process.env.SKETCHBATTLE_BASE ?? "/sketch-battle/",
+  base,
+  // <base>privacy and <base>terms, as the server serves them
+  plugins: [{
+    name: "legal-pages",
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        const m = /^([^?]*\/)(privacy|terms)(\?.*)?$/.exec(req.url ?? "");
+        if (m && m[1] === base) req.url = `${m[1]}${m[2]}.html${m[3] ?? ""}`;
+        next();
+      });
+    },
+  }],
   define: { __BUILD__: JSON.stringify(build) },
   // screen class names go into the session's wide event
   esbuild: { keepNames: true },

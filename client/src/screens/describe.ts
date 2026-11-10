@@ -4,7 +4,7 @@ import type { MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
 import { sfx } from "../audio/audio";
 import { HINT_DESCRIPTION_MAX, HINT_NAME_MAX } from "../../../shared/account";
-import { library } from "../account";
+import { library, playingAsGuest } from "../account";
 import { bg, card, label, title, type Screen, INK } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
 import { forgeOpens, RED } from "./character";
@@ -38,7 +38,7 @@ export class DescribeScreen implements Screen {
     pad.locked = true;
     this.name = new TextField({ maxLength: HINT_NAME_MAX, upper: true, value: hint?.name, onSubmit: () => this.description.el.focus(), onCancel: () => this.back() });
     this.description = new TextField({ maxLength: HINT_DESCRIPTION_MAX, multiline: true, quiet: true, value: hint?.description, onSubmit: () => this.send(), onCancel: () => this.back() });
-    this.menu.focus = 1;
+    this.menu.focus = playingAsGuest() ? 0 : 1;
   }
 
   abandon(): void {
@@ -47,7 +47,8 @@ export class DescribeScreen implements Screen {
 
   private buttons(): Button[] {
     return [
-      { id: "public", x: FORM_X, y: 690, w: 480, h: 80, text: "SHARE WITH EVERYONE", size: 32, checked: this.pub, disabled: this.sending },
+      // a guest's characters stay out of COMMUNITY until they sign in
+      ...(playingAsGuest() ? [] : [{ id: "public", x: FORM_X, y: 690, w: 480, h: 80, text: "SHARE WITH EVERYONE", size: 32, checked: this.pub, disabled: this.sending }]),
       { id: "send", x: FORM_X, y: 800, w: 400, h: 110, text: this.sending ? "…" : "CREATE CHARACTER", size: 34, disabled: this.sending },
       { id: "back", x: FORM_X + 440, y: 800, w: 400, h: 110, text: "KEEP DRAWING", size: 34, disabled: this.sending },
     ];

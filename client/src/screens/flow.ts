@@ -1,5 +1,5 @@
 import type { SlotSource } from "../match";
-import { signOut } from "../account";
+import { guestSignIn, signOut, signedIn } from "../account";
 import { activity } from "../activity";
 import { allChoices, forgetLibrary, practiceDummy, refreshLibrary, type FighterChoice } from "../fighters";
 import { forgetMaps, refreshMaps } from "../maps";
@@ -20,12 +20,13 @@ import { CommunityScreen } from "./community";
 import { BattleMenuScreen } from "./battle/menu";
 import { OnlineScreen } from "./online";
 import { StageScreen, type MatchSetup } from "./stage";
-import { LoadingScreen } from "./loading";
+import { LoadingScreen, WaitScreen } from "./loading";
 import { localMatch, type LocalPlayer } from "./localmatch";
 import { VersusScreen } from "./versus";
 
+/** Signed in, or BACK: the Activity's room, else the title (a fresh guest's if there's no session). */
 export function signInScreen(nav: Nav, error = ""): Screen {
-  return new SignInScreen(() => (activity ? nav.call() : nav.title()), error);
+  return new SignInScreen(() => (activity ? nav.call() : signedIn() ? nav.title() : nav.guest()), error);
 }
 
 /** Every menu path of the signed-in game, from the title down. */
@@ -37,8 +38,9 @@ export function menus(): Nav {
       if (mode === "library") return nav.library();
       if (mode === "maps") return nav.maps();
       if (mode === "feedback") return new FeedbackScreen(() => nav.title());
-      return new SettingsScreen(() => nav.title(), () => { signOut(); forgetLibrary(); forgetMaps(); return signInScreen(nav); });
-    }, (id) => nav.community(id)),
+      return new SettingsScreen(() => nav.title(), () => { signOut(); forgetLibrary(); forgetMaps(); return activity ? signInScreen(nav) : nav.guest(); });
+    }, (id) => nav.community(id), () => signInScreen(nav)),
+    guest: () => new WaitScreen(guestSignIn(), () => nav.title(), (error) => signInScreen(nav, error)),
     create: (pad, hint) => new CreateScreen(nav, pad, hint),
     describe: (pad, hint) => new DescribeScreen(nav, pad, hint),
     forge: (entry) => new ForgeScreen(nav, entry),

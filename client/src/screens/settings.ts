@@ -4,7 +4,7 @@ import type { MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
 import { setMusicVolume, setVolume, sfx } from "../audio/audio";
 import { bg, card, hint, label, backButton, goTo, type Screen, INK, MAYHEM, settings, saveSettings } from "./ui";
-import { account } from "../account";
+import { account, playingAsGuest } from "../account";
 import { ButtonMenu, type Button } from "./buttons";
 import { drawTabs, otherTabButton, type Tabs } from "./tabs";
 import { ControlsPage } from "./controls";
@@ -42,7 +42,8 @@ export class SettingsScreen implements Screen {
       id: r.id, x: ROW.x, y: ROW.top + i * ROW.gap, w: ROW.w, h: ROW.h, text: r.name, custom: true, stepAt: VALUE_X,
       step: (d) => { r.step(d); saveSettings(); },
     }));
-    b.push({ id: "signout", x: VIEW_W / 2 - SIGN_OUT.w / 2, y: SIGN_OUT.y, w: SIGN_OUT.w, h: SIGN_OUT.h, text: "SIGN OUT", size: 32 });
+    // a guest signing out would lose everything they made
+    if (!playingAsGuest()) b.push({ id: "signout", x: VIEW_W / 2 - SIGN_OUT.w / 2, y: SIGN_OUT.y, w: SIGN_OUT.w, h: SIGN_OUT.h, text: "SIGN OUT", size: 32 });
     b.push(otherTabButton(TABS, this.tab));
     return b;
   }
@@ -81,7 +82,7 @@ export class SettingsScreen implements Screen {
       });
       const about = this.rows.find((r) => r.id === focused?.id)?.about?.();
       if (about) label(ctx, about, VIEW_W / 2, ROW.top + this.rows.length * ROW.gap + 26, 26, INK, "center");
-      if (account.player) label(ctx, `signed in as ${account.player.name}`, VIEW_W / 2, SIGN_OUT.y - 24, 26, PENCIL, "center", 600);
+      if (account.player && !playingAsGuest()) label(ctx, `signed in as ${account.player.name}`, VIEW_W / 2, SIGN_OUT.y - 24, 26, PENCIL, "center", 600);
       this.menu.draw(ctx, buttons);
     }
     if (backButton(ctx) && !this.controls.busy) { sfx.menuBack(); goTo(this.onBack()); }

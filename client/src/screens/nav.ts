@@ -10,6 +10,8 @@ export interface CharacterHint { name: string; description: string }
 /** Where the account screens can go; app.ts builds it so screens don't import each other in a circle. */
 export interface Nav {
   title(): Screen;
+  /** A new guest's session, then the title. */
+  guest(): Screen;
   /** The creator's pad; `pad` reopens an earlier drawing, `hint` what was typed about it so far. */
   create(pad?: DrawPad, hint?: CharacterHint): Screen;
   /** After the pad: name it and describe it (both optional), then create it. */
