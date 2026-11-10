@@ -80,6 +80,8 @@ npm run events -- --json --since 30m | jq …       # raw records
 ssh ssd-server 'cd ~/sketch-battle && node dist/events.mjs --since 2h'   # on the server
 ```
 
+`npm run funnel -- --since 14d` counts distinct visitors per source (the session's `source`: referrer host,
+`?ref=`, utm_* params) reaching each step from arrival to coming back; `node dist/funnel.mjs` on the server.
 `--data <dir>` reads another data dir; `--legacy` also prints the old one-line `client-log.jsonl`
 that builds from before wide events still post to. `node scripts/wide-events-check.mjs` plays a
 three-browser match against a scratch server and checks the store (usage at the top of the file).

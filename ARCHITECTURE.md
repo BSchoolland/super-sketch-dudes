@@ -236,15 +236,16 @@ build, bundle, viewport, player; `server`; `request`), a level that only escalat
 message, repeats counted), an open `business` payload, and a headline (first error, else first
 warning, else a business value with a `message`). No clock or randomness in it: both are passed in.
 
-Client (`client/src/telemetry/`): `startTelemetry` in `mount` opens the session (device, view
+Client (`client/src/telemetry/`): `startTelemetry` in `mount` opens the session (device, source, view
 history, screens visited, hidden time, matches) and catches uncaught errors, rejections,
 `console.error` and canvas context loss onto every open event. `MatchTelemetry` opens when an
 online `start` arrives (bundle load outcomes), attaches to the rollback session and renderer
 (frames, confirmation, WAITING stalls, RTT, rollback counters, frame-time histogram, camera and
 canvas-scale sanity every draw, sprite draws with no image, a readback of the world layer every
 10 s that flags plain paper), and finishes with the exit. `DrawSession` keeps one for its room.
-Open events are sent every 10 s while they change and by `sendBeacon` on `pagehide` or when the
-tab hides; a bundle swap ends the session and the next bundle continues its trace.
+The source (`shared/source.ts`) is this tab's arrival, kept in sessionStorage so a page back
+from Discord or Google keeps it, and the browser's first-ever arrival from localStorage. Open
+events are sent every 10 s while they change and by `sendBeacon` on `pagehide` or when the tab hides; a bundle swap ends the session and the next bundle continues its trace.
 
 Server: the relay opens a `room` event per room, a `connection` event per socket (under the page's
 session trace from `?trace=`), and a `match` event per start with per-slot input/hash counts, input

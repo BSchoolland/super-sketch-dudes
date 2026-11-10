@@ -1,6 +1,7 @@
 import { WideEvent, type ClientTier, type EventKind, type Issue, type WideEventRecord } from "../../../shared/wide";
 import { site } from "../base";
 import { account } from "../account";
+import { visitSource } from "./source";
 
 /**
  * The page's wide events: the session (mount to page hide or bundle swap) and whatever is open
@@ -132,6 +133,7 @@ export function startTelemetry(opts: TelemetryStart): () => void {
   const s = session;
   const nav = navigator as Navigator & { deviceMemory?: number };
   s.set("device", { platform: nav.platform, lang: nav.language, cores: nav.hardwareConcurrency, memory: nav.deviceMemory ?? null, touch: nav.maxTouchPoints, pads: navigator.getGamepads?.().filter(Boolean).length ?? 0 });
+  s.set("source", visitSource({ referrer: document.referrer, url: location.href }, sessionStorage, localStorage, trace, Date.now(), (key, problem) => s.issue("warn", "source", `${key} in storage was ${problem}; this page's arrival replaced it`)));
   s.set("view", view);
   if (opts.continues) s.set("continues", true);
   const hidden = { count: 0, ms: 0, since: 0 };

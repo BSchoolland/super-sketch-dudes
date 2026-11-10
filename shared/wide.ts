@@ -1,3 +1,5 @@
+import { sourceProblem } from "./source";
+
 /**
  * The wide event: one structured record per unit of work (a page session, one client's view of a
  * match, a room, a forge job, a request), built up over its whole life and persisted whole.
@@ -143,6 +145,11 @@ export function recordProblem(v: unknown): string | null {
   if (!Array.isArray(r.issues)) return "bad issues";
   if (!r.business || typeof r.business !== "object" || Array.isArray(r.business)) return "bad business";
   if (!r.client || typeof r.client !== "object" || typeof (r.client as ClientTier).session !== "string") return "missing client tier";
+  const business = r.business as Record<string, unknown>;
+  if (r.kind === "session" && business.source !== undefined) {
+    const source = sourceProblem(business.source);
+    if (source) return `bad source: ${source}`;
+  }
   return null;
 }
 

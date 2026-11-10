@@ -3,41 +3,23 @@ import fs from "node:fs";
 import path from "node:path";
 import { filterEvents, readEvents, type EventQuery, type StoredEvent } from "../server/eventlog";
 import type { EventLevel } from "../shared/wide";
+import { cliArgs, dataDir, parseSince } from "./lib/cli";
 
 const USAGE = `npm run events -- [--trace <id>] [--since 2h] [--level warn] [--kind match] [--grep text]
   [--limit 50] [-v | --full | --json] [--legacy] [--data <dir>]
 --trace matches an event's trace, parent or id: a match trace (m-<room>-<seed>) finds every client and the relay,
 a session trace (s-...) finds the session with its matches, requests and relay connection.`;
-const args = process.argv.slice(2);
-const flag = (name: string): boolean => args.includes(name);
-const value = (name: string): string | undefined => {
-  const i = args.indexOf(name);
-  if (i < 0) return undefined;
-  const v = args[i + 1];
-  if (v === undefined || v.startsWith("--")) throw new Error(`${name} needs a value`);
-  return v;
-};
-const known = new Set(["--trace", "--since", "--level", "--kind", "--grep", "--limit", "--data", "-v", "--full", "--json", "--legacy", "--help"]);
-for (const a of args) if (a.startsWith("-") && !known.has(a)) throw new Error(`unknown flag ${a}\n${USAGE}`);
-if (flag("--help")) { console.log(USAGE); process.exit(0); }
-
-function parseSince(s: string): number {
-  const m = /^(\d+(?:\.\d+)?)(s|m|h|d)$/.exec(s);
-  if (m) return Date.now() - Number(m[1]) * { s: 1e3, m: 6e4, h: 36e5, d: 864e5 }[m[2] as "s" | "m" | "h" | "d"];
-  const t = Date.parse(s);
-  if (Number.isNaN(t)) throw new Error(`--since wants 90s, 30m, 2h, 1d or a date, not ${s}`);
-  return t;
-}
+const { flag, value } = cliArgs(["--trace", "--since", "--level", "--kind", "--grep", "--limit", "--data", "-v", "--full", "--json", "--legacy"], USAGE);
 
 const level = value("--level");
 if (level && !["info", "warn", "error"].includes(level)) throw new Error(`--level is info, warn or error, not ${level}`);
-const dataDir = value("--data") ?? process.env.SKETCHBATTLE_DATA ?? path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "server-data");
+const data = dataDir(value("--data"), import.meta.url);
 const since = value("--since");
 const query: EventQuery = { trace: value("--trace"), since: since ? parseSince(since) : undefined, level: level as EventLevel | undefined, kind: value("--kind"), grep: value("--grep") };
 const limit = Number(value("--limit") ?? (query.trace ? 500 : 50));
 const full = flag("--full");
 const verbose = full || flag("-v") || !!query.trace;
-const events = filterEvents(readEvents(dataDir), query).slice(-limit);
+const events = filterEvents(readEvents(data), query).slice(-limit);
 
 const tty = process.stdout.isTTY;
 const paint = (code: number, s: string): string => (tty ? `\x1b[${code}m${s}\x1b[0m` : s);
@@ -92,12 +74,12 @@ else {
     console.log(line(e));
     if (verbose) { for (const l of detail(e)) console.log(l); console.log(""); }
   }
-  console.log(paint(2, `${events.length} event(s) from ${dataDir}`));
+  console.log(paint(2, `${events.length} event(s) from ${data}`));
 }
 
 // builds from before wide events log one-liners to client-log.jsonl
 if (flag("--legacy")) {
-  const file = path.join(dataDir, "client-log.jsonl");
+  const file = path.join(data, "client-log.jsonl");
   for (const f of [file + ".1", file].filter((p) => fs.existsSync(p))) {
     for (const l of fs.readFileSync(f, "utf8").split("\n")) {
       if (!l) continue;
