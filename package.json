@@ -14,7 +14,8 @@
     "frames": "tsx scripts/frames.ts",
     "shots": "node scripts/shots.mjs",
     "events": "tsx scripts/events.ts",
-    "funnel": "tsx scripts/funnel.ts"
+    "funnel": "tsx scripts/funnel.ts",
+    "forge-budget": "tsx scripts/forge-budget.ts"
   },
   "keywords": [],
   "author": "",

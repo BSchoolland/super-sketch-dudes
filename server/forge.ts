@@ -12,14 +12,16 @@ import { setHeld, upsertCharacter } from "./library";
 import { finish, openEvent } from "./events";
 import type { WideEvent } from "../shared/wide";
 import { isJudgement, type Judgements } from "../shared/moderation";
-import { attachModeration, decide } from "./moderation";
+import { attachModeration, BLOCKED_ERROR, decide } from "./moderation";
+import { claimsBetween, claimsOf, currentBudget, ipKeyOf, loadBudget, restingOf, standing, weekOf, type Allowance, type BudgetJob } from "./budget";
+import type { ForgeStanding } from "../shared/account";
 
 /**
  * The forge job queue. A job is one drawing becoming one fighter; it belongs to a player and
  * lands in their library whatever started it. The forge
  * worker on Ben's machine polls /forge/jobs/next with FORGE_TOKEN; nothing here calls out to it.
  */
-export interface ForgeJob {
+export interface ForgeJob extends BudgetJob {
   id: string;
   fighterId: string;
   owner: string;
@@ -31,6 +33,10 @@ export interface ForgeJob {
   error: string | null;
   claimedAt: number;
   attempts: number;
+  /** The auto moderator blocked it: it can't be retried for free. */
+  blocked: boolean;
+  /** Times the player sent it back to the forge with TRY AGAIN. */
+  retries: number;
   origin: LibraryEntry["origin"];
   /** What the player typed about it, if anything: the design pass reads it. */
   hint: { name: string; description: string } | null;
@@ -60,6 +66,12 @@ function restore(): void {
   for (const job of saved) {
     job.public ??= true;
     job.moderation ??= null;
+    // jobs from before the budget: one claim if it was ever claimed, sent on a player's allowance
+    job.claims = claimsOf(job);
+    job.allowance ??= "player";
+    job.ipKey ??= null;
+    job.blocked ??= job.error?.startsWith(BLOCKED_ERROR) ?? false;
+    job.retries ??= 0;
     jobs.set(job.id, job);
     if (job.status === "queued") { queue.push(job.id); restored.push(job); }
     // the worker outlives a server restart and is still on it: keep it running; the stale-claim
@@ -77,8 +89,13 @@ export function charStatusOf(job: ForgeJob): CharStatus {
   return job.status === "running" ? "generating" : job.status === "done" ? "ready" : job.status;
 }
 
+/** A failed forge the player may send back once, free: not one the moderator blocked. */
+const RETRIES = 1;
+const retryable = (job: ForgeJob): boolean => job.status === "failed" && !job.blocked && job.retries < RETRIES;
+
 export function entryOf(job: ForgeJob): LibraryEntry {
   return {
+    ...(retryable(job) ? { retryable: true } : {}),
     id: job.fighterId, owner: job.owner, status: charStatusOf(job), stage: job.stage, error: job.error,
     name: job.result?.name ?? null, tagline: job.result?.tagline ?? null, description: job.result?.description ?? null,
     drawingUrl: drawingUrlOf(job.fighterId), bundleUrl: job.result?.bundleUrl ?? null, sheetUrl: job.result?.sheetUrl ?? null,
@@ -88,7 +105,7 @@ export function entryOf(job: ForgeJob): LibraryEntry {
 
 function openJobEvent(job: ForgeJob, parent: string | null): WideEvent {
   const e = openEvent("forge", `f-${job.id}`, parent)
-    .set("job", { id: job.id, fighterId: job.fighterId, owner: job.owner, player: job.playerName, origin: job.origin, hint: !!job.hint })
+    .set("job", { id: job.id, fighterId: job.fighterId, owner: job.owner, player: job.playerName, origin: job.origin, hint: !!job.hint, allowance: job.allowance, retries: job.retries })
     .set("timeline", []);
   events.set(job.id, e);
   return e;
@@ -121,30 +138,63 @@ function changed(job: ForgeJob, player?: Player): void {
 const PER_PLAYER = 2, PER_PLAYER_QUIET = 3;
 
 /**
- * The job the forge should take next. A player with nothing being forged goes first (someone
- * drawing one character isn't stuck behind another player's batch); otherwise first come, first
- * served. Nobody gets more than their share of the forge at once.
+ * The job the forge should take next, while the budget lets it take any. A player with nothing being forged
+ * goes first (someone drawing one character isn't stuck behind another player's batch); then whoever has had
+ * fewer forges this week (so a backlog left while the forge rested is taken a player at a time, not one
+ * player's pile first); then first come, first served. Nobody gets more than their share of the forge at once.
  */
 function nextFairJob(): ForgeJob | null {
+  const now = Date.now();
+  if (restingOf(jobs.values(), now)) return null;
   for (let i = queue.length - 1; i >= 0; i--) if (jobs.get(queue[i])?.status !== "queued") queue.splice(i, 1);
-  const running = new Map<string, number>();
-  for (const job of jobs.values()) if (job.status === "running") running.set(job.owner, (running.get(job.owner) ?? 0) + 1);
+  const running = new Map<string, number>(), thisWeek = new Map<string, number>();
+  const week = weekOf(currentBudget().weekStartsAt, now);
+  for (const job of jobs.values()) {
+    if (job.status === "running") running.set(job.owner, (running.get(job.owner) ?? 0) + 1);
+    const n = job.claims.filter((t) => t >= week.start && t < week.end).length;
+    if (n) thisWeek.set(job.owner, (thisWeek.get(job.owner) ?? 0) + n);
+  }
   const waiting = queue.map((id) => jobs.get(id)).filter((j): j is ForgeJob => !!j && j.status === "queued");
   const owners = new Set(waiting.map((j) => j.owner));
   const cap = (owner: string) => ([...owners].some((o) => o !== owner) ? PER_PLAYER : PER_PLAYER_QUIET);
   const allowed = waiting.filter((j) => (running.get(j.owner) ?? 0) < cap(j.owner));
-  return allowed.find((j) => !running.get(j.owner)) ?? allowed[0] ?? null;
+  const busy = (j: ForgeJob): number => (running.get(j.owner) ? 1 : 0);
+  // a stable sort: queue order breaks ties
+  return allowed.sort((a, b) => busy(a) - busy(b) || (thisWeek.get(a.owner) ?? 0) - (thisWeek.get(b.owner) ?? 0))[0] ?? null;
+}
+
+/** Where a player stands with the forge budget; `ip` is their address (the per-network cap on guests). */
+export function standingOf(player: Player, ip: string, now = Date.now()): ForgeStanding {
+  return standing(player, ip, [...jobs.values()], now);
+}
+
+/**
+ * Sends a failed character back to the forge, once, without using up one of the player's forges. Its claims
+ * still count toward the week. A string is why it can't be.
+ */
+export function retryJob(player: Player, fighterId: string, parent: string | null): ForgeJob | string {
+  const job = [...jobs.values()].find((j) => j.fighterId === fighterId && j.owner === player.id);
+  if (!job) return "not one of yours";
+  if (!retryable(job)) return job.blocked ? "the moderator blocked this one: it can't be retried" : job.status !== "failed" ? "it hasn't failed" : "it was already retried";
+  job.retries++;
+  job.attempts = 0;
+  job.status = "queued"; job.stage = "waiting in line"; job.error = null;
+  queue.push(job.id);
+  openJobEvent(job, parent).set("retry", job.retries);
+  changed(job, player);
+  return job;
 }
 
 /** Stores the drawing and queues the job; the library gets the entry at once, as "queued". */
 /** `parent` is the trace the job came from: the creator's request. */
-export function enqueueJob(spec: { fighterId: string; player: Player; png: Buffer; origin: LibraryEntry["origin"]; hint?: { name: string; description: string } | null; public: boolean; parent: string | null }): ForgeJob {
+export function enqueueJob(spec: { fighterId: string; player: Player; ip: string; allowance: Allowance; png: Buffer; origin: LibraryEntry["origin"]; hint?: { name: string; description: string } | null; public: boolean; parent: string | null }): ForgeJob {
   const drawingPath = path.join(genDir, "drawings", `${spec.fighterId}.png`);
   fs.mkdirSync(path.dirname(drawingPath), { recursive: true });
   fs.writeFileSync(drawingPath, spec.png);
   const job: ForgeJob = {
     id: crypto.randomBytes(6).toString("hex"), fighterId: spec.fighterId, owner: spec.player.id, playerName: spec.player.name,
-    drawingPath, status: "queued", stage: "waiting in line", error: null, claimedAt: 0, attempts: 0, origin: spec.origin, hint: spec.hint ?? null, public: spec.public, createdAt: Date.now(), moderation: null, result: null,
+    drawingPath, status: "queued", stage: "waiting in line", error: null, claimedAt: 0, attempts: 0, claims: [], allowance: spec.allowance,
+    ipKey: spec.allowance === "guest" ? ipKeyOf(spec.ip) : null, blocked: false, retries: 0, origin: spec.origin, hint: spec.hint ?? null, public: spec.public, createdAt: Date.now(), moderation: null, result: null,
   };
   jobs.set(job.id, job);
   queue.push(job.id);
@@ -241,6 +291,7 @@ export function attachForge(api: express.Router, opts: ForgeOptions): void {
   fs.mkdirSync(genDir, { recursive: true });
   jobsFile = path.join(opts.dataDir, "forge-jobs.json");
   attachModeration(opts.dataDir);
+  loadBudget(opts.dataDir);
   restore();
 
   const setStatus = (job: ForgeJob, status: ForgeJob["status"], stage: string, error: string | null = null): void => {
@@ -270,6 +321,9 @@ export function attachForge(api: express.Router, opts: ForgeOptions): void {
     if (job) {
       queue.splice(queue.indexOf(job.id), 1);
       job.claimedAt = Date.now(); job.attempts++;
+      job.claims.push(job.claimedAt);
+      const week = weekOf(currentBudget().weekStartsAt, job.claimedAt);
+      events.get(job.id)?.set("budget", { week: claimsBetween(jobs.values(), week.start, week.end), perWeek: currentBudget().perWeek, claims: job.claims.length });
       setStatus(job, "running", "reading the drawing");
       return res.json({ id: job.id, fighterId: job.fighterId, playerName: job.playerName, attempts: job.attempts, hint: job.hint, moderated: !!job.moderation });
     }
@@ -300,7 +354,7 @@ export function attachForge(api: express.Router, opts: ForgeOptions): void {
     const d = decide(job.owner, job.fighterId, job.moderation);
     events.get(job.id)?.set("moderation", { harsh: harsh.verdict, lenient: lenient.verdict, blocked: d.blocked, held: d.held, reputation: [d.before, d.after] });
     if (d.held) setHeld(job.fighterId, true);
-    if (d.blocked) setStatus(job, "failed", "", d.error);
+    if (d.blocked) { job.blocked = true; setStatus(job, "failed", "", d.error); }
     else changed(job);
     res.json({ blocked: d.blocked, held: d.held, before: d.before, after: d.after });
   });

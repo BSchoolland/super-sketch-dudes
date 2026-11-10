@@ -61,6 +61,34 @@ scanned and kept current on save and unsave. A creator deleting a character some
 marks it `deleted`: it leaves their library and COMMUNITY, its bundle stays, and the entry is
 removed for real when the last saver unsaves it.
 
+## The forge budget
+
+Every forge is an Opus agent session paid out of a weekly subscription limit, so `server/budget.ts` holds the
+forge to a budget from `<data>/forge-budget.json` (its shape and default are documented there; a malformed file
+stops the server; a change takes a restart, which hands off like a deploy):
+
+```json
+{ "perWeek": 100, "weekStartsAt": "2026-11-06T19:00:00Z", "paused": null,
+  "perPlayerPerDay": 3, "waitingPerPlayer": 1, "guest": { "lifetime": 1, "perIpPerDay": 3 } }
+```
+
+- A forge counts against the week when the worker claims it (`claims` on the job in forge-jobs.json: the count
+  is derived from the jobs, so it survives restarts and handoffs). Failed, moderator-blocked and retried forges
+  count. Weeks are 7-day windows from `weekStartsAt`, in both directions, so moving the anchor moves every window.
+- A player's allowance is charged when they send a drawing: `perPlayerPerDay` in any 24 hours for a signed-in
+  player; a guest (`guest-…` id) gets `lifetime` ever, and guests from one address (`clientIp`, kept only as a
+  hash, `ipKey`) get `perIpPerDay` between them. Staff (`<data>/staff.json`) have no per-player limit.
+- Resting: `paused` (the kill switch, with the reason players read) or the week spent. Nothing is claimed; drawings
+  are still taken, `waitingPerPlayer` each, and forged when it reopens. `nextFairJob` puts players with nothing
+  forging first, then whoever has had fewer forges this week, then the queue order, so a backlog is taken a
+  player at a time.
+- TRY AGAIN on a failed forge (`retryable`, not one the moderator blocked) requeues the same job once without
+  charging the player; its claim still counts toward the week.
+- GET /library carries the player's `ForgeStanding` (shared/account.ts): left, the wall and when it lifts,
+  resting. The title, the creator, the describe page, MY CHARACTERS and the forging screen word it
+  (`forgeWords` in client/src/screens/character.ts). `npm run forge-budget` prints the week from the live data;
+  `node scripts/budgetcheck.mjs` walks every state in a browser.
+
 ## Determinism (non-negotiable; rollback depends on it)
 
 - `shared/` never touches `Math.sin/cos/tan/atan2/pow/exp/log/random`, `Date`, `performance`,

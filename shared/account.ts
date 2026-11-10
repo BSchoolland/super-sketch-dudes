@@ -47,6 +47,33 @@ export interface LibraryEntry {
   deleted?: boolean;
   /** A moderator judge flagged it: kept out of COMMUNITY and the menu brawl, whatever `public` says, until Ben releases it. */
   held?: boolean;
+  /** It failed through no fault of the player: TRY AGAIN forges it once more without using up a forge of theirs. */
+  retryable?: boolean;
+}
+
+/**
+ * Where a player stands with the forge (server/budget.ts): what they may still start and, when they can't, why.
+ * Times are epoch ms; the client words them in the player's own time zone.
+ */
+export interface ForgeStanding {
+  /** Whose allowance: a signed-in player's daily one, a guest's lifetime one, or staff, who have none. */
+  kind: "player" | "guest" | "staff";
+  /** Forges they may still start; null for staff. */
+  left: number | null;
+  /** The allowance itself: per day for a player, ever for a guest; null for staff. */
+  allowance: number | null;
+  /** A signed-in player's daily allowance, for telling a guest what signing in gets them. */
+  perPlayerPerDay: number;
+  /** Why they can't start one now, or null if they can. */
+  wall: null | "day" | "guest" | "network" | "waiting";
+  /** When "day" or "network": when the next forge comes back. */
+  moreAt: number | null;
+  /** The forge isn't taking jobs: Ben paused it (`reason`), or this week's forges are spent (`until` the next week). */
+  resting: { reason: string | null; until: number | null } | null;
+  /** Their drawings queued for the forge (while it rests, waiting for it to open). */
+  waiting: number;
+  /** How many drawings one player may leave waiting while the forge rests. */
+  waitingPerPlayer: number;
 }
 
 /** A character in COMMUNITY, as the caller sees it. */

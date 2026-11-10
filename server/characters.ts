@@ -5,7 +5,9 @@ import { COMMUNITY_PAGE, COMMUNITY_SORTS, TRENDING_DAYS, DRAW_PNG_MAX_BYTES, HIN
 import { playerOf } from "./auth";
 import type { WideEvent } from "../shared/wide";
 import type { LibraryEntry } from "../shared/account";
-import { drawingUrlOf, enqueueJob, entryOf, jobOf, newFighterId, reviseCharacter, storeCharacter } from "./forge";
+import { drawingUrlOf, enqueueJob, entryOf, jobOf, newFighterId, retryJob, reviseCharacter, standingOf, storeCharacter } from "./forge";
+import { admit } from "./budget";
+import { clientIp } from "./school";
 import { communityCharacters, savesSince, dummyEntry, everyCharacter, findCharacter, libraryOf, removeCharacter, saveCharacter, savedOf, setDummy, setPublic, setStarters, starterEntries, starterIds, setHeld, takeDown, unsaveCharacter, upsertCharacter } from "./library";
 import { HOUSE_ROSTER } from "../shared/house";
 
@@ -14,7 +16,7 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
   api.get("/library", (req, res) => {
     const player = playerOf(req);
     if (!player) return res.status(401).json({ error: "not signed in" });
-    res.json({ player, characters: libraryWithSaves(player.id) });
+    res.json({ player, characters: libraryWithSaves(player.id), forge: standingOf(player, clientIp(req)) });
   });
 
   // someone else's public character into your library, by reference
@@ -138,9 +140,25 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
     const hint = name || description ? { name, description } : null;
     if (req.body?.public !== undefined && typeof req.body.public !== "boolean") return res.status(400).json({ error: "public must be true or false" });
     const event = res.locals.event as WideEvent | undefined;
-    const job = enqueueJob({ fighterId: newFighterId(player.id.replace(/\W+/g, "").slice(-4) || "p"), player, png, origin: "creator", hint, public: req.body?.public ?? true, parent: event?.trace ?? null });
+    const ip = clientIp(req);
+    const before = standingOf(player, ip);
+    const admitted = admit(before);
+    event?.set("allowance", "refused" in admitted ? { refused: admitted.refused } : admitted.allowance);
+    if ("refused" in admitted) return res.status(429).json({ error: admitted.refused, forge: before });
+    const job = enqueueJob({ fighterId: newFighterId(player.id.replace(/\W+/g, "").slice(-4) || "p"), player, ip, allowance: admitted.allowance, png, origin: "creator", hint, public: req.body?.public ?? true, parent: event?.trace ?? null });
     event?.set("forge", `f-${job.id}`);
-    res.json({ character: entryOf(job) });
+    res.json({ character: entryOf(job), forge: standingOf(player, ip) });
+  });
+
+  // TRY AGAIN on a character that failed through no fault of the player's: forged once more, free
+  api.post("/characters/:id/retry", (req, res) => {
+    const player = playerOf(req);
+    if (!player) return res.status(401).json({ error: "not signed in" });
+    const event = res.locals.event as WideEvent | undefined;
+    const job = retryJob(player, req.params.id, event?.trace ?? null);
+    if (typeof job === "string") return res.status(409).json({ error: job });
+    event?.set("forge", `f-${job.id}`);
+    res.json({ character: entryOf(job), forge: standingOf(player, clientIp(req)) });
   });
 
   // a finished character made elsewhere (a CLI forge run), dropped straight into a player's library
