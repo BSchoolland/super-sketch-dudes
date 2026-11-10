@@ -7,7 +7,6 @@ import { site } from "../base";
 import { activity } from "../activity";
 import { myLibrary, refreshLibrary } from "../fighters";
 import { forgeWords } from "./character";
-import { PENCIL } from "../render/paper";
 import { myMaps, refreshMaps } from "../maps";
 import { bg, card, hint, label, title, hover, clicked, goTo, type Screen, INK } from "./ui";
 import { pointer } from "../input/pointer";
