@@ -37,7 +37,7 @@ beforeAll(async () => {
   a.use("/api", router);
   initLibrary(dataDir);
   initEvents(dataDir);
-  attachAuth(router, { dataDir, devLogin: true, botKey: null });
+  attachAuth(router, { dataDir, devLogin: true, botKey: null, discord: { api: "http://discord.invalid", clientSecret: null } });
   attachCharacters(router, "t");
   server = http.createServer(a).listen(0, "127.0.0.1");
   await new Promise<void>((r) => server.once("listening", () => r()));

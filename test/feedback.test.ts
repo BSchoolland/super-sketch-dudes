@@ -28,7 +28,7 @@ beforeAll(async () => {
   const router = express.Router();
   a.use("/api", router);
   initLibrary(dataDir);
-  attachAuth(router, { dataDir, devLogin: true, botKey: null });
+  attachAuth(router, { dataDir, devLogin: true, botKey: null, discord: { api: "http://discord.invalid", clientSecret: null } });
   attachFeedback(router, { dataDir, admins: ["dev-ben"] });
   server = http.createServer(a).listen(0, "127.0.0.1");
   await new Promise<void>((r) => server.once("listening", () => r()));

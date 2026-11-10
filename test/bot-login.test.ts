@@ -18,7 +18,7 @@ beforeAll(async () => {
   api.use(express.json());
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "bot-login-"));
   initLibrary(dataDir);
-  attachAuth(api, { dataDir, devLogin: false, botKey: KEY });
+  attachAuth(api, { dataDir, devLogin: false, botKey: KEY, discord: { api: "http://discord.invalid", clientSecret: null } });
   app.use("/api", api);
   server = app.listen(0, "127.0.0.1");
   await new Promise<void>((r) => server.once("listening", () => r()));

@@ -30,7 +30,7 @@ beforeAll(async () => {
   app.use("/api", router);
   initLibrary(dataDir);
   initEvents(dataDir);
-  attachAuth(router, { dataDir, devLogin: true, botKey: null });
+  attachAuth(router, { dataDir, devLogin: true, botKey: null, discord: { api: "http://discord.invalid", clientSecret: null } });
   attachForge(router, { token: TOKEN, dataDir, genBase: "/gen" });
   attachCharacters(router, TOKEN);
   server = http.createServer(app);

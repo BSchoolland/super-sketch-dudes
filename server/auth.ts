@@ -2,20 +2,25 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import type express from "express";
-import { GOOGLE_CLIENT_ID, SESSION_HEADER, type LastPlayed, type News, type Player } from "../shared/account";
+import { DISCORD_APP_ID, GOOGLE_CLIENT_ID, SESSION_HEADER, type LastPlayed, type News, type Player } from "../shared/account";
 import { markPlayed, seeNews } from "./library";
 
 /**
  * Sign-in: the browser does Discord's implicit OAuth grant (no client secret), gets an access
  * token, and posts it here. We ask Discord who it belongs to and hand back a session token,
- * which the client sends on every request and on the lobby socket. Google is the same trip with
+ * which the client sends on every request and on the lobby socket. Inside the Discord Activity
+ * there is no redirect: the client gets a one-time code from the Embedded App SDK and we exchange
+ * it for the access token with the app's client secret, then ask Discord the same way. Google is the same trip with
  * an ID token, which Google checks for us and we hold to our client ID and the client's nonce.
  * Or: an email and password,
  * scrypt-hashed in accounts.json. Sessions persist to disk. DEV_LOGIN=1 adds a name-only login
  * for local tests.
  */
-/** `botKey`: a secret that lets the bench's bots sign in as bot accounts (ids `bot-…`, never a real player's); unset, no bot login. */
-export interface AuthOptions { dataDir: string; devLogin: boolean; botKey: string | null }
+/**
+ * `botKey`: a secret that lets the bench's bots sign in as bot accounts (ids `bot-…`, never a real player's); unset, no bot login.
+ * `discord.api`: Discord's API base (a fake one in tests); `discord.clientSecret`: the app's, for the Activity's code exchange.
+ */
+export interface AuthOptions { dataDir: string; devLogin: boolean; botKey: string | null; discord: { api: string; clientSecret: string | null } }
 
 const sessions = new Map<string, { player: Player; at: number }>();
 let file = "";
@@ -70,17 +75,45 @@ export function attachAuth(api: express.Router, opts: AuthOptions): void {
   accountsFile = path.join(opts.dataDir, "accounts.json");
   if (fs.existsSync(accountsFile)) for (const [k, v] of JSON.parse(fs.readFileSync(accountsFile, "utf8"))) accounts.set(k, v);
 
-  api.post("/auth/discord", async (req, res) => {
-    const accessToken = String(req.body?.accessToken ?? "");
-    if (!accessToken) return res.status(400).json({ error: "accessToken required" });
-    const r = await fetch("https://discord.com/api/users/@me", { headers: { authorization: `Bearer ${accessToken}` } });
-    if (!r.ok) return res.status(401).json({ error: `discord said ${r.status}` });
+  /** The player a Discord access token belongs to, or why Discord wouldn't say. */
+  async function discordPlayer(accessToken: string): Promise<Player | string> {
+    const r = await fetch(`${opts.discord.api}/users/@me`, { headers: { authorization: `Bearer ${accessToken}` } });
+    if (!r.ok) return `discord said ${r.status}`;
     const u = (await r.json()) as { id: string; username: string; global_name?: string | null; avatar?: string | null };
-    const player: Player = {
+    return {
       id: u.id,
       name: cleanName(u.global_name || u.username),
       avatar: u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=96` : null,
     };
+  }
+
+  api.post("/auth/discord", async (req, res) => {
+    const accessToken = String(req.body?.accessToken ?? "");
+    if (!accessToken) return res.status(400).json({ error: "accessToken required" });
+    const player = await discordPlayer(accessToken);
+    if (typeof player === "string") return res.status(401).json({ error: player });
+    res.json(issue(player));
+  });
+
+  // the Activity's code was authorized without a redirect_uri, so the exchange carries none either
+  api.post("/auth/discord/activity", async (req, res) => {
+    const code = String(req.body?.code ?? "");
+    if (!code) return res.status(400).json({ error: "code required" });
+    if (!opts.discord.clientSecret) {
+      const why = "DISCORD_CLIENT_SECRET is not set on the server, so a Discord Activity sign-in can't be exchanged";
+      console.error(why);
+      return res.status(500).json({ error: why });
+    }
+    const r = await fetch(`${opts.discord.api}/oauth2/token`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ client_id: DISCORD_APP_ID, client_secret: opts.discord.clientSecret, grant_type: "authorization_code", code }),
+    });
+    if (!r.ok) return res.status(401).json({ error: `discord refused the code: ${r.status} ${(await r.text()).slice(0, 200)}` });
+    const { access_token: accessToken } = (await r.json()) as { access_token?: unknown };
+    if (typeof accessToken !== "string") return res.status(502).json({ error: "discord's token response had no access_token" });
+    const player = await discordPlayer(accessToken);
+    if (typeof player === "string") return res.status(401).json({ error: player });
     res.json(issue(player));
   });
 

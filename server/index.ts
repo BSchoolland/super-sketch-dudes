@@ -43,9 +43,13 @@ const FORGE_TOKEN = process.env.FORGE_TOKEN ?? "";
 if (!FORGE_TOKEN) console.warn("FORGE_TOKEN unset: the forge and game bundle uploads are disabled");
 const ice = iceConfigured();
 if (!ice.stun || !ice.turn) console.warn(`peer-to-peer: ${ice.stun} STUN and ${ice.turn} TURN servers (RTC_STUN, RTC_TURN, RTC_TURN_SECRET); pairs that can't connect directly play over the relay`);
+// a fake Discord stands in for the real one only on a DEV_LOGIN server (scripts/activitycheck.mjs)
+if (process.env.DISCORD_API && process.env.DEV_LOGIN !== "1") throw new Error("DISCORD_API is set without DEV_LOGIN=1: only a dev server may talk to a fake Discord");
+const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || null;
+if (!DISCORD_CLIENT_SECRET) console.warn("DISCORD_CLIENT_SECRET unset: nobody can sign in inside the Discord Activity");
 // sign-in, libraries, the forge queue, the creator
 initLibrary(DATA_DIR);
-attachAuth(api, { dataDir: DATA_DIR, devLogin: process.env.DEV_LOGIN === "1", botKey: process.env.BOT_LOGIN_KEY || null });
+attachAuth(api, { dataDir: DATA_DIR, devLogin: process.env.DEV_LOGIN === "1", botKey: process.env.BOT_LOGIN_KEY || null, discord: { api: process.env.DISCORD_API ?? "https://discord.com/api", clientSecret: DISCORD_CLIENT_SECRET } });
 attachForge(api, { token: FORGE_TOKEN, dataDir: DATA_DIR, genBase: `${BASE}/gen` });
 attachCharacters(api, FORGE_TOKEN, DATA_DIR);
 // player-made maps, for the accounts in map-makers.json
@@ -83,8 +87,10 @@ const clientDir = fs.existsSync(path.join(root, "dist", "client")) ? path.join(r
 const staticOpts = { maxAge: "1h", setHeaders: (res: express.Response, p: string) => { if (p.endsWith(".html") || p.includes(`${path.sep}house${path.sep}`)) res.setHeader("Cache-Control", "no-cache"); } };
 app.use(BASE, express.static(clientDir, staticOpts));
 app.use("/", express.static(clientDir, staticOpts));
-// Discord sends the signed-in browser back to /auth with the token in the URL fragment; the game page handles it
-app.get(["/", BASE, `${BASE}/`, "/auth", `${BASE}/auth`], (_req, res) => res.sendFile(path.join(clientDir, "index.html")));
+// Discord sends the signed-in browser back to /auth with the token in the URL fragment; the game page handles it.
+// /discord is where the Discord Activity's root URL mapping points (ARCHITECTURE.md, Discord Activity).
+const pages = ["/auth", "/discord", "/discord/"].flatMap((p) => [p, `${BASE}${p}`]);
+app.get(["/", BASE, `${BASE}/`, ...pages], (_req, res) => res.sendFile(path.join(clientDir, "index.html")));
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ noServer: true });

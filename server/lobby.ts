@@ -48,6 +48,8 @@ export interface Room {
   /** Game bundle hash the room plays on; null = whatever the page loaded. */ game: string | null;
   /** CPU players the host added: they take the slots after the members'. */ bots: RoomBot[];
   /** Team battle: members and bots fight on their `team`'s side. */ teams: boolean;
+  /** A Discord Activity launch's room: everyone in the voice channel who opens the game lands in it (see "call"). */ instance: string | null;
+  /** People who opened the call's room mid-match: they join when it reopens. */ waiting: Client[];
   event: WideEvent;
   match: RelayMatch | null;
 }
@@ -157,11 +159,11 @@ function pushCapped(business: Record<string, unknown>, key: string, value: unkno
 }
 const since = (e: WideEvent): number => Date.now() - e.t0;
 
-export function newRoom(host: Client, isPublic: boolean): Room {
+export function newRoom(host: Client, isPublic: boolean, instance: string | null = null): Room {
   const code = makeCode();
   const trace = `r-${code}-${Date.now().toString(36)}`;
-  const room: Room = { code, trace, members: [], started: false, host, seed: 0, config: null, public: isPublic, picking: null, game: null, bots: [], teams: false, match: null, event: openEvent("room", trace, host.event.trace) };
-  room.event.set("room", { code, host: host.name, public: isPublic });
+  const room: Room = { code, trace, members: [], started: false, host, seed: 0, config: null, public: isPublic, picking: null, game: null, bots: [], teams: false, instance, waiting: [], match: null, event: openEvent("room", trace, host.event.trace) };
+  room.event.set("room", { code, host: host.name, public: isPublic, ...(instance ? { instance } : {}) });
   rooms.set(code, room);
   return room;
 }
@@ -318,10 +320,12 @@ function roomInfo(room: Room): unknown {
     members: room.members.map((m) => ({ id: m.id, name: m.name, slot: m.slot, fighter: m.fighter, bundleUrl: m.bundleUrl, ready: m.ready, team: m.team })),
     bots: room.bots,
     teams: room.teams,
+    call: room.instance !== null,
   };
 }
 
 export function leaveRoom(c: Client): void {
+  for (const r of rooms.values()) if (r.waiting.includes(c)) r.waiting = r.waiting.filter((w) => w !== c);
   const room = c.room;
   if (!room) return;
   const slot = c.slot;
@@ -337,6 +341,12 @@ export function leaveRoom(c: Client): void {
     room.match.left.set(slot, { id: c.id, frame });
     room.match.event.issue("warn", "left", `${c.name} (slot ${slot}) left mid-match at relay frame ${frame}`);
     pushCapped(room.match.event.business, "left", { id: c.id, name: c.name, slot, at: since(room.match.event), newest: frame });
+  }
+  if (!room.members.length && room.waiting.length) {
+    endRelayMatch(room, "everyone left");
+    room.started = false;
+    admitWaiting(room);
+    return;
   }
   if (!room.members.length) {
     rooms.delete(room.code);
@@ -368,6 +378,32 @@ export function joinRoom(c: Client, room: Room): void {
   pushCapped(room.event.business, "joins", { id: c.id, name: c.name, session: c.event.trace, at: since(room.event) });
   pushCapped(c.event.business, "rooms", room.code);
   broadcast(room, roomInfo(room));
+}
+
+/** The call's room reopened: whoever was waiting on the match joins, the first of them hosting if nobody else is left. */
+function admitWaiting(room: Room): void {
+  const waiting = room.waiting.splice(0);
+  if (!room.members.length) room.host = waiting[0];
+  for (const c of waiting) joinRoom(c, room);
+}
+
+/** The 128-bit hex digest of a Discord Activity's instance id the client sends: never the id itself, which names the server and channel. */
+const INSTANCE_KEY = /^[0-9a-f]{32}$/;
+
+/**
+ * A Discord Activity launch: the first person in the voice channel to open the game makes the room and hosts it, and
+ * everyone after joins it. Mid-match, they wait and join when it reopens; past ROOM_SIZE people (waiting counts) they
+ * are told it's full, and play bots on their own.
+ */
+function joinCall(c: Client, key: string): void {
+  leaveRoom(c);
+  const room = [...rooms.values()].find((r) => r.instance === key);
+  if (!room) { joinRoom(c, newRoom(c, false, key)); return; }
+  if (room.members.length + room.waiting.length >= ROOM_SIZE) { send(c, { t: "full" }); return; }
+  if (!room.started) { joinRoom(c, room); return; }
+  room.waiting.push(c);
+  pushCapped(room.event.business, "waits", { id: c.id, name: c.name, at: since(room.event) });
+  send(c, { t: "waiting" });
 }
 
 /** A client gone for good: out of its room, its connection event finished. */
@@ -492,6 +528,12 @@ export function attachLobby(wss: WebSocketServer): void {
           break;
         }
         case "create": joinRoom(c, newRoom(c, !!msg.public)); break;
+        case "call": {
+          const key = String(msg.key ?? "");
+          if (!INSTANCE_KEY.test(key)) { send(c, { t: "error", error: "bad call key" }); break; }
+          joinCall(c, key);
+          break;
+        }
         case "rooms": send(c, publicRooms()); break;
         // the fullest open public room, so lobbies fill up before new ones open
         case "quick": {
@@ -504,7 +546,7 @@ export function attachLobby(wss: WebSocketServer): void {
           const room = rooms.get(String(msg.code ?? "").toUpperCase());
           if (!room) { send(c, { t: "error", error: "no such room" }); break; }
           if (room.started) { send(c, { t: "error", error: "match in progress" }); break; }
-          if (room.members.length >= ROOM_SIZE) { send(c, { t: "error", error: "room full" }); break; }
+          if (room.members.length + room.waiting.length >= ROOM_SIZE) { send(c, { t: "error", error: "room full" }); break; }
           joinRoom(c, room);
           break;
         }
@@ -676,7 +718,7 @@ export function attachLobby(wss: WebSocketServer): void {
           }
           broadcast(c.room, { t: "gameAt", hash: msg.hash, frame: msg.frame | 0 });
           break;
-        case "end": if (c.room && c.room.host === c) { endRelayMatch(c.room, "host ended"); c.room.started = false; c.room.members.forEach((m, i) => { m.ready = false; m.slot = i; }); broadcast(c.room, roomInfo(c.room)); } break;
+        case "end": if (c.room && c.room.host === c) { endRelayMatch(c.room, "host ended"); c.room.started = false; c.room.members.forEach((m, i) => { m.ready = false; m.slot = i; }); broadcast(c.room, roomInfo(c.room)); if (c.room.waiting.length) admitWaiting(c.room); } break;
       }
     });
     ws.on("close", (code, reason) => {
