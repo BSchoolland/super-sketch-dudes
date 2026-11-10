@@ -43,7 +43,8 @@ export async function instanceKey(instanceId: string): Promise<string> {
 export async function startActivity(launch: ActivityLaunch, params: URLSearchParams): Promise<Activity> {
   if (launch === "discord") {
     const { DiscordSDK } = await import("@discord/embedded-app-sdk");
-    sdk = new DiscordSDK(DISCORD_APP_ID);
+    // the SDK's console mirror rejects any line over 1000 characters as an unhandled rejection
+    sdk = new DiscordSDK(DISCORD_APP_ID, { disableConsoleLogOverride: true });
   } else if (import.meta.env.DEV) sdk = (await import("./activity-stub")).stubSdk(params);
   else throw new Error("the stub Discord is only in dev builds");
   await sdk.ready();

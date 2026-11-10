@@ -65,14 +65,23 @@ function checkBars(bars: unknown, p: string[]): void {
   }
 }
 
-/** Loads a generated module from source and calls its factory. Works in browsers and Node (data: URL import). */
+/**
+ * Loads a generated module from source and calls its factory. A browser imports it from a blob: URL,
+ * the only kind of in-memory script Discord's Activity CSP lets a page import; Node can't import blob:
+ * and takes a data: URL.
+ */
 export async function instantiateGenerated(src: string): Promise<(api: typeof generatedApi) => FighterDef> {
   const lint = lintGeneratedSource(src);
   if (lint.length) throw new Error(`generated fighter rejected:\n${lint.join("\n")}`);
-  const url = `data:text/javascript;base64,${toBase64(src)}`;
-  const mod = await import(/* @vite-ignore */ url);
+  const blob = typeof window === "undefined" ? null : URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+  let mod: { default?: unknown };
+  try {
+    mod = await import(/* @vite-ignore */ blob ?? `data:text/javascript;base64,${toBase64(src)}`);
+  } finally {
+    if (blob) URL.revokeObjectURL(blob);
+  }
   if (typeof mod.default !== "function") throw new Error("generated module has no default export function");
-  return mod.default;
+  return mod.default as (api: typeof generatedApi) => FighterDef;
 }
 
 function toBase64(s: string): string {
