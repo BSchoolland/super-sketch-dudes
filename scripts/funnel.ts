@@ -17,15 +17,17 @@ const data = dataDir(value("--data"), import.meta.url);
 const staff = new Set<string>(JSON.parse(fs.readFileSync(path.join(data, "staff.json"), "utf8")));
 const f = funnel(readEvents(data), since, timeZone, staff);
 
-const HEAD: Record<Step, string> = { arrived: "arrived", signedIn: "signed in", drew: "drew", forged: "forged", forgeDone: "forge done", played: "played", bots: "vs bots", online: "online", cameBack: "came back" };
+const HEAD: Record<Step, string> = { arrived: "arrived", guest: "as guest", drew: "drew", forged: "forged", forgeDone: "forge done", played: "played", bots: "vs bots", online: "online", signedIn: "signed in", cameBack: "came back" };
 const width = Math.max(12, ...f.rows.map((r) => r.source.length));
 const cells = (c: Counts): string => STEPS.map((k) => String(c[k]).padStart(HEAD[k].length)).join("  ");
 const why = Object.entries(f.excluded.why).map(([k, n]) => `${k} ${n}`).join(", ");
 
 console.log(`Funnel since ${new Date(since).toISOString().slice(0, 16)}Z (${sinceArg}) from ${data}: ${f.sessions} page sessions, calendar days in ${timeZone}`);
-console.log(`A visitor is a signed-in player, else one signed-out page session (joined to the player who later signs in in the same tab, where the tab's source was recorded).
-Signed-out sessions can't be joined across days, so "came back" only counts them when the browser's first-ever arrival (recorded since sources were) was on an earlier day.
-${UNRECORDED}: sessions from before sources were recorded; each signed-out one of them is its own visitor, including the half of an OAuth round trip before the bounce.`);
+console.log(`A visitor is a player: a guest, or an account (a guest who signed in counts as the account). A page session with no player (before guest play,
+or before its guest arrived) is its own visitor unless its tab later had a player, where the tab's source was recorded.
+Guests keep their id across days; sessions with no player can't be joined across days, so "came back" only counts them when the browser's
+first-ever arrival (recorded since sources were) was on an earlier day.
+${UNRECORDED}: sessions from before sources were recorded; each one with no player is its own visitor, including the half of an OAuth round trip before the bounce.`);
 console.log(`Excluded ${f.excluded.sessions} sessions (${f.excluded.visitors} visitors) as not human${why ? `: ${why}` : ""}`);
 if (f.screenless) console.log(`${f.screenless} sessions only ever sent their opening snapshot (no screen reached the server); they count as arrived`);
 if (f.orphanForges) console.log(`${f.orphanForges} players sent forge jobs in the window without a page session in it; they count for nobody`);
@@ -34,6 +36,7 @@ console.log(`${"source".padEnd(width)}  ${STEPS.map((k) => HEAD[k]).join("  ")}`
 for (const r of f.rows) console.log(`${r.source.padEnd(width)}  ${cells(r.counts)}`);
 console.log(`${"total".padEnd(width)}  ${cells(f.total)}`);
 console.log(`
-signed in: had a player or reached the title screen · drew: opened the draw pad · forged / forge done: the player sent a forge job,
+as guest: played as a guest (guest-… player) · drew: opened the draw pad · forged / forge done: the player sent a forge job,
 and one produced a fighter · vs bots: a local match (practice and map tests don't count) ·
-online: a relay match started (either side's record) · played: either · came back: page sessions on two or more calendar days`);
+online: a relay match started (either side's record) · played: either · signed in: made or used an account (Discord, Google, email) ·
+came back: page sessions on two or more calendar days`);

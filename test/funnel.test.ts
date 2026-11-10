@@ -83,7 +83,7 @@ describe("funnel", () => {
     ], T0 - DAY, "UTC", STAFF);
     expect(f.rows).toEqual([{ source: "(unrecorded)", counts: { ...only(f.total), arrived: 2 } }]);
     expect(f.screenless).toBe(1);
-    expect(f.excluded).toEqual({ sessions: 7, visitors: 6, why: { "headless browser": 1, "bot user agent": 1, "bench bot account": 1, "staff account": 3 } });
+    expect(f.excluded).toEqual({ sessions: 7, visitors: 6, why: { "headless browser": 1, "bot user agent": 1, "bench bot account": 1, "staff account": 4 } });
   });
 
   it("counts forges by their owner, and says when an owner has no session in the window", () => {
@@ -95,5 +95,39 @@ describe("funnel", () => {
     ], T0 - DAY, "UTC", STAFF);
     expect(f.total).toMatchObject({ drew: 1, forged: 1, forgeDone: 0 });
     expect(f.orphanForges).toBe(1);
+  });
+});
+
+describe("funnel with guests", () => {
+  const guestA = { id: "guest-aaa", name: "Brave Otter" };
+  const adopted = (guest: string, player: string, t0: number) => event("request", "server", "s-x", null, t0, { adopted: { guest, player, characters: 1, saved: 0 } });
+
+  it("counts a guest who never signed in as a guest, not signed in, and joins their sessions across days", () => {
+    const f = funnel([
+      session("s-g1", T0, { player: guestA, screens: ["TitleScreen", "BattleMenuScreen", "OnlineScreen", "LoadingScreen", "VersusScreen"], source: itch("s-g1", T0) }),
+      session("s-g2", T0 + 2 * DAY, { player: guestA, screens: ["TitleScreen"], source: { visit: { ...arrival(null, T0 + 2 * DAY), session: "s-g2" }, first: arrival("itch.io", T0) } }),
+    ], T0 - DAY, "UTC", STAFF);
+    expect(f.total).toEqual(only(f.total, "arrived", "guest", "played", "bots", "cameBack"));
+  });
+
+  it("joins a guest to the account they signed in to: one visitor, guest and signed in, forges counted once", () => {
+    const f = funnel([
+      session("s-g", T0, { player: { id: "guest-bbb", name: "Jolly Yak" }, screens: ["TitleScreen", "CreateScreen", "DescribeScreen"], source: itch("s-g", T0) }),
+      forge("guest-bbb", T0 + 1000, true),
+      adopted("guest-bbb", "google-bee", T0 + 5000),
+      session("s-acct", T0 + 6000, { player: { id: "google-bee", name: "Bee" }, screens: ["TitleScreen"], source: itch("s-g", T0) }),
+    ], T0 - DAY, "UTC", STAFF);
+    expect(f.rows).toHaveLength(1);
+    expect(f.total).toEqual(only(f.total, "arrived", "guest", "drew", "forged", "forgeDone", "signedIn"));
+    expect(f.orphanForges).toBe(0);
+  });
+
+  it("a guest who signs in to a staff account is staff", () => {
+    const f = funnel([
+      session("s-sg", T0, { player: { id: "guest-ccc", name: "Tiny Owl" }, screens: ["TitleScreen"] }),
+      adopted("guest-ccc", "discord-1", T0 + 1000),
+    ], T0 - DAY, "UTC", STAFF);
+    expect(f.total.arrived).toBe(0);
+    expect(f.excluded.visitors).toBe(1);
   });
 });
