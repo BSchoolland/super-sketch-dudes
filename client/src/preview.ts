@@ -12,8 +12,15 @@ export interface PreviewApi {
   pose(slot: number, x: number, y: number, facing: 1 | -1, airborne: boolean): void;
   start(slot: number, move: string): void;
   step(n: number): void;
+  boxes(on: boolean): void;
+  /** Sets bars on a fighter (a gear, a charge), e.g. to film a form other than its first. */
+  bars(slot: number, values: Record<string, number>): void;
+  /** Draws the view's rect (x, y, w, h) at `scale` into its own canvas and returns it as a JPEG data URL; dt 0 when it's a second look at the same frame. */
+  shot(x: number, y: number, w: number, h: number, scale: number, boxes: boolean, dt: number): string;
   fighter(slot: number): { x: number; y: number; sx: number; sy: number; action: string; frame: number; move: string | null; hookErr: string | null };
 }
+
+let shotCanvas: HTMLCanvasElement | undefined;
 
 export function previewApi(v: VersusScreen): PreviewApi {
   const st = () => v.match.state;
@@ -45,6 +52,25 @@ export function previewApi(v: VersusScreen): PreviewApi {
     },
     start(slot, move) { startMove(st(), st().fighters[slot], move); },
     step(n) { v.debugStep(n); },
+    boxes(on) { v.renderer.showHitboxes = on; },
+    bars(slot, values) {
+      const f = st().fighters[slot];
+      for (const [k, n] of Object.entries(values)) {
+        if (!(k in f.bars)) throw new Error(`no bar ${k}; this fighter has ${Object.keys(f.bars).join(", ") || "none"}`);
+        f.bars[k] = n;
+      }
+    },
+    shot(x, y, w, h, scale, boxes, dt) {
+      const c = shotCanvas ??= document.createElement("canvas");
+      if (c.width !== Math.round(w * scale) || c.height !== Math.round(h * scale)) { c.width = Math.round(w * scale); c.height = Math.round(h * scale); }
+      const ctx = c.getContext("2d")!;
+      ctx.setTransform(scale, 0, 0, scale, -x * scale, -y * scale);
+      const was = v.renderer.showHitboxes;
+      v.renderer.showHitboxes = boxes;
+      v.draw(ctx, dt);
+      v.renderer.showHitboxes = was;
+      return c.toDataURL("image/jpeg", 0.92);
+    },
     fighter(slot) {
       const f = st().fighters[slot];
       const p = v.renderer.cam.toScreen(f.x, f.y);

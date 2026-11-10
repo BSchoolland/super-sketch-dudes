@@ -15,6 +15,7 @@ import { ART_THEMES, drawStageArt, stageArt } from "./stageart";
 import { createHud, drawHud, fighterColors, type HudState } from "./hud";
 import { drawStrikes, inWindup } from "./strikes";
 import { drawLook, lookColor, lookOf, type LookAt } from "./looks";
+import { moveSource, projectileSource, runDraw, type Placed } from "./brush";
 import type { Projectile } from "../../../shared/types";
 
 /** Rollback smoothing: the time constant a correction eases out with, and the biggest jump that eases rather than snaps. */
@@ -29,6 +30,8 @@ export class Renderer {
   fx: Fx;
   hud: HudState;
   ghosts: Ghost[] = [];
+  /** Where each slot's cell went on its last few sim frames, for move draws (`pose`, `smear`). */
+  private placed: Placed[][] = [];
   projGhosts: ProjGhost[] = [];
   time = 0;
   showHitboxes = false;
@@ -153,15 +156,21 @@ export class Renderer {
     for (const p of state.projectiles) {
       const a = this.prevProj.get(p.id) ?? p, b = this.curProj.get(p.id) ?? p;
       const x = a.x + (b.x - a.x) * alpha, y = a.y + (b.y - a.y) * alpha;
-      const def = defOf(state.fighters[p.from]);
+      const owner = state.fighters[p.from], def = defOf(owner);
       const look = lookOf(def, p.kind);
-      if (look) drawLook(ctx, def, look, this.projAt(p, x, y));
+      if (def.draws?.[p.kind]) {
+        const trail = this.placed[p.from] ?? [];
+        ctx.save(); this.guardedDraw(ctx, def, p.kind, projectileSource(p, owner, def, x, y, trail[trail.length - 1]), "only"); ctx.restore();
+      } else if (look) drawLook(ctx, def, look, this.projAt(p, x, y));
       else drawProjectile(ctx, x, y, p.vx, p.vy, p.hb.r, this.colors[p.owner] ?? "#fff");
     }
     // fighters, back to front by slot (the one who was hit last draws on top)
     const order = state.fighters.map((f) => f).sort((a, b) => a.lastHitFrame - b.lastHitFrame);
+    for (const f of order) this.drawMoveArt(ctx, f, interp[f.slot], "back");
     for (const f of order) this.drawFighter(ctx, state, f, interp[f.slot]);
-    for (const f of order) if (f.action === "attack") drawStrikes(ctx, f, interp[f.slot], this.colors[f.slot] ?? "#fff", this.time);
+    for (const f of order) if (f.action === "attack") {
+      if (!this.drawMoveArt(ctx, f, interp[f.slot], "front")) drawStrikes(ctx, f, interp[f.slot], this.colors[f.slot] ?? "#fff", this.time);
+    }
     this.fx.drawWorld(ctx);
     if (this.showHitboxes) this.drawBoxes(ctx, state);
     ctx.restore();
@@ -171,12 +180,37 @@ export class Renderer {
     ctx.restore();
   }
 
+  /** A move with a `draw` is drawn by the fighter's own function; false when the move has none (strikes draw it). */
+  private drawMoveArt(ctx: CanvasRenderingContext2D, f: Fighter, pos: { x: number; y: number }, pass: "back" | "front"): boolean {
+    if (f.action !== "attack") return false;
+    const mv = currentMove(f);
+    if (!mv?.draw) return false;
+    const trail = this.placed[f.slot] ?? [];
+    const now = trail[trail.length - 1];
+    ctx.save();
+    const def = defOf(f);
+    this.guardedDraw(ctx, def, mv.draw, moveSource(f, mv, def, pos, now?.move === f.move && now.frame === f.frame ? now : undefined, trail), pass);
+    ctx.restore();
+    return true;
+  }
+
+  /** Render-only generated code: a throw is reported once per draw and that draw is skipped, so the match keeps drawing. */
+  private guardedDraw(ctx: CanvasRenderingContext2D, def: FighterDef, name: string, src: Parameters<typeof runDraw>[3], pass: Parameters<typeof runDraw>[4]): void {
+    try { runDraw(ctx, def, name, src, pass); }
+    catch (e) {
+      const key = `${def.id}.${name}`;
+      if (!this.drawErrors.has(key)) { this.drawErrors.add(key); console.error(`draw ${key} threw: ${e instanceof Error ? e.message : e}`); }
+    }
+  }
+  private drawErrors = new Set<string>();
+
   private projAt(p: Projectile, x: number, y: number, ghost = false): LookAt {
     return { x, y, angle: Math.atan2(p.vy, p.vx), r: p.hb.r, len: 0, facing: p.facing, frame: p.age, ghost };
   }
 
   private drawFighter(ctx: CanvasRenderingContext2D, state: State, f: Fighter, pos: { x: number; y: number }): void {
     if (f.action === "dead") return;
+    const world = ctx.getTransform().inverse();
     const def = defOf(f);
     const a = animFor(f, def);
     const pose = poseAt(a.keys, a.frame, a.loop);
@@ -227,7 +261,15 @@ export class Renderer {
     const seated = FLOOR_ANIMS.has(a.name) ? restOnFloor(def, c.cell, pose) : pose;
     // in the air a lean is a spin about the body; on the ground it tips from the feet
     const spinAround = !f.grounded && !FLOOR_ANIMS.has(a.name) ? "middle" : "feet";
-    drawSprite(ctx, def, c.cell, seated, { alpha, flash: f.hitlag > 0 && !!f.pending, flip: c.flip, spinAround, card: !!stageArt(stageOf(state)) });
+    const placed = (m: DOMMatrix, url: string, u: number, feet: number) => {
+      const trail = this.placed[f.slot] ??= [];
+      const move = f.action === "attack" ? f.move : null;
+      const last = trail[trail.length - 1];
+      const entry = { m: world.multiply(m), url, px: def.sprite.px, u, feet, move, frame: f.frame };
+      if (last && last.move === move && last.frame === f.frame) trail[trail.length - 1] = entry;
+      else { trail.push(entry); if (trail.length > 8) trail.shift(); }
+    };
+    drawSprite(ctx, def, c.cell, seated, { alpha, flash: f.hitlag > 0 && !!f.pending, flip: c.flip, spinAround, card: !!stageArt(stageOf(state)), placed });
     ctx.restore();
     // shield bubble
     if (f.shieldHeld || f.action === "shieldStun") {

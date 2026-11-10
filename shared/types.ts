@@ -143,6 +143,8 @@ export interface Move {
   cell?: string;
   /** Sprite fighters: mirror the cell (a back-air drawn from the forward-attack cell). */
   cellFlip?: boolean;
+  /** Names a function in the def's `draws`: called every frame of the move to draw it, in place of its hitboxes' looks. */
+  draw?: string;
 }
 
 /** Pose tracks (squash, stretch, lean, offset of the whole cell) for the sprite's non-move states. */
@@ -252,6 +254,8 @@ export interface FighterDef {
   visual?: (f: Fighter) => { scale?: number; glow?: number; shake?: number };
   /** Named looks for projectiles (by `kind`) and hitboxes (by `fx`). See Look. */
   looks?: Record<string, Look>;
+  /** Render-only move drawings, named by a move's `draw`. The argument is the client's DrawKit (client/src/render/brush.ts). */
+  draws?: Record<string, (g: any) => void>;
   /** What the forge measured about playing it, for the CPU (see cpu-study.ts). */
   cpu?: CpuStudy;
 }

@@ -58,13 +58,7 @@ const STAGE_ORDER = ["drawing the animation", "designing the moves", "writing th
 export async function runForge(job: JobSpec, drawingSrc: string, dir: string, io: ForgeIO): Promise<CompletePayload> {
   const t0 = Date.now();
   fs.mkdirSync(dir, { recursive: true });
-  const wt = path.join(root, "..", "forge-worktrees", job.id);
-  fs.mkdirSync(path.dirname(wt), { recursive: true });
-  const git = (...a: string[]) => { const r = spawnSync("git", a, { cwd: root, encoding: "utf8" }); if (r.status !== 0) throw new Error(`git ${a[0]}: ${r.stderr.trim()}`); return r.stdout; };
-  // left behind by a worker that died mid-job: this attempt starts clean
-  if (fs.existsSync(wt)) { spawnSync("git", ["worktree", "remove", "--force", wt], { cwd: root }); fs.rmSync(wt, { recursive: true, force: true }); }
-  git("worktree", "add", "--detach", "--force", wt, "HEAD");
-  fs.symlinkSync(path.join(root, "node_modules"), path.join(wt, "node_modules"));
+  const wt = makeWorktree(job.id);
   const work = path.join(wt, "forge", "work", job.fighterId);
   fs.mkdirSync(work, { recursive: true });
   const drawing = path.join(work, "drawing.png");
@@ -78,10 +72,52 @@ export async function runForge(job: JobSpec, drawingSrc: string, dir: string, io
   fs.writeFileSync(path.join(dir, "prompt.txt"), prompt);
   await io.progress("an agent is making it");
 
+  const result = await runAgent(wt, prompt, dir, io, () => fs.existsSync(path.join(work, "payload.json")));
+  fs.writeFileSync(path.join(dir, "agent-final.txt"), result.text);
+
+  const payloadFile = path.join(work, "payload.json");
+  if (!fs.existsSync(payloadFile)) throw new ForgeError(`the agent finished without deploying: ${result.text.trim().slice(0, 300)}`);
+  const p = JSON.parse(fs.readFileSync(payloadFile, "utf8"));
+  // keep what it made
+  for (const f of fs.readdirSync(work)) if (f.endsWith(".fighter.js") || f === "payload.json") fs.copyFileSync(path.join(work, f), path.join(dir, f));
+  if (fs.existsSync(path.join(work, "cells"))) fs.cpSync(path.join(work, "cells"), path.join(dir, "cells"), { recursive: true });
+  removeWorktree(wt);
+
+  const report: ForgeReport = {
+    fighterId: job.fighterId, name: p.name, wallMs: Date.now() - t0, costUsd: result.costUsd, sheetCostUsd: sheetCost(path.join(dir, "sheet-cost.jsonl")), sessionId: result.sessionId,
+    checks: p.report?.checks, soft: p.report?.soft ?? [], notes: result.text.slice(0, 2000),
+  };
+  fs.writeFileSync(path.join(dir, "report.json"), JSON.stringify(report, null, 1));
+  return { name: p.name, tagline: p.tagline, description: p.description ?? "", source: p.source, cpu: p.cpu, sprite: p.sprite, cells: p.cells, sheet: p.sheet, report };
+}
+
+/** A fresh detached worktree of HEAD for one job at ../forge-worktrees/<id>, node_modules linked in. */
+export function makeWorktree(id: string): string {
+  const wt = path.join(root, "..", "forge-worktrees", id);
+  fs.mkdirSync(path.dirname(wt), { recursive: true });
+  const git = (...a: string[]) => { const r = spawnSync("git", a, { cwd: root, encoding: "utf8" }); if (r.status !== 0) throw new Error(`git ${a[0]}: ${r.stderr.trim()}`); return r.stdout; };
+  // left behind by a worker that died mid-job: this attempt starts clean
+  if (fs.existsSync(wt)) { spawnSync("git", ["worktree", "remove", "--force", wt], { cwd: root }); fs.rmSync(wt, { recursive: true, force: true }); }
+  git("worktree", "add", "--detach", "--force", wt, "HEAD");
+  fs.symlinkSync(path.join(root, "node_modules"), path.join(wt, "node_modules"));
+  return wt;
+}
+
+export function removeWorktree(wt: string): void {
+  spawnSync("git", ["worktree", "remove", "--force", wt], { cwd: root });
+}
+
+export interface AgentResult { costUsd: number; text: string; sessionId: string }
+
+/**
+ * One Opus session on `prompt` in the worktree, streamed to <dir>/session.jsonl, its tool calls logged and
+ * turned into progress stages. A non-zero exit is a failure unless `finished()` says the work landed anyway.
+ */
+export function runAgent(wt: string, prompt: string, dir: string, io: ForgeIO, finished: () => boolean): Promise<AgentResult> {
   // stream the session so the room sees what it's doing
   const log = fs.createWriteStream(path.join(dir, "session.jsonl"));
   const ledger = path.join(dir, "sheet-cost.jsonl");
-  const result = await new Promise<{ costUsd: number; text: string; sessionId: string }>((resolve, reject) => {
+  return new Promise<AgentResult>((resolve, reject) => {
     const child = spawn(AGENT_BIN, ["-p", "--model", AGENT_MODEL, ...(AGENT_EFFORT ? ["--effort", AGENT_EFFORT] : []), "--dangerously-skip-permissions", "--output-format", "stream-json", "--verbose"], { cwd: wt, stdio: ["pipe", "pipe", "pipe"], env: { ...process.env, FORGE_SHEET_LEDGER: ledger } });
     let buf = "", err = "", timedOut = false, costUsd = 0, text = "", sessionId = "", lost = "", reached = -1;
     const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, TIMEOUT_MS);
@@ -115,27 +151,11 @@ export async function runForge(job: JobSpec, drawingSrc: string, dir: string, io
       clearTimeout(timer); log.end();
       if (timedOut) return reject(new ForgeError(`the agent ran out of time (${TIMEOUT_MS / 60000} minutes)`));
       if (lost) return reject(new Error(`the site stopped this job: ${lost}`));
-      if (code !== 0 && !fs.existsSync(path.join(work, "payload.json"))) return reject(new Error(`agent exited ${code}: ${(err || text).trim().slice(-400)}`));
+      if (code !== 0 && !finished()) return reject(new Error(`agent exited ${code}: ${(err || text).trim().slice(-400)}`));
       resolve({ costUsd, text, sessionId });
     });
     child.stdin.end(prompt);
   });
-  fs.writeFileSync(path.join(dir, "agent-final.txt"), result.text);
-
-  const payloadFile = path.join(work, "payload.json");
-  if (!fs.existsSync(payloadFile)) throw new ForgeError(`the agent finished without deploying: ${result.text.trim().slice(0, 300)}`);
-  const p = JSON.parse(fs.readFileSync(payloadFile, "utf8"));
-  // keep what it made
-  for (const f of fs.readdirSync(work)) if (f.endsWith(".fighter.js") || f === "payload.json") fs.copyFileSync(path.join(work, f), path.join(dir, f));
-  if (fs.existsSync(path.join(work, "cells"))) fs.cpSync(path.join(work, "cells"), path.join(dir, "cells"), { recursive: true });
-  spawnSync("git", ["worktree", "remove", "--force", wt], { cwd: root });
-
-  const report: ForgeReport = {
-    fighterId: job.fighterId, name: p.name, wallMs: Date.now() - t0, costUsd: result.costUsd, sheetCostUsd: sheetCost(ledger), sessionId: result.sessionId,
-    checks: p.report?.checks, soft: p.report?.soft ?? [], notes: result.text.slice(0, 2000),
-  };
-  fs.writeFileSync(path.join(dir, "report.json"), JSON.stringify(report, null, 1));
-  return { name: p.name, tagline: p.tagline, description: p.description ?? "", source: p.source, cpu: p.cpu, sprite: p.sprite, cells: p.cells, sheet: p.sheet, report };
 }
 
 function sheetCost(ledger: string): number {

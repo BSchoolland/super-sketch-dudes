@@ -8,9 +8,10 @@
 //   The drawing's part does the work. The sword is long, so his reach is long and his tip matters: the
 //   point is a sweet spot on the moves where a real sword would have one (fsmash, usmash, fair, bair,
 //   dash attack) and the shaft is sour. A short part gets short moves; a heavy part gets slow ones.
-//   Every strike has a look. Tilts are a thin steel crescent (cut), stabs are a glowing line along the
-//   blade (skewer), smashes are heavier hatched steel (chop, sweep), the fire special is a bolt that is
-//   nothing like the sword. A player should be able to tell the moves apart from the shape alone.
+//   Every strike is drawn (see `draws` at the bottom). Cuts are a steel crescent swept through the hitbox,
+//   arriving as it comes out and thinning away after; level swings are an oval round him; stabs shoot out
+//   along the blade; smashes are heavier hatched steel; the drive is fire pouring off the blade, nothing like
+//   the sword. A player should be able to tell the moves apart from the shape alone.
 //   Poses sell it. Each move has its own keys (wind-up, snap into the hit, settle), and the smashes
 //   and specials switch cells mid-move (`cells`) so a chop winds up overhead and comes down forward.
 //
@@ -57,22 +58,11 @@ export default function make(api) {
     key(Math.min(total - 1, hit + 6), { rot: lean * 0.7, sx: 1.04, sy: 0.98, ...extra }),
     key(total, rest),
   ];
+  // draws (at the bottom) draw every move; a look only names a hitbox's `fx` and colours its hit sparks
   const looks = {
-    // the sword itself, cut out of the lunge drawing, spinning end over end
-    blade: { cell: "atk-fwd", crop: [298, 290, 132, 50], size: 100, spin: -26, trail: "ghost" },
-    // every tilt and aerial: a thin crescent of steel with a blue edge
-    cut: { shape: "slash", color: "#dce6f2", ink: "#3f6fb5", texture: "solid" },
-    // the point: full blue, for the sweet spots
-    point: { shape: "slash", color: "#3f6fb5", ink: "#24221e", texture: "solid" },
-    // smashes: heavy hatched steel, twice the size of a tilt's cut; skewer is also the line of every straight stab
-    chop: { shape: "slash", color: "#7fa3d9", ink: "#24221e", texture: "hatch", size: 190 },
-    skewer: { shape: "bolt", color: "#3f6fb5", ink: "#24221e", texture: "glow", size: 34 },
-    sweep: { shape: "slash", color: "#7fa3d9", ink: "#24221e", texture: "hatch", size: 150 },
-    // the DRIVE: a bolt of fire, nothing like the sword
-    drive: { shape: "bolt", color: "#ff8a2a", ink: "#c93a1c", texture: "flame", size: 90 },
-    // the TORNADO: a scribbled whirl around him, spinning
-    tornado: { shape: "cloud", color: "#e8eef8", ink: "#3f6fb5", texture: "scribble", size: 190, spin: 32, aim: false },
-    tornadoBurst: { shape: "star", color: "#bcd0ee", ink: "#3f6fb5", texture: "glow", size: 220, spin: 12, aim: false },
+    blade: { color: "#3f6fb5" },
+    cut: { color: "#dce6f2" }, point: { color: "#3f6fb5" }, chop: { color: "#7fa3d9" }, skewer: { color: "#3f6fb5" },
+    sweep: { color: "#7fa3d9" }, drive: { color: "#ff8a2a" }, tornado: { color: "#e8eef8" }, tornadoBurst: { color: "#bcd0ee" },
   };
 
   const GRAB = { total: 36, hit: 7, damage: 9 };
@@ -186,6 +176,94 @@ export default function make(api) {
 
   const BLADE_OUT = 16, BLADE_BACK = 0.6;
   const DRIVE_CHARGE_MAX = 45, DRIVE_FRAMES = 18;
+
+  // HOW HIS MOVES ARE DRAWN. Each draw runs every frame of the move (or projectile kind) named the same, with g:
+  // the move's hitboxes on screen, pose() for a pixel of the cell, a pencil-and-marker brush, and ready-made strokes
+  // timed to the hitbox (g.cut, g.level, g.thrust, g.pop, g.zap, g.flame, g.whirl, g.burst, g.dust; see DrawKit in
+  // client/src/render/brush.ts and strokes.ts). Most moves are one or two strokes; write your own from the brush
+  // when nothing fits. Strokes default to his marker blue over a pale tint of it; the heavy ones are hatched steel.
+  const HEAVY = { color: "#b9cdee", ink: "#24221e", hatch: true };
+  const HAND = [312, 317], RAISED = [317, 210], TIP = [420, 303];
+  const level = (g, i, cx, cy, rx, ry, a, b, o) => { const h = g.hit(i); g.level(cx, cy, rx, ry, a, b, h.frames[0], h.frames[1], o); };
+
+  const draws = {
+    jab1: (g) => { g.thrust(0, { width: 16 }); g.pop(0, { n: 5, dist: 26 }); },
+    jab2: (g) => level(g, 0, 50, -60, 66, 34, 160, 330, { width: 24 }),
+    // level swings are an oval round him, behind to in front
+    ftilt: (g) => { if (g.hit(0).live) g.smear({ count: 2 }); level(g, 0, 40, -58, 92, 30, 230, 345, { width: 30, lead: 5 }); },
+    dashAttack: (g) => { g.smear({ count: 4, alpha: 0.5 }); g.thrust(1, { width: 22 }); g.pop(0, { dist: 60 }); g.dust(-60, 0, 9, { n: 3 }); },
+    utilt: (g) => {
+      // one arc over his head across both hitboxes: it starts when the first comes out
+      const p = g.at(0, -70), a = g.ends(0), b = g.ends(1);
+      g.swing(p, g.dist(p, b.near) + 10, g.angle(p, a.near) - 10, g.angle(p, b.far) + 10, b.h.frames[0], b.h.frames[1], { width: 30, lead: b.h.frames[0] - a.h.frames[0] + 3 });
+    },
+    dtilt: (g) => { level(g, 0, 56, -16, 66, 12, 215, 350, { width: 22 }); g.dust(40, 120, 8); },
+    nair: (g) => {
+      const a = g.hit(0), b = g.hit(1);
+      if (a.live || b.live) g.smear({ count: 3 });
+      g.swing(g.at(0, -62), 108, -10, 190, b.frames[0], b.frames[1], { width: 28, len: 0.6, lead: b.frames[0] - a.frames[0] + 3 });
+    },
+    fair: (g) => {
+      // pivots on his hand as drawn, so the arc rides the lunge
+      g.cut(0, g.frame >= 11 ? g.pose(...HAND) : g.at(10, -90), 130, { width: 40, ...HEAVY });
+      if (g.hit(0).live) g.smear({ count: 3 });
+      g.pop(0, { ink: HEAVY.ink });
+    },
+    bair: (g) => { g.thrust(1, { width: 22 }); g.pop(0, { dist: 56, ink: HEAVY.ink }); },
+    uair: (g) => { g.thrust(1, { width: 24 }); g.pop(0, { dist: 56 }); },
+    dair: (g) => { for (let i = 0; i < 3; i++) g.thrust(i, i === 2 ? { width: 30, lag: 4, ...HEAVY } : { width: 18, lag: 4 }); g.pop(2, { ink: HEAVY.ink, dist: 60 }); },
+    fsmash: (g) => {
+      // CHOP: overhead to forward through the tip
+      if (g.frame >= 17 && g.frame <= 24) g.smear({ count: 4, alpha: 0.55 });
+      g.cut(0, g.frame >= 18 ? g.pose(...HAND) : g.pose(...RAISED), 150, { width: 52, lag: 10, ...HEAVY });
+      g.pop(0, { n: 12, dist: 80, len: 22, ink: HEAVY.ink });
+      g.dust(60, 160, 20, { n: 3 });
+    },
+    usmash: (g) => {
+      if (g.frame >= 15 && g.frame <= 20) g.smear({ count: 3 });
+      g.thrust(1, { width: 36, lag: 8, ...HEAVY });
+      g.pop(0, { n: 12, dist: 70, len: 20, ink: HEAVY.ink });
+      g.dust(-50, 50, 15, { n: 3 });
+    },
+    dsmash: (g) => {
+      // a low ring round his feet: the near side forward, then the far side back
+      level(g, 0, 0, -18, 128, 20, 200, 355, { width: 30, lead: 5, ...HEAVY });
+      level(g, 1, 0, -18, 128, 20, 20, 175, { width: 30, lead: 5, ...HEAVY });
+      g.dust(30, 150, 16); g.dust(-30, -150, 24);
+    },
+    sspecial: (g) => {
+      // the DRIVE: the blade catches while it charges, then fire pours off it and streams back past him
+      const c = (g.bars.drive ?? 0) / DRIVE_CHARGE_MAX, tip = g.pose(...TIP), hilt = g.pose(...HAND);
+      if (g.frame <= 14) { if (c > 0) g.flame(g.lerp(hilt, tip, 0.2), g.lerp(hilt, tip, 1.1), 10 + c * 16, { alpha: 0.6 + c * 0.4, seed: 3 }); return; }
+      const h = g.hit(0), fade = g.span(h.frames[1], h.frames[1] + 10);
+      if (fade >= 1) return;
+      g.smear({ count: 4, alpha: 0.5 });
+      g.under(() => g.flame(g.at(-110 - c * 60, -50), [h.x2 + h.r * 0.6 * g.facing, h.y2], h.r * 1.6 * (1 - fade * 0.8), { alpha: 1 - fade }));
+      g.flecks(g.at(-20, -60), { t: (g.frame % 8) / 8, n: 5, dist: 70, deg: 170, spread: 60, len: 10, color: "#c93a1c", seed: Math.floor(g.frame / 8) });
+    },
+    dspecial: (g) => {
+      const spin = g.hit(0), burst = g.hit(1), c = g.at(0, -66);
+      if (g.frame >= 5 && g.frame <= 36) g.whirl(c, spin.r * 1.05, 120, { alpha: g.span(5, 9) * (1 - g.span(34, 37)), spin: 34 });
+      if (g.frame >= 5 && g.frame <= 34) g.smear({ count: 2, alpha: 0.35 });
+      g.burst(c, burst.r, g.span(burst.frames[0], burst.frames[0] + 14), { width: 18, n: 14 });
+      g.dust(-110, 110, burst.frames[0], { n: 5 });
+    },
+    uspecial: (g) => {
+      if (g.frame >= 5 && g.frame <= 23) { g.whirl(g.at(0, -66), g.hit(0).r, 140, { alpha: g.span(5, 8) * (1 - g.span(21, 24)), spin: -40, rings: 3 }); g.smear({ count: 3, alpha: 0.35 }); }
+      g.thrust(2, { width: 26 }); g.pop(1, { dist: 60 });
+    },
+    ledgeAttack: (g) => g.cut(0, g.at(0, -60), 80),
+    getupAttack: (g) => { g.cut(0, g.at(0, -40), -50); g.cut(1, g.at(0, -40), 50); },
+    // the thrown sword (a projectile: frame is its age, at() measures from it): the blade cut out of the lunge
+    // cell, spinning end over end inside a whirl of its own swipes
+    blade: (g) => {
+      const c = g.at(0, 0), spin = -26 * g.frame;
+      for (let k = 1; k <= 2; k++) g.line(g.arc(c, 46 + k * 4, spin + 40 * k, spin + 40 * k + 120, 14), { width: 2.2 - k * 0.6, color: g.color, alpha: 0.7 / k });
+      g.cell("atk-fwd", c, { crop: [298, 290, 132, 50], size: 100, deg: spin });
+    },
+  };
+  // a draw named after a move draws that move; the rest (blade) are projectile kinds
+  for (const id of Object.keys(draws)) if (moves[id]) moves[id].draw = id;
   return {
     id: "sword-guy",
     name: "SWORD GUY",
@@ -195,6 +273,7 @@ export default function make(api) {
     rig: { anims: spriteAnims(), loops: spriteLoops },
     palette: { colors: { marker: "#3f6fb5" }, outline: "#24221e" },
     looks,
+    draws,
     special: () => ({ drop: 0 }),
     bars: {
       sword: { label: "SWORD", color: "#3f6fb5", max: 1, start: 1 },

@@ -234,7 +234,7 @@ export function restOnFloor(def: FighterDef, cell: string, pose: Pose): Pose {
 export const stillSprites = new Set<string>();
 
 /** `spinAround: "middle"` turns the lean about the body's middle instead of its feet (airborne: tumbling, launched). `card`: on its paper cut-out (art stages). */
-export interface SpriteDrawOpts { alpha?: number; flash?: boolean; ghost?: boolean; flip?: boolean; spinAround?: "feet" | "middle"; card?: boolean }
+export interface SpriteDrawOpts { alpha?: number; flash?: boolean; ghost?: boolean; flip?: boolean; spinAround?: "feet" | "middle"; card?: boolean; placed?: (m: DOMMatrix, url: string, u: number, feet: number) => void }
 
 /**
  * Draws one cell in fighter space (+x facing, +y down, feet at the origin) with the pose's
@@ -265,6 +265,7 @@ export function drawSprite(ctx: CanvasRenderingContext2D, def: FighterDef, cell:
   drawHealth.sprites++;
   if (!img) e.failed ? drawHealth.failed++ : drawHealth.loading++;
   const feet = feetRow(def, stillSprites.has(def.id) ? "idle" : cell, e);
+  opts.placed?.(ctx.getTransform(), url, u, feet);
   const card = opts.card && !opts.ghost && img ? cardOf(e, sp.px) : null;
   if (card) {
     const x = (-sp.px / 2 - card.pad) * u, y = (-feet - card.pad) * u, s = (sp.px + 2 * card.pad) * u;
