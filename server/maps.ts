@@ -56,6 +56,15 @@ export function mapsOf(owner: string): MapDoc[] {
   return [...maps.values()].filter((m) => m.owner === owner).sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
+/** A guest signing in: their maps are `to`'s. */
+export function moveMaps(from: string, to: Player): void {
+  for (const m of mapsOf(from)) store({ ...m, owner: to.id, ownerName: to.name });
+}
+
+export function forgetMaps(owner: string): void {
+  for (const m of mapsOf(owner)) { maps.delete(m.id); fs.rmSync(fileOf(m.id)); }
+}
+
 function store(doc: MapDoc): void {
   maps.set(doc.id, doc);
   fs.writeFileSync(fileOf(doc.id), JSON.stringify(doc, null, 1));

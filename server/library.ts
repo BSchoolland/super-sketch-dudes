@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { GAME_VERSION, type LastPlayed, type LibraryEntry, type News, type Player } from "../shared/account";
+import { GAME_VERSION, isGuest, type LastPlayed, type LibraryEntry, type News, type Player } from "../shared/account";
 import { FRESH_MS, compareVersions, releasesSince, type Fresh } from "../shared/releases";
 
 /**
@@ -180,11 +180,14 @@ export function setPublic(owner: string, id: string, pub: boolean): LibraryEntry
   return e;
 }
 
-/** Ready characters anyone can find and save: public, not deleted, not a starter (everyone has those). */
+/** Shown to other players (COMMUNITY, the menu brawl): its owner made it public, has an account, and no moderator holds it. */
+export const isListed = (c: LibraryEntry): boolean => c.public && !c.held && !isGuest(c.owner);
+
+/** Ready characters anyone can find and save: listed, not deleted, not a starter (everyone has those). */
 export function communityCharacters(): { entry: LibraryEntry; creator: Player | null; plays: number; saves: number }[] {
   scanAll();
   return [...cache.values()].flatMap((lib) => lib.characters
-    .filter((c) => c.status === "ready" && c.bundleUrl && c.public && !c.held && !c.deleted && !starters.includes(c.id))
+    .filter((c) => c.status === "ready" && c.bundleUrl && isListed(c) && !c.deleted && !starters.includes(c.id))
     .map((entry) => ({ entry, creator: lib.player, plays: playCount(entry.id), saves: saveCount(entry.id) })));
 }
 
@@ -255,4 +258,46 @@ function purge(owner: string, id: string): void {
   const lib = load(owner);
   lib.characters = lib.characters.filter((c) => c.id !== id);
   write(owner);
+}
+
+/**
+ * A guest signing in: their characters and saves join `to`'s library and the guest's record is gone. A save of a
+ * character `to` already owns or has saved is the one reference kept (the earlier save time).
+ */
+export function moveLibrary(from: string, to: string): { characters: number; saved: number } {
+  if (from === to) throw new Error(`moving ${from}'s library onto itself`);
+  scanAll();
+  const src = load(from), dst = load(to);
+  for (const c of src.characters) { c.owner = to; dst.characters.push(c); }
+  let saved = 0;
+  for (const s of src.saved) {
+    const had = dst.saved.find((x) => x.id === s.id);
+    if (had || dst.characters.some((c) => c.id === s.id)) {
+      if (had && s.at < had.at) had.at = s.at;
+      const left = saveCount(s.id) - 1;
+      if (left > 0) saves.set(s.id, left); else saves.delete(s.id);
+      continue;
+    }
+    dst.saved.push(s);
+    saved++;
+  }
+  write(to);
+  cache.delete(from);
+  fs.rmSync(fileOf(from), { force: true });
+  return { characters: src.characters.length, saved };
+}
+
+/** Every guest's record: who, when they last played, and whether they made or saved anything. */
+export function guestRecords(): { id: string; lastPlayed: number; made: boolean; characters: string[] }[] {
+  scanAll();
+  return [...cache].filter(([id]) => isGuest(id)).map(([id, lib]) => ({
+    id, lastPlayed: lib.lastPlayed?.at ?? 0, made: lib.characters.length > 0 || lib.saved.length > 0, characters: lib.characters.map((c) => c.id),
+  }));
+}
+
+/** Deletes a player's record: their characters' entries and their saves (the last saver of a deleted character takes it). */
+export function forgetPlayer(owner: string): void {
+  for (const { id } of [...load(owner).saved]) unsaveCharacter(owner, id);
+  cache.delete(owner);
+  fs.rmSync(fileOf(owner), { force: true });
 }

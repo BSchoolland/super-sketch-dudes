@@ -39,3 +39,11 @@ export function decide(player: string, fighterId: string, j: Judgements): Decisi
   fs.appendFileSync(logFile, JSON.stringify({ at: Date.now(), player, fighterId, ...j, blocked, held: flags.length > 0 && !blocked, before, after }) + "\n");
   return { blocked, held: flags.length > 0 && !blocked, error, before, after };
 }
+
+/** A guest signing in keeps the lower of their two reputations; `to` null drops the guest's score. */
+export function moveReputation(from: string, to: string | null): void {
+  if (!(from in scores)) return;
+  if (to) scores[to] = Math.min(reputationOf(to), scores[from]);
+  delete scores[from];
+  fs.writeFileSync(scoresFile, JSON.stringify(scores, null, 1));
+}

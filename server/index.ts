@@ -18,6 +18,7 @@ import { attachBrawlStats } from "./brawl-stats";
 import { attachEvents, initEvents, requestErrors, requestEvents, watchProcess } from "./events";
 import { iceConfigured } from "./ice";
 import { restoreHandoff, saveHandoff } from "./handoff";
+import { sweepGuests } from "./guests";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
@@ -55,6 +56,19 @@ attachCharacters(api, FORGE_TOKEN, DATA_DIR);
 // player-made maps, for the accounts in map-makers.json
 initMaps({ dataDir: DATA_DIR, devLogin: process.env.DEV_LOGIN === "1" });
 attachMaps(api);
+// guests who stopped coming back; a failed sweep is an error on the process event, not a crash loop at every boot
+const sweep = (): void => {
+  try {
+    const { swept, kept } = sweepGuests(Date.now());
+    if (swept) console.log(`guests: deleted ${swept} who stopped playing`);
+    if (kept.length) processEvent.issue("warn", "guest-sweep", `kept ${kept.length} idle guests (open forge jobs, or a starter or the dummy is theirs): ${kept.slice(0, 5).join(", ")}`);
+  } catch (error) {
+    console.error("guest sweep failed", error);
+    processEvent.issue("error", "guest-sweep", error instanceof Error ? error.message : String(error), error instanceof Error ? error.stack : undefined);
+  }
+};
+sweep();
+setInterval(sweep, 6 * 3_600_000).unref();
 // game bundles: whole builds of the game, one folder per hash; rooms switch between them live
 attachGames(api, { token: FORGE_TOKEN, dataDir: DATA_DIR });
 const gamesDir = path.join(DATA_DIR, "games");
@@ -91,6 +105,8 @@ app.use("/", express.static(clientDir, staticOpts));
 // /discord is where the Discord Activity's root URL mapping points (ARCHITECTURE.md, Discord Activity).
 const pages = ["/auth", "/discord", "/discord/"].flatMap((p) => [p, `${BASE}${p}`]);
 app.get(["/", BASE, `${BASE}/`, ...pages], (_req, res) => res.sendFile(path.join(clientDir, "index.html")));
+// the privacy notice and terms: plain pages beside the game (privacy.html is the URL Google's consent screen has)
+for (const page of ["privacy", "terms"]) app.get([`/${page}`, `${BASE}/${page}`], (_req, res) => res.sendFile(path.join(clientDir, `${page}.html`)));
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ noServer: true });

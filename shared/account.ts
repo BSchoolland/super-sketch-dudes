@@ -12,13 +12,16 @@ export interface News { since: number; fresh: Fresh[]; seen: Fresh[] }
 
 export type CharStatus = "queued" | "generating" | "ready" | "failed";
 
-/** A signed-in player: a Discord or Google identity, or an email account. The id is the account. */
+/** A player: a Discord or Google identity, an email account, or a guest (`guest-…`, a name the server picked). The id is the account. */
 export interface Player {
   id: string;
   name: string;
-  /** Avatar image URL, if Discord or Google has one; email accounts never do. */
+  /** Avatar image URL, if Discord or Google has one; email accounts and guests never do. */
   avatar: string | null;
 }
+
+/** Guests play without an account; their characters stay out of COMMUNITY until they sign in. */
+export const isGuest = (id: string): boolean => id.startsWith("guest-");
 
 /** One character in a player's library: a forge job's outcome, from queued to ready. */
 export interface LibraryEntry {

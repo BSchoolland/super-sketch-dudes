@@ -2,8 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import type express from "express";
-import { DISCORD_APP_ID, GOOGLE_CLIENT_ID, SESSION_HEADER, type LastPlayed, type News, type Player } from "../shared/account";
+import { DISCORD_APP_ID, GOOGLE_CLIENT_ID, SESSION_HEADER, isGuest, type LastPlayed, type News, type Player } from "../shared/account";
+import type { WideEvent } from "../shared/wide";
 import { markPlayed, seeNews } from "./library";
+import { adoptGuest, newGuest } from "./guests";
+import { clientIp } from "./school";
 
 /**
  * Sign-in: the browser does Discord's implicit OAuth grant (no client secret), gets an access
@@ -12,9 +15,9 @@ import { markPlayed, seeNews } from "./library";
  * there is no redirect: the client gets a one-time code from the Embedded App SDK and we exchange
  * it for the access token with the app's client secret, then ask Discord the same way. Google is the same trip with
  * an ID token, which Google checks for us and we hold to our client ID and the client's nonce.
- * Or: an email and password,
- * scrypt-hashed in accounts.json. Sessions persist to disk. DEV_LOGIN=1 adds a name-only login
- * for local tests.
+ * Or an email and password, scrypt-hashed in accounts.json (the client asks a birth year first and keeps the answer to itself). A browser with
+ * no session gets a guest (ids `guest-…`, guests.ts); signing in from a guest's session moves what the guest made to
+ * the account. Sessions persist to disk. DEV_LOGIN=1 adds a name-only login for local tests.
  */
 /**
  * `botKey`: a secret that lets the bench's bots sign in as bot accounts (ids `bot-…`, never a real player's); unset, no bot login.
@@ -40,6 +43,7 @@ function saveAccounts(): void {
 
 const PASSWORD_MIN = 8, PASSWORD_MAX = 200;
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
+const GUESTS_PER_HOUR = 200;
 
 function hashPassword(password: string, salt: string): Promise<string> {
   return new Promise((resolve, reject) => crypto.scrypt(password, salt, 64, (err, key) => (err ? reject(err) : resolve(key.toString("base64")))));
@@ -59,8 +63,23 @@ export function playerOf(req: express.Request): Player | null {
   return playerFromSession(req.get(SESSION_HEADER) ?? req.query.session);
 }
 
-/** A signed-in player, when they last played before this sign-in (null: never) and their NEW stickers. */
-function issue(player: Player): { session: string; player: Player; lastPlayed: LastPlayed | null; news: News | null } {
+/** Ends every session a player has. */
+export function endSessionsOf(id: string): void {
+  let ended = false;
+  for (const [token, s] of sessions) if (s.player.id === id) { sessions.delete(token); ended = true; }
+  if (ended) save();
+}
+
+/**
+ * A signed-in player, when they last played before this sign-in (null: never) and their NEW stickers. Signing in to an
+ * account from a guest's session moves the guest's library to it and ends the guest.
+ */
+function issue(player: Player, req: express.Request, res: express.Response): { session: string; player: Player; lastPlayed: LastPlayed | null; news: News | null } {
+  const was = playerOf(req);
+  if (was && isGuest(was.id) && !isGuest(player.id)) {
+    const moved = adoptGuest(was.id, player);
+    (res.locals.event as WideEvent | undefined)?.set("adopted", { guest: was.id, player: player.id, ...moved });
+  }
   const token = crypto.randomBytes(24).toString("base64url");
   sessions.set(token, { player, at: Date.now() });
   save();
@@ -92,7 +111,7 @@ export function attachAuth(api: express.Router, opts: AuthOptions): void {
     if (!accessToken) return res.status(400).json({ error: "accessToken required" });
     const player = await discordPlayer(accessToken);
     if (typeof player === "string") return res.status(401).json({ error: player });
-    res.json(issue(player));
+    res.json(issue(player, req, res));
   });
 
   // the Activity's code was authorized without a redirect_uri, so the exchange carries none either
@@ -114,7 +133,7 @@ export function attachAuth(api: express.Router, opts: AuthOptions): void {
     if (typeof accessToken !== "string") return res.status(502).json({ error: "discord's token response had no access_token" });
     const player = await discordPlayer(accessToken);
     if (typeof player === "string") return res.status(401).json({ error: player });
-    res.json(issue(player));
+    res.json(issue(player, req, res));
   });
 
   api.post("/auth/google", async (req, res) => {
@@ -126,7 +145,7 @@ export function attachAuth(api: express.Router, opts: AuthOptions): void {
     if (t.aud !== GOOGLE_CLIENT_ID || !["accounts.google.com", "https://accounts.google.com"].includes(t.iss)) return res.status(401).json({ error: "that token isn't for this game" });
     if (t.nonce !== nonce) return res.status(401).json({ error: "sign-in expired, try again" });
     const player: Player = { id: `google-${t.sub}`, name: cleanName(t.given_name || t.name), avatar: t.picture ?? null };
-    res.json(issue(player));
+    res.json(issue(player, req, res));
   });
 
   api.post("/auth/signup", async (req, res) => {
@@ -139,21 +158,33 @@ export function attachAuth(api: express.Router, opts: AuthOptions): void {
     const player: Player = { id: `email-${crypto.randomBytes(9).toString("hex")}`, name: cleanName(req.body?.name), avatar: null };
     accounts.set(email, { player, salt, hash: await hashPassword(password, salt) });
     saveAccounts();
-    res.json(issue(player));
+    res.json(issue(player, req, res));
+  });
+
+  // a browser's first visit; a busy school network shares one address, so the cap is generous
+  const guestsPerHour = new Map<string, { hour: number; n: number }>();
+  api.post("/auth/guest", (req, res) => {
+    const ip = clientIp(req), hour = Math.floor(Date.now() / 3_600_000);
+    const seen = guestsPerHour.get(ip);
+    if (seen && seen.hour !== hour) for (const [k, v] of guestsPerHour) if (v.hour !== hour) guestsPerHour.delete(k);
+    const n = seen?.hour === hour ? seen.n : 0;
+    if (n >= GUESTS_PER_HOUR) return res.status(429).json({ error: "too many new guests from this network: try again in an hour" });
+    guestsPerHour.set(ip, { hour, n: n + 1 });
+    res.json(issue(newGuest(), req, res));
   });
 
   api.post("/auth/login", async (req, res) => {
     const account = accounts.get(String(req.body?.email ?? "").trim().toLowerCase());
     const password = String(req.body?.password ?? "").slice(0, PASSWORD_MAX);
     if (!account || !(await passwordMatches(account, password))) return res.status(401).json({ error: "wrong email or password" });
-    res.json(issue(account.player));
+    res.json(issue(account.player, req, res));
   });
 
   if (opts.devLogin) {
     api.post("/auth/dev", (req, res) => {
       const name = cleanName(req.body?.name);
       const player: Player = { id: `dev-${name.toLowerCase().replace(/\W+/g, "-")}`, name, avatar: null };
-      res.json(issue(player));
+      res.json(issue(player, req, res));
     });
   }
 
@@ -164,7 +195,7 @@ export function attachAuth(api: express.Router, opts: AuthOptions): void {
       if (given.length !== key.length || !crypto.timingSafeEqual(given, key)) return res.status(401).json({ error: "wrong bot key" });
       const name = cleanName(req.body?.name);
       const player: Player = { id: `bot-${name.toLowerCase().replace(/\W+/g, "-")}`, name, avatar: null };
-      res.json(issue(player));
+      res.json(issue(player, req, res));
     });
   }
 

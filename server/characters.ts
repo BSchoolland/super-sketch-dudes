@@ -8,7 +8,7 @@ import type { LibraryEntry } from "../shared/account";
 import { drawingUrlOf, enqueueJob, entryOf, jobOf, newFighterId, retryJob, reviseCharacter, standingOf, storeCharacter } from "./forge";
 import { admit } from "./budget";
 import { clientIp } from "./school";
-import { communityCharacters, savesSince, dummyEntry, everyCharacter, findCharacter, libraryOf, removeCharacter, saveCharacter, savedOf, setDummy, setPublic, setStarters, starterEntries, starterIds, setHeld, takeDown, unsaveCharacter, upsertCharacter } from "./library";
+import { isListed, communityCharacters, savesSince, dummyEntry, everyCharacter, findCharacter, libraryOf, removeCharacter, saveCharacter, savedOf, setDummy, setPublic, setStarters, starterEntries, starterIds, setHeld, takeDown, unsaveCharacter, upsertCharacter } from "./library";
 import { HOUSE_ROSTER } from "../shared/house";
 
 /** The character creator and the library, over HTTP, for signed-in players. */
@@ -210,7 +210,7 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
     const not = new Set(String(req.query.not ?? "").split(",").filter(Boolean));
     const all = [
       ...HOUSE_ROSTER.map((h) => ({ id: h.id as string, name: h.name as string | null, bundleUrl: null as string | null })),
-      ...everyCharacter().filter((c) => c.public && !c.held).map((c) => ({ id: c.id, name: c.name, bundleUrl: c.bundleUrl })),
+      ...everyCharacter().filter(isListed).map((c) => ({ id: c.id, name: c.name, bundleUrl: c.bundleUrl })),
     ].filter((c) => !not.has(c.id));
     for (let i = 0; i < Math.min(n, all.length); i++) { const j = i + Math.floor(Math.random() * (all.length - i)); [all[i], all[j]] = [all[j], all[i]]; }
     res.json({ characters: all.slice(0, n) });

@@ -1,12 +1,13 @@
 import { sourceLabel, type VisitSource } from "../shared/source";
+import { isGuest } from "../shared/account";
 import type { StoredEvent } from "./eventlog";
 
 /**
- * How far visitors got, per source, from the wide event store. A visitor is a signed-in player,
- * else a signed-out page session; signed-out sessions in a tab that later signs in join that
- * player (the tab's recorded source links them).
+ * How far visitors got, per source, from the wide event store. A visitor is a player (a guest or an account; a guest
+ * who signed in is the account they signed in to, joined by the sign-in request's `adopted`), else a page session with
+ * no player; those in a tab that later has one join that player (the tab's recorded source links them).
  */
-export const STEPS = ["arrived", "signedIn", "drew", "forged", "forgeDone", "played", "bots", "online", "cameBack"] as const;
+export const STEPS = ["arrived", "guest", "drew", "forged", "forgeDone", "played", "bots", "online", "signedIn", "cameBack"] as const;
 export type Step = (typeof STEPS)[number];
 export type Counts = Record<Step, number>;
 export interface FunnelRow { source: string; counts: Counts }
@@ -25,12 +26,13 @@ export const UNRECORDED = "(unrecorded)";
 /** Local matches entered from these are practice against the dummy or a map test, not a match. */
 const NOT_A_MATCH_FROM = new Set(["LibraryScreen", "MapEditorScreen"]);
 
-function nonHuman(s: StoredEvent, staff: Set<string>): string | null {
+/** `visitor`: the key the session counts under (`p:<player id>` for a player, a guest under the account they signed in to). */
+function nonHuman(s: StoredEvent, visitor: string, staff: Set<string>): string | null {
   const ua = s.client!.ua, player = s.client!.player;
   if (/HeadlessChrome/.test(ua)) return "headless browser";
   if (/bot|crawl|spider|slurp/i.test(ua)) return "bot user agent";
   if (player?.id.startsWith("bot-")) return "bench bot account";
-  if (player && staff.has(player.id)) return "staff account";
+  if (visitor.startsWith("p:") && staff.has(visitor.slice(2))) return "staff account";
   return null;
 }
 
@@ -53,10 +55,19 @@ export function funnel(events: StoredEvent[], since: number, timeZone: string, s
   // a bundle swap carries a page session on in a new event under the same trace: both count as that session
   const sessions = events.filter((e) => e.kind === "session" && e.t0 >= since);
 
+  // a guest who signed in, at any time, is their account
+  const accountOf = new Map<string, string>();
+  for (const e of events) {
+    const adopted = e.kind === "request" ? (e.business.adopted as { guest: string; player: string } | undefined) : undefined;
+    if (adopted) accountOf.set(adopted.guest, adopted.player);
+  }
+  const visitorOf = (id: string): string => `p:${accountOf.get(id) ?? id}`;
+  const adopters = new Set([...accountOf.values()].map((id) => `p:${id}`));
+
   const forged = new Set<string>(), forgeDone = new Set<string>(), online = new Set<string>();
   for (const e of events) {
     if (e.kind === "forge" && e.t0 >= since) {
-      const owner = `p:${(e.business.job as { owner: string }).owner}`;
+      const owner = visitorOf((e.business.job as { owner: string }).owner);
       forged.add(owner);
       if (e.final && (e.business.result as { bundleUrl?: string } | undefined)?.bundleUrl) forgeDone.add(owner);
     }
@@ -75,7 +86,7 @@ export function funnel(events: StoredEvent[], since: number, timeZone: string, s
   const visitors = new Map<string, StoredEvent[]>();
   for (const s of sessions) {
     const tab = sourceOf(s)?.visit.session, player = s.client!.player;
-    const key = player ? `p:${player.id}` : tab ? (tabPlayer.has(tab) ? `p:${tabPlayer.get(tab)!.id}` : `t:${tab}`) : `s:${s.trace}`;
+    const key = player ? visitorOf(player.id) : tab ? (tabPlayer.has(tab) ? visitorOf(tabPlayer.get(tab)!.id) : `t:${tab}`) : `s:${s.trace}`;
     visitors.set(key, [...(visitors.get(key) ?? []), s]);
   }
 
@@ -84,7 +95,7 @@ export function funnel(events: StoredEvent[], since: number, timeZone: string, s
   const total = zero();
   const excluded = { sessions: 0, visitors: 0, why: {} as Record<string, number> };
   for (const [key, list] of visitors) {
-    const reasons = list.map((s) => nonHuman(s, staff));
+    const reasons = list.map((s) => nonHuman(s, key, staff));
     if (reasons.some(Boolean)) {
       excluded.visitors++;
       excluded.sessions += new Set(list.map((s) => s.trace)).size;
@@ -98,15 +109,17 @@ export function funnel(events: StoredEvent[], since: number, timeZone: string, s
     const traces = list.map((s) => s.trace);
     const screens = list.map(screensOf);
     const bots = screens.some(playedLocal), net = traces.some((t) => online.has(t));
+    const players = list.flatMap((s) => (s.client!.player ? [s.client!.player.id] : []));
     const reached: Record<Step, boolean> = {
       arrived: true,
-      signedIn: list.some((s) => s.client!.player) || screens.some((l) => l.includes("TitleScreen")),
+      guest: players.some(isGuest) || adopters.has(key),
       drew: screens.some((l) => l.includes("CreateScreen")),
       forged: forged.has(key),
       forgeDone: forgeDone.has(key),
       played: bots || net,
       bots,
       online: net,
+      signedIn: players.some((id) => !isGuest(id)),
       cameBack: days.size > 1 || list.some((s) => { const first = sourceOf(s)?.first; return !!first && day.format(first.at) < firstDay; }),
     };
     const label = firstSource ? sourceLabel(firstSource.first) : UNRECORDED;

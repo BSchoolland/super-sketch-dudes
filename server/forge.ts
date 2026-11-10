@@ -279,6 +279,33 @@ export function charactersMade(): number {
   return n;
 }
 
+/** A guest signing in: their jobs, finished or not, are `to`'s; one still to finish lands in `to`'s library. */
+export function moveJobs(from: string, to: Player): void {
+  let moved = false;
+  for (const job of jobs.values()) {
+    if (job.owner !== from) continue;
+    job.owner = to.id;
+    if (job.status === "queued" || job.status === "running") job.playerName = to.name;
+    moved = true;
+  }
+  if (moved) persist();
+}
+
+/** Whether the forge still has work of this owner's queued or running. */
+export const hasOpenJobs = (owner: string): boolean => [...jobs.values()].some((j) => j.owner === owner && (j.status === "queued" || j.status === "running"));
+
+/** Deletes an owner's jobs and these characters' drawings and forged files. */
+export function forgetForged(owner: string, fighterIds: string[]): void {
+  if (hasOpenJobs(owner)) throw new Error(`${owner} still has forge jobs open`);
+  for (const [id, job] of jobs) if (job.owner === owner) { jobs.delete(id); fs.rmSync(job.drawingPath, { force: true }); }
+  for (const f of fighterIds) {
+    if (!/^gen-[\w-]+$/.test(f)) throw new Error(`not a forged fighter id: ${f}`);
+    fs.rmSync(path.join(genDir, f), { recursive: true, force: true });
+    fs.rmSync(path.join(genDir, "drawings", `${f}.png`), { force: true });
+  }
+  persist();
+}
+
 export function newFighterId(prefix: string): string {
   return `gen-${prefix}-${crypto.randomBytes(3).toString("hex")}`;
 }
