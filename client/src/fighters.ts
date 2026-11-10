@@ -4,7 +4,7 @@ import { site } from "./base";
 import { fighterLoad, type FighterLoad } from "./gen";
 import { roster } from "../../shared/fighters/index";
 import { HOUSE_ROSTER, houseBundlePath, type HouseId } from "../../shared/house";
-import type { LibraryEntry } from "../../shared/account";
+import type { ForgeStanding, LibraryEntry } from "../../shared/account";
 import type { FighterDef } from "../../shared/types";
 
 /** A fighter someone can pick: one of the house roster, or a ready character from a library. */
@@ -35,12 +35,13 @@ export function choiceDef(c: FighterChoice): { def: FighterDef | null; load: Fig
  * The signed-in player's library, fetched on demand and shared by every screen. `entries` is
  * null until the first fetch lands; a failed fetch keeps the last list and says why.
  */
-export const myLibrary: { entries: LibraryEntry[] | null; error: string; loading: boolean } = { entries: null, error: "", loading: false };
+export const myLibrary: { entries: LibraryEntry[] | null; error: string; loading: boolean; forge: ForgeStanding | null } = { entries: null, error: "", loading: false, forge: null };
 
 export async function refreshLibrary(): Promise<void> {
   myLibrary.loading = true;
   try {
-    const { characters } = await library.list();
+    const { characters, forge } = await library.list();
+    myLibrary.forge = forge;
     // newest into the library first: your own by when they were made, saved ones by when you saved them
     myLibrary.entries = [...characters].sort((a, b) => (b.saved ?? b.createdAt) - (a.saved ?? a.createdAt));
     myLibrary.error = "";
@@ -71,6 +72,7 @@ export async function refreshDummy(): Promise<void> {
 export function forgetLibrary(): void {
   myLibrary.entries = null;
   myLibrary.error = "";
+  myLibrary.forge = null;
 }
 
 /** What a player can fight with: their ready characters, then the house. */

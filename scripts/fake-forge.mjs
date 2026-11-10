@@ -4,6 +4,7 @@
 // The 3x3 sheet is composed from the exemplar's cells with a tiny PNG codec (no image deps).
 import fs from "node:fs";
 import zlib from "node:zlib";
+import { execFileSync } from "node:child_process";
 
 const server = process.argv[2] ?? "http://localhost:3010";
 const token = process.argv[3] ?? "devtoken";
@@ -13,6 +14,8 @@ const root = new URL("..", import.meta.url);
 const source = fs.readFileSync(new URL("forge/exemplar/sword-guy.fighter.js", root), "utf8");
 const cellFiles = Object.fromEntries(CELLS.map((c) => [c, fs.readFileSync(new URL(`forge/exemplar/sword-guy/${c}.png`, root))]));
 const cells = Object.fromEntries(CELLS.map((c) => [c, cellFiles[c].toString("base64")]));
+// the CPU study ships in the bundle and the game plays against it, so it's a real one, of the exemplar
+const cpu = JSON.parse(execFileSync("npx", ["tsx", "scripts/lib/exemplar-study.ts"], { cwd: new URL(".", root), encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] }));
 
 function decodeRgba(buf) {
   let pos = 8, width = 0, height = 0;
@@ -91,7 +94,7 @@ async function work(job, n) {
   await api(`/forge/jobs/${job.id}/complete`, {
     name, tagline: `${job.playerName}'s desk lamp with a grudge and a very long cord`, description: "A floating desk lamp that whips its cord.",
     card: ["ATTACK  cord whip, aim it", "SPECIAL  hold: bulb flash burst", "UP+SPECIAL  propeller lift", "GRAB  plug hook, toss"],
-    source, sprite: { px: 512, feetPx: 448, heightPx: 360, anims: {} }, cells, sheet,
+    source, sprite: { px: 512, feetPx: 448, heightPx: 360, anims: {} }, cells, sheet, cpu,
   });
   console.log(`  done: ${name}`);
 }

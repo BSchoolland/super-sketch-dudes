@@ -41,7 +41,7 @@ export function menus(): Nav {
     }, (id) => nav.community(id)),
     create: (pad, hint) => new CreateScreen(nav, pad, hint),
     describe: (pad, hint) => new DescribeScreen(nav, pad, hint),
-    forge: (entry, pad) => new ForgeScreen(nav, entry, pad),
+    forge: (entry) => new ForgeScreen(nav, entry),
     library: () => new LibraryScreen(nav),
     community: (open) => new CommunityScreen(nav, open),
     // the Activity opens here, not on the title screen that fetches these for the website

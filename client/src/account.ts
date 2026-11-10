@@ -1,5 +1,5 @@
 import { site } from "./base";
-import { DISCORD_APP_ID, GAME_VERSION, GOOGLE_CLIENT_ID, SESSION_HEADER, type CommunityCharacter, type CommunitySort, type FeaturedCharacter, type LastPlayed, type News, type Player, type LibraryEntry } from "../../shared/account";
+import { DISCORD_APP_ID, GAME_VERSION, GOOGLE_CLIENT_ID, SESSION_HEADER, type CommunityCharacter, type CommunitySort, type FeaturedCharacter, type ForgeStanding, type LastPlayed, type News, type Player, type LibraryEntry } from "../../shared/account";
 import { FRESH_MS, releasesSince, type Fresh, type Release } from "../../shared/releases";
 import { sessionTrace } from "./telemetry/events";
 
@@ -169,7 +169,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const library = {
-  list: () => api<{ player: Player; characters: LibraryEntry[] }>("/library"),
+  list: () => api<{ player: Player; characters: LibraryEntry[]; forge: ForgeStanding }>("/library"),
   /** `n` random contenders for the brawl, none of `not`; a house fighter comes with no bundleUrl. */
   sample: (n: number, not: string[]) => api<{ characters: { id: string; name: string | null; bundleUrl: string | null }[] }>(`/characters/sample?n=${n}&not=${not.join(",")}`),
   dummy: () => api<{ character: LibraryEntry | null }>("/dummy"),
@@ -182,6 +182,8 @@ export const library = {
   community: (sort: CommunitySort, page: number, q = "") => api<{ characters: CommunityCharacter[]; pages: number }>(`/characters/community?sort=${sort}&page=${page}&q=${encodeURIComponent(q)}`),
   featured: () => api<{ characters: FeaturedCharacter[]; made: number }>("/characters/featured"),
   /** `hint` is what the player typed on the describe page; the forge's design pass reads it. */
-  create: (png: string, hint: { name: string; description: string }, pub: boolean) => api<{ character: LibraryEntry }>("/characters", { method: "POST", body: JSON.stringify({ png, ...hint, public: pub }) }),
+  create: (png: string, hint: { name: string; description: string }, pub: boolean) => api<{ character: LibraryEntry; forge: ForgeStanding }>("/characters", { method: "POST", body: JSON.stringify({ png, ...hint, public: pub }) }),
+  /** TRY AGAIN on a character that failed through no fault of the player's (`retryable`): free, once. */
+  retry: (id: string) => api<{ character: LibraryEntry; forge: ForgeStanding }>(`/characters/${id}/retry`, { method: "POST" }),
   get: (id: string) => api<{ character: LibraryEntry }>(`/characters/${id}`),
 };

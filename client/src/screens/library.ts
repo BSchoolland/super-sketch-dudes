@@ -8,7 +8,7 @@ import { libraryChoices, myLibrary, practiceDummy, refreshDummy, refreshLibrary 
 import type { LibraryEntry } from "../../../shared/account";
 import { bg, hover, label, title, type Screen } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
-import { drawCharacterArt, drawCharacterCell, RED } from "./character";
+import { drawCharacterArt, drawCharacterCell, forgeWords, RED } from "./character";
 import { wrapped } from "./text";
 import { CharacterDetail, COL_W, COL_X, moveRows, type MoveRow } from "./charcard";
 import { DrawPad } from "./pad";
@@ -68,6 +68,7 @@ export class LibraryScreen implements Screen {
     const armed = this.deleteArmed >= 0 && this.t - this.deleteArmed < 3;
     const b: Button[] = [];
     if (e.status === "ready") b.push({ id: "practice", x: 0, y, w, h: 110, text: "PRACTICE", size: 44, disabled: !practiceDummy.choice });
+    if (e.retryable) b.push({ id: "retry", x: 0, y, w, h: 110, text: "TRY AGAIN", size: 44 });
     b.push({ id: "copy", x: 0, y, w, h: 110, text: "COPY DRAWING", size: 34 });
     if (!e.starter) b.push({ id: "delete", x: 0, y, w, h: 110, text: armed ? "SURE?" : e.saved ? "UNSAVE" : "DELETE", size: 44 });
     b.push({ id: "back", x: 0, y, w, h: 110, text: "BACK", size: 44 });
@@ -85,8 +86,9 @@ export class LibraryScreen implements Screen {
     return this.detail?.entry === e ? moveRows(e, this.detail.movesTop) : [];
   }
 
-  /** Opens the creator with this character's drawing already on the pad. */
+  /** Opens the creator with this character's drawing already on the pad, or on why it can't take one now. */
   private copyDrawing(e: LibraryEntry): void {
+    if (myLibrary.forge && forgeWords(myLibrary.forge).blocked) { this.next = this.nav.create(); return; }
     const img = new Image();
     img.onload = () => {
       const pad = new DrawPad(PAD);
@@ -118,7 +120,7 @@ export class LibraryScreen implements Screen {
     if (pressed === "back" || m.back) { sfx.menuBack(); return this.nav.title(); }
     if (pressed?.startsWith("c")) {
       const e = this.entries[Number(pressed.slice(1))];
-      if (e.status === "queued" || e.status === "generating") return this.nav.forge(e, null);
+      if (e.status === "queued" || e.status === "generating") return this.nav.forge(e);
       this.selected = e;
       this.detail = e.status === "ready" ? new CharacterDetail(e) : null;
       this.deleteArmed = -1;
@@ -131,6 +133,7 @@ export class LibraryScreen implements Screen {
     const pressed = this.detailMenu.update(this.detailButtons(e), m, taps);
     if (pressed === "practice") return this.nav.practice(libraryChoices([e])[0], this.device);
     if (pressed === "copy") { sfx.menuConfirm(); this.copyDrawing(e); }
+    if (pressed === "retry") this.retry(e);
     if (pressed === "public") this.flipPublic(e);
     if (pressed === "delete") {
       if (this.deleteArmed >= 0 && this.t - this.deleteArmed < 3) this.remove(e);
@@ -160,6 +163,16 @@ export class LibraryScreen implements Screen {
     );
   }
 
+  private retry(e: LibraryEntry): void {
+    library.retry(e.id).then(
+      ({ character, forge }) => { myLibrary.forge = forge; this.next = this.nav.forge(character); void refreshLibrary(); },
+      (error: unknown) => {
+        console.error(`retry ${e.id} failed`, error);
+        this.problem = error instanceof Error ? error.message : String(error);
+      },
+    );
+  }
+
   private remove(e: LibraryEntry): void {
     this.deleteArmed = -1;
     (e.saved ? library.unsave(e.id) : library.remove(e.id)).then(
@@ -182,6 +195,8 @@ export class LibraryScreen implements Screen {
   private drawGrid(ctx: CanvasRenderingContext2D): void {
     const buttons = this.gridButtons();
     drawCharTabs(ctx, "mine", buttons[this.menu.focus]?.id === "tab");
+    const forge = myLibrary.forge && forgeWords(myLibrary.forge).short;
+    if (forge) label(ctx, forge, VIEW_W / 2 + 280, VIEW_H - 84, 26, PENCIL, "left", 700, VIEW_W / 2 - 320);
     if (!myLibrary.entries) label(ctx, "…", VIEW_W / 2, 500, 60, PENCIL);
     else if (!this.entries.length) label(ctx, "nothing here yet: draw your first fighter", VIEW_W / 2, 480, 40, PENCIL);
     const focus = this.menu.focus;
@@ -201,7 +216,8 @@ export class LibraryScreen implements Screen {
     } else {
       drawCharacterArt(ctx, e, 160, 110, 640, this.t);
       title(ctx, "FAILED", 870, 200, 96, RED, "left");
-      wrapped(ctx, e.error ?? "couldn't be made", 870, 280, 860, 32, RED, 8, "left");
+      const h = wrapped(ctx, e.error ?? "couldn't be made", 870, 280, 860, 32, RED, 8, "left");
+      if (e.retryable) label(ctx, "TRY AGAIN is free: it doesn't use up one of your forges", 870, 280 + h + 30, 26, PENCIL, "left");
     }
     this.detailMenu.draw(ctx, this.detailButtons(e));
   }

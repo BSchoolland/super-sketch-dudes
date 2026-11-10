@@ -14,8 +14,8 @@ export interface Nav {
   create(pad?: DrawPad, hint?: CharacterHint): Screen;
   /** After the pad: name it and describe it (both optional), then create it. */
   describe(pad: DrawPad, hint?: CharacterHint): Screen;
-  /** Watching a character the forge is making (or has made); `pad` is kept for TRY AGAIN. */
-  forge(entry: LibraryEntry, pad: DrawPad | null): Screen;
+  /** Watching a character the forge is making (or has made). */
+  forge(entry: LibraryEntry): Screen;
   library(): Screen;
   /** COMMUNITY: everyone's public characters, to save into your library. */
   community(open?: string): Screen;

@@ -3,7 +3,9 @@ import { VIEW_H, VIEW_W } from "../render/camera";
 import type { MenuInput } from "../input/devices";
 import { sfx } from "../audio/audio";
 import { account, isNew, seeNews, unseenReleases } from "../account";
-import { refreshLibrary } from "../fighters";
+import { myLibrary, refreshLibrary } from "../fighters";
+import { forgeWords } from "./character";
+import { PENCIL } from "../render/paper";
 import { myMaps, refreshMaps } from "../maps";
 import { bg, card, hint, label, title, hover, clicked, goTo, type Screen, INK } from "./ui";
 import { pointer } from "../input/pointer";
@@ -65,11 +67,15 @@ export class TitleScreen implements Screen {
   get items(): { id: Mode; name: string; desc: string }[] {
     return [
       { id: "battle", name: "BATTLE", desc: "Fight the CPU, a friend here, or someone online" },
-      { id: "create", name: "NEW CHARACTER", desc: "Draw a new character" },
+      { id: "create", name: "NEW CHARACTER", desc: this.forgeNote || "Draw a new character" },
       { id: "library", name: "CHARACTERS", desc: "Yours, and everyone else's to save" },
       ...(myMaps.canCreate ? [{ id: "maps" as const, name: "MAPS", desc: "Build a stage to fight on" }] : []),
       { id: "settings", name: "SETTINGS", desc: "Change settings" },
     ];
+  }
+  /** How many forges are left, or why there are none, from the library fetch. */
+  private get forgeNote(): string {
+    return myLibrary.forge ? forgeWords(myLibrary.forge).short : "";
   }
   brawl: MenuBrawl | null = null;
   /** What's new since this player last played, over the menu until they close it. */
@@ -123,6 +129,9 @@ export class TitleScreen implements Screen {
       if (live && !tapped && clicked(x, y, w, h)) goTo(this.pick(it.id));
       card(ctx, x, y, w, h, "", i === this.sel);
       title(ctx, it.name, x + w / 2, y + 60, 42, INK);
+      // the forge's word on the card itself, not only under it when it's picked: resting, or none left
+      const st = myLibrary.forge;
+      if (it.id === "create" && st && (st.wall || st.resting)) label(ctx, st.resting ? "resting" : "none left", x + w - 14, y + h - 12, 20, PENCIL, "right");
       if (it.id === "library" && isNew("characters")) drawNewSticker(ctx, x + w - 20, y + 8);
     });
     // the brawl plays over the menu: fighters stand on the cards and the logo

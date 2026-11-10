@@ -7,7 +7,8 @@ import { HINT_DESCRIPTION_MAX, HINT_NAME_MAX } from "../../../shared/account";
 import { library } from "../account";
 import { bg, card, label, title, type Screen, INK } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
-import { RED } from "./character";
+import { forgeOpens, RED } from "./character";
+import { myLibrary } from "../fighters";
 import type { DrawPad } from "./pad";
 import { padPng } from "./padtools";
 import { TextField } from "./textfield";
@@ -76,6 +77,8 @@ export class DescribeScreen implements Screen {
     if (!this.name.value && !this.description.value) label(ctx, "leave both empty and it's all read from the drawing", FORM_X, DESC.y + DESC.h + 38, 24, PENCIL, "left");
     const buttons = this.buttons();
     this.menu.draw(ctx, buttons);
+    const resting = myLibrary.forge?.resting;
+    if (resting) label(ctx, `The forge is resting: this one waits in line until it opens${resting.until ? ` ${forgeOpens(resting.until)}` : ""}`, FORM_X, 960, 24, PENCIL, "left");
     if (this.problem) label(ctx, this.problem, VIEW_W / 2, VIEW_H - 40, 28, RED);
   }
 
@@ -99,7 +102,7 @@ export class DescribeScreen implements Screen {
     this.sending = true;
     this.problem = "";
     library.create(out.png, { name: this.name.value.trim(), description: this.description.value.trim() }, this.pub).then(
-      () => { sfx.menuConfirm(); this.next = this.nav.library(); },
+      ({ forge }) => { myLibrary.forge = forge; sfx.menuConfirm(); this.next = this.nav.library(); },
       (error: unknown) => {
         console.error("character upload failed", error);
         this.problem = error instanceof Error ? error.message : String(error);

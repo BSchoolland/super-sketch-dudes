@@ -3,13 +3,12 @@ import type { MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
 import { sfx } from "../audio/audio";
 import { library } from "../account";
-import { libraryChoices, refreshLibrary } from "../fighters";
+import { libraryChoices, myLibrary, refreshLibrary } from "../fighters";
 import type { LibraryEntry } from "../../../shared/account";
 import { bg, hover, label, type Screen } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
-import { characterStatus, drawCharacterArt, etaWords, forgeEta, forgeStep, FORGE_S, RED } from "./character";
+import { characterStatus, drawCharacterArt, etaWords, forgeEta, forgeOpens, forgeStep, FORGE_S, RED } from "./character";
 import { INK, PENCIL, inkRect } from "../render/paper";
-import type { DrawPad } from "./pad";
 import { wrapped } from "./text";
 import { CharacterDetail, moveRows } from "./charcard";
 import type { Nav } from "./nav";
@@ -30,7 +29,9 @@ export class ForgeScreen implements Screen {
   private stage = "";
   private stageAt = 0;
 
-  constructor(private nav: Nav, private entry: LibraryEntry, private pad: DrawPad | null) {}
+  private retrying = false;
+
+  constructor(private nav: Nav, private entry: LibraryEntry) {}
 
   get done(): boolean {
     return this.entry.status === "ready" || this.entry.status === "failed";
@@ -43,8 +44,8 @@ export class ForgeScreen implements Screen {
       { id: "battle", x: VIEW_W / 2 - w - 20, y, w, h: 110, text: "BATTLE WITH IT", size: 44 },
       library,
     ];
-    if (this.entry.status === "failed" && this.pad) return [
-      { id: "retry", x: VIEW_W / 2 - w - 20, y, w, h: 110, text: "TRY AGAIN", size: 44 },
+    if (this.entry.retryable) return [
+      { id: "retry", x: VIEW_W / 2 - w - 20, y, w, h: 110, text: "TRY AGAIN", size: 44, disabled: this.retrying },
       library,
     ];
     return [{ ...library, x: VIEW_W / 2 - w / 2 }];
@@ -60,7 +61,7 @@ export class ForgeScreen implements Screen {
       if (!choice) throw new Error(`ready character ${this.entry.id} has no bundle`);
       return this.nav.battle(choice);
     }
-    if (pressed === "retry" && this.pad) return this.nav.create(this.pad);
+    if (pressed === "retry") this.retry();
     if (pressed === "back" || m.back) { sfx.menuBack(); return this.nav.library(); }
     return null;
   }
@@ -102,9 +103,22 @@ export class ForgeScreen implements Screen {
     ctx.restore();
     inkRect(ctx, x, y, w, h, INK, 2);
     const dots = ".".repeat(1 + (Math.floor(this.t * 2) % 3));
-    label(ctx, `${step.label}${dots}`, VIEW_W / 2, y + h + 50, 34, e.status === "queued" ? PENCIL : INK);
+    const resting = e.status === "queued" ? myLibrary.forge?.resting : null;
+    label(ctx, `${resting ? "Waiting for the forge" : step.label}${dots}`, VIEW_W / 2, y + h + 50, 34, e.status === "queued" ? PENCIL : INK);
     const eta = forgeEta(e);
-    if (eta !== null) label(ctx, etaWords(eta), VIEW_W / 2, y + h + 92, 26, PENCIL);
+    const below = resting ? (resting.until ? `it opens again ${forgeOpens(resting.until)}` : resting.reason!) : eta !== null ? etaWords(eta) : "";
+    if (below) label(ctx, below, VIEW_W / 2, y + h + 92, 26, PENCIL);
+  }
+
+  private retry(): void {
+    this.retrying = true;
+    library.retry(this.entry.id).then(
+      ({ character, forge }) => { this.entry = character; myLibrary.forge = forge; this.shown = 0; this.pollError = ""; void refreshLibrary(); },
+      (error: unknown) => {
+        console.error(`retry ${this.entry.id} failed`, error);
+        this.pollError = error instanceof Error ? error.message : String(error);
+      },
+    ).finally(() => { this.retrying = false; });
   }
 
   private poll(): void {
