@@ -7,6 +7,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import type { CheckReport } from "./checks";
 import type { CpuStudy } from "../shared/cpu-study";
+import { FORGE_JOB_MINUTES } from "../shared/config";
 
 export const AGENT_MODEL = process.env.FORGE_MODEL ?? "claude-opus-5-5";
 const AGENT_EFFORT = process.env.FORGE_EFFORT;
@@ -14,7 +15,7 @@ const AGENT_BIN = process.env.FORGE_CLAUDE_BIN ?? "claude";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
-const TIMEOUT_MS = Number(process.env.FORGE_TIMEOUT_MIN ?? 15) * 60_000;
+const TIMEOUT_MS = Number(process.env.FORGE_TIMEOUT_MIN ?? FORGE_JOB_MINUTES) * 60_000;
 
 export interface JobSpec { id: string; fighterId: string; playerName: string; hint?: { name: string; description: string } | null }
 

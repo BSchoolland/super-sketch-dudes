@@ -32,7 +32,7 @@ forge/
    - `deploy.ts --name --tagline` re-runs the gate and writes `payload.json`, the only thing that leaves the worktree
 4. **Complete** `POST /api/forge/jobs/:id/complete` with the payload: `{ name, tagline, description, source,
    sprite: { px, feetPx, heightPx, anims }, cells: { <cell>: base64 png }, sheet, report }`.
-   The server rebuilds and validates the bundle before it serves it. No payload after 15 minutes, or the agent
+   The server rebuilds and validates the bundle before it serves it. No payload after FORGE_JOB_MINUTES (shared/config.ts, 25), or the agent
    stops without deploying → `POST /api/forge/jobs/:id/fail { error }`.
 
 Progress strings (shown to players on the reveal screen) come from the agent's tool calls: "drawing the

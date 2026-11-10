@@ -66,3 +66,6 @@ export const C = {
   SUDDEN_DEATH_PERCENT: 300,
   DASH_ATTACK_MIN_RUN: 4,
 } as const;
+
+/** How long the forge agent gets for one character; the site takes a job back a little after that. */
+export const FORGE_JOB_MINUTES = 25;

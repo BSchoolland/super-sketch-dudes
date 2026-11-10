@@ -6,6 +6,7 @@ import type { LibraryEntry, Player } from "../shared/account";
 import type { CharStatus } from "../shared/account";
 import { buildGenerated } from "../shared/gen/load";
 import { SPRITE_CELLS } from "../shared/gen/sprite";
+import { FORGE_JOB_MINUTES } from "../shared/config";
 import { STUDY_VERSION, type CpuStudy } from "../shared/cpu-study";
 import { setHeld, upsertCharacter } from "./library";
 import { finish, openEvent } from "./events";
@@ -250,7 +251,7 @@ export function attachForge(api: express.Router, opts: ForgeOptions): void {
   // a job the forge claimed but never finished goes back on the queue once
   setInterval(() => {
     for (const job of jobs.values()) {
-      if (job.status === "running" && Date.now() - job.claimedAt > 15 * 60_000) {
+      if (job.status === "running" && Date.now() - job.claimedAt > (FORGE_JOB_MINUTES + 2) * 60_000) {
         events.get(job.id)?.issue("warn", "timeout", `claimed ${Math.round((Date.now() - job.claimedAt) / 60_000)} min ago and never finished`);
         if (job.attempts >= 2) setStatus(job, "failed", "", "gave up on this one after two tries");
         else { queue.push(job.id); setStatus(job, "queued", "back in line"); }
