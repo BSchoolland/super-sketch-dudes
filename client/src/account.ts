@@ -1,13 +1,14 @@
 import { site } from "./base";
-import { DISCORD_APP_ID, GAME_VERSION, GOOGLE_CLIENT_ID, SESSION_HEADER, type CommunityCharacter, type CommunitySort, type FeaturedCharacter, type ForgeStanding, type LastPlayed, type News, type Player, type LibraryEntry } from "../../shared/account";
+import { DISCORD_APP_ID, GAME_VERSION, GOOGLE_CLIENT_ID, SESSION_HEADER, type CommunityCharacter, type CommunitySort, type FeaturedCharacter, type ForgeStanding, type LastPlayed, type News, type Player, type LibraryEntry, isGuest } from "../../shared/account";
 import { FRESH_MS, releasesSince, type Fresh, type Release } from "../../shared/releases";
 import { sessionTrace } from "./telemetry/events";
 
 /**
- * Who's signed in, remembered in localStorage. Sign-in is Discord's implicit OAuth grant: the
- * browser goes to Discord, comes back to /auth with an access token in the URL fragment, and
- * `finishSignIn` trades it for a session token with the server. Google is the same round trip
- * with an ID token instead. Or an email and password.
+ * Who's playing, remembered in localStorage: a guest the server made on this browser's first visit, or an account.
+ * Sign-in is Discord's implicit OAuth grant: the browser goes to Discord, comes back to /auth with an access token in
+ * the URL fragment, and `finishSignIn` trades it for a session token with the server. Google is the same round trip
+ * with an ID token instead. Or an email and password. A sign-in carries the guest's session, so the
+ * server moves what the guest made to the account.
  */
 export const account: { session: string | null; player: Player | null } = { session: null, player: null };
 /**
@@ -52,8 +53,13 @@ function save(): void {
   localStorage.setItem(KEY, JSON.stringify({ session: account.session, player: account.player }));
 }
 
+/** Has a session: a guest or an account. */
 export function signedIn(): boolean {
   return !!account.session && !!account.player;
+}
+
+export function playingAsGuest(): boolean {
+  return !!account.player && isGuest(account.player.id);
 }
 
 const authRedirect = (): string => encodeURIComponent(`${location.origin}${site.base}auth`);
@@ -88,7 +94,9 @@ export function unfinishedSignIn(): string | null {
 
 /** Posts credentials to an /auth endpoint and keeps the session it hands back. Throws the server's reason on failure. */
 async function authenticate(path: string, body: object): Promise<void> {
-  const res = await fetch(`${site.base}api/auth/${path}`, { method: "POST", headers: { "content-type": "application/json", "x-trace-id": sessionTrace() }, body: JSON.stringify(body) });
+  const headers: Record<string, string> = { "content-type": "application/json", "x-trace-id": sessionTrace() };
+  if (account.session) headers[SESSION_HEADER] = account.session;
+  const res = await fetch(`${site.base}api/auth/${path}`, { method: "POST", headers, body: JSON.stringify(body) });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(text.startsWith("{") ? (JSON.parse(text) as { error: string }).error : `sign-in failed: HTTP ${res.status}`);
@@ -131,6 +139,9 @@ export async function finishSignIn(): Promise<boolean> {
 
 export const emailSignIn = (email: string, password: string): Promise<void> => authenticate("login", { email, password });
 export const emailSignUp = (email: string, password: string, name: string): Promise<void> => authenticate("signup", { email, password, name });
+
+/** A browser with no session plays as a guest the server names. */
+export const guestSignIn = (): Promise<void> => authenticate("guest", {});
 
 /** Local testing only: the server accepts a name when it runs with DEV_LOGIN=1. */
 export const devSignIn = (name: string): Promise<void> => authenticate("dev", { name });
