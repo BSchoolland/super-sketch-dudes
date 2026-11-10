@@ -81,7 +81,7 @@ export const HINT_NAME_MAX = 28, HINT_DESCRIPTION_MAX = 720;
 export const GOOGLE_CLIENT_ID = "568376323404-395dbb6rf9c6p8n3mhnd1obh4u4r1gc3.apps.googleusercontent.com";
 
 /** The Discord app players sign in with, on the website and as the Discord Activity. */
-export const DISCORD_APP_ID = "1506034935838937201";
+export const DISCORD_APP_ID = "1569520137055240272";
 
 /** Header the client sends its session token in. */
 export const SESSION_HEADER = "x-session";

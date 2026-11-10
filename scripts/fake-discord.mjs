@@ -8,7 +8,7 @@ import http from "node:http";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 
-const APP_ID = "1506034935838937201";
+const APP_ID = "1569520137055240272";
 
 /** A Discord user id (a snowflake's shape) that only depends on the name. */
 export const fakeUserId = (name) => (BigInt(`0x${crypto.createHash("sha256").update(name).digest("hex").slice(0, 15)}`) + 10n ** 17n).toString();

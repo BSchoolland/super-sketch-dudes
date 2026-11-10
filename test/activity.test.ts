@@ -8,9 +8,9 @@ const params = (q: string) => new URLSearchParams(q);
 
 describe("Activity detection", () => {
   it("is the Activity only with Discord's launch parameters on its proxy domain", () => {
-    expect(activityLaunch(params(DISCORD_QUERY), "1506034935838937201.discordsays.com", false)).toBe("discord");
+    expect(activityLaunch(params(DISCORD_QUERY), "1569520137055240272.discordsays.com", false)).toBe("discord");
     expect(activityLaunch(params(DISCORD_QUERY), "bschoolland.dev", false)).toBeNull();
-    expect(activityLaunch(params("frame_id=f1&platform=desktop"), "1506034935838937201.discordsays.com", false)).toBeNull();
+    expect(activityLaunch(params("frame_id=f1&platform=desktop"), "1569520137055240272.discordsays.com", false)).toBeNull();
     expect(activityLaunch(params(""), "bschoolland.dev", false)).toBeNull();
   });
 

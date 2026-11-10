@@ -55,7 +55,7 @@ describe("Discord Activity sign-in", () => {
     const post = await gameServer(SECRET);
     discord.exchanges.length = 0;
     expect((await post("/auth/discord/activity", { code: "stub-Bob" })).status).toBe(200);
-    expect(discord.exchanges).toEqual([{ client_id: "1506034935838937201", client_secret: SECRET, grant_type: "authorization_code", code: "stub-Bob" }]);
+    expect(discord.exchanges).toEqual([{ client_id: "1569520137055240272", client_secret: SECRET, grant_type: "authorization_code", code: "stub-Bob" }]);
   });
 
   it("says so when Discord refuses the code, and wants a code at all", async () => {

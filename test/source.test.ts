@@ -51,7 +51,7 @@ describe("visit source capture", () => {
   });
 
   it("counts a Discord Activity launch as its own source, and keeps none of Discord's launch parameters", () => {
-    const s = visitSource({ referrer: "https://discord.com/", url: "https://1506034935838937201.discordsays.com/?instance_id=i-1-gc-2-3&guild_id=2&channel_id=3&frame_id=f&platform=desktop", launch: "discord-activity" }, new MemoryStorage(), new MemoryStorage(), "s-aaa", 1000, noBad);
+    const s = visitSource({ referrer: "https://discord.com/", url: "https://1569520137055240272.discordsays.com/?instance_id=i-1-gc-2-3&guild_id=2&channel_id=3&frame_id=f&platform=desktop", launch: "discord-activity" }, new MemoryStorage(), new MemoryStorage(), "s-aaa", 1000, noBad);
     expect(s.visit).toEqual({ referrer: "discord.com", ref: "discord-activity", utm: { source: null, medium: null, campaign: null }, landing: "/", at: 1000, session: "s-aaa" });
     expect(sourceLabel(s.first)).toBe("discord-activity");
   });
