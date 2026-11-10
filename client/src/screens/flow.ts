@@ -1,8 +1,8 @@
 import type { SlotSource } from "../match";
 import { signOut } from "../account";
 import { activity } from "../activity";
-import { allChoices, forgetLibrary, practiceDummy, type FighterChoice } from "../fighters";
-import { forgetMaps } from "../maps";
+import { allChoices, forgetLibrary, practiceDummy, refreshLibrary, type FighterChoice } from "../fighters";
+import { forgetMaps, refreshMaps } from "../maps";
 import { MapsScreen } from "./maps";
 import { MapEditorScreen } from "./mapeditor";
 import { settings } from "./ui";
@@ -44,7 +44,8 @@ export function menus(): Nav {
     forge: (entry, pad) => new ForgeScreen(nav, entry, pad),
     library: () => new LibraryScreen(nav),
     community: (open) => new CommunityScreen(nav, open),
-    call: () => new OnlineScreen(() => nav.title(), "call", null),
+    // the Activity opens here, not on the title screen that fetches these for the website
+    call: () => { void refreshLibrary(); void refreshMaps(); return new OnlineScreen(() => nav.title(), "call", null); },
     battle: (fighter) => new BattleMenuScreen((entry) => {
       const menu = () => nav.battle(fighter);
       // VS BOTS is a room like the others: one nobody else can find, started with a bot in it
