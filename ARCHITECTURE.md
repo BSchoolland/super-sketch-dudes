@@ -50,6 +50,17 @@ that carries its map plays the same everywhere: locally, over the relay (the hos
 start message carry it; the server relays a map only after `checkMap` passes), and across a bundle
 swap. Fighters start standing on whatever platform their spawn is on.
 
+## Guests and accounts
+
+A browser with no session gets a guest (`server/guests.ts`): a real player, id `guest-…`, with a two-word name the
+server picks, so the library, forge, lobbies and telemetry need nothing special. Signing in to Discord, Google or an
+email account carries the guest's session; the server moves the guest's characters, saves, maps, open forge jobs and
+reputation to the account (a save the account already has is kept once) and ends the guest. A guest's characters are
+never listed (`isListed` in library.ts) until they belong to an account. Idle guests are swept every 6 hours: 7 days
+after their last visit if they made or saved nothing, 60 if they did. Email signup asks a birth year first, in the
+browser only (`client/src/age.ts`); an under-13 answer is remembered in localStorage and nothing reaches the server.
+The Activity never makes guests: Discord signs everyone in. `<base>privacy` and `<base>terms` are static pages.
+
 ## Community characters
 
 A player file (`server/library.ts`) holds the player's own characters and `saved`: ids of other

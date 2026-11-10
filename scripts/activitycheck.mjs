@@ -15,7 +15,7 @@ import path from "node:path";
 import { startFakeDiscord, fakeUserId } from "./fake-discord.mjs";
 import { openOnline } from "./menu-nav.mjs";
 
-const SERVER_PORT = 3029, VITE_PORT = 5199, SECRET = "activitycheck-secret";
+const SERVER_PORT = Number(process.env.SERVER_PORT ?? 3029), VITE_PORT = Number(process.env.VITE_PORT ?? 5199), SECRET = "activitycheck-secret";
 const shotsAt = process.argv.indexOf("--shots");
 const shots = shotsAt > 0 ? process.argv[shotsAt + 1] : null;
 const data = fs.mkdtempSync(path.join(os.tmpdir(), "activitycheck-"));

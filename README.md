@@ -58,6 +58,7 @@ node scripts/menushots.mjs        # walk the menus and screenshot them
 node scripts/padcheck.mjs         # gamepad smoke test with a fake pad
 node scripts/perfbench.mjs --throttle 4 --dpr 1.25   # frame times on a pretend potato (needs the dev servers)
 node scripts/activitycheck.mjs   # the Discord Activity end to end, Discord stubbed (starts its own servers)
+node scripts/frontdoorcheck.mjs  # guest play, signing in from a guest, the signup age question, /privacy and /terms (starts its own servers)
 scripts/deploy.sh    # build, ship to personal-server, restart pm2 "sketch-battle" (CI runs this on every push to master)
 ```
 

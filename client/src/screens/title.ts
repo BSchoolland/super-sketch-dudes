@@ -71,7 +71,7 @@ function drawPlayerBadge(ctx: CanvasRenderingContext2D, signInFocused: boolean):
 
 /** The privacy notice and terms, small in the bottom left; a click opens one in place of the game. False: `live` is off. */
 export function drawLegalLinks(ctx: CanvasRenderingContext2D, live: boolean): void {
-  const y = VIEW_H - 16, size = 18;
+  const y = VIEW_H - 14, size = 22;
   ctx.save();
   ctx.font = `700 ${size}px ${FONT}`;
   let x = 22;
