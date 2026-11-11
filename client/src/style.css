@@ -1,4 +1,5 @@
 :root { color-scheme: light; }
-html, body { margin: 0; height: 100%; background: #f4efe4; overflow: hidden; font-family: "Patrick Hand", "Comic Sans MS", cursive; }
+html, body { margin: 0; height: 100%; background: #f4efe4; overflow: hidden; font-family: "Patrick Hand", "Comic Sans MS", cursive; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+input, textarea { -webkit-user-select: text; user-select: text; }
 #game { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; image-rendering: auto; touch-action: none; }
 #overlay { position: fixed; inset: 0; pointer-events: none; }

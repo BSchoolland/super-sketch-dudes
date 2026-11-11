@@ -17,7 +17,7 @@ const data = dataDir(value("--data"), import.meta.url);
 const staff = new Set<string>(JSON.parse(fs.readFileSync(path.join(data, "staff.json"), "utf8")));
 const f = funnel(readEvents(data), since, timeZone, staff);
 
-const HEAD: Record<Step, string> = { arrived: "arrived", guest: "as guest", drew: "drew", forged: "forged", forgeDone: "forge done", played: "played", bots: "vs bots", online: "online", signedIn: "signed in", cameBack: "came back" };
+const HEAD: Record<Step, string> = { arrived: "arrived", guest: "as guest", drew: "drew", forged: "forged", forgeDone: "forge done", played: "played", bots: "vs bots", online: "online", touch: "on touch", signedIn: "signed in", cameBack: "came back" };
 const width = Math.max(12, ...f.rows.map((r) => r.source.length));
 const cells = (c: Counts): string => STEPS.map((k) => String(c[k]).padStart(HEAD[k].length)).join("  ");
 const why = Object.entries(f.excluded.why).map(([k, n]) => `${k} ${n}`).join(", ");
@@ -38,5 +38,5 @@ console.log(`${"total".padEnd(width)}  ${cells(f.total)}`);
 console.log(`
 as guest: played as a guest (guest-… player) · drew: opened the draw pad · forged / forge done: the player sent a forge job,
 and one produced a fighter · vs bots: a local match (practice and map tests don't count) ·
-online: a relay match started (either side's record) · played: either · signed in: made or used an account (Discord, Google, email) ·
+online: a relay match started (either side's record) · played: either · on touch: played a match on the touch controls · signed in: made or used an account (Discord, Google, email) ·
 came back: page sessions on two or more calendar days`);

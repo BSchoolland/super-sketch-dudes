@@ -12,6 +12,7 @@ import { TEAM_COLORS } from "../render/hud";
 import { PENCIL } from "../render/paper";
 import { VIEW_H, VIEW_W } from "../render/camera";
 import { consumeTypedChars, type DeviceId, type MenuInput } from "../input/devices";
+import { touchInUse } from "../input/touch";
 import { sfx } from "../audio/audio";
 import { WebSocketTransport, type PublicRoom, type RelayMessage, type RoomBot, type RoomMember, type Unsubscribe } from "../net/transport";
 import { allChoices } from "../fighters";
@@ -162,6 +163,8 @@ export class OnlineScreen implements Screen {
     this.t += dt;
     // the arrows (keyboard 2) are a friend's side of the keyboard: whoever uses them in the menus is still keyboard 1
     if (m.from && !this.friendDevice(m.from)) this.device = m.from === "kb2" ? "kb1" : m.from;
+    // the touch controls play as keyboard 1
+    if (touchInUse()) this.device = "kb1";
     if (this.nextScreen) {
       const next = this.nextScreen;
       this.nextScreen = null;

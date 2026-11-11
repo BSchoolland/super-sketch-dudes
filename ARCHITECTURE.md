@@ -202,6 +202,20 @@ start of every sim frame from the latest device state; keyboard events are recor
 arrive so a press between frames is never lost. Gamepads are polled each frame. Each player
 slot has a device (keyboard layout 1, keyboard layout 2, or a gamepad index) and a bindings map.
 
+### Touch
+
+`input/touchpad.ts` is the on-screen controls as a device, DOM-free and unit-tested against the sim
+(`test/touch.test.ts`); `input/touch.ts` feeds it pointer events and decides when it is keyboard 1: while the last
+thing pressed was the screen (a key, mouse button or gamepad hands keyboard 1 back). Its frames carry `B.DIGITAL`, so
+the sim plays them by the keyboard's rules (tap ATTACK: tilt, hold: smash), with an analog stick. A thumb crosses the
+middle of a stick over several frames, so a fast push is sent as one frame at rest then the push, which the sim reads
+as a flick (dash from a walk, roll, spot dodge, platform drop); ATTACK within 8 frames of a flick adds a 2-frame
+right-stick pulse, the keyboard SMASH key's, for the smash. JUMP with ATTACK within 3 frames drops JUMP before the jump
+squat ends: a short hop. A match screen arms the controls every tick (`VersusScreen.armControls`, from app.ts) and
+they are live only while it runs; the HUD keeps to the space between them (`Renderer.hudBand`). Upright, the app draws
+a "turn your phone sideways" page instead of the match and a local match pauses. A match played on them counts on
+the session's `touch.matches`, which the funnel's "on touch" column reads.
+
 ## Rendering
 
 Per-frame cost on a weak machine is fill rate and stroke geometry, in that order: the paper is a

@@ -8,6 +8,9 @@ import { ButtonMenu, inside, type Button } from "./buttons";
 import { label, title, settings, saveSettings } from "./ui";
 import { MOUSE_BUTTONS, RED, drawKey, legendOf, type KeyLook, type Rect } from "./keyboardmap";
 import { PAD_PARTS, drawGamepad, padStyleOf, partPoint } from "./gamepadmap";
+import { currentLayout, touchInUse, type TouchSetting } from "../input/touch";
+import { drawTouchControls } from "../render/touchcontrols";
+import { paperCard } from "../render/paper";
 
 type Pt = { x: number; y: number };
 
@@ -49,6 +52,20 @@ const PAD_CALLOUTS: { name: string; note?: string; x: number; y: number; parts: 
   { name: "SMASH", note: "in the air: air attacks", x: 1600, y: 715, parts: ["rstick"] },
 ];
 const CHECKS = { y: 860, h: 80 };
+/** The touch view's drawing: a landscape screen with the controls on it as a match lays them out. */
+const SCREEN = { x: 470, y: 250, w: 980 };
+const TOUCH_CALLOUTS: { name: string; note?: string; x: number; y: number; part: "stick" | "pause" | "jump" | "attack" | "special" | "shield" }[] = [
+  { name: "PAUSE", note: "not online", x: 240, y: 300, part: "pause" },
+  { name: "MOVE", note: "drag anywhere on the left", x: 240, y: 480, part: "stick" },
+  { name: "", note: "flick it with ATTACK: SMASH", x: 240, y: 600, part: "stick" },
+  { name: "SPECIAL", note: "up + special flies you back", x: 240, y: 760, part: "special" },
+  { name: "SHIELD", note: "+ a flick: roll or dodge", x: 1240, y: 190, part: "shield" },
+  { name: "JUMP", note: "again in the air · with ATTACK: short hop", x: 1690, y: 330, part: "jump" },
+  { name: "ATTACK", note: "hold it to SMASH", x: 1690, y: 620, part: "attack" },
+];
+const TOUCH_STEPS: TouchSetting[] = ["auto", "always", "off"];
+const TOUCH_WORD: Record<TouchSetting, string> = { auto: "WHEN TOUCHED", always: "ALWAYS", off: "NEVER" };
+const SIZES = [0.6, 0.7, 0.8, 0.9, 1, 1.15, 1.3, 1.5];
 /** PLAYER 1 / PLAYER 2: whose keys the drawing shows and changes. */
 const PLAYER_TABS = { y: 150, w: 260, h: 70, gap: 30 };
 const SETTINGS_KEY: Record<Keyboard, "keys" | "keys2"> = { kb1: "keys", kb2: "keys2" };
@@ -80,7 +97,7 @@ function drawCallout(ctx: CanvasRenderingContext2D, c: { name: string; note?: st
  */
 export class ControlsPage {
   private menu = new ButtonMenu();
-  private view: "keys" | "pad" = "keys";
+  private view: "keys" | "pad" | "touch" = "keys";
   private pad: DeviceId = "pad0";
   /** Whose keys the keyboard drawing is. */
   private player: Keyboard = "kb1";
@@ -94,7 +111,7 @@ export class ControlsPage {
 
   /** The tab was opened from `from` (null: a click), which picks the drawing. */
   show(from: DeviceId | null): void {
-    this.view = from?.startsWith("pad") ? "pad" : "keys";
+    this.view = from?.startsWith("pad") ? "pad" : !from && touchInUse() ? "touch" : "keys";
     if (from?.startsWith("pad")) this.pad = from;
     this.menu.focus = 0;
   }
@@ -107,6 +124,7 @@ export class ControlsPage {
   get hint(): string {
     if (this.waiting) return "press the new key or mouse button · Esc: cancel";
     if (this.view === "keys") return "click a key, or arrows + Enter, to change it · Esc: back";
+    if (this.view === "touch") return "a light push and ATTACK: a tilt · stick down in the air: fall fast · SHIELD in the air: air dodge";
     return padStyleOf(this.padId()) === "playstation" ? "stick: pick · ✕: change · ○: back" : "stick: pick · A: change · B: back";
   }
 
@@ -135,6 +153,14 @@ export class ControlsPage {
   }
 
   private buttons(tab: Button): Button[] {
+    if (this.view === "touch") {
+      const step = <T,>(list: T[], now: T, d: -1 | 1): T => list[Math.max(0, Math.min(list.length - 1, list.indexOf(now) + d))];
+      return [
+        { id: "touch", text: `SHOW THEM: ${TOUCH_WORD[settings.touch]}`, x: VIEW_W / 2 - 520, y: CHECKS.y, w: 600, h: CHECKS.h, size: 32, step: (d) => { settings.touch = step(TOUCH_STEPS, settings.touch, d); saveSettings(); } },
+        { id: "touchSize", text: `SIZE: ${Math.round(settings.touchSize * 100)}%`, x: VIEW_W / 2 + 120, y: CHECKS.y, w: 400, h: CHECKS.h, size: 32, step: (d) => { settings.touchSize = step(SIZES, settings.touchSize, d); saveSettings(); } },
+        tab,
+      ];
+    }
     if (this.view === "pad") {
       return [
         { id: "tapJump", text: "STICK UP JUMPS", checked: settings.tapJump, x: VIEW_W / 2 - 440, y: CHECKS.y, w: 420, h: CHECKS.h, size: 32 },
@@ -161,6 +187,7 @@ export class ControlsPage {
     // the drawing follows the device in hand
     if (m.from?.startsWith("pad") && this.view !== "pad") { this.view = "pad"; this.menu.focus = 0; }
     else if ((m.from === "kb1" || m.from === "kb2" || (m.any && !m.from)) && this.view !== "keys") { this.view = "keys"; this.menu.focus = 0; }
+    else if (taps.length && touchInUse() && this.view !== "touch") { this.view = "touch"; this.menu.focus = 0; return null; }
     if (m.from?.startsWith("pad")) this.pad = m.from;
     const buttons = this.buttons(tab);
     if (this.view === "keys") {
@@ -244,7 +271,8 @@ export class ControlsPage {
         if (on || focused) inkLine(ctx, b.x + 30, b.y + b.h - 6, b.x + b.w - 30, b.y + b.h - 9, INK, on ? 4 : 2.4);
       }
     }
-    else this.drawPad(ctx);
+    else if (this.view === "pad") this.drawPad(ctx);
+    else this.drawTouch(ctx);
     this.menu.draw(ctx, buttons);
     const over = buttons.some((b) => inside(pointer, b)) || (this.view === "keys" && this.callouts.some((c) => inside(pointer, c.box)));
     if (pointer.present && over && !this.waiting) document.body.style.cursor = "pointer";
@@ -277,6 +305,32 @@ export class ControlsPage {
       const w = textWidth(ctx, g.name, NAME, 900);
       this.callouts.push({ name: g.name, x: LIST.nameX - w / 2, y: mid, w, above: false, slots: mine, to: [], box: { x: LIST.nameX - w - 12, y, w: w + 24, h: LIST.capH } });
     });
+  }
+
+  /** The controls as a match on this screen lays them out, at the chosen size, on a drawing of the screen. */
+  private drawTouch(ctx: CanvasRenderingContext2D): void {
+    const k = SCREEN.w / VIEW_W, h = VIEW_H * k;
+    const layout = currentLayout();
+    paperCard(ctx, SCREEN.x, SCREEN.y, SCREEN.w, h);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(SCREEN.x, SCREEN.y, SCREEN.w, h); ctx.clip();
+    ctx.translate(SCREEN.x, SCREEN.y);
+    ctx.scale(k, k);
+    const s = layout.stick;
+    drawTouchControls(ctx, { layout, stick: { ox: s.x, oy: s.y, x: s.x, y: s.y, active: false }, held: () => false, pause: false });
+    ctx.restore();
+    for (const c of TOUCH_CALLOUTS) {
+      const at = c.part === "stick" ? layout.stick : c.part === "pause" ? layout.pause : layout.buttons[c.part];
+      const mid = { x: SCREEN.x + at.x * k, y: SCREEN.y + at.y * k };
+      const w = Math.max(c.name ? textWidth(ctx, c.name, NAME, 900) : 0, c.note ? textWidth(ctx, c.note, NOTE, 600) : 0);
+      // a label right above what it names hangs its line from under the note
+      const above = Math.abs(mid.x - c.x) < w / 2;
+      const from = above ? { x: c.x, y: c.y + 46 } : { x: c.x + Math.sign(mid.x - c.x) * (w / 2 + 14), y: c.name ? c.y - 12 : c.y + 24 };
+      // the line stops at the control's rim, clear of its word
+      const d = Math.hypot(from.x - mid.x, from.y - mid.y), r = (c.part === "stick" ? at.r * 0.5 : at.r) * k;
+      const to = { x: mid.x + ((from.x - mid.x) / d) * r, y: mid.y + ((from.y - mid.y) / d) * r };
+      drawCallout(ctx, { ...c, w }, from, [to], INK, false);
+    }
   }
 
   private padId(): string {

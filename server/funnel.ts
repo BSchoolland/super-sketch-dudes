@@ -7,7 +7,7 @@ import type { StoredEvent } from "./eventlog";
  * who signed in is the account they signed in to, joined by the sign-in request's `adopted`), else a page session with
  * no player; those in a tab that later has one join that player (the tab's recorded source links them).
  */
-export const STEPS = ["arrived", "guest", "drew", "forged", "forgeDone", "played", "bots", "online", "signedIn", "cameBack"] as const;
+export const STEPS = ["arrived", "guest", "drew", "forged", "forgeDone", "played", "bots", "online", "touch", "signedIn", "cameBack"] as const;
 export type Step = (typeof STEPS)[number];
 export type Counts = Record<Step, number>;
 export interface FunnelRow { source: string; counts: Counts }
@@ -119,6 +119,7 @@ export function funnel(events: StoredEvent[], since: number, timeZone: string, s
       played: bots || net,
       bots,
       online: net,
+      touch: list.some((s) => ((s.business.touch as { matches: number } | undefined)?.matches ?? 0) > 0),
       signedIn: players.some((id) => !isGuest(id)),
       cameBack: days.size > 1 || list.some((s) => { const first = sourceOf(s)?.first; return !!first && day.format(first.at) < firstDay; }),
     };

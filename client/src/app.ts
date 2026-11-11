@@ -5,6 +5,8 @@ import { VIEW_H, VIEW_W } from "./render/camera";
 import { PAPER } from "./render/paper";
 import { connectedPads, endInputFrame, readMenu, type DeviceId } from "./input/devices";
 import { attachPointer, endPointerFrame, endPointerTick, setPointerTransform } from "./input/pointer";
+import { attachTouch, pad, touchInUse, touchLive, touchShown } from "./input/touch";
+import { drawSideways } from "./render/touchcontrols";
 import { OnlineScreen } from "./screens/online";
 import { NetVersusScreen } from "./screens/netversus";
 import { VersusScreen } from "./screens/versus";
@@ -76,6 +78,8 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     noteView({ w, h, dpr, canvasW: canvas.width, canvasH: canvas.height, scale, quality: pacer.quality });
   }
   const detachPointer = attachPointer(canvas);
+  // after the pointer's listeners: a finger the controls take is claimed from the taps
+  const detachTouch = attachTouch(canvas);
   window.addEventListener("resize", resize);
   resize();
 
@@ -149,6 +153,7 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     const dt = Math.min(0.25, (now - last) / 1000);
     last = now;
     const menu = readMenu(allDevices());
+    if (screen instanceof VersusScreen) screen.armControls();
     let next = screen.update(dt, menu) ?? takeHandoff();
     // signed out (a 401 anywhere): a fresh guest on the website, the door in the Activity, except mid-match or on a no-account page
     const current = next ?? screen;
@@ -201,6 +206,12 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     pacer.drew(now);
     lastDraw = now;
     document.body.style.cursor = "default";
+    if (screen instanceof VersusScreen && screen.sideways) {
+      drawSideways(ctx, canvas.width, canvas.height);
+      endPointerFrame();
+      requestAnimationFrame(frame);
+      return;
+    }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = PAPER;
     // only the letterbox bars: every screen paints the whole view, and a full-canvas fill is the priciest thing a potato does per frame
@@ -225,10 +236,14 @@ export async function mount(opts: MountOptions): Promise<AppController> {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pageshow", onPageShow);
       detachPointer();
+      detachTouch();
       stopTelemetry();
       stopClassTime();
     },
   };
-  (window as any).sketchbattle = { get screen() { return screen; }, get preview() { return (screen as VersusScreen).preview ?? null; }, build: site.build, hash: swap.hash };
+  (window as any).sketchbattle = {
+    get screen() { return screen; }, get preview() { return (screen as VersusScreen).preview ?? null; }, build: site.build, hash: swap.hash,
+    get touch() { return { layout: pad.layout, live: touchLive(), shown: touchShown(), inUse: touchInUse() }; },
+  };
   return controller;
 }

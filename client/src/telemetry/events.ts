@@ -216,3 +216,10 @@ export function noteScreen(name: string): void {
   if (!session) throw new Error("wide events used before startTelemetry");
   sessionList("screens", [name, Math.round((Date.now() - session.t0) / 100) / 10]);
 }
+
+/** A match (local or online) the player played on the touch controls: how the funnel tells touch players apart. */
+export function noteTouchMatch(): void {
+  if (!session) throw new Error("wide events used before startTelemetry");
+  const had = (session.business.touch as { matches: number } | undefined)?.matches ?? 0;
+  session.set("touch", { matches: had + 1 });
+}

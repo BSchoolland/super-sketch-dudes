@@ -1,5 +1,6 @@
 import { B, EMPTY_INPUT, type InputFrame } from "../../../shared/input";
 import { bindingsOf } from "./bindings";
+import { endTouchTick, stopTouch, touchFrame, touchInUse } from "./touch";
 
 export type DeviceId = "kb1" | "kb2" | `pad${number}`;
 
@@ -14,6 +15,7 @@ window.addEventListener("keydown", (e) => {
   if (e.repeat) return;
   // text fields own their keystrokes
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+  stopTouch();
   keys.add(e.code);
   pressedThisFrame.add(e.code);
   pressedAt.set(e.code, inputFrame);
@@ -24,9 +26,9 @@ window.addEventListener("keydown", (e) => {
   if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Tab", "Slash"].includes(e.code)) e.preventDefault();
 });
 window.addEventListener("keyup", (e) => keys.delete(e.code));
-// mouse buttons are keys named Mouse<button>; menus and join prompts leave them alone (`mouse: false`)
+// mouse buttons are keys named Mouse<button>; menus and join prompts leave them alone (`menu: true`)
 const isMouse = (code: string) => code.startsWith("Mouse");
-window.addEventListener("pointerdown", (e) => { if (e.pointerType !== "mouse") return; keys.add(`Mouse${e.button}`); pressedThisFrame.add(`Mouse${e.button}`); });
+window.addEventListener("pointerdown", (e) => { if (e.pointerType !== "mouse") return; stopTouch(); keys.add(`Mouse${e.button}`); pressedThisFrame.add(`Mouse${e.button}`); });
 window.addEventListener("pointerup", (e) => { if (e.pointerType === "mouse") keys.delete(`Mouse${e.button}`); });
 window.addEventListener("pointercancel", (e) => { if (e.pointerType === "mouse") keys.delete(`Mouse${e.button}`); });
 window.addEventListener("contextmenu", (e) => { if (!(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) e.preventDefault(); });
@@ -53,12 +55,16 @@ function dz(v: number, dead = 0.18): number {
 }
 const q = (v: number): number => Math.round(v * 100);
 
-/** Reads a device into a sim input frame. Call once per sim frame. */
-export function readDevice(dev: DeviceId, opts: { tapJump: boolean; mouse?: boolean } = { tapJump: true }): InputFrame {
+/**
+ * Reads a device into a sim input frame. Call once per sim frame. `menu`: for menu navigation, so no mouse buttons
+ * and no touch controls. Keyboard 1 is the touch controls while the player is on the touchscreen.
+ */
+export function readDevice(dev: DeviceId, opts: { tapJump: boolean; menu?: boolean } = { tapJump: true }): InputFrame {
+  if (dev === "kb1" && !opts.menu && touchInUse()) return touchFrame();
   if (dev === "kb1" || dev === "kb2") {
     const b = bindingsOf(dev);
     // a tap that started and ended between two frames still counts for one frame
-    const down = (list: string[]) => list.some((k) => (opts.mouse !== false || !isMouse(k)) && (keys.has(k) || pressedThisFrame.has(k)));
+    const down = (list: string[]) => list.some((k) => (!opts.menu || !isMouse(k)) && (keys.has(k) || pressedThisFrame.has(k)));
     const x = (down(b.right) ? 100 : 0) - (down(b.left) ? 100 : 0);
     const y = (down(b.down) ? 100 : 0) - (down(b.up) ? 100 : 0);
     if (x) lastX.set(dev, Math.sign(x) as 1 | -1);
@@ -92,6 +98,7 @@ export function readDevice(dev: DeviceId, opts: { tapJump: boolean; mouse?: bool
   if (btn(4) || btn(5) || btn(6) || btn(7)) bits |= B.SHIELD;
   if (btn(8)) bits |= B.PRACTICE;
   if (btn(9)) bits |= B.PAUSE;
+  if (bits || ax || ay || cx || cy) stopTouch();
   // tap jump: a stick flick up counts as a jump press for 2 frames and holds while the stick stays up
   if (opts.tapJump) {
     if (ay < -0.7 && prev.ay >= -0.4) prev.jumpFlick = 2;
@@ -114,7 +121,7 @@ const menuPrev = new Map<string, InputFrame>();
 export function readMenu(devices: DeviceId[]): MenuInput {
   const m: MenuInput = { up: false, down: false, left: false, right: false, confirm: false, back: false, start: false, any: false, from: null };
   for (const d of devices) {
-    const now = readDevice(d, { tapJump: false, mouse: false });
+    const now = readDevice(d, { tapJump: false, menu: true });
     const prev = menuPrev.get(d) ?? EMPTY_INPUT;
     const edge = (bit: number) => (now.b & bit) && !(prev.b & bit);
     const dir = (v: number, pv: number, sgn: number) => sgn * v >= 60 && sgn * pv < 60;
@@ -154,6 +161,7 @@ export function takeKeyPress(): string | null {
 }
 
 export function endInputFrame(): void {
+  endTouchTick();
   inputFrame++;
   pressedThisFrame.clear();
   typedThisFrame.length = 0;

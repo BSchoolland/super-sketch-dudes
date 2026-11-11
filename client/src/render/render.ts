@@ -35,6 +35,8 @@ export class Renderer {
   projGhosts: ProjGhost[] = [];
   time = 0;
   showHitboxes = false;
+  /** The span of the bottom edge the HUD keeps to (the touch controls have the corners); null: all of it. */
+  hudBand: { left: number; right: number } | null = null;
   /** Backdrop, HUD and the slot markers over heads; the title screen's brawl draws fighters only. */
   chrome = true;
   names: string[];
@@ -176,7 +178,7 @@ export class Renderer {
     ctx.restore();
     this.afterWorld?.(ctx);
     this.fx.drawScreen(ctx, VIEW_W, VIEW_H, this.cam);
-    if (this.chrome) drawHud(ctx, state, this.hud, dt, this.names);
+    if (this.chrome) drawHud(ctx, state, this.hud, dt, this.names, this.hudBand);
     ctx.restore();
   }
 

@@ -23,6 +23,11 @@ export function setPointerTransform(scale: number, offX: number, offY: number): 
   cssScale = scale; cssOffX = offX; cssOffY = offY;
 }
 
+/** CSS pixels per view pixel. */
+export function viewScale(): number {
+  return cssScale;
+}
+
 export function toView(clientX: number, clientY: number): ViewPoint {
   return { x: (clientX - cssOffX) / cssScale, y: (clientY - cssOffY) / cssScale };
 }

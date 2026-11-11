@@ -6,6 +6,7 @@ import { MAX_PLAYERS, type MatchConfig } from "../../../shared/sim";
 import { VIEW_W } from "../render/camera";
 import { drawBanner } from "../render/hud";
 import type { DeviceId, MenuInput } from "../input/devices";
+import { consumeTaps } from "../input/pointer";
 import type { MatchTelemetry } from "../telemetry/match";
 import { RollbackMatch } from "../net/match";
 import { RollbackSession, type SessionHandoff } from "../net/rollback";
@@ -178,6 +179,10 @@ export class NetVersusScreen extends VersusScreen {
     cleanup = this.cleanupMatch;
   }
 
+  protected override running(): boolean {
+    return super.running() && this.go && !this.failure && !this.swapAt && !this.handedOff;
+  }
+
   override update(dt: number, menu: MenuInput): Screen | null {
     if (this.handedOff) return null;
     this.opts.transport.watch?.();
@@ -199,7 +204,7 @@ export class NetVersusScreen extends VersusScreen {
         this.cleanupMatch("left");
         return this.opts.exit("left");
       }
-      if (menu.back || menu.confirm) {
+      if (menu.back || menu.confirm || consumeTaps().length) {
         const exit = this.failure.title === "CONNECTION LOST" ? "closed" : "failure";
         this.cleanupMatch(exit);
         return this.opts.exit(exit);

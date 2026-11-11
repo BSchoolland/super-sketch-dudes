@@ -2,6 +2,9 @@ import { VIEW_H, VIEW_W } from "../render/camera";
 import type { PreviewApi } from "../preview";
 import type { MenuInput } from "../input/devices";
 import { rumble } from "../input/devices";
+import { armTouch, pad, portrait, touchLive, touchShown } from "../input/touch";
+import { drawTouchControls } from "../render/touchcontrols";
+import { noteTouchMatch } from "../telemetry/events";
 import { LocalMatch, type MatchDriver, type SlotSource } from "../match";
 import { Renderer } from "../render/render";
 import { drawBanner, TEAM_COLORS, TEAM_NAMES } from "../render/hud";
@@ -36,6 +39,9 @@ export class VersusScreen implements Screen {
   preview: PreviewApi | null = null;
   /** REMATCH / MENU on the result screen; a mode that moves on by itself turns them off. */
   endButtons = true;
+  /** On a touchscreen held upright: the app asks for it turned instead of drawing the match. */
+  sideways = false;
+  private touchNoted = false;
   constructor(cfg: MatchConfig, sources: SlotSource[], private onExit: () => Screen, private onRematch: () => Screen, training = false, driver?: MatchDriver) {
     this.match = driver ?? new LocalMatch(cfg, sources);
     this.training = training;
@@ -48,8 +54,23 @@ export class VersusScreen implements Screen {
       this.resetTraining();
     }
   }
+  /** Whether the match is running for this client: online adds the connection's say. */
+  protected running(): boolean {
+    return !this.match.paused && !this.match.state.ended;
+  }
+
+  /** The touch controls for this tick, before update: up while the match runs, for keyboard 1 (whom they play as). */
+  armControls(): void {
+    const shown = touchShown() && this.match.sources.some((s) => s.device === "kb1");
+    this.sideways = shown && portrait();
+    // turned upright mid-fight: a match that can wait does
+    if (this.sideways && this.match instanceof LocalMatch && this.countdown <= 0 && this.running()) this.match.paused = true;
+    armTouch(shown && !this.sideways && this.running(), this.match instanceof LocalMatch);
+  }
+
   update(dt: number, m: MenuInput): Screen | null {
     let st = this.match.state;
+    if (!this.touchNoted && touchLive() && pad.touched) { this.touchNoted = true; noteTouchMatch(); }
     if (this.countdown > 0) {
       const before = Math.ceil(this.countdown);
       this.countdown -= dt;
@@ -162,7 +183,10 @@ export class VersusScreen implements Screen {
   draw(ctx: CanvasRenderingContext2D, dt: number): void {
     const st = this.match.state;
     const alpha = this.match.paused || this.countdown > 0 ? 1 : Math.min(1, this.acc / STEP);
+    const touch = touchLive();
+    this.renderer.hudBand = touch ? pad.layout.free : null;
     this.renderer.draw(ctx, st, alpha, dt);
+    if (touch) drawTouchControls(ctx, { layout: pad.layout, stick: pad.stickView(), held: (b) => pad.held(b), pause: pad.pauseable ? pad.pauseHeld : null });
     if (this.countdown > 0) {
       const n = Math.ceil(this.countdown - 0.2);
       const text = n >= 1 ? `${n}` : "GO!";
