@@ -59,9 +59,15 @@ async function passwordMatches(account: Account, password: string): Promise<bool
   return crypto.timingSafeEqual(hash, Buffer.from(account.hash, "base64"));
 }
 
-export function playerFromSession(token: unknown): Player | null {
+/** A sign-in lasts this long (the privacy page says six months). */
+export const SESSION_MS = 183 * 86_400_000;
+
+export function playerFromSession(token: unknown, now = Date.now()): Player | null {
   if (typeof token !== "string" || !token) return null;
-  return sessions.get(token)?.player ?? null;
+  const s = sessions.get(token);
+  if (!s) return null;
+  if (now - s.at > SESSION_MS) { sessions.delete(token); save(); return null; }
+  return s.player;
 }
 
 export function playerOf(req: express.Request): Player | null {
@@ -109,7 +115,10 @@ export function applyName(id: string, name: string): Player {
 
 export function attachAuth(api: express.Router, opts: AuthOptions): void {
   file = path.join(opts.dataDir, "sessions.json");
-  if (fs.existsSync(file)) for (const [k, v] of JSON.parse(fs.readFileSync(file, "utf8"))) sessions.set(k, v);
+  if (fs.existsSync(file)) for (const [k, v] of JSON.parse(fs.readFileSync(file, "utf8")) as [string, { player: Player; at: number }][]) {
+    if (Date.now() - v.at <= SESSION_MS) sessions.set(k, v);
+  }
+  save();
   loadNameRequests(opts.dataDir);
   accountsFile = path.join(opts.dataDir, "accounts.json");
   if (fs.existsSync(accountsFile)) for (const [k, v] of JSON.parse(fs.readFileSync(accountsFile, "utf8"))) accounts.set(k, v);

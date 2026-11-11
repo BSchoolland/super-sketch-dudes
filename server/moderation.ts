@@ -18,6 +18,17 @@ export function attachModeration(dataDir: string): void {
   scoresFile = path.join(dataDir, "reputation.json");
   logFile = path.join(dataDir, "moderation.jsonl");
   scores = fs.existsSync(scoresFile) ? JSON.parse(fs.readFileSync(scoresFile, "utf8")) : {};
+  pruneLog(Date.now());
+}
+
+/** The moderator's records are kept a year (the privacy page says so). */
+export const MODERATION_KEEP_MS = 365 * 86_400_000;
+
+function pruneLog(now: number): void {
+  if (!fs.existsSync(logFile)) return;
+  const lines = fs.readFileSync(logFile, "utf8").split("\n").filter(Boolean);
+  const kept = lines.filter((l) => now - (JSON.parse(l) as { at: number }).at <= MODERATION_KEEP_MS);
+  if (kept.length !== lines.length) fs.writeFileSync(logFile, kept.map((l) => l + "\n").join(""));
 }
 
 export const reputationOf = (player: string): number => scores[player] ?? START;
