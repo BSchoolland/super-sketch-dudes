@@ -3,7 +3,7 @@
 import { chromium } from "playwright";
 import { openOnline as signInOnline } from "./menu-nav.mjs";
 import { down as btnDown, up as btnUp, press as btnPress } from "./lib/keys.mjs";
-const base = process.argv[2] ?? "http://localhost:5175/sketch-battle/";
+const base = process.argv[2] ?? "http://localhost:5175/";
 const browser = await chromium.launch();
 const page = async () => (await browser.newContext({ viewport: { width: 1280, height: 720 } })).newPage();
 const pages = [await page(), await page()];

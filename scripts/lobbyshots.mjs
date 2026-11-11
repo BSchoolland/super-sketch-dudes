@@ -1,7 +1,7 @@
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 import { openOnline } from "./menu-nav.mjs";
-const base = process.argv[2] ?? "http://localhost:5175/sketch-battle/";
+const base = process.argv[2] ?? "http://localhost:5175/";
 const out = process.argv[3] ?? "shots/lobby";
 mkdirSync(out, { recursive: true });
 const browser = await chromium.launch();

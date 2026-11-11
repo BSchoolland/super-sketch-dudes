@@ -4,12 +4,12 @@
 // Expects a DEV_LOGIN server and Vite in front of it:
 //   SKETCHBATTLE_DATA=/tmp/wide-data DEV_LOGIN=1 PORT=3028 npx tsx server/index.ts
 //   SKETCHBATTLE_SERVER=http://localhost:3028 npx vite --config client/vite.config.ts --port 5198
-// Usage: node scripts/wide-events-check.mjs [base=http://localhost:5198/sketch-battle/] [data=/tmp/wide-data]
+// Usage: node scripts/wide-events-check.mjs [base=http://localhost:5198/] [data=/tmp/wide-data]
 import { chromium } from "playwright";
 import { execFileSync } from "node:child_process";
 import { openOnline } from "./menu-nav.mjs";
 
-const base = process.argv[2] ?? "http://localhost:5198/sketch-battle/";
+const base = process.argv[2] ?? "http://localhost:5198/";
 const data = process.argv[3] ?? "/tmp/wide-data";
 const browser = await chromium.launch();
 const pages = await Promise.all(["Ann", "Bob", "Kirill"].map(async (name) => {
@@ -40,7 +40,7 @@ try {
   await Promise.all(pages.map((p) => p.waitForFunction(() => window.sketchbattle.screen.lobbyDebug?.()?.members.length === 3)));
   for (const [i, p] of pages.entries()) await p.evaluate((id) => {
     const s = window.sketchbattle.screen;
-    s.pick({ id, name: id.toUpperCase(), bundleUrl: `/sketch-battle/house/${id}/bundle.json?v=${window.sketchbattle.build}`, house: true, entry: null });
+    s.pick({ id, name: id.toUpperCase(), bundleUrl: `/house/${id}/bundle.json?v=${window.sketchbattle.build}`, house: true, entry: null });
   }, ["rocket", "wizard", "slugbert"][i]);
   await Promise.all(pages.map((p) => p.waitForFunction(() => window.sketchbattle.screen.lobbyDebug().members.every((m) => m.fighter))));
   for (const p of pages) await screen(p, () => window.sketchbattle.screen.toggleReady());

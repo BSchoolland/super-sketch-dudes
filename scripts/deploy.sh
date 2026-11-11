@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Build and ship to personal-server (user ssd, its own pm2) behind Apache on supersketchdudes.com.
-# Usage: scripts/deploy.sh [name=sketch-battle] [port=3008] [base=/play/]
+# Usage: scripts/deploy.sh [name=sketch-battle] [port=3008] [base=/]
 # Each name is its own pm2 process and Apache path (rules must exist for the base; see ARCHITECTURE.md).
 set -euo pipefail
 cd "$(dirname "$0")/.."
-NAME=${1:-sketch-battle}; PORT=${2:-3008}; BASE=${3:-/play/}
+NAME=${1:-sketch-battle}; PORT=${2:-3008}; BASE=${3:-/}
 npm run check
 SKETCHBATTLE_BASE=$BASE npm run build
 BUILD=$(git rev-parse --short HEAD)

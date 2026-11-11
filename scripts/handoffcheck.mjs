@@ -9,13 +9,13 @@ import { chromium } from "playwright";
 import { openOnline } from "./menu-nav.mjs";
 
 const PORT = 3091;
-const url = `http://localhost:${PORT}/sketch-battle/`;
+const url = `http://localhost:${PORT}/`;
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "sb-handoffcheck-"));
 const log = (...a) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...a);
 let server = null;
 
 async function boot() {
-  server = spawn("node", ["dist/server.mjs"], { env: { ...process.env, PORT: String(PORT), SKETCHBATTLE_DATA: dataDir, DEV_LOGIN: "1", SKETCHBATTLE_BASE: "/sketch-battle/" }, stdio: "ignore" });
+  server = spawn("node", ["dist/server.mjs"], { env: { ...process.env, PORT: String(PORT), SKETCHBATTLE_DATA: dataDir, DEV_LOGIN: "1", SKETCHBATTLE_BASE: "/" }, stdio: "ignore" });
   for (let i = 0; i < 100; i++) {
     if (await fetch(`${url}api/health`).then((r) => r.ok, () => false)) return;
     await new Promise((r) => setTimeout(r, 100));

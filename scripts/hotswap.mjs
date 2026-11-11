@@ -1,12 +1,12 @@
 // Two browsers play an online match on bundle A; bundle B is pushed and the room switched
 // mid-match; both must carry on, on B, in sync. Records Ann's browser.
-// Usage: node scripts/hotswap.mjs [base=http://localhost:5177/sketch-battle/] [site=http://localhost:3010] [out=/tmp/tf/hotswap]
+// Usage: node scripts/hotswap.mjs [base=http://localhost:5177/] [site=http://localhost:3010] [out=/tmp/tf/hotswap]
 import { chromium } from "playwright";
 import { execSync } from "node:child_process";
 import { mkdirSync, readdirSync, renameSync } from "node:fs";
 import { openOnline } from "./menu-nav.mjs";
 import { down as btnDown, up as btnUp, press as btnPress } from "./lib/keys.mjs";
-const base = process.argv[2] ?? "http://localhost:5177/sketch-battle/";
+const base = process.argv[2] ?? "http://localhost:5177/";
 const site = process.argv[3] ?? "http://localhost:3010";
 const out = process.argv[4] ?? "/tmp/tf/hotswap";
 mkdirSync(out, { recursive: true });

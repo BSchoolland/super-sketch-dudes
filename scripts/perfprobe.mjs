@@ -2,7 +2,7 @@
 // Expects the dev servers. Usage: node scripts/perfprobe.mjs [base] [throttle=6] [seconds=10] [w=1366] [h=768] [dpr=1]
 import { chromium } from "playwright";
 import fs from "node:fs";
-const [base = "http://localhost:5175/sketch-battle/", throttle = "6", seconds = "10", w = "1366", h = "768", dpr = "1"] = process.argv.slice(2);
+const [base = "http://localhost:5175/", throttle = "6", seconds = "10", w = "1366", h = "768", dpr = "1"] = process.argv.slice(2);
 const browser = await chromium.launch({ args: ["--disable-gpu-vsync", "--disable-frame-rate-limit"].slice(0, 0) });
 const ctx = await browser.newContext({ viewport: { width: +w, height: +h }, deviceScaleFactor: +dpr });
 const page = await ctx.newPage();

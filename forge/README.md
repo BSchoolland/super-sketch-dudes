@@ -48,6 +48,6 @@ per outage). A flagged name goes to the moderation channel. Sessions are kept un
 
 ## Running it
 
-`FORGE_TOKEN=... SITE=https://bschoolland.dev/sketch-battle OPENAI_API_KEY=... npx tsx forge/worker.ts`
+`FORGE_TOKEN=... SITE=https://supersketchdudes.com OPENAI_API_KEY=... npx tsx forge/worker.ts`
 under `systemd --user` (unit in `forge/forge.service`). Logs one line per tool call per job to stdout and
 keeps every job's prompt, session stream, fighter, payload and cells under `forge/runs/<jobId>/`.

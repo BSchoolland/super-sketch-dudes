@@ -1,13 +1,13 @@
 // Walks the account game in real browsers against a local server + scripts/fake-forge.mjs:
 // sign-in, NEW CHARACTER (draw, DONE, forged), MY CHARACTERS, BATTLE: VS BOTS, then a public lobby
 // found through JOIN ROOM and QUICK MATCH by two signed-in players. Screenshots into shots/library/.
-//   node scripts/libraryshots.mjs [base=http://localhost:5178/sketch-battle/] [out=shots/library]
+//   node scripts/libraryshots.mjs [base=http://localhost:5178/] [out=shots/library]
 // Server: PORT=3012 DEV_LOGIN=1 FORGE_TOKEN=devtoken npx tsx server/index.ts, plus scripts/fake-forge.mjs
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 import { down as btnDown, up as btnUp, press as btnPress } from "./lib/keys.mjs";
 
-const base = process.argv[2] ?? "http://localhost:5178/sketch-battle/";
+const base = process.argv[2] ?? "http://localhost:5178/";
 const out = process.argv[3] ?? "shots/library";
 mkdirSync(out, { recursive: true });
 const W = 1600, H = 900;

@@ -3,7 +3,7 @@
 // with a made-up user id per name. Run it, then the server with DEV_LOGIN=1 and DISCORD_API pointed at it:
 //   DISCORD_CLIENT_SECRET=fake node scripts/fake-discord.mjs 3099
 //   DEV_LOGIN=1 DISCORD_API=http://localhost:3099/api DISCORD_CLIENT_SECRET=fake npx tsx server/index.ts
-// then open http://localhost:5175/sketch-battle/?activity=stub&instance=one&as=Ann
+// then open http://localhost:5175/?activity=stub&instance=one&as=Ann
 import http from "node:http";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";

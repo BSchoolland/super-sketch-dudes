@@ -23,7 +23,7 @@ const shots = shotsAt > 0 ? process.argv[shotsAt + 1] : "/tmp/ssd-touch-shots";
 fs.mkdirSync(shots, { recursive: true });
 const data = fs.mkdtempSync(path.join(os.tmpdir(), "touchcheck-"));
 fs.writeFileSync(path.join(data, "staff.json"), "[]");
-const base = `http://localhost:${VITE_PORT}/sketch-battle/`;
+const base = `http://localhost:${VITE_PORT}/`;
 const children = [];
 const fail = (message) => { throw new Error(message); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -150,7 +150,7 @@ try {
   }
   async function pickAndStart(pages, fighters, setup) {
     for (const [i, p] of pages.entries()) await p.evaluate((id) => {
-      window.sketchbattle.screen.pick({ id, name: id.toUpperCase(), bundleUrl: `/sketch-battle/house/${id}/bundle.json?v=${window.sketchbattle.build}`, house: true, entry: null });
+      window.sketchbattle.screen.pick({ id, name: id.toUpperCase(), bundleUrl: `/house/${id}/bundle.json?v=${window.sketchbattle.build}`, house: true, entry: null });
     }, fighters[i]);
     await Promise.all(pages.map((p) => p.waitForFunction(() => window.sketchbattle.screen.lobbyDebug()?.members.every((m) => m.fighter))));
     if (pages.length > 1) for (const p of pages) await p.evaluate(() => window.sketchbattle.screen.toggleReady());

@@ -4,7 +4,7 @@ The game works without any of this: a pair that can't link plays over the relay,
 STUN server most pairs never link (browsers hide their local addresses, and two homes behind NAT need STUN to find
 each other), and without TURN the pairs behind strict NATs or firewalls never link either. coturn does both.
 
-Nothing changes in Apache: signaling rides the existing `/sketch-battle/ws` WebSocket.
+Nothing changes in Apache: signaling rides the existing `/ws` WebSocket.
 
 ## 1. Install and configure coturn
 

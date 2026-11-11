@@ -1,7 +1,7 @@
 // The title screen's brawl (shared/brawl.ts), run headless at full speed with every house fighter and
 // everyone's characters from the live site, all loaded up front. Prints kills, deaths, time survived and
 // damage per life for each character.
-// Usage: tsx scripts/brawl-bench.ts [sim minutes per brawl=120] [brawls in parallel=8] [site=https://bschoolland.dev]
+// Usage: tsx scripts/brawl-bench.ts [sim minutes per brawl=120] [brawls in parallel=8] [site=https://supersketchdudes.com]
 import { fork } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { Brawl } from "../shared/brawl";
@@ -14,13 +14,13 @@ import { loadHouse } from "../test/house";
 interface Row { kills: number; deaths: number; survivedSec: number; dealt: number; drops: number }
 type Totals = Record<string, Row>;
 
-const MINUTES = Number(process.argv[2] ?? 120), PARALLEL = Number(process.argv[3] ?? 8), SITE = process.argv[4] ?? "https://bschoolland.dev";
+const MINUTES = Number(process.argv[2] ?? 120), PARALLEL = Number(process.argv[3] ?? 8), SITE = process.argv[4] ?? "https://supersketchdudes.com";
 const worker = process.env.BRAWL_SEED !== undefined;
 
 async function loadEveryone(): Promise<Record<string, string>> {
   const names: Record<string, string> = {};
   for (const h of HOUSE_ROSTER) { await loadHouse(h.id); names[h.id] = h.name; }
-  const res = await fetch(`${SITE}/sketch-battle/api/characters/everyone`);
+  const res = await fetch(`${SITE}/api/characters/everyone`);
   if (!res.ok) throw new Error(`everyone's characters: HTTP ${res.status}`);
   const { characters } = (await res.json()) as { characters: { id: string; name: string; bundleUrl: string }[] };
   for (const c of characters) {

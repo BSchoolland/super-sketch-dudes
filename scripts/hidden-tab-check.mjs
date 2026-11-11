@@ -6,7 +6,7 @@
 import { chromium } from "playwright";
 import { openOnline } from "./menu-nav.mjs";
 
-const base = process.argv[2] ?? "http://localhost:5199/sketch-battle/";
+const base = process.argv[2] ?? "http://localhost:5199/";
 const press = async (p, key, n = 1) => { for (let i = 0; i < n; i++) { await p.keyboard.press(key); await p.waitForTimeout(110); } };
 const browser = await chromium.launch({ headless: false });
 try {
@@ -23,7 +23,7 @@ try {
   const pages = [host, guest];
   await Promise.all(pages.map((p) => p.waitForFunction(() => window.sketchbattle.screen.lobbyDebug?.()?.members.length === 2)));
   for (const [i, p] of pages.entries()) await p.evaluate((id) => {
-    window.sketchbattle.screen.pick({ id, name: id.toUpperCase(), bundleUrl: `/sketch-battle/house/${id}/bundle.json?v=${window.sketchbattle.build}`, house: true, entry: null });
+    window.sketchbattle.screen.pick({ id, name: id.toUpperCase(), bundleUrl: `/house/${id}/bundle.json?v=${window.sketchbattle.build}`, house: true, entry: null });
   }, ["rocket", "wizard"][i]);
   await Promise.all(pages.map((p) => p.waitForFunction(() => window.sketchbattle.screen.lobbyDebug().members.every((m) => m.fighter))));
   for (const p of pages) await p.evaluate(() => window.sketchbattle.screen.toggleReady());

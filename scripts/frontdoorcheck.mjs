@@ -18,7 +18,7 @@ const SERVER_PORT = Number(process.env.SERVER_PORT ?? 3231), VITE_PORT = Number(
 const shotsAt = process.argv.indexOf("--shots");
 const shots = shotsAt > 0 ? process.argv[shotsAt + 1] : null;
 const data = fs.mkdtempSync(path.join(os.tmpdir(), "frontdoorcheck-"));
-const base = `http://localhost:${VITE_PORT}/sketch-battle/`;
+const base = `http://localhost:${VITE_PORT}/`;
 const children = [];
 const fail = (message) => { throw new Error(message); };
 const YEAR = new Date().getFullYear(), MONTH = new Date().getMonth() + 1;
@@ -96,7 +96,7 @@ try {
     await press(p, "ArrowDown", downs);
     await press(p, "Enter");
   }
-  const pickHouse = (p, id) => p.evaluate((id) => window.sketchbattle.screen.pick({ id, name: id.toUpperCase(), bundleUrl: `/sketch-battle/house/${id}/bundle.json?v=${window.sketchbattle.build}`, house: true, entry: null }), id);
+  const pickHouse = (p, id) => p.evaluate((id) => window.sketchbattle.screen.pick({ id, name: id.toUpperCase(), bundleUrl: `/house/${id}/bundle.json?v=${window.sketchbattle.build}`, house: true, entry: null }), id);
   const inLobby = (p, n) => p.waitForFunction((n) => window.sketchbattle?.screen?.lobbyDebug?.()?.members.length === n, n, { timeout: 20000 });
   async function played(pages, label) {
     await Promise.all(pages.map((p) => p.waitForFunction(() => typeof window.sketchbattle.screen.netDebug === "function", null, { timeout: 20000 })));

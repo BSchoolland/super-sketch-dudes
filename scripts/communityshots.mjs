@@ -1,10 +1,10 @@
 // COMMUNITY in a real browser: the grid on BEST, then the first character big with SAVE.
-//   node scripts/communityshots.mjs [base=http://localhost:5178/sketch-battle/] [out=shots/community]
+//   node scripts/communityshots.mjs [base=http://localhost:5178/] [out=shots/community]
 // Server: PORT=3012 DEV_LOGIN=1 npx tsx server/index.ts, with players and their bundles in server-data/
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 
-const base = process.argv[2] ?? "http://localhost:5178/sketch-battle/";
+const base = process.argv[2] ?? "http://localhost:5178/";
 const out = process.argv[3] ?? "shots/community";
 mkdirSync(out, { recursive: true });
 const W = 1600, H = 900;

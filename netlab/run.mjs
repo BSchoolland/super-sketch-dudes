@@ -33,7 +33,7 @@ const REPO = path.dirname(HERE);
 // tagged by the Dockerfile's content, so a changed Dockerfile builds a new image and never reuses a stale one
 const IMAGE = `sketchbattle-netlab:${createHash("sha256").update(fs.readFileSync(path.join(HERE, "Dockerfile"))).digest("hex").slice(0, 12)}`;
 const TURN_SECRET = "netlab";
-const BASE = "/sketch-battle/";
+const BASE = "/";
 const PORT = 3008;
 
 // ---- arguments

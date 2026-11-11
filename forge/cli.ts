@@ -1,5 +1,5 @@
 // Runs the forge on one drawing, no server.
-// Usage: npx tsx forge/cli.ts <drawing.png> <outdir> [--name Player] [--url /sketch-battle/gen-test] [--hint-name N] [--hint-desc D]
+// Usage: npx tsx forge/cli.ts <drawing.png> <outdir> [--name Player] [--url /gen-test] [--hint-name N] [--hint-desc D]
 // Writes <outdir>/bundle.json (cell URLs under --url/cells), cells/, payload.json, report.json.
 import fs from "node:fs";
 import path from "node:path";
@@ -12,7 +12,7 @@ loadForgeEnv();
 const args = process.argv.slice(2);
 const opt = (k: string, d: string) => { const i = args.indexOf(`--${k}`); return i >= 0 ? args.splice(i, 2)[1] : d; };
 const player = opt("name", "Player");
-const url = opt("url", "/sketch-battle/gen-test").replace(/\/$/, "");
+const url = opt("url", "/gen-test").replace(/\/$/, "");
 const hintName = opt("hint-name", ""), hintDesc = opt("hint-desc", "");
 const [drawing, out] = args;
 if (!drawing || !out) { console.error("usage: npx tsx forge/cli.ts <drawing.png> <outdir> [--name Player] [--url /base]"); process.exit(2); }

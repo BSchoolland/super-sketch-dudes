@@ -29,7 +29,7 @@ fs.mkdirSync(sheets, { recursive: true });
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 const FONT = path.join(root, "client/public/fonts/PatrickHand-Regular.ttf");
-const BASE = "/sketch-battle/";
+const BASE = "/";
 const ID = "gen-preview";
 const { bundle } = bundleOf(path.resolve(js), path.resolve(cellsDir));
 bundle.id = ID;

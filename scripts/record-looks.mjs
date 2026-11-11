@@ -3,7 +3,7 @@
 import { chromium } from "playwright";
 import { mkdirSync, readdirSync, renameSync } from "node:fs";
 import { down as btnDown, up as btnUp, press as btnPress } from "./lib/keys.mjs";
-const base = process.argv[2] ?? "http://localhost:5178/sketch-battle/";
+const base = process.argv[2] ?? "http://localhost:5178/";
 const out = process.argv[3] ?? "/tmp/tf/looks";
 mkdirSync(out, { recursive: true });
 const browser = await chromium.launch();

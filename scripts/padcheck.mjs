@@ -1,6 +1,6 @@
 // Fakes a standard gamepad in the page and checks the fighter obeys it: stick right runs, X jumps, A attacks, right stick smashes.
 import { chromium } from "playwright";
-const base = process.argv[2] ?? "http://localhost:5175/sketch-battle/";
+const base = process.argv[2] ?? "http://localhost:5175/";
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
 const errors = [];

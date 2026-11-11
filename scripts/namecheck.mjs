@@ -18,7 +18,7 @@ const shotsAt = process.argv.indexOf("--shots");
 const shots = shotsAt > 0 ? process.argv[shotsAt + 1] : null;
 const data = fs.mkdtempSync(path.join(os.tmpdir(), "namecheck-"));
 const server = `http://localhost:${SERVER_PORT}`;
-const base = `http://localhost:${VITE_PORT}/sketch-battle/`;
+const base = `http://localhost:${VITE_PORT}/`;
 const children = [];
 const fail = (message) => { throw new Error(message); };
 const REFUSED = "Captain Mean", APPROVED = "Turbo Pancake";

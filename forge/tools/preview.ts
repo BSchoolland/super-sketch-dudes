@@ -17,7 +17,7 @@ const only = opt("moves")?.split(",").filter(Boolean) ?? null;
 fs.mkdirSync(out, { recursive: true });
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
-const BASE = "/sketch-battle/";
+const BASE = "/";
 const ID = "gen-preview";
 const { bundle } = bundleOf(path.resolve(js), path.resolve(cellsDir));
 bundle.id = ID;

@@ -2,7 +2,7 @@
 // attacking. Prints each side's sim rate, time sync skips, stalls and rollbacks. Expects the dev servers,
 // the server started with DEV_LOGIN=1. Usage: node scripts/netperf.mjs [base] [throttle=6] [seconds=20]
 import { chromium } from "playwright";
-const [base = "http://localhost:5175/sketch-battle/", throttle = "6", seconds = "20"] = process.argv.slice(2);
+const [base = "http://localhost:5175/", throttle = "6", seconds = "20"] = process.argv.slice(2);
 const browser = await chromium.launch();
 const open = async (name) => {
   const p = await (await browser.newContext({ viewport: { width: 1280, height: 720 } })).newPage();

@@ -1,6 +1,6 @@
 name: Deploy
 
-# Every push to master ships to bschoolland.dev/sketch-battle/ through scripts/deploy.sh.
+# Every push to master ships to supersketchdudes.com through scripts/deploy.sh.
 on:
   push:
     branches: [master]

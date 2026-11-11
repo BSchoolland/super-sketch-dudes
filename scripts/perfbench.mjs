@@ -1,12 +1,12 @@
 // Frame-time bench: a CPU-vs-CPU match in headless Chromium at a chosen CPU throttle and pixel ratio, sampling
 // requestAnimationFrame gaps and counting draws and sim frames. Run it before and after a renderer change.
 // Needs Vite in front of a server (see wide-events-check.mjs); the quick-match URL needs no sign-in.
-// Usage: node scripts/perfbench.mjs [--base http://localhost:5199/sketch-battle/] [--throttle 4] [--seconds 12] [--dpr 1.25] [--stage rooftops] [--fighters rocket,wizard]
+// Usage: node scripts/perfbench.mjs [--base http://localhost:5199/] [--throttle 4] [--seconds 12] [--dpr 1.25] [--stage rooftops] [--fighters rocket,wizard]
 import { chromium } from "playwright";
 
 const args = process.argv.slice(2);
 const opt = (name, dflt) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : dflt; };
-const base = opt("base", "http://localhost:5199/sketch-battle/");
+const base = opt("base", "http://localhost:5199/");
 const throttle = Number(opt("throttle", 4)), seconds = Number(opt("seconds", 12)), dpr = Number(opt("dpr", 1.25));
 const stage = opt("stage", "rooftops"), fighters = opt("fighters", "rocket,wizard"), players = opt("players", "cpu"), chrome = opt("chrome", "on") !== "off";
 

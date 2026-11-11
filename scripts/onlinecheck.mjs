@@ -1,7 +1,7 @@
 import { chromium } from "playwright";
 import { openOnline as signInOnline } from "./menu-nav.mjs";
 
-const base = process.argv[2] ?? "http://localhost:5175/sketch-battle/";
+const base = process.argv[2] ?? "http://localhost:5175/";
 const server = process.argv[3] ?? base;
 const health = new URL("api/health", server.endsWith("/") ? server : `${server}/`);
 
