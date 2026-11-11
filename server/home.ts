@@ -9,7 +9,7 @@ import { communityCharacters, rankedCommunity } from "./library";
  * Its files are client/public/home/ and its URLs are relative, so they work at both. The game is always reached at GAME.
  */
 const SITE = "https://supersketchdudes.com/";
-const GAME = "https://supersketchdudes.com/sketch-battle/";
+const GAME = "https://supersketchdudes.com/play/";
 const PLAY = `${GAME}?ref=home`;
 /** Fighters in the strip: BEST's order, one per creator. */
 const STRIP = 6;

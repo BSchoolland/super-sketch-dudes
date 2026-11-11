@@ -58,7 +58,7 @@ describe("the landing page", () => {
     expect(html).toContain(`<link rel="canonical" href="https://supersketchdudes.com/">`);
     expect(html).toContain(`<meta property="og:image" content="https://supersketchdudes.com/og.jpg">`);
     expect(html).toMatch(/<h1>/);
-    expect(html).toContain(`href="https://supersketchdudes.com/sketch-battle/?ref=home"`);
+    expect(html).toContain(`href="https://supersketchdudes.com/play/?ref=home"`);
     const ld = JSON.parse(/<script type="application\/ld\+json">(.*?)<\/script>/s.exec(html)![1]);
     expect(ld).toMatchObject({ "@context": "https://schema.org", "@type": "VideoGame", url: "https://supersketchdudes.com/", offers: { price: "0" } });
     expect(html).not.toMatch(/forge/i);
