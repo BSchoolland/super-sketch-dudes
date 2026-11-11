@@ -20,11 +20,12 @@ import { attachEvents, initEvents, requestErrors, requestEvents, watchProcess } 
 import { iceConfigured } from "./ice";
 import { restoreHandoff, saveHandoff } from "./handoff";
 import { sweepGuests } from "./guests";
+import { OLD_HOST, oldHostPage } from "./oldhost";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
 const PORT = Number(process.env.PORT ?? 3008);
-const BASE = (process.env.SKETCHBATTLE_BASE ?? "/sketch-battle/").replace(/\/$/, "");
+const BASE = (process.env.SKETCHBATTLE_BASE ?? "/play/").replace(/\/$/, "");
 const DATA_DIR = process.env.SKETCHBATTLE_DATA ?? path.join(root, "server-data");
 fs.mkdirSync(DATA_DIR, { recursive: true });
 initEvents(DATA_DIR);
@@ -34,7 +35,7 @@ const app = express();
 // forge completions carry nine PNG cells + a sheet as base64; a new character carries its drawing
 app.use((req, res, next) => express.json({ limit: req.path.includes("/forge/") || req.path.endsWith("/characters/import") || req.path.endsWith("/cells") ? "12mb" : req.path.endsWith("/cpu") ? "4mb" : req.path.includes("/games") ? "40mb" : req.path.endsWith("/events") ? "256kb" : req.path.endsWith("/source") ? "4mb" : req.path.endsWith("/characters") || req.path.endsWith("/feedback") || req.path.endsWith("/feedback/response") ? "2mb" : req.path.includes("/maps") ? "80kb" : "8kb" })(req, res, next));
 const api = express.Router();
-// Apache proxies /sketch-battle/* to / here; when hit directly the prefix is still present, so mount both.
+// Apache proxies /play/* to / here; when hit directly the prefix is still present, so mount both.
 app.use("/api", api);
 app.use(`${BASE}/api`, api);
 api.use(requestEvents());
@@ -107,7 +108,10 @@ app.use("/", express.static(clientDir, staticOpts));
 // Discord sends the signed-in browser back to /auth with the token in the URL fragment; the game page handles it.
 // /discord is where the Discord Activity's root URL mapping points (ARCHITECTURE.md, Discord Activity).
 const pages = ["/auth", "/discord", "/discord/"].flatMap((p) => [p, `${BASE}${p}`]);
-app.get(["/", BASE, `${BASE}/`, ...pages], (_req, res) => res.sendFile(path.join(clientDir, "index.html")));
+app.get(["/", BASE, `${BASE}/`, ...pages], (req, res) => {
+    if (req.get("x-forwarded-host") === OLD_HOST && !req.path.endsWith("/auth")) return res.type("html").send(oldHostPage(req.originalUrl.includes("?") ? req.originalUrl.slice(req.originalUrl.indexOf("?")) : ""));
+    res.sendFile(path.join(clientDir, "index.html"));
+  });
 // the privacy notice and terms: plain pages beside the game (privacy.html is the URL Google's consent screen has)
 for (const page of ["privacy", "terms"]) app.get([`/${page}`, `${BASE}/${page}`], (_req, res) => res.sendFile(path.join(clientDir, `${page}.html`)));
 

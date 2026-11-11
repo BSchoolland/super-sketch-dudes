@@ -6,7 +6,7 @@ let build = "dev";
 try { build = execSync("git rev-parse --short HEAD").toString().trim(); } catch { /* no git */ }
 const serverTarget = process.env.SKETCHBATTLE_SERVER ?? "http://localhost:3008";
 
-const base = process.env.SKETCHBATTLE_BASE ?? "/sketch-battle/";
+const base = process.env.SKETCHBATTLE_BASE ?? "/play/";
 
 export default defineConfig({
   root: path.resolve(__dirname),
@@ -32,10 +32,10 @@ export default defineConfig({
   server: {
     port: 5175,
     proxy: {
-      "/sketch-battle/api": { target: serverTarget, rewrite: (p) => p.replace(/^\/sketch-battle/, "") },
-      "/sketch-battle/gen": { target: serverTarget },
-      "/sketch-battle/games": { target: serverTarget },
-      "/sketch-battle/ws": { target: serverTarget, ws: true, rewrite: (p) => p.replace(/^\/sketch-battle/, "") },
+      "/play/api": { target: serverTarget, rewrite: (p) => p.replace(/^\/play/, "") },
+      "/play/gen": { target: serverTarget },
+      "/play/games": { target: serverTarget },
+      "/play/ws": { target: serverTarget, ws: true, rewrite: (p) => p.replace(/^\/play/, "") },
     },
   },
 });

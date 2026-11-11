@@ -31,7 +31,7 @@ import { swap, type Handoff } from "./handoff";
 
 export interface MountOptions {
   canvas: HTMLCanvasElement;
-  /** URL prefix of the site (its /api and /ws), e.g. "/sketch-battle/". */
+  /** URL prefix of the site (its /api and /ws), e.g. "/play/". */
   base: string;
   params: URLSearchParams;
   /** This bundle's hash, "" for the classic single-build page. */

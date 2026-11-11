@@ -3,7 +3,7 @@
 A platform fighter in the browser. Two to four fighters, percent damage, knockback, blast zones,
 stocks. Keyboard or controller, couch or online.
 
-**Play:** https://supersketchdudes.com/sketch-battle/
+**Play:** https://supersketchdudes.com/play/
 
 - `DESIGN.md` is what this is and why.
 - `CHARACTERS.md` is the roster: every fighter's fantasy, stats and frame data.
