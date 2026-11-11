@@ -1,4 +1,4 @@
-// COMMUNITY in a real browser: the grid sorted by popular, then the first character big with SAVE.
+// COMMUNITY in a real browser: the grid on BEST, then the first character big with SAVE.
 //   node scripts/communityshots.mjs [base=http://localhost:5178/sketch-battle/] [out=shots/community]
 // Server: PORT=3012 DEV_LOGIN=1 npx tsx server/index.ts, with players and their bundles in server-data/
 import { chromium } from "playwright";
@@ -27,7 +27,7 @@ await page.waitForFunction(() => window.sketchbattle.screen.constructor.name ===
 // every visible cell's bundle loading in turns the drawing into the fighter
 await page.mouse.move(...at(960, 1060));
 await page.waitForTimeout(Number(process.env.LOAD_MS ?? 6000));
-await shot("1-popular");
+await shot("1-best");
 
 await tap(145 + 125, 160 + 125);
 await page.mouse.move(...at(960, 1060));

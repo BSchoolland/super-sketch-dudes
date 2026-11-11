@@ -111,7 +111,7 @@ describe("guests", () => {
     const mine = lib.filter((c) => !c.saved && !c.starter).map((c) => c.id).sort();
     expect(mine).toEqual(["gen-guest-made", "gen-haver-own", queued.character.id].sort());
     expect(lib.filter((c) => c.saved).map((c) => c.id).sort()).toEqual(["gen-pub-a", "gen-pub-b"]);
-    const saves = ((await (await api("/characters/community?sort=saved")).json()) as { characters: { id: string; saves: number }[] }).characters;
+    const saves = ((await (await api("/characters/community?sort=best")).json()) as { characters: { id: string; saves: number }[] }).characters;
     expect(saves.find((c) => c.id === "gen-pub-a")?.saves).toBe(1);
     expect(saves.find((c) => c.id === "gen-haver-own")?.saves ?? 0).toBe(0);
     const maps = ((await (await api("/maps", H(back.session))).json()) as { maps: { id: string; owner: string; ownerName: string }[] }).maps;

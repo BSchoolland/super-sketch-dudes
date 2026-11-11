@@ -24,6 +24,9 @@ let dummyFile = "";
 /** Online matches each fighter has been picked for, one per slot, kept in <dataDir>/plays.json. */
 let plays: Record<string, number> = {};
 let playsFile = "";
+/** Hand-picked characters, newest pick first: they lead COMMUNITY's BEST. Kept in <dataDir>/best.json. */
+let best: string[] = [];
+let bestFile = "";
 
 function fileOf(owner: string): string {
   return path.join(dir, `${owner.replace(/[^\w-]/g, "_")}.json`);
@@ -56,6 +59,19 @@ export function initLibrary(dataDir: string): void {
   dummy = fs.existsSync(dummyFile) ? JSON.parse(fs.readFileSync(dummyFile, "utf8")) : null;
   playsFile = path.join(dataDir, "plays.json");
   plays = fs.existsSync(playsFile) ? JSON.parse(fs.readFileSync(playsFile, "utf8")) : {};
+  bestFile = path.join(dataDir, "best.json");
+  best = fs.existsSync(bestFile) ? JSON.parse(fs.readFileSync(bestFile, "utf8")) : [];
+}
+
+export function bestIds(): string[] {
+  return [...best];
+}
+/** Picks a character for BEST, ahead of the earlier picks, or drops it. */
+export function setBest(id: string, on: boolean): void {
+  if (!findCharacter(id)) throw new Error(`no such character: ${id}`);
+  best = best.filter((b) => b !== id);
+  if (on) best.unshift(id);
+  fs.writeFileSync(bestFile, JSON.stringify(best));
 }
 
 /** The name this player goes by, once they have a record. */
@@ -145,14 +161,6 @@ export function savedOf(owner: string): LibraryEntry[] {
     const e = findCharacter(id);
     return e?.status === "ready" ? [{ ...e, saved: at }] : [];
   });
-}
-
-/** Saves made since `since` (ms), per character, across every library. */
-export function savesSince(since: number): Map<string, number> {
-  scanAll();
-  const out = new Map<string, number>();
-  for (const lib of cache.values()) for (const s of lib.saved) if (s.at >= since) out.set(s.id, (out.get(s.id) ?? 0) + 1);
-  return out;
 }
 
 export function saveCount(id: string): number {

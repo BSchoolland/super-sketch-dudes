@@ -86,19 +86,20 @@ export interface ForgeStanding {
 export interface CommunityCharacter extends Pick<LibraryEntry, "id" | "name" | "tagline" | "drawingUrl" | "createdAt"> {
   bundleUrl: string;
   creator: Pick<Player, "name">;
-  /** Online matches it was picked for: what POPULAR sorts by. */
+  /** Online matches it was picked for. */
   plays: number;
-  /** Players who have it saved (MOST SAVED), and how many saved it in the last TRENDING_DAYS (TRENDING). */
+  /** Players who have it saved. */
   saves: number;
-  recentSaves: number;
+  /** Hand-picked: it leads BEST. */
+  best: boolean;
   /** In the caller's library by reference. */
   saved: boolean;
   /** The caller made it. */
   mine: boolean;
 }
-export type CommunitySort = "popular" | "saved" | "trending" | "new";
-export const COMMUNITY_SORTS: readonly CommunitySort[] = ["popular", "saved", "trending", "new"];
-export const TRENDING_DAYS = 7;
+/** BEST: the hand-picked ones, newest pick first, then the rest by how many players saved them. */
+export type CommunitySort = "best" | "new";
+export const COMMUNITY_SORTS: readonly CommunitySort[] = ["best", "new"];
 export const COMMUNITY_PAGE = 36;
 
 /** A fighter in the release card's lineup. */

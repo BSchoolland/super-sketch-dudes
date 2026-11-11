@@ -21,7 +21,7 @@ const source = fs.readFileSync(new URL("../forge/exemplar/sword-guy.fighter.js",
 const api = (p: string, init?: RequestInit) => fetch(`http://127.0.0.1:${port}/api${p}`, { ...init, headers: { "x-forge-token": TOKEN, "content-type": "application/json", ...(init?.headers ?? {}) } });
 const json = async <T = any>(p: string, init?: RequestInit): Promise<T> => (await api(p, init)).json() as Promise<T>;
 const signIn = async (name: string) => ({ "x-session": (await json("/auth/dev", { method: "POST", body: JSON.stringify({ name }) })).session as string });
-const community = async (H: Record<string, string>, sort = "popular") => (await json<{ characters: CommunityCharacter[] }>(`/characters/community?sort=${sort}`, { headers: H })).characters;
+const community = async (H: Record<string, string>, sort = "best") => (await json<{ characters: CommunityCharacter[] }>(`/characters/community?sort=${sort}`, { headers: H })).characters;
 const library = async (H: Record<string, string>) => (await json<{ characters: LibraryEntry[] }>("/library", { headers: H })).characters;
 
 /** A ready character as an older player file has it: no `public` field. */
@@ -37,6 +37,7 @@ beforeAll(async () => {
     fs.writeFileSync(path.join(dataDir, "players", `${owner}.json`), JSON.stringify({ player: { id: owner, name, avatar: null }, lastPlayed: null, characters, ...(saved ? { saved: saved.map((id) => ({ id, at: 1 })) } : {}) }));
   file("dev-ann", "Ann", [ready("gen-old", "dev-ann", 1), ready("gen-new", "dev-ann", 3), ready("gen-mid", "dev-ann", 2), ready("gen-hidden", "dev-ann", 2, { public: false })]);
   file("dev-cal", "Cal", [], ["gen-old"]);
+  fs.writeFileSync(path.join(dataDir, "staff.json"), JSON.stringify(["dev-boss"]));
   app();
 });
 function app(): void {
@@ -58,30 +59,34 @@ beforeAll(async () => {
 });
 afterAll(() => { server.close(); fs.rmSync(dataDir, { recursive: true, force: true }); });
 
-describe("community save leaderboards", () => {
-  it("MOST SAVED ranks by every save, TRENDING by this week's", async () => {
-    // Cal saved gen-old long ago; two players save gen-mid now
-    const savers = await Promise.all(["Dee", "Eli"].map(signIn));
-    for (const H of savers) expect((await api("/library/saved/gen-mid", { method: "POST", headers: H })).status).toBe(200);
-    const H = await signIn("Fay");
-    const most = await community(H, "saved");
-    expect(most.slice(0, 2).map((c) => [c.id, c.saves])).toEqual([["gen-mid", 2], ["gen-old", 1]]);
-    const trending = await community(H, "trending");
-    expect(trending[0]).toMatchObject({ id: "gen-mid", recentSaves: 2 });
-    expect(trending.find((c) => c.id === "gen-old")).toMatchObject({ saves: 1, recentSaves: 0 });
-    expect((await api("/characters/community?sort=nope", { headers: H })).status).toBe(400);
+describe("BEST", () => {
+  it("leads with what an admin picked, newest pick first, then the most saved, then the newest", async () => {
+    const boss = await signIn("Boss"), fay = await signIn("Fay");
+    expect((await community(fay)).map((c) => [c.id, c.saves, c.best])).toEqual([["gen-old", 1, false], ["gen-new", 0, false], ["gen-mid", 0, false]]);
+    const pick = (id: string, best: boolean, H: Record<string, string>) => api(`/characters/community/${id}/best`, { method: "POST", headers: H, body: JSON.stringify({ best }) });
+    expect((await pick("gen-mid", true, fay)).status).toBe(403);
+    expect((await pick("gen-mid", true, {})).status).toBe(401);
+    expect((await pick("gen-hidden", true, boss)).status).toBe(404);
+    expect((await pick("gen-mid", true, boss)).status).toBe(200);
+    expect((await pick("gen-new", true, boss)).status).toBe(200);
+    expect((await community(fay)).map((c) => [c.id, c.best])).toEqual([["gen-new", true], ["gen-mid", true], ["gen-old", false]]);
+    expect(JSON.parse(fs.readFileSync(path.join(dataDir, "best.json"), "utf8"))).toEqual(["gen-new", "gen-mid"]);
+    expect((await json<{ picker: boolean }>("/characters/community", { headers: boss })).picker).toBe(true);
+    expect((await json<{ picker: boolean }>("/characters/community", { headers: fay })).picker).toBe(false);
     // leave the shared fixtures as the next tests expect them
-    for (const S of savers) await api("/library/saved/gen-mid", { method: "DELETE", headers: S });
+    for (const id of ["gen-mid", "gen-new"]) expect((await pick(id, false, boss)).status).toBe(200);
+    expect((await community(fay)).map((c) => c.id)).toEqual(["gen-old", "gen-new", "gen-mid"]);
+    expect((await api("/characters/community?sort=popular", { headers: fay })).status).toBe(400);
   });
 });
 
 describe("community", () => {
-  it("lists public ready characters, with the creator's name only, popular or new first", async () => {
+  it("lists public ready characters, with the creator's name only, best or new first", async () => {
     const bob = await signIn("Bob");
-    const pop = await community(bob);
-    expect(pop.map((c) => c.id)).toEqual(["gen-new", "gen-mid", "gen-old"]);
-    expect(pop[0]).toMatchObject({ plays: 0, saved: false, mine: false, creator: { name: "Ann" } });
-    expect(pop[0].creator).toEqual({ name: "Ann" });
+    const best = await community(bob);
+    expect(best.map((c) => c.id)).toEqual(["gen-old", "gen-new", "gen-mid"]);
+    expect(best[0]).toMatchObject({ plays: 0, saved: false, mine: false, creator: { name: "Ann" } });
+    expect(best[0].creator).toEqual({ name: "Ann" });
     expect((await community(bob, "new")).map((c) => c.id)).toEqual(["gen-new", "gen-mid", "gen-old"]);
     expect((await api("/characters/community?sort=weird")).status).toBe(400);
   });
@@ -94,14 +99,13 @@ describe("community", () => {
     expect(await named("ann")).toEqual([]);
   });
 
-  it("popular ranks by online plays, not saves, then newest", async () => {
+  it("counts online plays without ranking by them, and drops a deleted character", async () => {
     const bob = await signIn("Bob");
     recordPlays(["gen-mid", "gen-mid", "gen-new", "wizard"]);
-    const pop = await community(bob);
-    expect(pop.map((c) => [c.id, c.plays])).toEqual([["gen-mid", 2], ["gen-new", 1], ["gen-old", 0]]);
+    expect((await community(bob)).map((c) => [c.id, c.plays])).toEqual([["gen-old", 0], ["gen-new", 1], ["gen-mid", 2]]);
     expect((await community(bob, "new")).map((c) => c.id)).toEqual(["gen-new", "gen-mid", "gen-old"]);
     expect((await api("/library/gen-mid", { method: "DELETE", headers: await signIn("Ann") })).status).toBe(204);
-    expect((await community(bob)).map((c) => c.id)).toEqual(["gen-new", "gen-old"]);
+    expect((await community(bob)).map((c) => c.id)).toEqual(["gen-old", "gen-new"]);
   });
 
   it("saving is a reference: it shows up in the saver's library, counts, and can't be doubled, made of your own, or of a private one", async () => {

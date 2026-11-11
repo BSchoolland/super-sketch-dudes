@@ -201,7 +201,9 @@ export const library = {
   unsave: (id: string) => api<{ saved: boolean }>(`/library/saved/${id}`, { method: "DELETE" }),
   /** One public character, by id: 404 once it's private, held or gone. */
   communityOne: (id: string) => api<{ character: CommunityCharacter }>(`/characters/community/${id}`),
-  community: (sort: CommunitySort, page: number, q = "") => api<{ characters: CommunityCharacter[]; pages: number }>(`/characters/community?sort=${sort}&page=${page}&q=${encodeURIComponent(q)}`),
+  /** `picker`: the caller may pick what leads BEST. */
+  community: (sort: CommunitySort, page: number, q = "") => api<{ characters: CommunityCharacter[]; pages: number; picker: boolean }>(`/characters/community?sort=${sort}&page=${page}&q=${encodeURIComponent(q)}`),
+  setBest: (id: string, best: boolean) => api<{ best: boolean }>(`/characters/community/${id}/best`, { method: "POST", body: JSON.stringify({ best }) }),
   featured: () => api<{ characters: FeaturedCharacter[]; made: number }>("/characters/featured"),
   /** `hint` is what the player typed on the describe page; the forge's design pass reads it. */
   create: (png: string, hint: { name: string; description: string }, pub: boolean) => api<{ character: LibraryEntry; forge: ForgeStanding }>("/characters", { method: "POST", body: JSON.stringify({ png, ...hint, public: pub }) }),

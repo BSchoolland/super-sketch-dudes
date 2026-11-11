@@ -1,5 +1,5 @@
 import { VIEW_H, VIEW_W } from "../render/camera";
-import { inkLine, inkPath, PAPER, PENCIL } from "../render/paper";
+import { inkLine, PENCIL } from "../render/paper";
 import type { MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
 import { sfx } from "../audio/audio";
@@ -16,46 +16,20 @@ import { drawCharTabs, otherCharTab } from "./chartabs";
 import { ScrollView, type Rect } from "./scroll";
 
 const COLS = 6, ART = 250, GAP = 50, ROW_H = 350, TOP = 250, BOTTOM = VIEW_H - 180;
-/** Room above the first row for the count bursts. */
 const PAD_TOP = 30;
 const X0 = (VIEW_W - (COLS * ART + (COLS - 1) * GAP)) / 2;
 /** The search box, under the tabs on the left; the sorts are words on the right of the same row. */
 const SEARCH = { x: X0, y: 150, w: 720, h: 76 };
 const SORT_W = 220, SORT_Y = SEARCH.y;
-const SORT_NAME: Record<CommunitySort, string> = { popular: "POPULAR", saved: "MOST SAVED", trending: "TRENDING", new: "NEWEST" };
-/** What the burst on each cell counts, for the sort that ranks by it. */
-function countOf(c: CommunityCharacter, sort: CommunitySort): { n: number; what: string } {
-  if (sort === "saved") return { n: c.saves, what: "saves" };
-  if (sort === "trending") return { n: c.recentSaves, what: "this week" };
-  return { n: c.plays, what: "" };
-}
+const SORT_NAME: Record<CommunitySort, string> = { best: "BEST", new: "NEWEST" };
 
-/** A comic-book burst on a cell's top-right corner with the number the list is sorted by. */
-function drawCount(ctx: CanvasRenderingContext2D, x: number, y: number, n: number): void {
-  const spikes = 9, outer = 40, inner = 29;
-  const pts: [number, number][] = [];
-  for (let i = 0; i < spikes * 2; i++) {
-    const a = (i / (spikes * 2)) * Math.PI * 2 - Math.PI / 2, r = i % 2 ? inner : outer;
-    pts.push([Math.cos(a) * r, Math.sin(a) * r]);
-  }
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(0.12);
-  inkPath(ctx, pts, true, Math.round(x));
-  ctx.fillStyle = PAPER;
-  ctx.fill();
-  ctx.lineWidth = 2.4; ctx.lineJoin = "round"; ctx.strokeStyle = INK;
-  ctx.stroke();
-  ctx.restore();
-  label(ctx, String(n), x, y + 10, 28, INK, "center", 900, inner * 2 - 6);
-}
-
-/** CHARACTERS, COMMUNITY tab: everyone's public characters, most played online or newest first; one big with SAVE. */
+/** CHARACTERS, COMMUNITY tab: everyone's public characters, the best or the newest first; one big with SAVE. An admin's has the button that picks it for BEST. */
 export class CommunityScreen implements Screen {
   t = 0;
   private menu = new ButtonMenu();
   private detailMenu = new ButtonMenu();
-  private sort: CommunitySort = "popular";
+  private sort: CommunitySort = "best";
+  private picker = false;
   private items: CommunityCharacter[] | null = null;
   private pages = 0;
   private loaded = 0;
@@ -105,8 +79,9 @@ export class CommunityScreen implements Screen {
     const id = ++this.fetchId;
     this.loading = true;
     library.community(this.sort, page, this.query).then(
-      ({ characters, pages }) => {
+      ({ characters, pages, picker }) => {
         if (id !== this.fetchId) return;
+        this.picker = picker;
         this.items = page ? [...(this.items ?? []), ...characters] : characters;
         this.pages = pages;
         this.loaded = page + 1;
@@ -159,6 +134,7 @@ export class CommunityScreen implements Screen {
       { id: "save", x: 0, y, w, h: 110, text: c.mine ? "YOURS" : c.saved ? "SAVED" : "SAVE", size: 44, disabled: c.mine || this.saving },
       { id: "back", x: 0, y, w, h: 110, text: "BACK", size: 44 },
     ];
+    if (this.picker) b.push({ id: "best", x: 0, y, w, h: 110, text: c.best ? "TAKE OFF BEST" : "PUT IN BEST", size: 32, disabled: this.saving });
     const x0 = (VIEW_W - (b.length * w + (b.length - 1) * gap)) / 2;
     b.forEach((btn, i) => { btn.x = x0 + i * (w + gap); });
     for (const r of this.rows(c)) b.push({ id: `m${r.i}`, x: r.x, y: r.y, w: r.w, h: r.h, text: "", custom: true });
@@ -210,6 +186,7 @@ export class CommunityScreen implements Screen {
   private updateDetail(c: CommunityCharacter, m: MenuInput, taps: ReturnType<typeof consumeTaps>): Screen | null {
     const pressed = this.detailMenu.update(this.detailButtons(c), m, taps);
     if (pressed === "save") this.toggleSave(c);
+    if (pressed === "best") this.toggleBest(c);
     if (pressed === "back" || m.back) {
       sfx.menuBack();
       this.selected = null;
@@ -229,6 +206,18 @@ export class CommunityScreen implements Screen {
       },
       (error: unknown) => {
         console.error(`save ${c.id} failed`, error);
+        this.problem = error instanceof Error ? error.message : String(error);
+        this.saving = false;
+      },
+    );
+  }
+
+  private toggleBest(c: CommunityCharacter): void {
+    this.saving = true;
+    library.setBest(c.id, !c.best).then(
+      ({ best }) => { c.best = best; this.saving = false; sfx.menuConfirm(); },
+      (error: unknown) => {
+        console.error(`picking ${c.id} for BEST failed`, error);
         this.problem = error instanceof Error ? error.message : String(error);
         this.saving = false;
       },
@@ -263,11 +252,6 @@ export class CommunityScreen implements Screen {
       if (!this.scroll.shows(r.y - PAD_TOP, ROW_H)) return;
       const x = r.x, y = this.scroll.at(r.y);
       drawCharacterCell(ctx, { ...c, status: "ready", stage: "", error: null }, x, y, ART, this.t + i * 0.2, i === focus);
-      const count = countOf(c, this.sort);
-      if (count.n) {
-        drawCount(ctx, x + ART - 30, y + 18, count.n);
-        if (count.what) label(ctx, count.what, x + ART - 40, y + 86, 22, INK, "center", 800);
-      }
     }));
     for (const b of buttons) {
       const focused = buttons[focus] === b;
