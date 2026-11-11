@@ -26,7 +26,7 @@ import { renameJobsOf } from "./forge";
  * `botKey`: a secret that lets the bench's bots sign in as bot accounts (ids `bot-…`, never a real player's); unset, no bot login.
  * `discord.api`: Discord's API base (a fake one in tests); `discord.clientSecret`: the app's, for the Activity's code exchange.
  */
-export interface AuthOptions { dataDir: string; devLogin: boolean; botKey: string | null; discord: { api: string; clientSecret: string | null } }
+export interface AuthOptions { dataDir: string; devLogin: boolean; botKey: string | null; discord: { api: string; clientSecret: string | null }; /** Players may type their own name (off until typed names are moderated). */ namesOpen?: boolean }
 
 const sessions = new Map<string, { player: Player; at: number }>();
 let file = "";
@@ -217,6 +217,7 @@ export function attachAuth(api: express.Router, opts: AuthOptions): void {
     const player = playerOf(req);
     if (!player) return res.status(401).json({ error: "not signed in" });
     if (isGuest(player.id)) return res.status(403).json({ error: "sign in to pick your own name" });
+    if (!opts.namesOpen) return res.status(403).json({ error: "changing your name is switched off for now" });
     const name = typedName(req.body?.name);
     if (!name) return res.status(400).json({ error: "a name needs letters or numbers" });
     const renamed = renamePlayer(player.id, name);

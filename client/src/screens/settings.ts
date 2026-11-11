@@ -45,10 +45,8 @@ export class SettingsScreen implements Screen {
       step: (d) => { r.step(d); saveSettings(); },
     }));
     // a guest signing out would lose everything they made
-    if (!playingAsGuest()) b.push(
-      { id: "name", x: VIEW_W / 2 - ACCOUNT.w - ACCOUNT.gap / 2, y: ACCOUNT.y, w: ACCOUNT.w, h: ACCOUNT.h, text: "CHANGE NAME", size: 32 },
-      { id: "signout", x: VIEW_W / 2 + ACCOUNT.gap / 2, y: ACCOUNT.y, w: ACCOUNT.w, h: ACCOUNT.h, text: "SIGN OUT", size: 32 },
-    );
+    // CHANGE NAME is off until typed names go past the moderator: players see each other's names
+    if (!playingAsGuest()) b.push({ id: "signout", x: VIEW_W / 2 - ACCOUNT.w / 2, y: ACCOUNT.y, w: ACCOUNT.w, h: ACCOUNT.h, text: "SIGN OUT", size: 32 });
     b.push(otherTabButton(TABS, this.tab));
     return b;
   }

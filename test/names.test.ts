@@ -39,7 +39,7 @@ beforeAll(async () => {
   a.use("/api", router);
   initLibrary(dataDir);
   initEvents(dataDir);
-  attachAuth(router, { dataDir, devLogin: true, botKey: null, discord: { api: "http://discord.invalid", clientSecret: null } });
+  attachAuth(router, { dataDir, devLogin: true, botKey: null, discord: { api: "http://discord.invalid", clientSecret: null }, namesOpen: true });
   attachForge(router, { token: TOKEN, dataDir, genBase: "/gen" });
   attachCharacters(router, TOKEN, dataDir);
   initMaps({ dataDir, devLogin: true });
