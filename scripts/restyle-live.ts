@@ -17,8 +17,10 @@ if (!outRoot || !pairs.length || !pairs.every((p) => p.includes("="))) { console
 if (!site || !token) throw new Error("SITE and FORGE_TOKEN must be set (~/.config/sketch-forge/env)");
 const origin = new URL(site).origin;
 
+// fighter URLs stored before the game moved to the site root carry its old base
+const atRoot = (url: string): string => url.replace(/^\/(?:sketch-battle|play)\/(?=gen\/)/, "/");
 const get = async (url: string): Promise<Buffer> => {
-  const r = await fetch(new URL(url, origin));
+  const r = await fetch(new URL(atRoot(url), origin));
   if (!r.ok) throw new Error(`GET ${url}: HTTP ${r.status}`);
   return Buffer.from(await r.arrayBuffer());
 };
