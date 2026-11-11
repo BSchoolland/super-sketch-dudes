@@ -35,7 +35,7 @@ export class ForgeScreen implements Screen {
   private retrying = false;
   private readonly look = fingers() ? TOUCH : DESK;
 
-  constructor(private nav: Nav, private entry: LibraryEntry) {}
+  constructor(private nav: Nav, public entry: LibraryEntry) {}
 
   get done(): boolean {
     return this.entry.status === "ready" || this.entry.status === "failed";

@@ -29,7 +29,14 @@
 <h2>Changes and contact</h2>
 <p>These terms may change; the game will link the current ones. Questions: <a href="mailto:bschoolland@gmail.com">bschoolland@gmail.com</a>. How your data is handled is on the <a href="privacy">privacy page</a>.</p>
 
-<p class="back"><a href="./">Back to the game</a> · <a href="privacy">Privacy</a></p>
+<p class="back"><span class="game"><a href="./">Back to the game</a> · </span><a href="privacy">Privacy</a></p>
 </main>
+<script>
+// opened from the game on CrazyGames: no link out to the website's copy of the game, and the other page is opened the same way
+if (new URLSearchParams(location.search).get("from") === "crazygames") {
+  for (const e of document.querySelectorAll(".game")) e.remove();
+  for (const a of document.querySelectorAll('a[href="privacy"], a[href="terms"]')) a.href += "?from=crazygames";
+}
+</script>
 </body>
 </html>

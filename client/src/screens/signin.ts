@@ -5,6 +5,7 @@ import { consumeTaps } from "../input/pointer";
 import { sfx } from "../audio/audio";
 import { activitySignIn, emailSignIn, emailSignUp, oauthSignInUrl } from "../account";
 import { activity, discordCode } from "../activity";
+import { crazyGames, crazyGamesLogin } from "../crazygames";
 import { ACCOUNT_AGE, ageStep, dayProblem, refuseSignup, signupRefused, yearProblem, type BirthAnswer } from "../age";
 import { sessionList } from "../telemetry/events";
 import { backRect, bg, card, grow, label, small, title, type Screen, INK } from "./ui";
@@ -24,6 +25,8 @@ const BACK: Button = { id: "back", x: 40, y: VIEW_H - 140, w: 240, h: 90, text: 
 const WEB_DOOR: Button[] = [...DOOR, BACK];
 /** Inside the Discord Activity the page can't leave for Discord or Google: DISCORD asks the Discord client again. */
 const ACTIVITY_DOOR: Button[] = [DOOR[0], { ...DOOR[2], y: DOOR[1].y }];
+/** Inside CrazyGames the only account is a CrazyGames one, through CrazyGames' own login. */
+const CRAZYGAMES_DOOR: Button[] = [{ ...DOOR[0], id: "crazygames", text: "SIGN IN WITH CRAZYGAMES" }, BACK];
 const FIELD_X = VIEW_W / 2 - 420, FIELD_W = 840, FIELD_H = 80, FIELD_GAP = 130, FIELD_TOP = 330;
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 const AGE_FIELD = { x: VIEW_W / 2 - 200, y: 330, w: 400, h: 96 };
@@ -56,7 +59,7 @@ export class SignInScreen implements Screen {
 
   private buttons(): Button[] {
     // a small screen's EMAIL and BACK are as tall as a finger needs, BACK clear of the privacy and terms links
-    if (this.mode === "door") return (activity ? ACTIVITY_DOOR : WEB_DOOR).map((b) => (!small() ? b : b.id === "email" ? { ...b, h: 100, size: 34 } : b.id === "back" ? { ...b, ...backRect(), y: 800 } : b));
+    if (this.mode === "door") return (activity ? ACTIVITY_DOOR : crazyGames ? CRAZYGAMES_DOOR : WEB_DOOR).map((b) => (!small() ? b : b.id === "email" ? { ...b, h: 100, size: 34 } : b.id === "back" ? { ...b, ...backRect(), y: 800 } : b));
     if (this.mode === "under") return [activity ? { ...BACK, x: VIEW_W / 2 - 120 } : { id: "play", x: VIEW_W / 2 - 250, y: 720, w: 500, h: 110, text: "KEEP PLAYING", size: 44 }];
     if (this.mode === "age") {
       const months = this.birth!.ask === "month";
@@ -83,6 +86,7 @@ export class SignInScreen implements Screen {
     if (this.mode === "door") {
       if (pressed) sessionList("signIn", pressed);
       if (pressed === "discord" && activity) { if (!this.sending) this.signInWith(discordCode().then(activitySignIn)); }
+      else if (pressed === "crazygames") { if (!this.sending) this.signInWith(crazyGamesLogin()); }
       else if (pressed === "discord" || pressed === "google") location.href = oauthSignInUrl(pressed);
       else if (pressed === "email") this.openForm("signin");
       else if (!activity && !this.sending && (pressed === "back" || m.back)) { sfx.menuBack(); return this.home(); }

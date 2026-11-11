@@ -3,7 +3,7 @@ import { arrivalProblem, PARAM_MAX, visitProblem, type Arrival, type VisitSource
 const VISIT_KEY = "sketchbattle.visit";
 const FIRST_KEY = "sketchbattle.firstVisit";
 
-/** `launch`: what opened the page when its URL can't say (the Discord Activity), counted as the `ref`. */
+/** `launch`: what opened the page when its URL can't say (the Discord Activity, CrazyGames), counted as the `ref`. */
 export interface Page { referrer: string; url: string; launch?: string }
 
 /**

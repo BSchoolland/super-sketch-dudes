@@ -1,6 +1,7 @@
 import type { SlotSource } from "../match";
 import { guestSignIn, signOut, signedIn } from "../account";
 import { activity } from "../activity";
+import { crazyGames, crazyGamesLogin, crazyGamesPlayer } from "../crazygames";
 import { allChoices, forgetLibrary, practiceDummy, refreshLibrary, type FighterChoice } from "../fighters";
 import { forgetMaps, refreshMaps } from "../maps";
 import { MapsScreen } from "./maps";
@@ -39,8 +40,9 @@ export function menus(): Nav {
       if (mode === "maps") return nav.maps();
       if (mode === "feedback") return new FeedbackScreen(() => nav.title());
       return new SettingsScreen(() => nav.title(), () => { signOut(); forgetLibrary(); forgetMaps(); return activity ? signInScreen(nav) : nav.guest(); });
-    }, (id) => nav.community(id), () => signInScreen(nav)),
-    guest: () => new WaitScreen(guestSignIn(), () => nav.title(), (error) => signInScreen(nav, error)),
+    }, (id) => nav.community(id), () => (crazyGames ? new WaitScreen(crazyGamesLogin(), () => nav.title(), (error) => signInScreen(nav, error)) : signInScreen(nav))),
+    // inside CrazyGames a lost session goes back to the CrazyGames user, if there is one
+    guest: () => new WaitScreen(crazyGames ? crazyGamesPlayer() : guestSignIn(), () => nav.title(), (error) => signInScreen(nav, error)),
     create: (pad, hint) => new CreateScreen(nav, pad, hint),
     describe: (pad, hint) => new DescribeScreen(nav, pad, hint),
     forge: (entry) => new ForgeScreen(nav, entry),
@@ -48,6 +50,7 @@ export function menus(): Nav {
     community: (open) => new CommunityScreen(nav, open),
     // the Activity opens here, not on the title screen that fetches these for the website
     call: () => { void refreshLibrary(); void refreshMaps(); return new OnlineScreen(() => nav.title(), "call", null); },
+    room: (code) => { void refreshLibrary(); void refreshMaps(); return new OnlineScreen(() => nav.title(), code ? { join: code } : "private", null); },
     battle: (fighter) => new BattleMenuScreen((entry) => {
       const menu = () => nav.battle(fighter);
       // VS BOTS is a room like the others: one nobody else can find, started with a bot in it

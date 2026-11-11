@@ -5,6 +5,7 @@ import { sfx } from "../audio/audio";
 import { account, isNew, playingAsGuest, seeNews, unseenReleases } from "../account";
 import { site } from "../base";
 import { activity } from "../activity";
+import { crazyGames } from "../crazygames";
 import { myLibrary, refreshLibrary } from "../fighters";
 import { forgeWords } from "./character";
 import { myMaps, refreshMaps } from "../maps";
@@ -87,11 +88,14 @@ export function drawLogo(ctx: CanvasRenderingContext2D, y: number): void {
   ctx.restore();
 }
 
+/** A guest can sign in: anywhere but a site CrazyGames sends the game to that has no CrazyGames accounts. */
+const offerSignIn = (): boolean => playingAsGuest() && (!crazyGames || crazyGames.accounts);
+
 /** Who's signed in, top right: the Discord avatar in a circle and the name. A guest has SIGN IN there, beside the name they play under. */
 function drawPlayerBadge(ctx: CanvasRenderingContext2D, signInFocused: boolean): void {
   const p = account.player;
   if (!p) return;
-  if (playingAsGuest()) {
+  if (offerSignIn()) {
     const b = signInBox(), size = grow(38, 15);
     card(ctx, b.x, b.y, b.w, b.h, "", signInFocused);
     title(ctx, "SIGN IN", b.x + b.w / 2, b.y + b.h / 2 + 14 + (size - 38) * 0.37, size, INK);
@@ -103,7 +107,7 @@ function drawPlayerBadge(ctx: CanvasRenderingContext2D, signInFocused: boolean):
   label(ctx, p.name, cx - r - 16, cy + 10, grow(30, 13), INK, "right", 800);
 }
 
-/** The privacy notice and terms, small in the bottom left; a click opens one in place of the game. False: `live` is off. */
+/** The privacy notice and terms, small in the bottom left; a click opens one in place of the game (inside CrazyGames, in a new tab). */
 export function drawLegalLinks(ctx: CanvasRenderingContext2D, live: boolean): void {
   const y = VIEW_H - 14, size = grow(22, 12);
   // on a small screen the target reaches past the word, up and to the sides
@@ -117,7 +121,10 @@ export function drawLegalLinks(ctx: CanvasRenderingContext2D, live: boolean): vo
     const over = live && hover(hit.x, hit.y, hit.w, hit.h);
     label(ctx, text, x, y, size, over ? INK : "rgba(41,39,34,0.5)", "left", 700);
     if (over) { inkLine(ctx, x, y + 4, x + w, y + 4, INK, 1.2); document.body.style.cursor = "pointer"; }
-    if (live && clicked(hit.x, hit.y, hit.w, hit.h)) location.href = `${site.base}${page}`;
+    if (live && clicked(hit.x, hit.y, hit.w, hit.h)) {
+      if (crazyGames) window.open(`${site.base}${page}?from=crazygames`, "_blank", "noopener");
+      else location.href = `${site.base}${page}`;
+    }
     x += w + (small() ? size * 1.4 : 22);
   }
   ctx.restore();
@@ -178,10 +185,10 @@ export class TitleScreen implements Screen {
       return null;
     }
     const n = this.items.length;
-    if (this.sel === SIGN_IN && !playingAsGuest()) this.sel = 0;
+    if (this.sel === SIGN_IN && !offerSignIn()) this.sel = 0;
     if (m.up) { this.sel = this.sel < 0 ? n - 1 : this.sel === 0 ? FEEDBACK : this.sel - 1; sfx.menuMove(); }
     if (m.down) { this.sel = this.sel < 0 ? 0 : (this.sel + 1) % n; sfx.menuMove(); }
-    if ((m.left || m.right) && this.sel < 0 && playingAsGuest()) { this.sel = this.sel === FEEDBACK ? SIGN_IN : FEEDBACK; sfx.menuMove(); }
+    if ((m.left || m.right) && this.sel < 0 && offerSignIn()) { this.sel = this.sel === FEEDBACK ? SIGN_IN : FEEDBACK; sfx.menuMove(); }
     if (m.confirm || m.start) {
       if (this.sel === SIGN_IN) { sfx.menuConfirm(); return this.onSignIn(); }
       return this.pick(this.sel === FEEDBACK ? "feedback" : this.items[this.sel].id);
@@ -214,13 +221,13 @@ export class TitleScreen implements Screen {
     if (live && hover(NOTE.x, NOTE.y, NOTE.w, NOTE.h)) { this.sel = FEEDBACK; document.body.style.cursor = "pointer"; }
     if (live && clicked(NOTE.x, NOTE.y, NOTE.w, NOTE.h)) goTo(this.pick("feedback"));
     drawFeedbackNote(ctx, this.sel === FEEDBACK);
-    if (playingAsGuest()) {
+    if (offerSignIn()) {
       const b = signInBox();
       if (live && !under && hover(b.x, b.y, b.w, b.h)) { this.sel = SIGN_IN; document.body.style.cursor = "pointer"; }
       if (live && !tapped && clicked(b.x, b.y, b.w, b.h)) { sfx.menuConfirm(); goTo(this.onSignIn()); }
     }
     drawPlayerBadge(ctx, this.sel === SIGN_IN);
-    const desc = this.sel === FEEDBACK ? "Ideas, bugs, anything: Ben reads these" : this.sel === SIGN_IN ? "Keep your characters on any device, with Discord or Google" : this.items[this.sel].desc;
+    const desc = this.sel === FEEDBACK ? "Ideas, bugs, anything: Ben reads these" : this.sel === SIGN_IN ? (crazyGames ? "Keep your characters with your CrazyGames account" : "Keep your characters on any device, with Discord or Google") : this.items[this.sel].desc;
     // what the picked row does: on a touchscreen nothing is picked before it's tapped, and a small screen has no room
     if (keysInHand() && !small()) label(ctx, desc, VIEW_W / 2, this.rowRect(this.items.length).y + 30, 26, INK, "center");
     keyHint(ctx, "click, or arrows + Enter · gamepad: stick + A");

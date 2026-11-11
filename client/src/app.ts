@@ -19,12 +19,15 @@ import { watchAudio } from "./audio/health";
 import { classTime, watchClassTime } from "./classtime";
 import { ClassScreen, FeedbackScreen, SketchScreen } from "./screens/classtime";
 import { FeedbackDetailScreen, FeedbackListScreen } from "./screens/feedbacklist";
-import { everywhere, noteActivity, noteScreen, noteView, sessionTrace, startTelemetry } from "./telemetry/events";
+import { everywhere, noteActivity, noteCrazyGames, noteScreen, noteView, sessionTrace, startTelemetry } from "./telemetry/events";
 import { loadGeneratedFighter } from "./gen";
-import { activitySignIn, devSignIn, finishSignIn, guestSignIn, loadAccount, markPlayed, signedIn, unfinishedSignIn } from "./account";
+import { activitySignIn, devSignIn, finishSignIn, guestSignIn, keepAccountApart, loadAccount, markPlayed, signedIn, unfinishedSignIn } from "./account";
 import { activityLaunch, discordCode, startActivity } from "./activity";
-import { forgetLibrary } from "./fighters";
-import { forgetMaps } from "./maps";
+import { crazyGames, crazyGamesLaunch, crazyGamesLoggedIn, crazyGamesPlayer, followPlay, onCrazyGamesInvite, onCrazyGamesLogin, showRoom, startCrazyGames, takeFirstRoom } from "./crazygames";
+import { CreateScreen } from "./screens/create";
+import { ForgeScreen } from "./screens/forging";
+import { forgetLibrary, refreshLibrary } from "./fighters";
+import { forgetMaps, refreshMaps } from "./maps";
 import { loadFighters, quickMatch } from "./quick";
 import { site, setSiteBase } from "./base";
 import { swap, type Handoff } from "./handoff";
@@ -53,6 +56,12 @@ export interface AppController {
   readonly screen: Screen;
 }
 
+/** The match is over and someone playing on this computer won it (or their team did). */
+function wonHere(v: VersusScreen): boolean {
+  const st = v.match.state;
+  return st.winner >= 0 && v.match.sources.some((s, i) => !!s.device && (st.rules.teams ? st.fighters[i].team === st.winner : i === st.winner));
+}
+
 /**
  * The whole game, mountable on a canvas. index.html mounts it once; shell.html mounts whichever
  * bundle the room is on and remounts the next one, mid-match, when the room switches.
@@ -64,9 +73,10 @@ export async function mount(opts: MountOptions): Promise<AppController> {
   if (shellSwap) swap.request = (hash, handoff) => shellSwap(hash, { ...handoff, session: sessionTrace() });
   const canvas = opts.canvas;
   const launch = activityLaunch(opts.params, location.host, import.meta.env.DEV);
-  const stopTelemetry = startTelemetry({ canvas, bundle: swap.hash, continues: opts.resume?.session, ...(launch ? { launch: "discord-activity" } : {}) });
-  // the website's own page: not the Activity, not the swappable shell (it would start them again at every swap)
-  if (!launch && !shellSwap) startBars(canvas);
+  const crazyLaunch = launch ? null : crazyGamesLaunch(opts.params, location.pathname, site.base, import.meta.env.DEV);
+  const stopTelemetry = startTelemetry({ canvas, bundle: swap.hash, continues: opts.resume?.session, ...(launch ? { launch: "discord-activity" } : crazyLaunch ? { launch: "crazygames" } : {}) });
+  // the website's own page: not the Activity, not CrazyGames, not the swappable shell (it would start them again at every swap)
+  if (!launch && !crazyLaunch && !shellSwap) startBars(canvas);
   const stopClassTime = watchClassTime();
   loadSettings();
   setVolume(settings.volume);
@@ -98,13 +108,25 @@ export async function mount(opts: MountOptions): Promise<AppController> {
 
   const nav = menus();
   const params = opts.params;
+  if (crazyLaunch) {
+    const environment = await startCrazyGames(crazyLaunch, params);
+    noteCrazyGames({ environment, accounts: !!crazyGames?.accounts, invited: !!crazyGames?.invite, instant: !!crazyGames?.instant });
+    if (crazyGames) keepAccountApart("crazygames");
+  }
   const restored = loadAccount();
   let signInError = "";
+  /** A CrazyGames invite accepted while the game runs: opened once no match is on. */
+  let invitedTo: string | null = null;
   if (launch) {
     // the Activity signs in from Discord on every launch, whatever this browser kept: storage in Discord's iframe is
     // partitioned and may not last, and the Discord account in the client may not be the one that signed in before
     noteActivity(await startActivity(launch, params));
     try { await activitySignIn(await discordCode()); } catch (error) { console.error(error); signInError = error instanceof Error ? error.message : String(error); }
+  } else if (crazyGames) {
+    // the CrazyGames user if they're logged in to CrazyGames, else this browser's guest; never a Discord, Google or email account
+    try { await crazyGamesPlayer(); } catch (error) { console.error(error); signInError = error instanceof Error ? error.message : String(error); }
+    onCrazyGamesLogin(() => crazyGamesLoggedIn().then(() => { void refreshLibrary(); void refreshMaps(); }, (error: unknown) => console.error("signing in the CrazyGames login failed", error)));
+    onCrazyGamesInvite((room) => { invitedTo = room; });
   } else {
     // back from Discord or Google (a token, a refusal, or nothing: the trip died), or ?dev=<name> against a DEV_LOGIN server
     let fresh = false;
@@ -116,12 +138,16 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     if (restored && !fresh) await markPlayed().catch((error: unknown) => everywhere("warn", "played", `marking this visit failed: ${error instanceof Error ? error.message : String(error)}`));
     if (!signedIn()) await guestSignIn().catch((error: unknown) => { console.error("guest sign-in failed", error); signInError = error instanceof Error ? error.message : String(error); });
   }
-  // the Activity opens on the voice channel's room; the website on the title, or once on why a sign-in didn't work
+  // the Activity opens on the voice channel's room; the website on the title, or once on why a sign-in didn't work;
+  // CrazyGames on the room of the invite it was opened from, or a fresh private room for instant multiplayer
   const home = (): Screen => {
     if (launch) return signedIn() ? nav.call() : signInScreen(nav, signInError);
     const error = signInError;
     signInError = "";
-    return error ? signInScreen(nav, error) : signedIn() ? nav.title() : nav.guest();
+    if (error) return signInScreen(nav, error);
+    const first = signedIn() ? takeFirstRoom() : undefined;
+    if (first !== undefined) return nav.room(first);
+    return signedIn() ? nav.title() : nav.guest();
   };
 
   // ?gen=<bundle url>[,<bundle url>] loads drawn fighters before the quick start / sheet below.
@@ -174,6 +200,12 @@ export async function mount(opts: MountOptions): Promise<AppController> {
       current.abandon?.();
       next = new ClassScreen(() => nav.title());
     }
+    const settled: Screen = next ?? screen;
+    if (invitedTo && !(settled instanceof VersusScreen || settled instanceof ClassScreen)) {
+      settled.abandon?.();
+      next = nav.room(invitedTo);
+      invitedTo = null;
+    }
     const shown = next ?? screen;
     if (!signedIn() && !(shown instanceof SignInScreen || shown instanceof WaitScreen || shown instanceof VersusScreen || shown instanceof SheetScreen || shown instanceof ClassScreen || shown instanceof FeedbackScreen || shown instanceof SketchScreen)) {
       shown.abandon?.();
@@ -185,6 +217,12 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     tourTick(dt, screen);
     if (!(screen instanceof TitleScreen)) closeAbout();
     music.follow(screen instanceof VersusScreen ? screen : null);
+    if (crazyGames) {
+      const v = screen instanceof VersusScreen ? screen : null;
+      const cheer = v && v.match.state.ended && wonHere(v) ? v : screen instanceof ForgeScreen && screen.entry.status === "ready" ? screen : null;
+      followPlay((!!v && !v.match.paused && !v.match.state.ended) || screen instanceof CreateScreen, cheer);
+      showRoom(screen instanceof OnlineScreen || screen instanceof NetVersusScreen ? screen.invitable() : null);
+    }
     endInputFrame();
     endPointerTick();
     return running;

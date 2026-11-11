@@ -6,7 +6,7 @@ import * as S from "./sounds";
 import { music } from "./music";
 
 export { music } from "./music";
-export { setMusicVolume, setVolume, unlockAudio } from "./engine";
+export { setMusicVolume, setMuted, setVolume, unlockAudio } from "./engine";
 
 const hitVary = 0.06;
 

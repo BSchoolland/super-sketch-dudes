@@ -25,6 +25,8 @@ import { MatchTelemetry } from "../telemetry/match";
 import { swap, type Handoff } from "../handoff";
 import { MESH_VERSION, roomMesh, type PeerMesh } from "../net/mesh";
 import { activity } from "../activity";
+import { crazyGames, invitableRoom, inviteLink } from "../crazygames";
+import { RED } from "./character";
 import { bg, card, hint, keyHint, keysInHand, label, title, hover, clicked, button, backButton, goTo, grow, small, tapWord, settings, saveSettings, type Screen, INK } from "./ui";
 import { TextField } from "./textfield";
 
@@ -38,9 +40,9 @@ const joinLayout = (): { rowH: number; rows: number; codeY: number } => {
 
 /**
  * How BATTLE sent you here. VS BOTS ("bots") and SAME KEYBOARD ("local") are private rooms that never show their code;
- * "call" is the Discord Activity's room.
+ * "call" is the Discord Activity's room. CrazyGames opens a new private room ("private") or the room of an invite ({ join }).
  */
-export type OnlineEntry = "call" | "quick" | "create" | "join" | "bots" | "local";
+export type OnlineEntry = "call" | "quick" | "create" | "join" | "bots" | "local" | "private" | { join: string };
 
 type RoomState = Extract<RelayMessage, { t: "room" }>;
 interface OnlineContext {
@@ -81,6 +83,8 @@ export class OnlineScreen implements Screen {
   private waitingFor = "CONNECTING…";
   /** Why this VS BOTS room isn't the call's (it was full). */
   private notice = "";
+  /** CrazyGames: what came of the last INVITE, and when. */
+  private invited: { text: string; error: boolean; t: number } | null = null;
   nextScreen: Screen | null = null;
   private context: OnlineContext;
   private device: DeviceId = "kb1";
@@ -155,6 +159,8 @@ export class OnlineScreen implements Screen {
       this.context.mesh = roomMesh(this.context.transport, () => this.context.id);
     }
     if (this.context.room) this.phase = "lobby";
+    else if (typeof entry === "object" && entry) { this.context.transport.sendLobby({ t: "join", code: entry.join }); this.phase = "waiting"; }
+    else if (entry === "private") { this.context.transport.sendLobby({ t: "create", public: false }); this.phase = "waiting"; }
     else if (entry === "call") {
       if (!activity) throw new Error("the call's room outside the Discord Activity");
       this.context.transport.sendLobby({ t: "call", key: activity.key });
@@ -209,6 +215,11 @@ export class OnlineScreen implements Screen {
 
   get roomCode(): string | null {
     return this.context.room?.code ?? null;
+  }
+
+  /** The room a friend could be invited into: one with its code showing. */
+  invitable(): { code: string; joinable: boolean } | null {
+    return invitableRoom(this.context.room, this.context.hidden);
   }
 
   lobbyDebug(): { code: string; members: { fighter: string }[]; bots: { fighter: string }[] } | null {
@@ -689,6 +700,7 @@ export class OnlineScreen implements Screen {
       ctx.font = `900 ${TITLE_SIZE}px ${FONT}`;
       label(ctx, aside, VIEW_W / 2 + ctx.measureText(head).width / 2 + 40, TITLE_Y - 6, grow(24, 11), PENCIL, "left");
     }
+    if (crazyGames && this.phase === "lobby" && !this.context.hidden && !room.call) this.drawInvite(ctx, room.code);
     this.select.draw(ctx, this.t);
     if (this.phase !== "lobby") return;
     const bots = room.bots ?? [];
@@ -700,6 +712,21 @@ export class OnlineScreen implements Screen {
       label(ctx, keysOf("kb1"), VIEW_W / 2, VIEW_H - 40, 20, "rgba(41,39,34,0.8)");
       label(ctx, keysOf("kb2"), VIEW_W / 2, VIEW_H - 14, 20, "rgba(41,39,34,0.8)");
     }
+  }
+
+  /** CrazyGames: INVITE copies a link into this room for a friend; CrazyGames' own invite UI knows the room too (showRoom). */
+  private drawInvite(ctx: CanvasRenderingContext2D, code: string): void {
+    const x = VIEW_W - 40 - 220, y = 22;
+    if (button(ctx, x, y, 220, 64, "INVITE", { size: 28 })) {
+      navigator.clipboard.writeText(inviteLink(code)).then(
+        () => { this.invited = { text: "link copied: send it to a friend", error: false, t: this.t }; },
+        (error: unknown) => {
+          console.error("copying the invite link failed", error);
+          this.invited = { text: `couldn't copy the link: ${error instanceof Error ? error.message : String(error)}`, error: true, t: this.t };
+        },
+      );
+    }
+    if (this.invited && this.t - this.invited.t < 6) label(ctx, this.invited.text, x - 20, y + 42, 22, this.invited.error ? RED : PENCIL, "right");
   }
 
   private drawError(ctx: CanvasRenderingContext2D): void {

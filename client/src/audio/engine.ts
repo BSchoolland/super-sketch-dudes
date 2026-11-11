@@ -43,8 +43,7 @@ export function live(): Mix & { c: AudioContext } {
   if (mix) return mix;
   ctx = new AudioContext({ latencyHint: "interactive" });
   mix = { ...buildMix(ctx, ctx.destination), c: ctx };
-  mix.sfx.gain.value = volumes.sfx;
-  mix.music.gain.value = volumes.music * MUSIC_TRIM;
+  applyVolumes();
   return mix;
 }
 
@@ -56,8 +55,16 @@ for (const ev of ["keydown", "pointerdown", "touchstart"]) window.addEventListen
 
 export function running(): (Mix & { c: AudioContext }) | null { return ctx?.state === "running" ? mix : null; }
 
-export function setVolume(v: number): void { volumes.sfx = v; if (mix) mix.sfx.gain.value = v; }
-export function setMusicVolume(v: number): void { volumes.music = v; if (mix) mix.music.gain.value = v * MUSIC_TRIM; }
+let muted = false;
+function applyVolumes(): void {
+  if (!mix) return;
+  mix.sfx.gain.value = muted ? 0 : volumes.sfx;
+  mix.music.gain.value = muted ? 0 : volumes.music * MUSIC_TRIM;
+}
+export function setVolume(v: number): void { volumes.sfx = v; applyVolumes(); }
+export function setMusicVolume(v: number): void { volumes.music = v; applyVolumes(); }
+/** CrazyGames' mute, over the player's own volumes. */
+export function setMuted(on: boolean): void { muted = on; applyVolumes(); }
 
 /** Screen x in world units → stereo position. Stages are ~±1250 wide; keep it off the hard edges. */
 export const panOf = (x: number | undefined): number => (x === undefined ? 0 : Math.max(-1, Math.min(1, x / 1100)) * 0.7);

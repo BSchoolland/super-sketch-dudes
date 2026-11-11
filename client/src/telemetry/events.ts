@@ -212,6 +212,13 @@ export function noteActivity(a: { key: string; platform: string }): void {
   session.set("activity", { instance: a.key, platform: a.platform });
 }
 
+/** This page was opened as the CrazyGames build: where the SDK found itself, and how the player arrived. */
+export function noteCrazyGames(c: { environment: string; accounts: boolean; invited: boolean; instant: boolean }): void {
+  if (!session) throw new Error("wide events used before startTelemetry");
+  session.set("crazygames", c);
+  if (c.environment === "disabled") session.issue("warn", "crazygames", "the CrazyGames page opened outside CrazyGames: playing the website");
+}
+
 export function noteScreen(name: string): void {
   if (!session) throw new Error("wide events used before startTelemetry");
   sessionList("screens", [name, Math.round((Date.now() - session.t0) / 100) / 10]);

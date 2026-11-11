@@ -59,7 +59,8 @@ reputation to the account (a save the account already has is kept once) and ends
 never listed (`isListed` in library.ts) until they belong to an account. Idle guests are swept every 6 hours: 7 days
 after their last visit if they made or saved nothing, 60 if they did. Email signup asks a birth year first, in the
 browser only (`client/src/age.ts`); an under-13 answer is remembered in localStorage and nothing reaches the server.
-The Activity never makes guests: Discord signs everyone in. `<base>privacy` and `<base>terms` are static pages.
+The Activity never makes guests: Discord signs everyone in. Inside CrazyGames the only account is a CrazyGames one
+(`crazygames-…`, see CrazyGames). `<base>privacy` and `<base>terms` are static pages.
 
 ### Player names
 
@@ -385,6 +386,41 @@ URL mapping (Developer Portal, Activities > URL Mappings):
 
 `node scripts/activitycheck.mjs` plays it end to end with Discord stubbed: `?activity=stub&instance=<launch>&as=<name>`
 on a dev build, against a DEV_LOGIN server whose `DISCORD_API` is `scripts/fake-discord.mjs`.
+
+## CrazyGames
+
+The same page runs inside CrazyGames (`client/src/crazygames.ts`), framed from our own URL,
+`https://bschoolland.dev/sketch-battle/crazygames` (the server sends index.html for `/crazygames`). It is not uploaded
+as a zip: a copy on CrazyGames' CDN would lag every push to master, and a stale sim in a room with the website's is a
+desync; framed, it is always the build the website runs, with the API and relay on its own origin (no CORS, no
+WebSocket origin rules). Only that path loads CrazyGames' HTML5 SDK v3; after `init` the SDK says where it is:
+`crazygames`, `local` (its own mode on localhost or with `?useLocalSdk=true`) or `disabled` (the URL opened anywhere
+else, which plays the website with a warning on the session event).
+
+- Players: guests as on the website, or a CrazyGames user. On every launch the SDK's user token
+  (`getUserToken({ signingKeyType: "IN_GAME_AUTH" })`, an RS256 JWT) goes to `POST /api/auth/crazygames`, which checks it
+  against CrazyGames' published keys (`server/crazygames.ts`, `https://userportal.crazygames.com/.well-known/jwks.json`)
+  and our game id (`CRAZYGAMES_GAME_ID`, from their Developer Portal; unset, that sign-in is a loud 500), and signs in
+  `crazygames-<user id>`, named by their CrazyGames username (a changed username renames them). A guest who logs in
+  to CrazyGames (their SIGN IN, which opens CrazyGames' login prompt, or CrazyGames' own login) moves to that player
+  like any guest signing in. The session is kept under its own localStorage key, so the page never carries a
+  website account; no Discord, Google or email, no CHANGE NAME, no SIGN OUT (CrazyGames reloads the page on logout).
+- Events: `loadingStart` at init and `loadingStop` with the first screen; `gameplayStart`/`Stop` around a match that
+  is running (not paused, not over) and the drawing pad; `happytime` when someone on this computer wins, and when a
+  character is done on the forging screen. CrazyGames' `muteAudio` mutes over the player's volumes.
+- Rooms: the room a player is in (one that shows its code) goes to CrazyGames with `updateRoom` (their invite UI uses
+  it); INVITE in the lobby copies `inviteLink({ room })`. A page opened from an invite lands in that room, instant
+  multiplayer opens a new private room, and an invite accepted while playing opens once no match is on.
+- Privacy and terms open in a new tab with `?from=crazygames`, which hides their link to the website's game.
+- No ads: Basic Launch has them off.
+- The session's `source` ref is `crazygames`, and `crazygames` holds the SDK's environment and how the player arrived.
+
+`node scripts/crazygamescheck.mjs` plays it end to end with CrazyGames stubbed: `?crazygames=stub&cgapi=<fake>` on a
+dev build (`&user=`, `&login=`, `&instantJoin=true`, an invite's `&czy_invite=true&czy_invite_params=room%3D<code>`),
+against a DEV_LOGIN server whose `CRAZYGAMES_JWKS` is `scripts/fake-crazygames.mjs`. The real SDK's local mode works
+too: a dev server with `CRAZYGAMES_GAME_ID=yourGameId` (its demo tokens are signed with CrazyGames' real key for that
+id) and `http://localhost:5175/sketch-battle/crazygames` signs in as its User1 (`?token_response=user2|logged_out`).
+`node scripts/crazygames-preflight.mjs` checks the live URL before submitting it.
 
 ## Wide events
 

@@ -23,6 +23,7 @@
 <li><b>Discord:</b> the game gets your account ID, display name and profile picture, nothing else.</li>
 <li><b>Google:</b> the game gets your account ID and profile picture. It doesn't keep your Google name: you get a made-up name like a guest's.</li>
 <li>With either one, the game never sees your password, email or contacts. You can change your player name in SETTINGS; the new one is checked by the moderator first.</li>
+<li><b>CrazyGames:</b> playing on CrazyGames while logged in to it, the game gets your CrazyGames user ID, username and profile picture from CrazyGames. Your CrazyGames username is your player name.</li>
 <li><b>Email and password:</b> the game keeps your email, the name you pick (checked by the moderator first) and a scrambled (hashed) version of your password, never the password itself. Before you make one, it asks the year you were born. That answer stays in your browser and is never sent to the game's server. If it shows you're under 13, the browser remembers only that, so the question isn't asked again.</li>
 </ul>
 <p>Signing in as a guest who made things moves them to the account.</p>
@@ -42,6 +43,7 @@
 <li><b>Anthropic</b> (Claude) and <b>OpenAI</b> (image generation): your drawing, and what you typed about it, are sent to them to build the fighter.</li>
 <li><b>An automatic moderator</b> (also Claude) checks every drawing and its name, normally before the fighter is made, and the developer can take any character down. It also checks every player name someone types, before anyone else sees it. If the moderator flags one, the drawing or name and your player name go to the developer's private Discord channel for a person to look at.</li>
 <li><b>Discord</b> or <b>Google</b>, only if you choose to sign in with them.</li>
+<li><b>CrazyGames</b>, if you play the game on their site: the game tells it when a match or a drawing starts and stops, and which room you're in so your friends can join it.</li>
 </ul>
 <p>The fighter is built on the developer's own computer, which keeps a working copy of each drawing and the notes made while building it.</p>
 <p>Nothing is sold, and nothing is used for ads.</p>
@@ -59,7 +61,14 @@
 <h2>Deleting your data</h2>
 <p>You can delete your characters and maps in the game. To delete your account and everything tied to it, or to ask what the game has about you, email <a href="mailto:bschoolland@gmail.com">bschoolland@gmail.com</a> and say which player name it is. A parent can ask on a child's behalf.</p>
 
-<p class="back"><a href="./">Back to the game</a> · <a href="terms">Terms</a></p>
+<p class="back"><span class="game"><a href="./">Back to the game</a> · </span><a href="terms">Terms</a></p>
 </main>
+<script>
+// opened from the game on CrazyGames: no link out to the website's copy of the game, and the other page is opened the same way
+if (new URLSearchParams(location.search).get("from") === "crazygames") {
+  for (const e of document.querySelectorAll(".game")) e.remove();
+  for (const a of document.querySelectorAll('a[href="privacy"], a[href="terms"]')) a.href += "?from=crazygames";
+}
+</script>
 </body>
 </html>

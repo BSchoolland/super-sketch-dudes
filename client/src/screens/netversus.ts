@@ -18,6 +18,7 @@ import { VersusScreen } from "./versus";
 import { label, type Screen, INK } from "./ui";
 import { site } from "../base";
 import { isBundlePath } from "../../../shared/account";
+import { invitableRoom } from "../crazygames";
 
 /**
  * The match a `start` message describes, and the bundle each player's fighter loads from ("" for
@@ -262,6 +263,11 @@ export class NetVersusScreen extends VersusScreen {
     if (!names.length) return "Connection is catching up";
     const who = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
     return this.waitingFor > 6 ? `${who} stopped responding · ${Math.ceil(20 - this.waitingFor)} s` : `Waiting for ${who}`;
+  }
+
+  /** The match's room, to invite a friend into for the next match. */
+  invitable(): { code: string; joinable: boolean } | null {
+    return invitableRoom(this.opts.roomState());
   }
 
   netDebug(frame = this.session.state.frame): { frame: number; hash: number | null } {

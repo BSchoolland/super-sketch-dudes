@@ -23,6 +23,8 @@ export interface Nav {
   community(open?: string): Screen;
   /** The Discord Activity's room: everyone in the voice channel who opened the game. */
   call(): Screen;
+  /** CrazyGames: the room an invite link points at, or (null) a new private room to invite friends into. */
+  room(code: string | null): Screen;
   /** BATTLE: quick match, a lobby, or bots; `fighter` starts out picked there (a character's FIGHT button). */
   battle(fighter?: FighterChoice): Screen;
   /** VS BOTS straight away, `fighter` picked if given; leaving goes to BATTLE. */

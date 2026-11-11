@@ -7,6 +7,7 @@ import { bg, card, grow, hint, keyHint, label, small, backButton, goTo, type Scr
 import { account, nameStanding, playingAsGuest } from "../account";
 import type { NameRequest } from "../../../shared/account";
 import { RED } from "./character";
+import { crazyGames } from "../crazygames";
 import { ButtonMenu, type Button } from "./buttons";
 import { drawTabs, otherTabButton, type Tabs } from "./tabs";
 import { ControlsPage } from "./controls";
@@ -57,8 +58,8 @@ export class SettingsScreen implements Screen {
       id: r.id, x: ROW.x, y: ROW.top + i * ROW.gap, w: ROW.w, h: ROW.h, text: r.name, custom: true, stepAt: VALUE_X,
       step: (d) => { r.step(d); saveSettings(); },
     }));
-    // a guest signing out would lose everything they made
-    if (!playingAsGuest()) b.push(
+    // a guest signing out would lose everything they made; inside CrazyGames the name and the account are CrazyGames'
+    if (!playingAsGuest() && !crazyGames) b.push(
       { id: "name", x: VIEW_W / 2 - ACCOUNT.w - ACCOUNT.gap / 2, y: ACCOUNT.y, w: ACCOUNT.w, h: ACCOUNT.h, text: "CHANGE NAME", size: ACCOUNT.size },
       { id: "signout", x: VIEW_W / 2 + ACCOUNT.gap / 2, y: ACCOUNT.y, w: ACCOUNT.w, h: ACCOUNT.h, text: "SIGN OUT", size: ACCOUNT.size },
     );

@@ -71,6 +71,8 @@ node scripts/barscheck.mjs       # the browser's bars on phones, emulated: the i
 node scripts/frontdoorcheck.mjs  # guest play, signing in from a guest, the signup age question, /privacy and /terms (starts its own servers)
 node scripts/frontcheck.mjs      # the front page on the built server: the title's about tab, PLAY back up, no scrolling in matches or by touch, the old /play/ addresses (builds, starts its own server)
 node scripts/homeshots.mjs       # the about sections' screenshots, clip and share image into client/public/ (starts its own servers)
+node scripts/crazygamescheck.mjs # the CrazyGames build end to end, CrazyGames stubbed (starts its own servers)
+node scripts/crazygames-preflight.mjs [url]   # is the CrazyGames page ready to submit (framing, CRAZYGAMES_GAME_ID, size, time)
 scripts/deploy.sh    # build, ship to personal-server, restart pm2 "sketch-battle" (CI runs this on every push to master)
 ```
 

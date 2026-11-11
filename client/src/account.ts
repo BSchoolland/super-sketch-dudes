@@ -37,9 +37,14 @@ export function seeNews(what: Fresh): void {
   news!.seen.push(what);
   void api<{ news: News | null }>(`/me/news/${what}`, { method: "POST" }).catch((error: unknown) => console.error(`marking ${what} seen failed`, error));
 }
-const KEY = "sketchbattle.account";
+let KEY = "sketchbattle.account";
 const NONCE_KEY = "sketchbattle.googleNonce";
 const PENDING_KEY = "sketchbattle.signingIn";
+
+/** The CrazyGames build keeps its player under its own key: only ever a guest or a CrazyGames player, never the website's account. */
+export function keepAccountApart(build: "crazygames"): void {
+  KEY = `sketchbattle.${build}.account`;
+}
 
 /** True when a saved session was restored. */
 export function loadAccount(): boolean {
@@ -159,6 +164,16 @@ export const devSignIn = (name: string): Promise<void> => authenticate("dev", { 
 export async function activitySignIn(code: string): Promise<void> {
   const earlier = account.session;
   await authenticate("discord/activity", { code });
+  if (earlier) endSession(earlier);
+}
+
+/**
+ * Inside CrazyGames: the CrazyGames user this SDK token says, made or found by the server; from a guest's session, the
+ * guest's things move to them. A session this browser kept from before is ended, as in the Activity.
+ */
+export async function crazyGamesSignIn(token: string): Promise<void> {
+  const earlier = account.session;
+  await authenticate("crazygames", { token });
   if (earlier) endSession(earlier);
 }
 
