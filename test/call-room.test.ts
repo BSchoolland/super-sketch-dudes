@@ -23,7 +23,7 @@ class Peer {
     this.ws = new WebSocket(`ws://127.0.0.1:${port}/ws?trace=s-call-${name.toLowerCase()}`);
     this.ws.on("message", (m) => { const j = JSON.parse(String(m)); if (j.t === "hello") this.id = j.id; this.inbox.push(j); });
   }
-  async ready(): Promise<void> { await new Promise<void>((r) => this.ws.once("open", () => r())); await this.expect("hello"); this.send({ t: "name", name: this.name }); }
+  async ready(): Promise<void> { await new Promise<void>((r) => this.ws.once("open", () => r())); await this.expect("hello"); this.send({ t: "name", session: this.name }); }
   send(m: unknown): void { this.ws.send(JSON.stringify(m)); }
   expect(t: string, pred: (m: any) => boolean = () => true): Promise<any> {
     return until(() => { const i = this.inbox.findIndex((m) => m.t === t && pred(m)); return i >= 0 ? this.inbox.splice(i, 1)[0] : undefined; }, `${this.name}: ${t} message`);
@@ -40,7 +40,7 @@ beforeAll(async () => {
   initEvents(dataDir);
   initLibrary(dataDir);
   server = http.createServer(express());
-  attachLobby(new WebSocketServer({ server, path: "/ws" }));
+  attachLobby(new WebSocketServer({ server, path: "/ws" }), (s) => (typeof s === "string" ? { id: `dev-${s}`, name: s, avatar: null } : null));
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
   port = (server.address() as { port: number }).port;
 });

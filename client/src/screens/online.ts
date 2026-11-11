@@ -155,7 +155,7 @@ export class OnlineScreen implements Screen {
       this.error = "COULD NOT CONNECT";
       this.phase = "error";
     });
-    if (account.player) this.context.transport.sendLobby({ t: "name", name: account.player.name });
+    if (account.session) this.context.transport.sendLobby({ t: "name", session: account.session });
   }
 
   update(dt: number, m: MenuInput): Screen | null {

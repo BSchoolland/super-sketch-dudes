@@ -60,7 +60,7 @@ beforeAll(async () => {
   api.get("/boom", () => { throw new Error("kaboom"); });
   api.use(requestErrors());
   server = http.createServer(app);
-  attachLobby(new WebSocketServer({ server, path: "/ws" }));
+  attachLobby(new WebSocketServer({ server, path: "/ws" }), (s) => (typeof s === "string" ? { id: `dev-${s}`, name: s, avatar: null } : null));
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
   port = (server.address() as { port: number }).port;
 });
@@ -217,7 +217,7 @@ describe("relay events", () => {
     const a = new Peer("s-host"), b = new Peer("s-guest");
     await a.open(); await b.open();
     await a.expect("hello"); await b.expect("hello");
-    a.send({ t: "name", name: "Ann" }); b.send({ t: "name", name: "Bob" });
+    a.send({ t: "name", session: "Ann" }); b.send({ t: "name", session: "Bob" });
     a.send({ t: "create" });
     const room = await a.expect("room");
     expect(room.trace).toMatch(new RegExp(`^r-${room.code}-`));

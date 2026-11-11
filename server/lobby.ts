@@ -1,7 +1,7 @@
 import type { WebSocketServer, WebSocket } from "ws";
 import type { IncomingMessage } from "node:http";
 import crypto from "node:crypto";
-import { isBundlePath } from "../shared/account";
+import { isBundlePath, type Player } from "../shared/account";
 import { CPU_TIERS } from "../shared/cpu-skill";
 import { MAX_PLAYERS, TEAMS, smallestTeam } from "../shared/sim";
 import { checkMap, MAP_JSON_MAX, type MapDoc } from "../shared/maps";
@@ -456,7 +456,8 @@ export function catchUp(m: RelayMatch, own: number, final: number[]): unknown[] 
   return out;
 }
 
-export function attachLobby(wss: WebSocketServer): void {
+/** `playerOf`: who a session token belongs to (auth.ts); a member is shown by that player's name, never one the client claims. */
+export function attachLobby(wss: WebSocketServer, playerOf: (session: unknown) => Player | null): void {
   const sweep = setInterval(dropSilentPlayers, 1000);
   wss.on("close", () => clearInterval(sweep));
   wss.on("connection", (ws, req: IncomingMessage) => {
@@ -488,7 +489,14 @@ export function attachLobby(wss: WebSocketServer): void {
       const t = msg.t.slice(0, 24);
       if (t in msgs || Object.keys(msgs).length < 40) msgs[t] = (msgs[t] ?? 0) + 1;
       switch (msg.t) {
-        case "name": c.name = String(msg.name ?? "").replace(/[^\w \-.!?]/g, "").slice(0, 14) || c.name; event.set("name", c.name); if (c.room) broadcast(c.room, roomInfo(c.room)); break;
+        case "name": {
+          const player = playerOf(msg.session);
+          if (!player) { event.issue("warn", "protocol", "a name without a session"); break; }
+          c.name = player.name;
+          event.set("name", c.name);
+          if (c.room) broadcast(c.room, roomInfo(c.room));
+          break;
+        }
         case "ping": send(c, { t: "pong", at: msg.at }); break;
         // a fresh socket taking over a client whose link broke or stuck (mid-match, or across a deploy: see handoff.ts)
         case "resume": {

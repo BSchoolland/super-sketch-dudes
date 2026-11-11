@@ -9,7 +9,7 @@ import http from "node:http";
 import { WebSocketServer } from "ws";
 import { attachLobby } from "./lobby";
 import { attachGames } from "./games";
-import { attachAuth } from "./auth";
+import { attachAuth, playerFromSession } from "./auth";
 import { initLibrary } from "./library";
 import { attachForge } from "./forge";
 import { attachCharacters } from "./characters";
@@ -116,7 +116,7 @@ server.on("upgrade", (req, socket, head) => {
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
   } else socket.destroy();
 });
-attachLobby(wss);
+attachLobby(wss, playerFromSession);
 restoreHandoff(DATA_DIR, processEvent);
 
 server.listen(PORT, () => console.log(`sketch-battle on :${PORT} serving ${clientDir}`));

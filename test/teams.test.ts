@@ -41,7 +41,7 @@ beforeAll(async () => {
   initEvents(dataDir);
   initLibrary(dataDir);
   server = http.createServer(express());
-  attachLobby(new WebSocketServer({ server, path: "/ws" }));
+  attachLobby(new WebSocketServer({ server, path: "/ws" }), (s) => (typeof s === "string" ? { id: `dev-${s}`, name: s, avatar: null } : null));
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
   port = (server.address() as { port: number }).port;
 });
