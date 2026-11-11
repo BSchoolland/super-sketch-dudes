@@ -18,6 +18,14 @@ export type ArtSource = Pick<LibraryEntry, "id" | "status" | "bundleUrl" | "draw
  */
 const FADE_MS = 300, LOADING_ALPHA = 0.45;
 
+/** How many rows below what's on screen a grid starts loading fighters, so they're ready when scrolled to. */
+export const PRELOAD_ROWS = 2;
+
+/** Starts loading a card's fighter without drawing it. */
+export function preloadArt(ch: ArtSource): void {
+  if (ch.status === "ready" && ch.bundleUrl) fighterLoad(ch.bundleUrl);
+}
+
 export function drawCharacterArt(ctx: CanvasRenderingContext2D, ch: ArtSource | null, x: number, y: number, size: number, t: number, picked = false): void {
   if (!ch) { drawImageIn(ctx, null, x, y, size, "—"); inkRect(ctx, x, y, size, size, PENCIL, 1.2); return; }
   const load = ch.status === "ready" && ch.bundleUrl ? fighterLoad(ch.bundleUrl) : null;

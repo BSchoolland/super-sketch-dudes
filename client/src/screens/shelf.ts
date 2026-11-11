@@ -2,7 +2,7 @@ import { VIEW_W } from "../render/camera";
 import { PENCIL } from "../render/paper";
 import { allChoices, type FighterChoice } from "../fighters";
 import { clicked, hover, label } from "./ui";
-import { drawCharacterCell } from "./character";
+import { drawCharacterCell, preloadArt, PRELOAD_ROWS } from "./character";
 import { ScrollView } from "./scroll";
 
 const CELL = 170, GAP = 44, COLS = 8, ROW_H = CELL + 56;
@@ -48,7 +48,10 @@ export class CharacterShelf {
     let out: FighterChoice | null = null;
     scroll.draw(ctx, () => choices.forEach((choice, i) => {
       const x = x0 + (i % COLS) * (CELL + GAP), top = PAD_TOP + Math.floor(i / COLS) * ROW_H;
-      if (!scroll.shows(top - PAD_TOP, ROW_H)) return;
+      if (!scroll.shows(top - PAD_TOP, ROW_H)) {
+        if (choice.entry && scroll.shows(top - PAD_TOP - PRELOAD_ROWS * ROW_H, (PRELOAD_ROWS + 1) * ROW_H)) preloadArt(choice.entry);
+        return;
+      }
       ctx.save();
       if (locked && choice.id !== picked) ctx.globalAlpha = 0.4;
       drawCharacterCell(ctx, choice.entry!, x, scroll.at(top), CELL, t + i * 0.2, choice.id === picked);

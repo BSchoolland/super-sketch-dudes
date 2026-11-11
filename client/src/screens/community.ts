@@ -8,7 +8,7 @@ import { practiceDummy, refreshDummy, refreshLibrary } from "../fighters";
 import { COMMUNITY_SORTS, type CommunityCharacter, type CommunitySort } from "../../../shared/account";
 import { bg, card, hover, label, title, type Screen, INK } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
-import { drawCharacterCell, RED } from "./character";
+import { drawCharacterCell, preloadArt, PRELOAD_ROWS, RED } from "./character";
 import { CharacterDetail, moveRows, type MoveRow } from "./charcard";
 import type { Nav } from "./nav";
 import { TextField } from "./textfield";
@@ -254,7 +254,10 @@ export class CommunityScreen implements Screen {
     const focus = this.menu.focus;
     this.scroll.draw(ctx, () => this.entries.forEach((c, i) => {
       const r = this.cell(i);
-      if (!this.scroll.shows(r.y - PAD_TOP, ROW_H)) return;
+      if (!this.scroll.shows(r.y - PAD_TOP, ROW_H)) {
+        if (this.scroll.shows(r.y - PAD_TOP - PRELOAD_ROWS * ROW_H, (PRELOAD_ROWS + 1) * ROW_H)) preloadArt({ ...c, status: "ready" });
+        return;
+      }
       const x = r.x, y = this.scroll.at(r.y);
       drawCharacterCell(ctx, { ...c, status: "ready", stage: "", error: null }, x, y, ART, this.t + i * 0.2, i === focus);
     }));

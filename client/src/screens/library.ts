@@ -8,7 +8,7 @@ import { libraryChoices, myLibrary, practiceDummy, refreshDummy, refreshLibrary 
 import type { LibraryEntry } from "../../../shared/account";
 import { bg, hover, label, title, type Screen } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
-import { drawCharacterArt, drawCharacterCell, forgeWords, RED } from "./character";
+import { drawCharacterArt, drawCharacterCell, forgeWords, preloadArt, PRELOAD_ROWS, RED } from "./character";
 import { wrapped } from "./text";
 import { CharacterDetail, COL_W, COL_X, moveRows, type MoveRow } from "./charcard";
 import { DrawPad } from "./pad";
@@ -203,6 +203,7 @@ export class LibraryScreen implements Screen {
     this.scroll.draw(ctx, () => this.entries.forEach((e, i) => {
       const c = this.cell(i);
       if (this.scroll.shows(c.y - PAD_TOP, ROW_H)) drawCharacterCell(ctx, e, c.x, this.scroll.at(c.y), ART, this.t + i * 0.2, i === focus);
+      else if (this.scroll.shows(c.y - PAD_TOP - PRELOAD_ROWS * ROW_H, (PRELOAD_ROWS + 1) * ROW_H)) preloadArt(e);
     }));
     this.menu.draw(ctx, buttons);
   }
