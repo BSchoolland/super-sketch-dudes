@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { GAME_VERSION, isGuest, type LastPlayed, type LibraryEntry, type News, type Player } from "../shared/account";
+import { GAME_VERSION, LOOK_MAX, isGuest, type LastPlayed, type LibraryEntry, type News, type Player } from "../shared/account";
 import { FRESH_MS, compareVersions, releasesSince, type Fresh } from "../shared/releases";
 
 /**
@@ -27,6 +27,9 @@ let playsFile = "";
 /** Hand-picked characters, newest pick first: they lead COMMUNITY's BEST. Kept in <dataDir>/best.json. */
 let best: string[] = [];
 let bestFile = "";
+/** Looks grades by character id, kept in <dataDir>/looks.json. */
+let looks: Record<string, number> = {};
+let looksFile = "";
 
 function fileOf(owner: string): string {
   return path.join(dir, `${owner.replace(/[^\w-]/g, "_")}.json`);
@@ -61,6 +64,22 @@ export function initLibrary(dataDir: string): void {
   plays = fs.existsSync(playsFile) ? JSON.parse(fs.readFileSync(playsFile, "utf8")) : {};
   bestFile = path.join(dataDir, "best.json");
   best = fs.existsSync(bestFile) ? JSON.parse(fs.readFileSync(bestFile, "utf8")) : [];
+  looksFile = path.join(dataDir, "looks.json");
+  looks = fs.existsSync(looksFile) ? JSON.parse(fs.readFileSync(looksFile, "utf8")) : {};
+}
+
+/** How cool a character looks, 1 to LOOK_MAX, or null if nobody graded it. */
+export function lookOf(id: string): number | null {
+  return looks[id] ?? null;
+}
+/** Adds or replaces looks grades. Throws on a grade that isn't a whole number from 1 to LOOK_MAX or a character there isn't. */
+export function setLooks(grades: Record<string, number>): void {
+  for (const [id, n] of Object.entries(grades)) {
+    if (!Number.isInteger(n) || n < 1 || n > LOOK_MAX) throw new Error(`${id}: a looks grade is a whole number from 1 to ${LOOK_MAX}, not ${n}`);
+    if (!findCharacter(id)) throw new Error(`no such character: ${id}`);
+  }
+  looks = { ...looks, ...grades };
+  fs.writeFileSync(looksFile, JSON.stringify(looks));
 }
 
 export function bestIds(): string[] {

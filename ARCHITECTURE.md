@@ -68,8 +68,9 @@ players' characters, references like the starters, never copies. GET /api/librar
 (flagged `saved`) + starters, so a saved character is a battle choice like any other. COMMUNITY
 (/api/characters/community) lists ready characters that are `public` (missing means public), not
 starters and not deleted. BEST leads with the ids in best.json (an admin's PUT IN BEST on a character,
-newest pick first), then orders the rest by how many player files save it, counted when the files are
-scanned and kept current on save and unsave; NEWEST is by creation time. A creator deleting a character somebody saved only
+newest pick first), then orders the rest by `bestScore` (shared/account.ts): how many player files save it,
+counted when the files are scanned and kept current on save and unsave, moved by its looks grade in
+looks.json (1 to 10, set with the forge token through POST /api/looks); NEWEST is by creation time. A creator deleting a character somebody saved only
 marks it `deleted`: it leaves their library and COMMUNITY, its bundle stays, and the entry is
 removed for real when the last saver unsaves it.
 

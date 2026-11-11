@@ -80,6 +80,25 @@ describe("BEST", () => {
   });
 });
 
+describe("looks grades", () => {
+  it("move a character up or down BEST by how cool it looks; a pick still leads", async () => {
+    const boss = await signIn("Boss"), fay = await signIn("Fay");
+    const grade = (looks: unknown, token = TOKEN) => api("/looks", { method: "POST", headers: { "x-forge-token": token }, body: JSON.stringify({ looks }) });
+    expect((await grade({ "gen-mid": 9 }, "wrong")).status).toBe(401);
+    expect((await grade({ "gen-mid": 11 })).status).toBe(400);
+    expect((await grade({ "gen-nope": 5 })).status).toBe(400);
+    // gen-old has the one save; a 9 is worth 2.4 saves, a 2 costs 1.8
+    expect((await grade({ "gen-mid": 9, "gen-old": 2 })).status).toBe(200);
+    expect((await community(fay)).map((c) => c.id)).toEqual(["gen-mid", "gen-new", "gen-old"]);
+    expect((await api("/characters/community/gen-old/best", { method: "POST", headers: boss, body: JSON.stringify({ best: true }) })).status).toBe(200);
+    expect((await community(fay)).map((c) => c.id)).toEqual(["gen-old", "gen-mid", "gen-new"]);
+    // leave the shared fixtures as the next tests expect them
+    expect((await api("/characters/community/gen-old/best", { method: "POST", headers: boss, body: JSON.stringify({ best: false }) })).status).toBe(200);
+    expect((await grade({ "gen-mid": 5, "gen-old": 5 })).status).toBe(200);
+    expect((await community(fay)).map((c) => c.id)).toEqual(["gen-old", "gen-new", "gen-mid"]);
+  });
+});
+
 describe("community", () => {
   it("lists public ready characters, with the creator's name only, best or new first", async () => {
     const bob = await signIn("Bob");

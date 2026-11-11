@@ -97,10 +97,15 @@ export interface CommunityCharacter extends Pick<LibraryEntry, "id" | "name" | "
   /** The caller made it. */
   mine: boolean;
 }
-/** BEST: the hand-picked ones, newest pick first, then the rest by how many players saved them. */
+/** BEST: the hand-picked ones, newest pick first, then the rest by `bestScore`. */
 export type CommunitySort = "best" | "new";
 export const COMMUNITY_SORTS: readonly CommunitySort[] = ["best", "new"];
 export const COMMUNITY_PAGE = 36;
+
+/** A looks grade runs 1 to LOOK_MAX; LOOK_PLAIN neither helps nor hurts, and each point either side is worth LOOK_WEIGHT saves. */
+export const LOOK_MAX = 10, LOOK_PLAIN = 5, LOOK_WEIGHT = 0.6;
+/** What BEST ranks the characters nobody picked by: how many players saved it, moved by how cool it looks (ungraded: not moved). */
+export const bestScore = (saves: number, look: number | null): number => saves + (look === null ? 0 : (look - LOOK_PLAIN) * LOOK_WEIGHT);
 
 /** A fighter in the release card's lineup. */
 export type FeaturedCharacter = Pick<LibraryEntry, "id" | "drawingUrl"> & { bundleUrl: string };
