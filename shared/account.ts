@@ -62,12 +62,12 @@ export interface LibraryEntry {
  * Times are epoch ms; the client words them in the player's own time zone.
  */
 export interface ForgeStanding {
-  /** Whose allowance: a signed-in player's daily one, a guest's lifetime one, or staff, who have none. */
+  /** Whose allowance: a signed-in player's daily one, a guest's lifetime one, or staff, who have a player's and may reset it. */
   kind: "player" | "guest" | "staff";
-  /** Forges they may still start; null for staff. */
-  left: number | null;
-  /** The allowance itself: per day for a player, ever for a guest; null for staff. */
-  allowance: number | null;
+  /** Forges they may still start. */
+  left: number;
+  /** The allowance itself: per day for a player or staff, ever for a guest. */
+  allowance: number;
   /** A signed-in player's daily allowance, for telling a guest what signing in gets them. */
   perPlayerPerDay: number;
   /** Why they can't start one now, or null if they can. */

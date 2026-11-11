@@ -208,4 +208,6 @@ export const library = {
   /** TRY AGAIN on a character that failed through no fault of the player's (`retryable`): free, once. */
   retry: (id: string) => api<{ character: LibraryEntry; forge: ForgeStanding }>(`/characters/${id}/retry`, { method: "POST" }),
   get: (id: string) => api<{ character: LibraryEntry }>(`/characters/${id}`),
+  /** Admins only: start today's allowance over. */
+  resetAllowance: () => api<{ forge: ForgeStanding }>("/characters/allowance/reset", { method: "POST" }),
 };

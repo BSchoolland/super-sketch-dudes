@@ -60,14 +60,15 @@ describe("a signed-in player's day", () => {
     expect(admit(standing(who("dev-b"), "", jobs, A + 6 * H, b, none))).toEqual({ allowance: "player" });
   });
 
-  it("doesn't apply to staff, whose forges still count toward the week", () => {
+  it("gives staff a player's day, which they can start over; their forges still count toward the week", () => {
     const staff = new Set(["dev-boss"]);
-    const jobs = [0, 1, 2, 3, 4].map((i) => job("dev-boss", A + i * H, { allowance: "staff" }));
-    const st = standing(who("dev-boss"), "", jobs, A + 5 * H, budget(), staff);
-    expect(st).toMatchObject({ kind: "staff", left: null, wall: null, resting: { reason: null, until: A + WEEK_MS } });
-    expect(admit(st)).toEqual({ allowance: "staff" });
-    expect(standing(who("dev-a"), "", jobs, A + 5 * H, budget(), staff).resting).not.toBeNull();
+    const jobs = [0, 1, 2].map((i) => job("dev-boss", A + i * H, { allowance: "staff" }));
+    const st = standing(who("dev-boss"), "", jobs, A + 3 * H, budget(), staff);
+    expect(st).toMatchObject({ kind: "staff", left: 0, wall: "day" });
+    expect(standing(who("dev-boss"), "", jobs, A + 3 * H, budget(), staff, new Map([["dev-boss", A + 2.5 * H]]))).toMatchObject({ kind: "staff", left: 2, wall: null });
+    expect(admit(standing(who("dev-boss"), "", jobs, A + 3 * H, budget(), staff, new Map([["dev-boss", A + 2.5 * H]])))).toEqual({ allowance: "staff" });
   });
+
 
   it("while the forge rests, lets each player leave so many drawings waiting", () => {
     const spent = [0, 1, 2, 3, 4].map((i) => job("dev-x", A + i * H - 2 * DAY_MS, { claims: [A + i * H] }));
@@ -76,7 +77,7 @@ describe("a signed-in player's day", () => {
     const left = [...spent, job("dev-a", A + 6 * H, { status: "queued", claims: [] })];
     expect(standing(who("dev-a"), "", left, A + 7 * H, budget(), none)).toMatchObject({ wall: "waiting", waiting: 1, left: 1 });
     expect(standing(who("dev-a"), "", left, A + 7 * H, budget({ waitingPerPlayer: 2 }), none)).toMatchObject({ wall: null });
-    expect(standing(who("dev-boss"), "", [...left, job("dev-boss", A + 7 * H, { status: "queued", claims: [] })], A + 7 * H, budget(), new Set(["dev-boss"])).wall).toBeNull();
+    expect(standing(who("dev-boss"), "", [...left, job("dev-boss", A + 7 * H, { status: "queued", claims: [] })], A + 7 * H, budget(), new Set(["dev-boss"])).wall).toBe("waiting");
   });
 });
 

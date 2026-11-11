@@ -7,6 +7,7 @@ import { bg, card, label, title, type Screen, INK } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
 import { forgeWords, RED } from "./character";
 import { myLibrary, refreshLibrary } from "../fighters";
+import { library } from "../account";
 import { wrapped } from "./text";
 import { DrawPad } from "./pad";
 import { PadTools } from "./padtools";
@@ -51,6 +52,7 @@ export class CreateScreen implements Screen {
 
   private buttons(): Button[] {
     if (this.walled) return [
+      ...(myLibrary.forge?.kind === "staff" && myLibrary.forge.wall === "day" ? [{ id: "reset", x: RIGHT, y: 560, w: COL_W, h: 110, text: "RESET (ADMIN)", size: 32 }] : []),
       { id: "community", x: RIGHT, y: 700, w: COL_W, h: 130, text: "COMMUNITY", size: 40 },
       { id: "back", x: RIGHT, y: 860, w: COL_W, h: 84, text: "BACK", size: 36 },
     ];
@@ -67,6 +69,13 @@ export class CreateScreen implements Screen {
     if (this.next) return this.leave(this.next);
     const pressed = this.menu.update(this.buttons(), m, consumeTaps());
     if (pressed === "community") return this.leave(this.nav.community());
+    if (pressed === "reset") {
+      sfx.menuConfirm();
+      void library.resetAllowance().then(
+        ({ forge }) => { myLibrary.forge = forge; },
+        (error: unknown) => { console.error("allowance reset failed", error); this.problem = error instanceof Error ? error.message : String(error); },
+      );
+    }
     if (pressed === "done") { sfx.menuConfirm(); return this.leave(this.nav.describe(this.tools.pad, this.hint)); }
     else if (pressed === "back" || m.back) { sfx.menuBack(); return this.leave(this.nav.title()); }
     else if (pressed) this.tools.press(pressed);

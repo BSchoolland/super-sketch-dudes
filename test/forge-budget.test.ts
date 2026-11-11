@@ -83,9 +83,14 @@ describe("the forge budget, over HTTP", () => {
     expect((await refused.json()).forge.wall).toBe("day");
 
     expect(await claimAll()).toEqual(["ann", "ann"]);
-    // three claimed of four (the old job's one included): staff may send as many as they like, and each counts
-    for (let i = 0; i < 4; i++) owners.set((await (await draw(boss)).json()).character.id, "boss");
-    expect(await standing(boss)).toMatchObject({ kind: "staff", left: null, wall: null });
+    // three claimed of four (the old job's one included): staff have a player's day, start it over with the
+    // admin reset, and every forge counts toward the week
+    for (let i = 0; i < 2; i++) owners.set((await (await draw(boss)).json()).character.id, "boss");
+    expect((await draw(boss)).status).toBe(429);
+    expect((await api("/characters/allowance/reset", { method: "POST", as: ann })).status).toBe(403);
+    expect((await (await api("/characters/allowance/reset", { method: "POST", as: boss })).json()).forge).toMatchObject({ kind: "staff", wall: null });
+    for (let i = 0; i < 2; i++) owners.set((await (await draw(boss)).json()).character.id, "boss");
+    expect(await standing(boss)).toMatchObject({ kind: "staff", wall: null });
     expect(await claimAll()).toEqual(["boss"]);
     expect(await standing(bob)).toMatchObject({ wall: null, resting: { reason: null, until: A + WEEK_MS } });
 

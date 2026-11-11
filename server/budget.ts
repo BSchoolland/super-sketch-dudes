@@ -89,6 +89,9 @@ export function parseStaff(raw: unknown, where: string): Set<string> {
 
 let budget: ForgeBudget = DEFAULT_BUDGET;
 let staff = new Set<string>();
+/** When each staff member last reset their own daily allowance (to test the walls); kept in allowance-resets.json. */
+let resets = new Map<string, number>();
+let resetsFile = "";
 
 /** Reads forge-budget.json and staff.json; throws on a malformed one. */
 export function loadBudget(dataDir: string): ForgeBudget {
@@ -100,10 +103,19 @@ export function loadBudget(dataDir: string): ForgeBudget {
   }
   const staffFile = path.join(dataDir, "staff.json");
   staff = fs.existsSync(staffFile) ? parseStaff(JSON.parse(fs.readFileSync(staffFile, "utf8")), staffFile) : new Set();
+  resetsFile = path.join(dataDir, "allowance-resets.json");
+  resets = new Map(fs.existsSync(resetsFile) ? Object.entries(JSON.parse(fs.readFileSync(resetsFile, "utf8")) as Record<string, number>) : []);
   return budget;
 }
 
 export const currentBudget = (): ForgeBudget => budget;
+
+/** A staff member starts their daily allowance over: drawings sent before now stop counting toward it (not toward the week). */
+export function resetAllowance(playerId: string, now: number): void {
+  if (!staff.has(playerId)) throw new Error(`${playerId} isn't staff: only staff can reset their allowance`);
+  resets.set(playerId, now);
+  fs.writeFileSync(resetsFile, JSON.stringify(Object.fromEntries(resets)));
+}
 export const staffIds = (): ReadonlySet<string> => staff;
 
 /** The 7-day window `now` falls in, counted from the anchor either way. */
@@ -141,16 +153,16 @@ function rolling(at: number[], limit: number, now: number): { used: number; more
   return { used: recent.length, moreAt: limit > 0 && recent.length >= limit ? recent[recent.length - limit] + DAY_MS : null };
 }
 
-export function standing(player: Player, ip: string, jobs: readonly BudgetJob[], now: number, b = budget, s: ReadonlySet<string> = staff): ForgeStanding {
+export function standing(player: Player, ip: string, jobs: readonly BudgetJob[], now: number, b = budget, s: ReadonlySet<string> = staff, r: ReadonlyMap<string, number> = resets): ForgeStanding {
   const kind = allowanceOf(player, s);
   const mine = jobs.filter((j) => j.owner === player.id);
   const waiting = mine.filter((j) => j.status === "queued").length;
   const resting = restingOf(jobs, now, b);
   const base = { kind, perPlayerPerDay: b.perPlayerPerDay, resting, waiting, waitingPerPlayer: b.waitingPerPlayer };
-  if (kind === "staff") return { ...base, left: null, allowance: null, wall: null, moreAt: null };
   let left: number, wall: ForgeStanding["wall"] = null, moreAt: number | null = null;
-  if (kind === "player") {
-    const day = rolling(mine.map((j) => j.createdAt), b.perPlayerPerDay, now);
+  if (kind !== "guest") {
+    const since = r.get(player.id) ?? 0;
+    const day = rolling(mine.filter((j) => j.createdAt > since).map((j) => j.createdAt), b.perPlayerPerDay, now);
     left = Math.max(0, b.perPlayerPerDay - day.used);
     if (!left) { wall = "day"; moreAt = day.moreAt; }
   } else {
@@ -162,7 +174,7 @@ export function standing(player: Player, ip: string, jobs: readonly BudgetJob[],
     else if (!left) { wall = "network"; moreAt = net.moreAt; }
   }
   if (!wall && resting && waiting >= b.waitingPerPlayer) wall = "waiting";
-  return { ...base, left, allowance: kind === "player" ? b.perPlayerPerDay : b.guest.lifetime, wall, moreAt };
+  return { ...base, left, allowance: kind === "guest" ? b.guest.lifetime : b.perPlayerPerDay, wall, moreAt };
 }
 
 const REFUSALS: Record<NonNullable<ForgeStanding["wall"]>, string> = {

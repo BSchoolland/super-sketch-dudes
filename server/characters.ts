@@ -6,7 +6,7 @@ import { playerOf } from "./auth";
 import type { WideEvent } from "../shared/wide";
 import type { LibraryEntry } from "../shared/account";
 import { drawingUrlOf, enqueueJob, entryOf, jobOf, newFighterId, retryJob, reviseCharacter, standingOf, storeCharacter } from "./forge";
-import { admit } from "./budget";
+import { admit, resetAllowance, staffIds } from "./budget";
 import { clientIp } from "./school";
 import { isListed, communityCharacters, savesSince, dummyEntry, everyCharacter, findCharacter, libraryOf, removeCharacter, saveCharacter, savedOf, setDummy, setPublic, setStarters, starterEntries, starterIds, setHeld, takeDown, unsaveCharacter, upsertCharacter } from "./library";
 import { HOUSE_ROSTER } from "../shared/house";
@@ -151,6 +151,15 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
   });
 
   // TRY AGAIN on a character that failed through no fault of the player's: forged once more, free
+  // staff only: start today's allowance over, to try the walls again
+  api.post("/characters/allowance/reset", (req, res) => {
+    const player = playerOf(req);
+    if (!player) return res.status(401).json({ error: "not signed in" });
+    if (!staffIds().has(player.id)) return res.status(403).json({ error: "only admins can reset their limit" });
+    resetAllowance(player.id, Date.now());
+    res.json({ forge: standingOf(player, clientIp(req)) });
+  });
+
   api.post("/characters/:id/retry", (req, res) => {
     const player = playerOf(req);
     if (!player) return res.status(401).json({ error: "not signed in" });
