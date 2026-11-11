@@ -2,7 +2,7 @@
 
 TypeScript, Vite, Canvas 2D on the client; Express + `ws` on the server; a shared deterministic
 sim used by both. Same shape as Kessler so it deploys the same way (pm2 process behind Apache
-at bschoolland.dev/sketch-battle).
+at supersketchdudes.com/play).
 
 ```
 sketch-battle/
@@ -21,7 +21,7 @@ sketch-battle/
     cpu.ts           bot controller: reads state, returns an input record
     rules.ts         stocks, time, KO, sudden death
   client/
-    index.html, vite.config.ts (base "/sketch-battle/")
+    index.html, vite.config.ts (base "/play/")
     src/main.ts      boot, screen router
     src/render/      canvas renderer: camera, rigs, effects, particles, stages, hud
     src/input/       keyboard + gamepad -> input records per slot; device assignment
@@ -321,8 +321,8 @@ by the relay. The session's `source` ref is `discord-activity`, and `activity` h
 URL mappings (Developer Portal, Activities > URL Mappings), in this order:
 
 ```
-/sketch-battle  ->  bschoolland.dev/sketch-battle          the API, the relay, fighters, assets (the build's /sketch-battle/ base)
-/               ->  bschoolland.dev/sketch-battle/discord   the page Discord loads (the server sends index.html for /discord)
+/play           ->  supersketchdudes.com/play              the API, the relay, fighters, assets (the build's /play/ base)
+/               ->  supersketchdudes.com/play/discord      the page Discord loads (the server sends index.html for /discord)
 ```
 
 `node scripts/activitycheck.mjs` plays it end to end with Discord stubbed: `?activity=stub&instance=<launch>&as=<name>`
@@ -357,7 +357,7 @@ sqlite dependency to lean on; `server/eventlog.ts` reads it back, newest snapsho
 
 ## Tooling
 
-- `npm run dev`: Vite on 5175 + server on 3008 with the /sketch-battle/api and /sketch-battle/ws proxies.
+- `npm run dev`: Vite on 5175 + server on 3008 with the /play/api and /play/ws proxies.
 - `npm run build`, `npm start`: same as Kessler.
 - `npm run ladder`: every fighter vs every fighter, CPU tier 5 (UNFAIR), N matches each, prints a
   win-rate matrix and average stock length; fails if any matchup is outside 40/60 (warn only
@@ -379,15 +379,20 @@ sqlite dependency to lean on; `server/eventlog.ts` reads it back, newest snapsho
 
 ## Deploy
 
-Apache on personal-server (bschoolland.dev vhost) gets, before the /kessler rule:
+Apache on personal-server, supersketchdudes.com vhost (`/etc/httpd/conf.d/supersketchdudes-le-ssl.conf`):
 
 ```
-RedirectMatch 301 ^/sketch-battle$ /sketch-battle/
-ProxyPass /sketch-battle/ws ws://localhost:3008/ws
-ProxyPassReverse /sketch-battle/ws ws://localhost:3008/ws
-ProxyPass /sketch-battle/ http://localhost:3008/
-ProxyPassReverse /sketch-battle/ http://localhost:3008/
+RedirectMatch 302 ^/$ /play/
+RedirectMatch 301 ^/play$ /play/
+ProxyPass /play/ws ws://localhost:3008/ws
+ProxyPassReverse /play/ws ws://localhost:3008/ws
+ProxyPass /play/ http://localhost:3008/
+ProxyPassReverse /play/ http://localhost:3008/
 ```
 
-The server serves the client from `dist/client` at `/` and at `/sketch-battle/` so it works both
-proxied and direct.
+The server serves the client from `dist/client` at `/` and at `/play/` so it works both proxied and direct.
+
+The game used to live at bschoolland.dev/sketch-battle/. That vhost still proxies `/sketch-battle/` here, and a
+page asked for with `X-Forwarded-Host: bschoolland.dev` is server/oldhost.ts's: it sends the browser to /play/
+with its game storage carried in the URL fragment (client/src/move.ts takes it in). Fighter URLs in the data carry
+the build base (`/play/gen/…`); they were rewritten from `/sketch-battle/gen/` when the base moved.
