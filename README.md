@@ -66,6 +66,7 @@ node scripts/perfbench.mjs --throttle 4 --dpr 1.25   # frame times on a pretend 
 node scripts/activitycheck.mjs   # the Discord Activity end to end, Discord stubbed (starts its own servers)
 node scripts/touchcheck.mjs      # the touch controls on emulated phones with real multi-touch: VS BOTS to a KO, quick match and the Activity against a keyboard (starts its own servers)
 node scripts/frontdoorcheck.mjs  # guest play, signing in from a guest, the signup age question, /privacy and /terms (starts its own servers)
+node scripts/homeshots.mjs       # the landing page's screenshots, clip and share image into client/public/home/ (starts its own servers)
 scripts/deploy.sh    # build, ship to personal-server, restart pm2 "sketch-battle" (CI runs this on every push to master)
 ```
 

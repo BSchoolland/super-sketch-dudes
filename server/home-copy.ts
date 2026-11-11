@@ -17,7 +17,7 @@ export const HOME_COPY = {
   steps: [
     { title: "1. Draw", text: "Draw your character on the page: a guy with a sword, a slug, a car, anything.", alt: "The drawing screen with a stick figure holding a sword" },
     { title: "2. It comes to life", text: "AI turns your drawing into a fighter with its own moves and special attacks.", alt: "The finished fighter next to the drawing it was made from" },
-    { title: "3. Fight", text: "Battle the computer, a friend on the same keyboard, or anyone online. Up to four fighters at once.", alt: "Four hand-drawn fighters in a match" },
+    { title: "3. Fight", text: "Battle the computer, a friend on the same keyboard, or anyone online. Up to six fighters at once.", alt: "Four hand-drawn fighters in a match" },
   ],
 
   fightersTitle: "Made by players",
@@ -28,13 +28,13 @@ export const HOME_COPY = {
     "The game is free.",
     "Making a new character takes a lot of AI work, so there's a daily limit on how many you can make.",
     "Playing is unlimited, and so is saving other players' characters to fight with.",
-    "Play with a keyboard or a controller. Touch screens are coming.",
+    "Play with a keyboard, a controller or a touch screen.",
     "No account needed: you can play as a guest. Sign in with Discord, Google or email to share your characters.",
   ],
 
   whereTitle: "Where to play",
   where: [
-    { title: "In your browser", text: "On any computer, at bschoolland.dev/sketch-battle." },
+    { title: "In your browser", text: "On any computer or phone, right here: press PLAY." },
     { title: "In Discord", text: "As an Activity: start it in a voice channel and everyone in the call lands in the same room." },
   ],
 
