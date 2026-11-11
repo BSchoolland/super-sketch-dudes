@@ -22,7 +22,7 @@ async function gameServer(clientSecret: string | null): Promise<(p: string, body
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "activity-auth-"));
   dirs.push(dataDir);
   initLibrary(dataDir);
-  attachAuth(api, { dataDir, devLogin: false, botKey: null, discord: { api: discord.api, clientSecret } });
+  attachAuth(api, { dataDir, devLogin: false, botKey: null, discord: { api: discord.api, clientSecret }, crazygames: { jwks: "http://crazygames.invalid", gameId: null } });
   app.use("/api", api);
   const server = app.listen(0, "127.0.0.1");
   servers.push(server);

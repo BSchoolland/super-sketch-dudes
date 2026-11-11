@@ -56,7 +56,7 @@ beforeAll(async () => {
   app.use("/api", api);
   api.use(requestEvents());
   attachEvents(api);
-  attachAuth(api, { dataDir, devLogin: true, botKey: null, discord: { api: "http://discord.invalid", clientSecret: null } });
+  attachAuth(api, { dataDir, devLogin: true, botKey: null, discord: { api: "http://discord.invalid", clientSecret: null }, crazygames: { jwks: "http://crazygames.invalid", gameId: null } });
   api.get("/boom", () => { throw new Error("kaboom"); });
   api.use(requestErrors());
   server = http.createServer(app);

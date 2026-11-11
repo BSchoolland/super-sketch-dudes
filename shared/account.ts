@@ -31,6 +31,10 @@ export interface NameStanding { player: Player; request: NameRequest | null; che
 /** Guests play without an account; their characters stay out of COMMUNITY until they sign in. */
 export const isGuest = (id: string): boolean => id.startsWith("guest-");
 
+/** A CrazyGames user, keyed on their CrazyGames user id; their name is their CrazyGames username. */
+export const CRAZYGAMES_PREFIX = "crazygames-";
+export const isCrazyGames = (id: string): boolean => id.startsWith(CRAZYGAMES_PREFIX);
+
 /** One character in a player's library: a forge job's outcome, from queued to ready. */
 export interface LibraryEntry {
   /** The fighter id (roster key), also the folder under /gen. */

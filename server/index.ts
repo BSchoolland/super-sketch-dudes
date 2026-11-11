@@ -22,6 +22,7 @@ import { restoreHandoff, saveHandoff } from "./handoff";
 import { sweepGuests } from "./guests";
 import { OLD_HOST, oldHostPage } from "./oldhost";
 import { attachHome } from "./home";
+import { CRAZYGAMES_JWKS } from "./crazygames";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
@@ -57,9 +58,17 @@ if (!ice.stun || !ice.turn) console.warn(`peer-to-peer: ${ice.stun} STUN and ${i
 if (process.env.DISCORD_API && process.env.DEV_LOGIN !== "1") throw new Error("DISCORD_API is set without DEV_LOGIN=1: only a dev server may talk to a fake Discord");
 const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || null;
 if (!DISCORD_CLIENT_SECRET) console.warn("DISCORD_CLIENT_SECRET unset: nobody can sign in inside the Discord Activity");
+// a fake CrazyGames key set likewise (scripts/crazygamescheck.mjs)
+if (process.env.CRAZYGAMES_JWKS && process.env.DEV_LOGIN !== "1") throw new Error("CRAZYGAMES_JWKS is set without DEV_LOGIN=1: only a dev server may trust a fake CrazyGames");
+const CRAZYGAMES_GAME_ID = process.env.CRAZYGAMES_GAME_ID || null;
+if (!CRAZYGAMES_GAME_ID) console.warn("CRAZYGAMES_GAME_ID unset: nobody can sign in with a CrazyGames account");
 // sign-in, libraries, the forge queue, the creator
 initLibrary(DATA_DIR);
-attachAuth(api, { dataDir: DATA_DIR, devLogin: process.env.DEV_LOGIN === "1", botKey: process.env.BOT_LOGIN_KEY || null, discord: { api: process.env.DISCORD_API ?? "https://discord.com/api", clientSecret: DISCORD_CLIENT_SECRET } });
+attachAuth(api, {
+  dataDir: DATA_DIR, devLogin: process.env.DEV_LOGIN === "1", botKey: process.env.BOT_LOGIN_KEY || null,
+  discord: { api: process.env.DISCORD_API ?? "https://discord.com/api", clientSecret: DISCORD_CLIENT_SECRET },
+  crazygames: { jwks: process.env.CRAZYGAMES_JWKS ?? CRAZYGAMES_JWKS, gameId: CRAZYGAMES_GAME_ID },
+});
 attachForge(api, { token: FORGE_TOKEN, dataDir: DATA_DIR, genBase: `${BASE}/gen` });
 // typed names wait for the moderator's judges, which the forge worker runs
 attachNameJudging(api, { token: FORGE_TOKEN, rename: applyName });

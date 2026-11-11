@@ -57,7 +57,7 @@ beforeAll(async () => {
   a.use("/api", router);
   initLibrary(dataDir);
   initEvents(dataDir);
-  attachAuth(router, { dataDir, devLogin: true, botKey: null, discord: { api: "http://discord.invalid", clientSecret: null }});
+  attachAuth(router, { dataDir, devLogin: true, botKey: null, discord: { api: "http://discord.invalid", clientSecret: null }, crazygames: { jwks: "http://crazygames.invalid", gameId: null } });
   attachForge(router, { token: TOKEN, dataDir, genBase: "/gen" });
   attachNameJudging(router, { token: TOKEN, rename: applyName });
   attachCharacters(router, TOKEN, dataDir);

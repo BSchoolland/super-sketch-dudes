@@ -180,7 +180,7 @@ export function frontPage(index: string, base: string, fighters: Fighter[]): str
 export function attachHome(app: express.Express, opts: { at: (p: string) => string[]; base: string; indexFile: string; genDir: string }): void {
   const index = fs.readFileSync(opts.indexFile, "utf8");
   frontPage(index, opts.base, []); // its places are checked at boot, not at the first visit
-  app.get([...opts.at("/"), ...opts.at("/index.html"), ...opts.at("/auth")], (_req, res) => {
+  app.get([...opts.at("/"), ...opts.at("/index.html"), ...opts.at("/auth"), ...opts.at("/crazygames")], (_req, res) => {
     res.setHeader("Cache-Control", "no-cache");
     res.type("html").send(frontPage(index, opts.base, strip()));
   });

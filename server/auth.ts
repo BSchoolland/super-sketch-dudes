@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import type express from "express";
-import { DISCORD_APP_ID, GOOGLE_CLIENT_ID, SESSION_HEADER, isGuest, type LastPlayed, type NameStanding, type News, type Player } from "../shared/account";
+import { DISCORD_APP_ID, GOOGLE_CLIENT_ID, SESSION_HEADER, isCrazyGames, isGuest, type LastPlayed, type NameStanding, type News, type Player } from "../shared/account";
 import type { WideEvent } from "../shared/wide";
 import { markPlayed, nameOf, renamePlayer, seeNews } from "./library";
 import { adoptGuest, newGuest } from "./guests";
@@ -12,6 +12,7 @@ import { badWordIn } from "./name-filter";
 import { renameMapsOf } from "./maps";
 import { renameJobsOf } from "./forge";
 import { checkerUp, loadNameRequests, nameRequestOf, requestName } from "./name-requests";
+import { crazyGamesKeys, crazyGamesPlayerId, verifyCrazyGamesToken } from "./crazygames";
 
 /**
  * Sign-in: the browser does Discord's implicit OAuth grant (no client secret), gets an access
@@ -20,15 +21,22 @@ import { checkerUp, loadNameRequests, nameRequestOf, requestName } from "./name-
  * there is no redirect: the client gets a one-time code from the Embedded App SDK and we exchange
  * it for the access token with the app's client secret, then ask Discord the same way. Google is the same trip with
  * an ID token, which Google checks for us and we hold to our client ID and the client's nonce; a Google player's name is one we pick (names.ts), never Google's.
- * Or an email and password, scrypt-hashed in accounts.json (the client asks a birth year first and keeps the answer to itself). A browser with
+ * Or an email and password, scrypt-hashed in accounts.json (the client asks a birth year first and keeps the answer to itself). Inside
+ * CrazyGames the SDK's user token, checked against CrazyGames' published keys, makes a `crazygames-<user id>` player named
+ * by their CrazyGames username. A browser with
  * no session gets a guest (ids `guest-…`, guests.ts); signing in from a guest's session moves what the guest made to
  * the account. Sessions persist to disk. DEV_LOGIN=1 adds a name-only login for local tests.
  */
 /**
  * `botKey`: a secret that lets the bench's bots sign in as bot accounts (ids `bot-…`, never a real player's); unset, no bot login.
  * `discord.api`: Discord's API base (a fake one in tests); `discord.clientSecret`: the app's, for the Activity's code exchange.
+ * `crazygames.jwks`: where CrazyGames publishes its token keys (a fake in tests); `crazygames.gameId`: ours, from their Developer Portal.
  */
-export interface AuthOptions { dataDir: string; devLogin: boolean; botKey: string | null; discord: { api: string; clientSecret: string | null } }
+export interface AuthOptions {
+  dataDir: string; devLogin: boolean; botKey: string | null;
+  discord: { api: string; clientSecret: string | null };
+  crazygames: { jwks: string; gameId: string | null };
+}
 
 const sessions = new Map<string, { player: Player; at: number }>();
 let file = "";
@@ -81,13 +89,15 @@ export function endSessionsOf(id: string): void {
   if (ended) save();
 }
 
+
 /**
  * A signed-in player, when they last played before this sign-in (null: never) and their NEW stickers. `arriving` is who
- * the sign-in says they are: a player with a record keeps the name on it. Signing in to an account from a guest's
- * session moves the guest's library to it and ends the guest.
+ * the sign-in says they are: a player with a record keeps the name on it, unless `named` says the sign-in's name wins
+ * (a CrazyGames username). Signing in to an account from a guest's session moves the guest's library to it and ends the guest.
  */
-function issue(arriving: Player, req: express.Request, res: express.Response): { session: string; player: Player; lastPlayed: LastPlayed | null; news: News | null } {
-  const player: Player = { ...arriving, name: nameOf(arriving.id) ?? arriving.name };
+function issue(arriving: Player, req: express.Request, res: express.Response, named: "record" | "provider" = "record"): { session: string; player: Player; lastPlayed: LastPlayed | null; news: News | null } {
+  const kept = nameOf(arriving.id);
+  const player: Player = { ...arriving, name: named === "record" ? kept ?? arriving.name : arriving.name };
   const was = playerOf(req);
   if (was && isGuest(was.id) && !isGuest(player.id)) {
     const moved = adoptGuest(was.id, player);
@@ -96,7 +106,9 @@ function issue(arriving: Player, req: express.Request, res: express.Response): {
   const token = crypto.randomBytes(24).toString("base64url");
   sessions.set(token, { player, at: Date.now() });
   save();
-  return { session: token, player, ...markPlayed(player) };
+  const played = markPlayed(player);
+  if (kept !== null && kept !== player.name) applyName(player.id, player.name);
+  return { session: token, player, ...played };
 }
 
 const cleanName = (s: unknown): string => typedName(s) || "someone";
@@ -200,6 +212,31 @@ export function attachAuth(api: express.Router, opts: AuthOptions): void {
     res.json(signedUp);
   });
 
+  // inside CrazyGames: the SDK's user token, on every launch and when a guest logs in to CrazyGames mid-session
+  const keys = crazyGamesKeys(opts.crazygames.jwks);
+  api.post("/auth/crazygames", async (req, res) => {
+    const token = String(req.body?.token ?? "");
+    if (!token) return res.status(400).json({ error: "token required" });
+    const gameId = opts.crazygames.gameId;
+    if (!gameId) {
+      const why = "CRAZYGAMES_GAME_ID is not set on the server, so a CrazyGames sign-in can't be checked";
+      console.error(why);
+      return res.status(500).json({ error: why });
+    }
+    const check = async (refresh: boolean) => verifyCrazyGamesToken(token, await keys(refresh), gameId, Date.now());
+    let user;
+    try {
+      user = await check(false);
+      if ("unknownKey" in user) user = await check(true);
+    } catch (error) {
+      console.error("fetching CrazyGames' keys failed", error);
+      return res.status(502).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+    if ("error" in user) return res.status(401).json({ error: `CrazyGames sign-in refused: ${user.error}` });
+    const player: Player = { id: crazyGamesPlayerId(user.userId), name: cleanName(user.username), avatar: user.profilePictureUrl };
+    res.json(issue(player, req, res, "provider"));
+  });
+
   // a browser's first visit; a busy school network shares one address, so the cap is generous
   const guestsPerHour = new Map<string, { hour: number; n: number }>();
   api.post("/auth/guest", (req, res) => {
@@ -254,6 +291,7 @@ export function attachAuth(api: express.Router, opts: AuthOptions): void {
     const player = playerOf(req);
     if (!player) return res.status(401).json({ error: "not signed in" });
     if (isGuest(player.id)) return res.status(403).json({ error: "sign in to pick your own name" });
+    if (isCrazyGames(player.id)) return res.status(403).json({ error: "your name is your CrazyGames username" });
     const name = typedName(req.body?.name);
     if (!name) return res.status(400).json({ error: "a name needs letters or numbers" });
     const asked = requestName(player, name);
