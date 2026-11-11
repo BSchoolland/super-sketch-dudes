@@ -6,7 +6,7 @@ import { sfx } from "../audio/audio";
 import { api, signedIn } from "../account";
 import { feedbackApi, loadImage } from "../feedback";
 import { FEEDBACK_MAX, type FeedbackItem } from "../../../shared/feedback";
-import { classTime } from "../classtime";
+import { classTime, tryClassPass } from "../classtime";
 import { bg, card, label, title, type Screen, INK } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
 import { RED } from "./character";
@@ -26,24 +26,50 @@ function note(characters: number | null): string[] {
     "So I've blocked the game during school (at least while you're at school on a Chromebook) before you get caught and it gets blocked anyway. You'll be able to play again at 3:00.",
     "In the meantime, I added this feedback system. You can use it to say anything you want about the game, your ideas for it, or things you want to see changed or added! I'll be reading these.",
     "Anyways, thanks for the support and for playing the game so much! I hope you all keep playing, just not in class :P",
+    "Got the passcode? Type it in below.",
   ];
 }
 
-/** What a school Chromebook sees during class instead of the game; it lets go when class time ends. */
+/** What a school Chromebook sees during class; it lets go when class time ends, or for the passcode. */
 export class ClassScreen implements Screen {
   t = 0;
   private menu = new ButtonMenu();
-  private feedbackY = 0;
+  private bottomY = 0;
+  private field: TextField | null = null;
+  private trying = false;
+  private wrong = false;
   constructor(private onDone: () => Screen) {}
 
+  abandon(): void {
+    this.field?.remove();
+  }
+
   private buttons(): Button[] {
-    return [{ id: "feedback", x: VIEW_W / 2 - 260, y: this.feedbackY, w: 520, h: 84, text: "SEND FEEDBACK", size: 34 }];
+    const y = this.bottomY;
+    return [
+      { id: "unlock", x: VIEW_W / 2 + 10, y, w: 300, h: 84, text: this.trying ? "…" : "UNLOCK", size: 34, disabled: this.trying },
+      { id: "feedback", x: VIEW_W / 2 + 330, y, w: 420, h: 84, text: "SEND FEEDBACK", size: 34 },
+    ];
+  }
+
+  private unlock(): void {
+    const pass = this.field?.value.trim() ?? "";
+    if (!pass || this.trying) return;
+    this.trying = true; this.wrong = false;
+    tryClassPass(pass).then(
+      (ok) => { this.trying = false; this.wrong = !ok; if (ok) sfx.menuConfirm(); },
+      (error: unknown) => { this.trying = false; this.wrong = true; console.error("passcode check failed", error); },
+    );
   }
 
   update(dt: number, m: MenuInput): Screen | null {
     this.t += dt;
-    if (!classTime.blocked) return this.onDone();
-    if (this.feedbackY && this.menu.update(this.buttons(), m, consumeTaps()) === "feedback") return new FeedbackScreen(() => this);
+    if (!classTime.blocked) { this.field?.remove(); return this.onDone(); }
+    if (!this.bottomY) return null;
+    this.field ??= new TextField({ type: "password", maxLength: 40, quiet: true, onSubmit: () => this.unlock(), onCancel: () => {} });
+    const pressed = this.menu.update(this.buttons(), m, consumeTaps());
+    if (pressed === "unlock") this.unlock();
+    if (pressed === "feedback") { this.field.remove(); this.field = null; return new FeedbackScreen(() => this); }
     return null;
   }
 
@@ -56,7 +82,12 @@ export class ClassScreen implements Screen {
       lines.forEach((l, i) => label(ctx, l, NOTE_X, y + i * LINE, SIZE, INK, "left", 600));
       y += lines.length * LINE + GAP;
     }
-    this.feedbackY = Math.min(y + 4, VIEW_H - 110);
+    this.bottomY = Math.min(y + 4, VIEW_H - 110);
+    const box = { x: VIEW_W / 2 - 430, y: this.bottomY, w: 420, h: 84 };
+    card(ctx, box.x, box.y, box.w, box.h, INK, document.activeElement === this.field?.el);
+    if (!this.field?.value) label(ctx, "passcode", box.x + box.w / 2, box.y + box.h / 2 + 10, 28, PENCIL);
+    this.field?.place(box.x + 16, box.y + 8, box.w - 32, box.h - 16, 32);
+    if (this.wrong) label(ctx, "That's not it.", VIEW_W / 2, this.bottomY + 120, 28, RED);
     this.menu.draw(ctx, this.buttons());
   }
 }
