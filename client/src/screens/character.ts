@@ -116,33 +116,33 @@ function soon(at: number): string {
   return `${h} hour${h === 1 ? "" : "s"}`;
 }
 
-const forges = (n: number): string => `${n} forge${n === 1 ? "" : "s"}`;
+const characters = (n: number): string => `${n} new character${n === 1 ? "" : "s"}`;
 
 /**
  * What the forge says to a player before they draw. `short` is one line (the title menu, the library); `title` and
  * `text` are the creator's. `blocked`: they can't send one now, and `text` says when they can.
  */
 export function forgeWords(st: ForgeStanding): { title: string | null; text: string; short: string; blocked: boolean } {
-  const rest = !st.resting ? "" : st.resting.reason ?? `It's made all its fighters for this week. Back ${forgeOpens(st.resting.until!)}.`;
-  const restShort = st.resting?.until ? `the forge is resting until ${forgeOpens(st.resting.until)}` : "the forge is resting";
-  const signIn = `Sign in and you get ${forges(st.perPlayerPerDay)} every day.`;
+  const rest = !st.resting ? "" : st.resting.reason ?? `They're back ${forgeOpens(st.resting.until!)}.`;
+  const restShort = st.resting?.until ? `new characters are paused until ${forgeOpens(st.resting.until)}` : "new characters are paused";
+  const signIn = `Sign in and you get ${characters(st.perPlayerPerDay)} every day.`;
   switch (st.wall) {
     case "day": return {
-      title: "THAT'S TODAY'S FORGES", blocked: true,
-      text: `You've used your ${forges(st.allowance!)} for today${st.moreAt ? `. You get another in ${soon(st.moreAt)}` : ""}. Till then: battle, or find fighters to save in COMMUNITY.`,
-      short: `no forges left today${st.moreAt ? `: another in ${soon(st.moreAt)}` : ""}`,
+      title: "THAT'S TODAY'S CHARACTERS", blocked: true,
+      text: `You've made your ${characters(st.allowance!)} for today${st.moreAt ? `. You get another in ${soon(st.moreAt)}` : ""}. Till then: battle, or find fighters to save in COMMUNITY.`,
+      short: `no new characters left today${st.moreAt ? `: another in ${soon(st.moreAt)}` : ""}`,
     };
-    case "guest": return { title: "SIGN IN FOR MORE", text: `Guests get ${st.allowance === 1 ? "one forge" : forges(st.allowance!)}. ${signIn}`, short: "sign in to draw more", blocked: true };
-    case "network": return { title: "SIGN IN FOR MORE", text: `Guests here have used today's forges. ${signIn}`, short: "sign in to draw more", blocked: true };
+    case "guest": return { title: "SIGN IN FOR MORE", text: `Guests get ${st.allowance === 1 ? "one new character" : characters(st.allowance!)}. ${signIn}`, short: "sign in to draw more", blocked: true };
+    case "network": return { title: "SIGN IN FOR MORE", text: `Guests here have made today's characters. ${signIn}`, short: "sign in to draw more", blocked: true };
     case "waiting": return {
-      title: "THE FORGE IS RESTING", blocked: true,
-      text: `${rest} ${st.waiting === 1 ? "Your drawing is" : "Your drawings are"} waiting for it.`,
+      title: "NEW CHARACTERS ARE PAUSED", blocked: true,
+      text: `${rest} ${st.waiting === 1 ? "Your drawing is" : "Your drawings are"} waiting in line.`,
       short: `${restShort}: yours is waiting`,
     };
     case null: break;
   }
-  if (st.resting) return { title: "THE FORGE IS RESTING", text: `${rest} Draw one now and it's forged ${st.resting.until ? "then" : "when the forge is back"}.`, short: restShort, blocked: false };
-  const left = st.left === null ? "" : st.kind === "guest" ? `${forges(st.left)} left as a guest` : `${forges(st.left)} left today`;
+  if (st.resting) return { title: "NEW CHARACTERS ARE PAUSED", text: `${rest} Draw one now and it comes to life ${st.resting.until ? "then" : "when they're back"}.`, short: restShort, blocked: false };
+  const left = st.left === null ? "" : st.kind === "guest" ? `${characters(st.left)} left as a guest` : `${characters(st.left)} left today`;
   return { title: null, text: left, short: left, blocked: false };
 }
 
@@ -151,7 +151,7 @@ export function characterStatus(ch: Pick<LibraryEntry, "status" | "stage" | "err
   const dots = ".".repeat(1 + (Math.floor(t * 2) % 3));
   if (ch.status === "ready") return null;
   if (ch.status === "failed") return { text: ch.error ?? "couldn't be made", color: RED };
-  if (ch.status === "queued") return { text: `${myLibrary.forge?.resting ? "Waiting for the forge" : forgeStep(ch.stage || "waiting in line").label}${dots}`, color: PENCIL };
+  if (ch.status === "queued") return { text: `${myLibrary.forge?.resting ? "Waiting in line" : forgeStep(ch.stage || "waiting in line").label}${dots}`, color: PENCIL };
   return { text: `${forgeStep(ch.stage || "reading the drawing").label}${dots}`, color: INK };
 }
 

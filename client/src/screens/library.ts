@@ -219,7 +219,7 @@ export class LibraryScreen implements Screen {
       drawCharacterArt(ctx, e, 160, 110, 640, this.t);
       title(ctx, "FAILED", 870, 200, 96, RED, "left");
       const h = wrapped(ctx, e.error ?? "couldn't be made", 870, 280, 860, 32, RED, 8, "left");
-      if (e.retryable) label(ctx, "TRY AGAIN is free: it doesn't use up one of your forges", 870, 280 + h + 30, 26, PENCIL, "left");
+      if (e.retryable) label(ctx, "TRY AGAIN is free: it doesn't count against today's characters", 870, 280 + h + 30, 26, PENCIL, "left");
     }
     this.detailMenu.draw(ctx, this.detailButtons(e));
   }

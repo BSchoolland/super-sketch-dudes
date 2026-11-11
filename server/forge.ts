@@ -93,10 +93,14 @@ export function charStatusOf(job: ForgeJob): CharStatus {
 const RETRIES = 1;
 const retryable = (job: ForgeJob): boolean => job.status === "failed" && !job.blocked && job.retries < RETRIES;
 
+/** What a player reads about a failed character: the moderator's reason is written for them, the rest is our plumbing. */
+const playerError = (job: ForgeJob): string | null =>
+  job.status !== "failed" || !job.error ? job.error : job.blocked ? job.error : "Something went wrong bringing this one to life. Sorry!";
+
 export function entryOf(job: ForgeJob): LibraryEntry {
   return {
     ...(retryable(job) ? { retryable: true } : {}),
-    id: job.fighterId, owner: job.owner, status: charStatusOf(job), stage: job.stage, error: job.error,
+    id: job.fighterId, owner: job.owner, status: charStatusOf(job), stage: job.stage, error: playerError(job),
     name: job.result?.name ?? null, tagline: job.result?.tagline ?? null, description: job.result?.description ?? null,
     drawingUrl: drawingUrlOf(job.fighterId), bundleUrl: job.result?.bundleUrl ?? null, sheetUrl: job.result?.sheetUrl ?? null,
     createdAt: job.createdAt, origin: job.origin, public: job.public,

@@ -193,7 +193,7 @@ try {
   await signIn(dee, "Dee");
   await drawOne(dee, 4);
   const claimed = await (await fetch(`${server}/api/forge/jobs/next`, { headers: { "x-forge-token": TOKEN } })).json();
-  await fetch(`${server}/api/forge/jobs/${claimed.id}/fail`, { method: "POST", headers: { "x-forge-token": TOKEN, "content-type": "application/json" }, body: JSON.stringify({ error: "The forge couldn't make this one work. Sorry!" }) });
+  await fetch(`${server}/api/forge/jobs/${claimed.id}/fail`, { method: "POST", headers: { "x-forge-token": TOKEN, "content-type": "application/json" }, body: JSON.stringify({ error: "couldn't make this one work. Sorry!" }) });
   await dee.waitForTimeout(3500);
   const left = (await forgeOf(dee)).left;
   await click(dee, 210, 315);

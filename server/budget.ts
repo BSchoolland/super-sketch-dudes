@@ -166,10 +166,10 @@ export function standing(player: Player, ip: string, jobs: readonly BudgetJob[],
 }
 
 const REFUSALS: Record<NonNullable<ForgeStanding["wall"]>, string> = {
-  day: "that's all your forges for today",
-  guest: "guests get one forge: sign in to draw more",
-  network: "guests on this network have used today's forges: sign in to draw more",
-  waiting: "the forge is resting and your drawing is already waiting for it",
+  day: "that's all your new characters for today",
+  guest: "guests get one new character: sign in to draw more",
+  network: "guests on this network have made today's characters: sign in to draw more",
+  waiting: "new characters are paused and your drawing is already waiting in line",
 };
 
 /** May this player send a drawing now: the allowance it draws on, or why not. */

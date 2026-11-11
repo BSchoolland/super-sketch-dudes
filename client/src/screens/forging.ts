@@ -104,9 +104,9 @@ export class ForgeScreen implements Screen {
     inkRect(ctx, x, y, w, h, INK, 2);
     const dots = ".".repeat(1 + (Math.floor(this.t * 2) % 3));
     const resting = e.status === "queued" ? myLibrary.forge?.resting : null;
-    label(ctx, `${resting ? "Waiting for the forge" : step.label}${dots}`, VIEW_W / 2, y + h + 50, 34, e.status === "queued" ? PENCIL : INK);
+    label(ctx, `${resting ? "Waiting in line" : step.label}${dots}`, VIEW_W / 2, y + h + 50, 34, e.status === "queued" ? PENCIL : INK);
     const eta = forgeEta(e);
-    const below = resting ? (resting.until ? `it opens again ${forgeOpens(resting.until)}` : resting.reason!) : eta !== null ? etaWords(eta) : "";
+    const below = resting ? (resting.until ? `back ${forgeOpens(resting.until)}` : resting.reason!) : eta !== null ? etaWords(eta) : "";
     if (below) label(ctx, below, VIEW_W / 2, y + h + 92, 26, PENCIL);
   }
 

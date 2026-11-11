@@ -79,7 +79,7 @@ export class DescribeScreen implements Screen {
     const buttons = this.buttons();
     this.menu.draw(ctx, buttons);
     const resting = myLibrary.forge?.resting;
-    if (resting) label(ctx, `The forge is resting: this one waits in line until it opens${resting.until ? ` ${forgeOpens(resting.until)}` : ""}`, FORM_X, 960, 24, PENCIL, "left");
+    if (resting) label(ctx, `New characters are paused: this one waits in line until they're back${resting.until ? ` ${forgeOpens(resting.until)}` : ""}`, FORM_X, 960, 24, PENCIL, "left");
     if (this.problem) label(ctx, this.problem, VIEW_W / 2, VIEW_H - 40, 28, RED);
   }
 
