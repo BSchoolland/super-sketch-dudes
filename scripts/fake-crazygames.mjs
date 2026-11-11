@@ -3,7 +3,7 @@
 // then the server with DEV_LOGIN=1, CRAZYGAMES_JWKS pointed at it and the same game id:
 //   node scripts/fake-crazygames.mjs 3498 test-game
 //   DEV_LOGIN=1 CRAZYGAMES_JWKS=http://127.0.0.1:3498/.well-known/jwks.json CRAZYGAMES_GAME_ID=test-game npx tsx server/index.ts
-// then open http://localhost:5175/sketch-battle/?crazygames=stub&cgapi=http://127.0.0.1:3498&user=Ann_Stub
+// then open http://localhost:5175/?crazygames=stub&cgapi=http://127.0.0.1:3498&user=Ann_Stub
 import http from "node:http";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";

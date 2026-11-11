@@ -390,7 +390,7 @@ on a dev build, against a DEV_LOGIN server whose `DISCORD_API` is `scripts/fake-
 ## CrazyGames
 
 The same page runs inside CrazyGames (`client/src/crazygames.ts`), framed from our own URL,
-`https://bschoolland.dev/sketch-battle/crazygames` (the server sends index.html for `/crazygames`). It is not uploaded
+`https://supersketchdudes.com/crazygames` (the server sends index.html for `/crazygames`). It is not uploaded
 as a zip: a copy on CrazyGames' CDN would lag every push to master, and a stale sim in a room with the website's is a
 desync; framed, it is always the build the website runs, with the API and relay on its own origin (no CORS, no
 WebSocket origin rules). Only that path loads CrazyGames' HTML5 SDK v3; after `init` the SDK says where it is:
@@ -419,7 +419,7 @@ else, which plays the website with a warning on the session event).
 dev build (`&user=`, `&login=`, `&instantJoin=true`, an invite's `&czy_invite=true&czy_invite_params=room%3D<code>`),
 against a DEV_LOGIN server whose `CRAZYGAMES_JWKS` is `scripts/fake-crazygames.mjs`. The real SDK's local mode works
 too: a dev server with `CRAZYGAMES_GAME_ID=yourGameId` (its demo tokens are signed with CrazyGames' real key for that
-id) and `http://localhost:5175/sketch-battle/crazygames` signs in as its User1 (`?token_response=user2|logged_out`).
+id) and `http://localhost:5175/crazygames` signs in as its User1 (`?token_response=user2|logged_out`).
 `node scripts/crazygames-preflight.mjs` checks the live URL before submitting it.
 
 ## Wide events

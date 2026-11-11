@@ -5,10 +5,10 @@
 //   3. a browser reaches the title as a guest (the SDK forced into its local mode, logged out), with the bytes and
 //      seconds it took, against CrazyGames' limits: 50 MB initial download (20 MB for the mobile homepage), 20 s
 // Step 3 makes one guest on that server (swept after 7 days).
-// Usage: node scripts/crazygames-preflight.mjs [url]   (default https://bschoolland.dev/sketch-battle/crazygames)
+// Usage: node scripts/crazygames-preflight.mjs [url]   (default https://supersketchdudes.com/crazygames)
 import { chromium } from "playwright";
 
-const url = process.argv[2] ?? "https://bschoolland.dev/sketch-battle/crazygames";
+const url = process.argv[2] ?? "https://supersketchdudes.com/crazygames";
 const problems = [];
 const say = (ok, line) => { console.log(`${ok ? "ok  " : "FAIL"} ${line}`); if (!ok) problems.push(line); };
 

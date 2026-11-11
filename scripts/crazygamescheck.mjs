@@ -24,7 +24,7 @@ const SERVER_PORT = Number(process.env.SERVER_PORT ?? 3431), VITE_PORT = Number(
 const shotsAt = process.argv.indexOf("--shots");
 const shots = shotsAt > 0 ? process.argv[shotsAt + 1] : null;
 const data = fs.mkdtempSync(path.join(os.tmpdir(), "crazygamescheck-"));
-const origin = `http://localhost:${VITE_PORT}`, base = `${origin}/sketch-battle/`;
+const origin = `http://localhost:${VITE_PORT}`, base = `${origin}/`;
 const children = [];
 const fail = (message) => { throw new Error(message); };
 const ACCOUNT_KEY = "sketchbattle.crazygames.account";
@@ -98,7 +98,7 @@ try {
     await p.evaluate((id) => { const s = window.sketchbattle.screen; s.sel = s.items.findIndex((i) => i.id === id); }, id);
     await press(p, "Enter");
   }
-  const pickHouse = (p, id) => p.evaluate((id) => window.sketchbattle.screen.pick({ id, name: id.toUpperCase(), bundleUrl: `/sketch-battle/house/${id}/bundle.json?v=${window.sketchbattle.build}`, house: true, entry: null }), id);
+  const pickHouse = (p, id) => p.evaluate((id) => window.sketchbattle.screen.pick({ id, name: id.toUpperCase(), bundleUrl: `/house/${id}/bundle.json?v=${window.sketchbattle.build}`, house: true, entry: null }), id);
   const inLobby = (p, n) => p.waitForFunction((n) => window.sketchbattle?.screen?.lobbyDebug?.()?.members.length === n, n, { timeout: 20000 });
   const SIGN_IN = [1920 - 40 - 110, 30 + 38];
 
@@ -116,9 +116,9 @@ try {
   await shot(bea, "01-title-guest");
   const [popup] = await Promise.all([bea.waitForEvent("popup"), tap(bea, 22 + 30, 1080 - 20)]);
   await popup.waitForLoadState();
-  if (new URL(popup.url()).pathname !== "/sketch-battle/privacy") fail(`privacy opened ${popup.url()}`);
+  if (new URL(popup.url()).pathname !== "/privacy") fail(`privacy opened ${popup.url()}`);
   const links = await popup.evaluate(() => [...document.querySelectorAll("a")].map((a) => a.href));
-  if (links.some((href) => !href.startsWith("mailto:") && !/\/sketch-battle\/(privacy|terms)\?from=crazygames$/.test(href))) fail(`the privacy page from CrazyGames links ${links.join(", ")}`);
+  if (links.some((href) => !href.startsWith("mailto:") && !/\/(privacy|terms)\?from=crazygames$/.test(href))) fail(`the privacy page from CrazyGames links ${links.join(", ")}`);
   if (shots) await popup.screenshot({ path: path.join(shots, "01b-privacy-from-crazygames.png"), fullPage: true });
   if (!(await screen(bea))) fail("clicking privacy navigated the game away");
   await popup.close();
