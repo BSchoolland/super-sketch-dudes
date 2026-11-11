@@ -103,15 +103,19 @@ api.use(requestErrors());
 const clientDir = fs.existsSync(path.join(root, "dist", "client")) ? path.join(root, "dist", "client") : path.join(root, "client");
 // house fighters keep their URLs across builds, so they revalidate (ETag) instead of sitting in the browser cache
 const staticOpts = { maxAge: "1h", setHeaders: (res: express.Response, p: string) => { if (p.endsWith(".html") || p.includes(`${path.sep}house${path.sep}`)) res.setHeader("Cache-Control", "no-cache"); } };
+// the game's old host: its page sends the browser to the new home (the static files below would serve index.html for /)
+app.get(["/", "/index.html", BASE, `${BASE}/`, `${BASE}/index.html`], (req, res, next) => {
+  if (req.get("x-forwarded-host") !== OLD_HOST) return next();
+  const q = req.originalUrl.indexOf("?");
+  res.setHeader("Cache-Control", "no-cache");
+  res.type("html").send(oldHostPage(q < 0 ? "" : req.originalUrl.slice(q)));
+});
 app.use(BASE, express.static(clientDir, staticOpts));
 app.use("/", express.static(clientDir, staticOpts));
 // Discord sends the signed-in browser back to /auth with the token in the URL fragment; the game page handles it.
 // /discord is where the Discord Activity's root URL mapping points (ARCHITECTURE.md, Discord Activity).
 const pages = ["/auth", "/discord", "/discord/"].flatMap((p) => [p, `${BASE}${p}`]);
-app.get(["/", BASE, `${BASE}/`, ...pages], (req, res) => {
-    if (req.get("x-forwarded-host") === OLD_HOST && !req.path.endsWith("/auth")) return res.type("html").send(oldHostPage(req.originalUrl.includes("?") ? req.originalUrl.slice(req.originalUrl.indexOf("?")) : ""));
-    res.sendFile(path.join(clientDir, "index.html"));
-  });
+app.get(["/", BASE, `${BASE}/`, ...pages], (_req, res) => res.sendFile(path.join(clientDir, "index.html")));
 // the privacy notice and terms: plain pages beside the game (privacy.html is the URL Google's consent screen has)
 for (const page of ["privacy", "terms"]) app.get([`/${page}`, `${BASE}/${page}`], (_req, res) => res.sendFile(path.join(clientDir, `${page}.html`)));
 
