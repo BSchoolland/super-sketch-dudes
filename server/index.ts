@@ -21,6 +21,7 @@ import { iceConfigured } from "./ice";
 import { restoreHandoff, saveHandoff } from "./handoff";
 import { sweepGuests } from "./guests";
 import { OLD_HOST, oldHostPage } from "./oldhost";
+import { attachHome } from "./home";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
@@ -110,6 +111,7 @@ app.get(["/", "/index.html", BASE, `${BASE}/`, `${BASE}/index.html`], (req, res,
   res.setHeader("Cache-Control", "no-cache");
   res.type("html").send(oldHostPage(q < 0 ? "" : req.originalUrl.slice(q)));
 });
+attachHome(app, { base: BASE, genDir });
 app.use(BASE, express.static(clientDir, staticOpts));
 app.use("/", express.static(clientDir, staticOpts));
 // Discord sends the signed-in browser back to /auth with the token in the URL fragment; the game page handles it.

@@ -32,6 +32,7 @@ export default defineConfig({
   server: {
     port: 5175,
     proxy: {
+      "^/play/home/(fighters/.*)?$": { target: serverTarget },
       "/play/api": { target: serverTarget, rewrite: (p) => p.replace(/^\/play/, "") },
       "/play/gen": { target: serverTarget },
       "/play/games": { target: serverTarget },

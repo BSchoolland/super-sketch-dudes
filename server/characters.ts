@@ -1,14 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import type express from "express";
-import { COMMUNITY_PAGE, COMMUNITY_SORTS, bestScore, DRAW_PNG_MAX_BYTES, HINT_DESCRIPTION_MAX, HINT_NAME_MAX, FEATURED, FEATURED_PER_CREATOR, type CommunityCharacter, type FeaturedCharacter } from "../shared/account";
+import { COMMUNITY_PAGE, COMMUNITY_SORTS, DRAW_PNG_MAX_BYTES, HINT_DESCRIPTION_MAX, HINT_NAME_MAX, FEATURED, FEATURED_PER_CREATOR, type CommunityCharacter, type FeaturedCharacter } from "../shared/account";
 import { playerOf } from "./auth";
 import type { WideEvent } from "../shared/wide";
 import type { LibraryEntry } from "../shared/account";
 import { drawingUrlOf, enqueueJob, entryOf, jobOf, newFighterId, retryJob, reviseCharacter, standingOf, storeCharacter } from "./forge";
 import { admit, resetAllowance, staffIds } from "./budget";
 import { clientIp } from "./school";
-import { isListed, communityCharacters, bestIds, setBest, lookOf, setLooks, dummyEntry, everyCharacter, findCharacter, libraryOf, removeCharacter, saveCharacter, savedOf, setDummy, setPublic, setStarters, starterEntries, starterIds, setHeld, takeDown, unsaveCharacter, upsertCharacter } from "./library";
+import { isListed, communityCharacters, rankedCommunity, bestIds, setBest, setLooks, dummyEntry, everyCharacter, findCharacter, libraryOf, removeCharacter, saveCharacter, savedOf, setDummy, setPublic, setStarters, starterEntries, starterIds, setHeld, takeDown, unsaveCharacter, upsertCharacter } from "./library";
 import { HOUSE_ROSTER } from "../shared/house";
 
 /** The character creator and the library, over HTTP, for signed-in players. */
@@ -56,10 +56,7 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
     const saved = new Set(caller ? savedOf(caller).map((e) => e.id) : []);
     const q = typeof req.query.q === "string" ? req.query.q.trim().toLowerCase() : "";
     const picks = bestIds();
-    const pick = (id: string): number => { const i = picks.indexOf(id); return i < 0 ? picks.length : i; };
-    const score = (c: ReturnType<typeof communityCharacters>[number]): number => bestScore(c.saves, lookOf(c.entry.id));
-    const all = communityCharacters().filter(({ entry }) => !q || (entry.name ?? "").toLowerCase().includes(q))
-      .sort((a, b) => (sort === "best" ? pick(a.entry.id) - pick(b.entry.id) || score(b) - score(a) : 0) || b.entry.createdAt - a.entry.createdAt);
+    const all = rankedCommunity(sort).filter(({ entry }) => !q || (entry.name ?? "").toLowerCase().includes(q));
     const characters = all.slice(page * COMMUNITY_PAGE, (page + 1) * COMMUNITY_PAGE).map((c) => asCommunity(c, caller, saved, picks));
     res.json({ characters, pages: Math.ceil(all.length / COMMUNITY_PAGE), picker: staffIds().has(caller) });
   });

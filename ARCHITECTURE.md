@@ -74,6 +74,12 @@ decision rule and reputation (moderation.ts, logged to moderation.jsonl with `na
 to wait; nothing is approved without them. `/forge/names/take-down {player}` gives a player a made-up name. The relay
 shows a room member by their session's name (`{ t: "name", session }`), never one the page claims.
 `node scripts/namecheck.mjs` walks it in real pages against `scripts/fake-name-judge.mjs`.
+## The landing page
+
+https://supersketchdudes.com/ is `<base>home/`: Apache proxies the whole domain there. `server/home.ts` renders it on
+each request with a strip of COMMUNITY's BEST (one per creator, listed characters only, their idle cells served at
+`home/fighters/<id>.png`); every word on it is in `server/home-copy.ts`. Its files are `client/public/home/`, all
+reached by relative URLs so they work at both addresses; PLAY and the privacy and terms links go to the game.
 
 ## Community characters
 

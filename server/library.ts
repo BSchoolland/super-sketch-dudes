@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { GAME_VERSION, LOOK_MAX, isGuest, type LastPlayed, type LibraryEntry, type News, type Player } from "../shared/account";
+import { GAME_VERSION, LOOK_MAX, bestScore, isGuest, type CommunitySort, type LastPlayed, type LibraryEntry, type News, type Player } from "../shared/account";
 import { FRESH_MS, compareVersions, releasesSince, type Fresh } from "../shared/releases";
 
 /**
@@ -229,6 +229,13 @@ export function communityCharacters(): { entry: LibraryEntry; creator: Player | 
   return [...cache.values()].flatMap((lib) => lib.characters
     .filter((c) => c.status === "ready" && c.bundleUrl && isListed(c) && !c.deleted && !starters.includes(c.id))
     .map((entry) => ({ entry, creator: lib.player, plays: playCount(entry.id), saves: saveCount(entry.id) })));
+}
+
+/** COMMUNITY in a sort's order: BEST leads with the picks, newest pick first, then by `bestScore`; NEWEST by creation. */
+export function rankedCommunity(sort: CommunitySort): ReturnType<typeof communityCharacters> {
+  const pick = (id: string): number => { const i = best.indexOf(id); return i < 0 ? best.length : i; };
+  const score = (c: ReturnType<typeof communityCharacters>[number]): number => bestScore(c.saves, lookOf(c.entry.id));
+  return communityCharacters().sort((a, b) => (sort === "best" ? pick(a.entry.id) - pick(b.entry.id) || score(b) - score(a) : 0) || b.entry.createdAt - a.entry.createdAt);
 }
 
 /** Every library into the cache, once; from then on every owner is in it (new ones arrive through upsertCharacter). */
