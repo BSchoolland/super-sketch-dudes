@@ -1,5 +1,5 @@
 import { site } from "./base";
-import { DISCORD_APP_ID, GAME_VERSION, GOOGLE_CLIENT_ID, SESSION_HEADER, type CommunityCharacter, type CommunitySort, type FeaturedCharacter, type ForgeStanding, type LastPlayed, type News, type Player, type LibraryEntry, isGuest } from "../../shared/account";
+import { DISCORD_APP_ID, GAME_VERSION, GOOGLE_CLIENT_ID, SESSION_HEADER, type CommunityCharacter, type CommunitySort, type FeaturedCharacter, type ForgeStanding, type LastPlayed, type NameStanding, type News, type Player, type LibraryEntry, isGuest } from "../../shared/account";
 import { FRESH_MS, releasesSince, type Fresh, type Release } from "../../shared/releases";
 import { sessionTrace } from "./telemetry/events";
 
@@ -163,9 +163,20 @@ export async function activitySignIn(code: string): Promise<void> {
 }
 
 /** An account picks the name other players see. */
-export async function rename(name: string): Promise<void> {
-  account.player = (await ask<{ player: Player }>("/me/name", { name }, "renaming")).player;
-  save();
+/** Asks for a new name: it waits for the moderator, and they keep the one they have until it's approved. */
+export async function requestName(name: string): Promise<NameStanding> {
+  return keepName(await ask<NameStanding>("/me/name", { name }, "asking for a name"));
+}
+
+/** Where their name stands; an approved name arrives here. */
+export async function nameStanding(): Promise<NameStanding> {
+  return keepName(await api<NameStanding>("/me/name"));
+}
+
+function keepName(s: NameStanding): NameStanding {
+  if (account.player?.id !== s.player.id) throw new Error(`asked about ${account.player?.id}'s name, got ${s.player.id}'s`);
+  if (account.player.name !== s.player.name) { account.player = s.player; save(); }
+  return s;
 }
 
 function endSession(token: string): void {

@@ -23,21 +23,25 @@ export function attachModeration(dataDir: string): void {
 export const reputationOf = (player: string): number => scores[player] ?? START;
 
 export const BLOCKED_ERROR = "Auto moderator blocked your character";
+export const blockedError = (flags: Flag[]): string => `${BLOCKED_ERROR} for reason: ${[...new Set(flags)].map((f) => FLAG_LABELS[f]).join(", ")}`;
 
-/** `held`: flagged but let through, so kept out of COMMUNITY until Ben releases it. */
-export interface Decision { blocked: boolean; held: boolean; error: string | null; before: number; after: number }
+/** `held`: flagged but let through (a drawing is kept out of COMMUNITY until Ben releases it). `flags`: what the judges flagged. */
+export interface Decision<F extends string = Flag> { blocked: boolean; held: boolean; flags: F[]; before: number; after: number }
 
-/** Applies one submission's judgements to its player's reputation, and says whether it may go to the forge. */
-export function decide(player: string, fighterId: string, j: Judgements): Decision {
-  const flags = [j.harsh, j.lenient].map((x) => x.verdict).filter((v): v is Flag => v !== "pass");
+/** What was judged: a drawing (and the name on it) or a name a player asked to go by. */
+export type Subject = { fighterId: string } | { name: string };
+
+/** Applies one submission's judgements to its player's reputation, and says whether it is blocked. */
+export function decide<V extends string>(player: string, subject: Subject, j: Judgements<V>): Decision<Exclude<V, "pass">> {
+  const flags = [j.harsh, j.lenient].map((x) => x.verdict).filter((v): v is Exclude<V, "pass"> => v !== "pass");
   const before = reputationOf(player);
   const blocked = flags.length === 2 || (flags.length === 1 && before < TRUSTED);
+  const held = flags.length > 0 && !blocked;
   const after = Math.max(0, Math.min(MAX, before + [BOTH_PASS, ONE_FLAG, BOTH_FLAG][flags.length]));
   scores[player] = after;
   fs.writeFileSync(scoresFile, JSON.stringify(scores, null, 1));
-  const error = blocked ? `${BLOCKED_ERROR} for reason: ${[...new Set(flags)].map((f) => FLAG_LABELS[f]).join(", ")}` : null;
-  fs.appendFileSync(logFile, JSON.stringify({ at: Date.now(), player, fighterId, ...j, blocked, held: flags.length > 0 && !blocked, before, after }) + "\n");
-  return { blocked, held: flags.length > 0 && !blocked, error, before, after };
+  fs.appendFileSync(logFile, JSON.stringify({ at: Date.now(), player, ...subject, ...j, blocked, held, before, after }) + "\n");
+  return { blocked, held, flags, before, after };
 }
 
 /** A guest signing in keeps the lower of their two reputations; `to` null drops the guest's score. */

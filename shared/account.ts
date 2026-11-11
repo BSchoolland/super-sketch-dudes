@@ -23,6 +23,11 @@ export interface Player {
 /** The longest a player's name can be. */
 export const NAME_MAX = 14;
 
+/** A name an account asked to go by: waiting for the moderator's judges, or refused by them (`reason` is for the player). */
+export type NameRequest = { name: string; status: "waiting" } | { name: string; status: "refused"; reason: string };
+/** GET /me/name: who they are now, their request, and whether the judges are up to check a waiting one. */
+export interface NameStanding { player: Player; request: NameRequest | null; checkerUp: boolean }
+
 /** Guests play without an account; their characters stay out of COMMUNITY until they sign in. */
 export const isGuest = (id: string): boolean => id.startsWith("guest-");
 

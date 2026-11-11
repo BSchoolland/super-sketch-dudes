@@ -1,11 +1,11 @@
-// Where the forge tells Ben: flagged characters, unjudged ones and sheet fallbacks go to a Discord channel through BenBot.
+// Where the forge tells Ben: flagged characters and names, unjudged ones and sheet fallbacks go to a Discord channel through BenBot.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
-import type { Judgements } from "../shared/moderation";
+import type { Judgements, NameVerdict } from "../shared/moderation";
 
 const run = promisify(execFile);
 const BENBOT = path.join(os.homedir(), "Projects/benbot/scripts");
@@ -46,6 +46,16 @@ export async function alertFlagged(s: Submission, j: Judgements, d: { blocked: b
     `lenient: **${j.lenient.verdict}**: ${j.lenient.reason}`,
     `${d.blocked ? "🚫 BLOCKED" : d.held ? "⏸ forging, held out of Community: @BenBot release or take it down" : "✅ went through"} · reputation ${d.before} → ${d.after}`,
   ].join("\n"));
+}
+
+/** A name at least one judge flagged, whatever came of it. */
+export async function alertFlaggedName(n: { player: string; playerName: string | null; name: string }, j: Judgements<NameVerdict>, d: { blocked: boolean; before: number; after: number }): Promise<void> {
+  await run(SEND, [config().channel, "--", [
+    `name **${n.name}** asked for by ${n.playerName ?? "?"} · \`${n.player}\``,
+    `harsh: **${j.harsh.verdict}**: ${j.harsh.reason}`,
+    `lenient: **${j.lenient.verdict}**: ${j.lenient.reason}`,
+    `${d.blocked ? "🚫 REFUSED" : "✅ approved: POST /api/forge/names/take-down {\"player\"} gives them a made-up name"} · reputation ${d.before} → ${d.after}`,
+  ].join("\n")]);
 }
 
 /** The judges couldn't run, so the character is going to the forge unjudged: Ben hears now. */

@@ -4,7 +4,9 @@ import type { MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
 import { setMusicVolume, setVolume, sfx } from "../audio/audio";
 import { bg, card, hint, label, backButton, goTo, type Screen, INK, MAYHEM, settings, saveSettings } from "./ui";
-import { account, playingAsGuest } from "../account";
+import { account, nameStanding, playingAsGuest } from "../account";
+import type { NameRequest } from "../../../shared/account";
+import { RED } from "./character";
 import { ButtonMenu, type Button } from "./buttons";
 import { drawTabs, otherTabButton, type Tabs } from "./tabs";
 import { ControlsPage } from "./controls";
@@ -37,7 +39,15 @@ export class SettingsScreen implements Screen {
       about: () => `${settings.extraStages ? "Four painted stages in the stage list" : "ON adds four painted stages"}: Stadium, Forest, Cliffs, Final Draft`,
     },
   ];
-  constructor(private onBack: () => Screen, private onSignOut: () => Screen) {}
+  /** The name they asked for, while it's being checked or for a day after it was refused. */
+  private nameRequest: NameRequest | null = null;
+  constructor(private onBack: () => Screen, private onSignOut: () => Screen) {
+    this.checkName();
+  }
+
+  private checkName(): void {
+    if (account.player && !playingAsGuest()) nameStanding().then((st) => { this.nameRequest = st.request; }, (error: unknown) => console.error("checking on a name failed", error));
+  }
 
   private buttons(): Button[] {
     const b: Button[] = this.rows.map((r, i) => ({
@@ -45,8 +55,10 @@ export class SettingsScreen implements Screen {
       step: (d) => { r.step(d); saveSettings(); },
     }));
     // a guest signing out would lose everything they made
-    // CHANGE NAME is off until typed names go past the moderator: players see each other's names
-    if (!playingAsGuest()) b.push({ id: "signout", x: VIEW_W / 2 - ACCOUNT.w / 2, y: ACCOUNT.y, w: ACCOUNT.w, h: ACCOUNT.h, text: "SIGN OUT", size: 32 });
+    if (!playingAsGuest()) b.push(
+      { id: "name", x: VIEW_W / 2 - ACCOUNT.w - ACCOUNT.gap / 2, y: ACCOUNT.y, w: ACCOUNT.w, h: ACCOUNT.h, text: "CHANGE NAME", size: 32 },
+      { id: "signout", x: VIEW_W / 2 + ACCOUNT.gap / 2, y: ACCOUNT.y, w: ACCOUNT.w, h: ACCOUNT.h, text: "SIGN OUT", size: 32 },
+    );
     b.push(otherTabButton(TABS, this.tab));
     return b;
   }
@@ -62,7 +74,7 @@ export class SettingsScreen implements Screen {
     }
     const pressed = this.menu.update(this.buttons(), m, taps);
     if (pressed === "tab") { sfx.menuConfirm(); this.tab = "controls"; this.controls.show(taps.length ? null : m.from); }
-    if (pressed === "name") return new RenameScreen(() => this);
+    if (pressed === "name") return new RenameScreen(() => { this.checkName(); return this; });
     if (pressed === "signout") { sfx.menuBack(); return this.onSignOut(); }
     if (m.back) { sfx.menuBack(); return this.onBack(); }
     return null;
@@ -86,7 +98,11 @@ export class SettingsScreen implements Screen {
       });
       const about = this.rows.find((r) => r.id === focused?.id)?.about?.();
       if (about) label(ctx, about, VIEW_W / 2, ROW.top + this.rows.length * ROW.gap + 26, 26, INK, "center");
-      if (account.player && !playingAsGuest()) label(ctx, `signed in as ${account.player.name}`, VIEW_W / 2, ACCOUNT.y - 24, 26, PENCIL, "center", 600);
+      if (account.player && !playingAsGuest()) {
+        const asked = this.nameRequest, refused = asked?.status === "refused";
+        const line = `signed in as ${account.player.name}${asked ? (refused ? ` · "${asked.name}" wasn't allowed` : ` · "${asked.name}" being checked`) : ""}`;
+        label(ctx, line, VIEW_W / 2, ACCOUNT.y - 24, 26, refused ? RED : PENCIL, "center", 600);
+      }
       this.menu.draw(ctx, buttons);
     }
     if (backButton(ctx) && !this.controls.busy) { sfx.menuBack(); goTo(this.onBack()); }

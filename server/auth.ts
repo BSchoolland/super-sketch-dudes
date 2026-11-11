@@ -2,14 +2,16 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import type express from "express";
-import { DISCORD_APP_ID, GOOGLE_CLIENT_ID, SESSION_HEADER, isGuest, type LastPlayed, type News, type Player } from "../shared/account";
+import { DISCORD_APP_ID, GOOGLE_CLIENT_ID, SESSION_HEADER, isGuest, type LastPlayed, type NameStanding, type News, type Player } from "../shared/account";
 import type { WideEvent } from "../shared/wide";
 import { markPlayed, nameOf, renamePlayer, seeNews } from "./library";
 import { adoptGuest, newGuest } from "./guests";
 import { clientIp } from "./school";
 import { randomName, typedName } from "./names";
+import { badWordIn } from "./name-filter";
 import { renameMapsOf } from "./maps";
 import { renameJobsOf } from "./forge";
+import { checkerUp, loadNameRequests, nameRequestOf, requestName } from "./name-requests";
 
 /**
  * Sign-in: the browser does Discord's implicit OAuth grant (no client secret), gets an access
@@ -26,7 +28,7 @@ import { renameJobsOf } from "./forge";
  * `botKey`: a secret that lets the bench's bots sign in as bot accounts (ids `bot-…`, never a real player's); unset, no bot login.
  * `discord.api`: Discord's API base (a fake one in tests); `discord.clientSecret`: the app's, for the Activity's code exchange.
  */
-export interface AuthOptions { dataDir: string; devLogin: boolean; botKey: string | null; discord: { api: string; clientSecret: string | null }; /** Players may type their own name (off until typed names are moderated). */ namesOpen?: boolean }
+export interface AuthOptions { dataDir: string; devLogin: boolean; botKey: string | null; discord: { api: string; clientSecret: string | null } }
 
 const sessions = new Map<string, { player: Player; at: number }>();
 let file = "";
@@ -93,9 +95,22 @@ function issue(arriving: Player, req: express.Request, res: express.Response): {
 
 const cleanName = (s: unknown): string => typedName(s) || "someone";
 
+/** Puts a player's new name everywhere it shows: their record, sessions, account, maps and unfinished jobs. */
+export function applyName(id: string, name: string): Player {
+  const renamed = renamePlayer(id, name);
+  let changed = false;
+  for (const s of sessions.values()) if (s.player.id === id) { s.player = renamed; changed = true; }
+  if (changed) save();
+  for (const a of accounts.values()) if (a.player.id === id) { a.player = renamed; saveAccounts(); }
+  renameMapsOf(renamed);
+  renameJobsOf(renamed);
+  return renamed;
+}
+
 export function attachAuth(api: express.Router, opts: AuthOptions): void {
   file = path.join(opts.dataDir, "sessions.json");
   if (fs.existsSync(file)) for (const [k, v] of JSON.parse(fs.readFileSync(file, "utf8"))) sessions.set(k, v);
+  loadNameRequests(opts.dataDir);
   accountsFile = path.join(opts.dataDir, "accounts.json");
   if (fs.existsSync(accountsFile)) for (const [k, v] of JSON.parse(fs.readFileSync(accountsFile, "utf8"))) accounts.set(k, v);
 
@@ -161,11 +176,19 @@ export function attachAuth(api: express.Router, opts: AuthOptions): void {
     if (!EMAIL.test(email)) return res.status(400).json({ error: "that doesn't look like an email" });
     if (password.length < PASSWORD_MIN || password.length > PASSWORD_MAX) return res.status(400).json({ error: `password needs ${PASSWORD_MIN}+ characters` });
     if (accounts.has(email)) return res.status(409).json({ error: "that email already has an account" });
+    // the name they typed waits for the moderator like any other; until then it's one we pick
+    const wanted = typedName(req.body?.name);
+    if (wanted && badWordIn(wanted)) return res.status(400).json({ error: "That name isn't allowed. Try another." });
     const salt = crypto.randomBytes(16).toString("base64");
-    const player: Player = { id: `email-${crypto.randomBytes(9).toString("hex")}`, name: cleanName(req.body?.name), avatar: null };
+    const player: Player = { id: `email-${crypto.randomBytes(9).toString("hex")}`, name: randomName(), avatar: null };
     accounts.set(email, { player, salt, hash: await hashPassword(password, salt) });
     saveAccounts();
-    res.json(issue(player, req, res));
+    const signedUp = issue(player, req, res);
+    if (wanted && wanted !== signedUp.player.name) {
+      const asked = requestName(signedUp.player, wanted);
+      if ("error" in asked) throw new Error(`a new account's name request was refused after the filter passed it: ${asked.error}`);
+    }
+    res.json(signedUp);
   });
 
   // a browser's first visit; a busy school network shares one address, so the cap is generous
@@ -212,21 +235,21 @@ export function attachAuth(api: express.Router, opts: AuthOptions): void {
     res.json({ player });
   });
 
-  // an account picks the name everyone sees: on their characters, their maps and in rooms
+  // an account asks for the name everyone sees (on their characters, their maps and in rooms); the moderator decides
+  api.get("/me/name", (req, res) => {
+    const player = playerOf(req);
+    if (!player) return res.status(401).json({ error: "not signed in" });
+    res.json({ player, request: nameRequestOf(player.id), checkerUp: checkerUp() } satisfies NameStanding);
+  });
   api.post("/me/name", (req, res) => {
     const player = playerOf(req);
     if (!player) return res.status(401).json({ error: "not signed in" });
     if (isGuest(player.id)) return res.status(403).json({ error: "sign in to pick your own name" });
-    if (!opts.namesOpen) return res.status(403).json({ error: "changing your name is switched off for now" });
     const name = typedName(req.body?.name);
     if (!name) return res.status(400).json({ error: "a name needs letters or numbers" });
-    const renamed = renamePlayer(player.id, name);
-    for (const s of sessions.values()) if (s.player.id === renamed.id) s.player = renamed;
-    save();
-    for (const a of accounts.values()) if (a.player.id === renamed.id) { a.player = renamed; saveAccounts(); }
-    renameMapsOf(renamed);
-    renameJobsOf(renamed);
-    res.json({ player: renamed });
+    const asked = requestName(player, name);
+    if ("error" in asked) return res.status(asked.status).json({ error: asked.error });
+    res.json({ player, request: asked, checkerUp: checkerUp() } satisfies NameStanding);
   });
 
   // a returning player with a saved session, opening the game

@@ -38,6 +38,14 @@ forge/
 Progress strings (shown to players on the reveal screen) come from the agent's tool calls: "drawing the
 animation", "writing the fighter", "balance testing", "final checks and upload".
 
+## A name
+
+Players' typed names come through a second poll loop, beside the jobs and never behind them: `GET /api/forge/names/next`
+(same token) gives `{ id, name, player, playerName }`; both judges run on the name alone (`moderateName`, two at a
+time, no tools but `./verdict`, a 2 min timeout) and `POST /api/forge/names/:id/verdict { harsh, lenient }` decides it.
+Judges that can't run `POST /api/forge/names/:id/release` it and the loop backs off five minutes (Ben is pinged once
+per outage). A flagged name goes to the moderation channel. Sessions are kept under `forge/runs/names/<id>/`.
+
 ## Running it
 
 `FORGE_TOKEN=... SITE=https://bschoolland.dev/sketch-battle OPENAI_API_KEY=... npx tsx forge/worker.ts`

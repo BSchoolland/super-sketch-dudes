@@ -61,6 +61,20 @@ after their last visit if they made or saved nothing, 60 if they did. Email sign
 browser only (`client/src/age.ts`); an under-13 answer is remembered in localStorage and nothing reaches the server.
 The Activity never makes guests: Discord signs everyone in. `<base>privacy` and `<base>terms` are static pages.
 
+### Player names
+
+A name a player types (SETTINGS > CHANGE NAME, or the NAME on an email signup) is a request: they keep the name they
+have (made up, or approved earlier) until the auto moderator passes the new one (`server/name-requests.ts`). The
+word filter (`server/name-filter.ts`: whole words and unambiguous stems, through leetspeak, spacing and stretching)
+refuses obvious ones on the spot. The rest wait, one per player and five a day, for the forge worker to claim
+(`GET /api/forge/names/next`, its own loop, never behind forge jobs and never counted against the forge budget) and
+judge with both judges (`moderateName` in forge/moderate.ts). `POST /forge/names/:id/verdict` applies the drawings'
+decision rule and reputation (moderation.ts, logged to moderation.jsonl with `name` instead of `fighterId`): passed,
+`applyName` (auth.ts) puts it everywhere; blocked, the player is told why for a day. Judges that can't run release it
+to wait; nothing is approved without them. `/forge/names/take-down {player}` gives a player a made-up name. The relay
+shows a room member by their session's name (`{ t: "name", session }`), never one the page claims.
+`node scripts/namecheck.mjs` walks it in real pages against `scripts/fake-name-judge.mjs`.
+
 ## Community characters
 
 A player file (`server/library.ts`) holds the player's own characters and `saved`: ids of other

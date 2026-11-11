@@ -1,12 +1,13 @@
-// The forge worker: polls the site for forge jobs, runs the forge, posts the fighter back.
+// The forge worker: polls the site for forge jobs, runs the forge, posts the fighter back; and for names players
+// asked for, which its judges decide.
 // Usage: npx tsx forge/worker.ts   (SITE, FORGE_TOKEN, OPENAI_API_KEY from the env, forge/.env or ~/.config/sketch-forge/env)
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadForgeEnv } from "./env";
 import { runForge, ForgeError, type JobSpec } from "./forge";
-import { moderate, ModerationUnavailable } from "./moderate";
-import { alertFlagged, alertUnavailable, checkAlertConfig, queueReview, type Submission } from "./mod-alerts";
+import { moderate, moderateName, ModerationUnavailable } from "./moderate";
+import { alertFlagged, alertFlaggedName, alertUnavailable, checkAlertConfig, queueReview, tellBen, type Submission } from "./mod-alerts";
 
 loadForgeEnv();
 const SITE = (process.env.SITE ?? "").replace(/\/$/, "");
@@ -88,9 +89,60 @@ async function moderated(job: Claimed, drawing: string, dir: string): Promise<"j
   return d.blocked ? "blocked" : "judged";
 }
 
+interface NameClaim { id: string; name: string; player: string; playerName: string | null }
+/** Names judged at once: each is two judges, beside the drawings' own. */
+const NAME_CONCURRENCY = 2;
+/** After the judges couldn't run, names wait this long before the next try. */
+const NAMES_BACKOFF_MS = 5 * 60_000;
+let namesDown = false, namesDownUntil = 0;
+
+/** Judges a name; nothing is approved without both judges, so judges that can't run put it back to wait. */
+async function judgeName(n: NameClaim): Promise<void> {
+  const t0 = Date.now();
+  let j;
+  try { j = await moderateName(n.name, path.join(RUNS, "names", n.id)); } catch (e) {
+    const why = e instanceof Error ? e.message : String(e);
+    log("names", `JUDGES UNAVAILABLE for "${n.name}", it waits: ${why}`);
+    await post(`/names/${n.id}/release`, { error: why });
+    namesDownUntil = Date.now() + NAMES_BACKOFF_MS;
+    if (namesDown) return;
+    namesDown = true;
+    await tellBen(`⚠️ the judges couldn't check a player name, so names are waiting (retrying every ${NAMES_BACKOFF_MS / 60_000} min): \`${why.slice(0, 300)}\``)
+      .catch((err) => log("names", `ALERT FAILED (unavailable): ${err instanceof Error ? err.message : String(err)}`));
+    return;
+  }
+  namesDown = false;
+  const d = (await (await post(`/names/${n.id}/verdict`, j)).json()) as { blocked: boolean; held: boolean; before: number; after: number };
+  log("names", `"${n.name}" for ${n.playerName}: harsh ${j.harsh.verdict}, lenient ${j.lenient.verdict} in ${((Date.now() - t0) / 1000).toFixed(0)}s, reputation ${d.before} -> ${d.after}${d.blocked ? ": REFUSED" : ""}`);
+  if (j.harsh.verdict !== "pass" || j.lenient.verdict !== "pass") await alertFlaggedName(n, j, d).catch((e) => log("names", `ALERT FAILED (flagged): ${e instanceof Error ? e.message : String(e)}`));
+}
+
+/** Names never wait behind forge jobs: their own loop, judges and slots. */
+async function pollNames(): Promise<void> {
+  let judging = 0;
+  for (;;) {
+    if (judging >= NAME_CONCURRENCY || Date.now() < namesDownUntil) { await sleep(500); continue; }
+    let n: NameClaim | null = null;
+    try {
+      const res = await api("/names/next");
+      if (res.status === 200) n = await res.json();
+      else if (res.status !== 204) log("names", `poll: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
+    } catch (e) {
+      log("names", `poll failed: ${(e as Error).message}`);
+    }
+    if (!n) { await sleep(POLL_MS); continue; }
+    judging++;
+    const claim = n;
+    void judgeName(claim)
+      .catch((e) => log("names", `FAILED judging "${claim.name}": ${e instanceof Error ? e.stack ?? e.message : String(e)}`))
+      .finally(() => judging--);
+  }
+}
+
 let running = 0;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-log("forge", `polling ${SITE} with ${CONCURRENCY} slots`);
+log("forge", `polling ${SITE} with ${CONCURRENCY} slots, and for names`);
+void pollNames();
 for (;;) {
   if (running >= CONCURRENCY) { await sleep(500); continue; }
   let job: Claimed | null = null;

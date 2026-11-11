@@ -9,7 +9,8 @@ import http from "node:http";
 import { WebSocketServer } from "ws";
 import { attachLobby } from "./lobby";
 import { attachGames } from "./games";
-import { attachAuth, playerFromSession } from "./auth";
+import { applyName, attachAuth, playerFromSession } from "./auth";
+import { attachNameJudging } from "./name-requests";
 import { initLibrary } from "./library";
 import { attachForge } from "./forge";
 import { attachCharacters } from "./characters";
@@ -52,6 +53,8 @@ if (!DISCORD_CLIENT_SECRET) console.warn("DISCORD_CLIENT_SECRET unset: nobody ca
 initLibrary(DATA_DIR);
 attachAuth(api, { dataDir: DATA_DIR, devLogin: process.env.DEV_LOGIN === "1", botKey: process.env.BOT_LOGIN_KEY || null, discord: { api: process.env.DISCORD_API ?? "https://discord.com/api", clientSecret: DISCORD_CLIENT_SECRET } });
 attachForge(api, { token: FORGE_TOKEN, dataDir: DATA_DIR, genBase: `${BASE}/gen` });
+// typed names wait for the moderator's judges, which the forge worker runs
+attachNameJudging(api, { token: FORGE_TOKEN, rename: applyName });
 attachCharacters(api, FORGE_TOKEN, DATA_DIR);
 // player-made maps, for the accounts in map-makers.json
 initMaps({ dataDir: DATA_DIR, devLogin: process.env.DEV_LOGIN === "1" });

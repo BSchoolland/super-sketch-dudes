@@ -11,8 +11,8 @@ import { STUDY_VERSION, type CpuStudy } from "../shared/cpu-study";
 import { setHeld, upsertCharacter } from "./library";
 import { finish, openEvent } from "./events";
 import type { WideEvent } from "../shared/wide";
-import { isJudgement, type Judgements } from "../shared/moderation";
-import { attachModeration, BLOCKED_ERROR, decide } from "./moderation";
+import { isJudgement, VERDICTS, type Judgements } from "../shared/moderation";
+import { attachModeration, BLOCKED_ERROR, blockedError, decide } from "./moderation";
 import { claimsBetween, claimsOf, currentBudget, ipKeyOf, loadBudget, restingOf, standing, weekOf, type Allowance, type BudgetJob } from "./budget";
 import type { ForgeStanding } from "../shared/account";
 
@@ -391,12 +391,12 @@ export function attachForge(api: express.Router, opts: ForgeOptions): void {
     if (!job || job.status !== "running") return res.status(409).json({ error: "job not running" });
     if (job.moderation) return res.status(409).json({ error: "already moderated" });
     const { harsh, lenient } = req.body ?? {};
-    if (!isJudgement(harsh) || !isJudgement(lenient)) return res.status(400).json({ error: "harsh and lenient judgements required" });
+    if (!isJudgement(harsh, VERDICTS) || !isJudgement(lenient, VERDICTS)) return res.status(400).json({ error: "harsh and lenient judgements required" });
     job.moderation = { harsh, lenient };
-    const d = decide(job.owner, job.fighterId, job.moderation);
+    const d = decide(job.owner, { fighterId: job.fighterId }, job.moderation);
     events.get(job.id)?.set("moderation", { harsh: harsh.verdict, lenient: lenient.verdict, blocked: d.blocked, held: d.held, reputation: [d.before, d.after] });
     if (d.held) setHeld(job.fighterId, true);
-    if (d.blocked) { job.blocked = true; setStatus(job, "failed", "", d.error); }
+    if (d.blocked) { job.blocked = true; setStatus(job, "failed", "", blockedError(d.flags)); }
     else changed(job);
     res.json({ blocked: d.blocked, held: d.held, before: d.before, after: d.after });
   });

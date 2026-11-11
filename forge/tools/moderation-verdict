@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# A moderation judge's one way to answer: moderation-verdict <pass|inappropriate|language|gore|other> "<reasoning>"
-case "${1:-}" in pass|inappropriate|language|gore|other) ;; *) echo "first argument must be one of: pass inappropriate language gore other" >&2; exit 2;; esac
+# A moderation judge's one way to answer: moderation-verdict <verdict> "<reasoning>", a verdict from ./verdicts
+allowed=" $(cat verdicts) "
+[[ -n "${1:-}" && "$allowed" == *" $1 "* ]] || { echo "first argument must be one of:$allowed" >&2; exit 2; }
 [ -n "${2:-}" ] || { echo "second argument: your reasoning" >&2; exit 2; }
 jq -n --arg verdict "$1" --arg reason "$2" '{verdict: $verdict, reason: $reason}' > verdict.json
 echo recorded

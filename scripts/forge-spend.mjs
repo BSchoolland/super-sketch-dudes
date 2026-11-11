@@ -35,6 +35,8 @@ for (const id of fs.readdirSync(runs)) {
 const recent = [...jobs.values()].filter((j) => j.createdAt >= since);
 const judged = execFileSync("ssh", ["ssd-server", "cat ~/sketch-battle/server-data/moderation.jsonl 2>/dev/null || true"], { encoding: "utf8" })
   .split("\n").filter(Boolean).map((l) => JSON.parse(l)).filter((d) => d.at >= since);
+// names players asked for are judged too (forge/runs/names/<request>), apart from drawings
+const names = judged.filter((d) => d.name !== undefined && d.fighterId === undefined);
 // every judge run in the window, blocked jobs included (they never write a prompt.txt)
 let judgeUsd = 0;
 for (const id of fs.readdirSync(runs)) for (const x of ["harsh", "lenient"]) {
@@ -42,10 +44,18 @@ for (const id of fs.readdirSync(runs)) for (const x of ["harsh", "lenient"]) {
   if (!fs.existsSync(log) || fs.statSync(log).mtimeMs < since) continue;
   for (const l of fs.readFileSync(log, "utf8").split("\n")) if (l.includes('"type":"result"')) judgeUsd += Number(JSON.parse(l).total_cost_usd ?? 0);
 }
+let nameJudgeUsd = 0;
+const nameRuns = path.join(runs, "names");
+for (const id of fs.existsSync(nameRuns) ? fs.readdirSync(nameRuns) : []) for (const x of ["harsh", "lenient"]) {
+  const log = path.join(nameRuns, id, `moderation-${x}`, "session.log");
+  if (!fs.existsSync(log) || fs.statSync(log).mtimeMs < since) continue;
+  for (const l of fs.readFileSync(log, "utf8").split("\n")) if (l.includes('"type":"result"')) nameJudgeUsd += Number(JSON.parse(l).total_cost_usd ?? 0);
+}
 const moderation = {
   judgeUsd: +judgeUsd.toFixed(2),
-  judged: judged.length,
-  split: judged.filter((d) => (d.harsh.verdict === "pass") !== (d.lenient.verdict === "pass")).length,
+  judged: judged.length - names.length,
+  split: judged.filter((d) => d.fighterId !== undefined).filter((d) => (d.harsh.verdict === "pass") !== (d.lenient.verdict === "pass")).length,
+  names: { judged: names.length, refused: names.filter((d) => d.blocked).length, judgeUsd: +nameJudgeUsd.toFixed(2) },
   blocked: recent.filter((j) => j.error?.startsWith("Auto moderator blocked")).map((j) => `${who(j)}: ${j.hint?.name || "(no name)"}: ${j.error.replace("Auto moderator blocked your character for reason: ", "")}`),
   // the judges couldn't run and the character was forged unjudged (fail open)
   unavailable: rows.filter((r) => ["harsh", "lenient"].some((x) => fs.existsSync(path.join(runs, r.id, `moderation-${x}`)) && !fs.existsSync(path.join(runs, r.id, `moderation-${x}`, "verdict.json")))).map((r) => `${r.player}: ${r.name}`),
