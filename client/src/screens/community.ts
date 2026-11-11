@@ -1,10 +1,10 @@
 import { VIEW_H, VIEW_W } from "../render/camera";
 import { inkLine, PENCIL } from "../render/paper";
-import type { MenuInput } from "../input/devices";
+import type { DeviceId, MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
 import { sfx } from "../audio/audio";
 import { library, seeNews } from "../account";
-import { refreshDummy, refreshLibrary } from "../fighters";
+import { practiceDummy, refreshDummy, refreshLibrary } from "../fighters";
 import { COMMUNITY_SORTS, type CommunityCharacter, type CommunitySort } from "../../../shared/account";
 import { bg, card, hover, label, title, type Screen, INK } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
@@ -30,6 +30,7 @@ export class CommunityScreen implements Screen {
   private detailMenu = new ButtonMenu();
   private sort: CommunitySort = "best";
   private picker = false;
+  private device: DeviceId = "kb1";
   private items: CommunityCharacter[] | null = null;
   private pages = 0;
   private loaded = 0;
@@ -132,6 +133,7 @@ export class CommunityScreen implements Screen {
     const y = VIEW_H - 150, w = 320, gap = 24;
     const b: Button[] = [
       { id: "save", x: 0, y, w, h: 110, text: c.mine ? "YOURS" : c.saved ? "SAVED" : "SAVE", size: 44, disabled: c.mine || this.saving },
+      { id: "practice", x: 0, y, w, h: 110, text: "PRACTICE", size: 44, disabled: !practiceDummy.choice },
       { id: "back", x: 0, y, w, h: 110, text: "BACK", size: 44 },
     ];
     if (this.picker) b.push({ id: "best", x: 0, y, w, h: 110, text: c.best ? "TAKE OFF BEST" : "PUT IN BEST", size: 32, disabled: this.saving });
@@ -157,6 +159,7 @@ export class CommunityScreen implements Screen {
 
   private step(dt: number, m: MenuInput): Screen | null {
     this.t += dt;
+    if (m.from) this.device = m.from;
     const typed = this.search?.value.trim() ?? "";
     if (typed !== this.query && this.t - this.typedAt > 0.3) { this.query = typed; this.reload(); }
     if (this.search) this.search.el.style.display = this.selected ? "none" : "";
@@ -187,6 +190,8 @@ export class CommunityScreen implements Screen {
     const pressed = this.detailMenu.update(this.detailButtons(c), m, taps);
     if (pressed === "save") this.toggleSave(c);
     if (pressed === "best") this.toggleBest(c);
+    // leaving practice comes back to this character
+    if (pressed === "practice") return this.nav.practice(c, this.device, () => this);
     if (pressed === "back" || m.back) {
       sfx.menuBack();
       this.selected = null;

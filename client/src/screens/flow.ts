@@ -53,16 +53,16 @@ export function menus(): Nav {
       // VS BOTS is a room like the others: one nobody else can find, started with a bot in it
       return new OnlineScreen(menu, entry, fighter ?? null);
     }, () => nav.title()),
-    practice: (you, device) => {
+    practice: (you, device, back) => {
       const dummy = practiceDummy.choice;
       if (!dummy) throw new Error("practice without a dummy");
       const make = (): Screen => {
         const cfg = { stage: "proving", players: [{ fighter: you.id, cpu: 0 }, { fighter: dummy.id, cpu: 0 }], rules: { stocks: 99, time: 0 }, seed: (Math.random() * 0xffffffff) >>> 0 };
-        const v = new VersusScreen(cfg, [{ device, cpu: 0 }, { device: null, cpu: 0 }], () => nav.library(), make, true);
+        const v = new VersusScreen(cfg, [{ device, cpu: 0 }, { device: null, cpu: 0 }], back, make, true);
         v.renderer.showHitboxes = false;
         return v;
       };
-      return new LoadingScreen([you.bundleUrl, dummy.bundleUrl], make, () => nav.library());
+      return new LoadingScreen([you.bundleUrl, dummy.bundleUrl], make, back);
     },
     maps: () => new MapsScreen(nav),
     mapEditor: (doc) => new MapEditorScreen(nav, doc),

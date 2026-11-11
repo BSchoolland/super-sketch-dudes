@@ -177,6 +177,7 @@ export class VersusScreen implements Screen {
     } else if (this.training && this.renderer.showHitboxes) {
       this.drawTrainingOverlay(ctx);
     }
+    if (this.training && !this.match.paused && !st.ended && button(ctx, 40, VIEW_H - 100, 200, 64, "BACK", { size: 26 })) { sfx.menuBack(); goTo(this.onExit()); }
     if (this.suddenT > 0 && !st.ended) drawBanner(ctx, "SUDDEN DEATH", "300% · one stock · first hit wins", "#ff3b3b", Math.min(1, (2.5 - this.suddenT) * 2 + 0.2));
     if (this.hookErr && !st.ended) drawBanner(ctx, this.hookErr.text, this.hookErr.detail, "#ff4d2e", Math.min(1, this.hookErr.t * 2 + 0.2));
     if (st.ended) {

@@ -131,7 +131,7 @@ export class LibraryScreen implements Screen {
 
   private updateDetail(e: LibraryEntry, m: MenuInput, taps: ReturnType<typeof consumeTaps>): Screen | null {
     const pressed = this.detailMenu.update(this.detailButtons(e), m, taps);
-    if (pressed === "practice") return this.nav.practice(libraryChoices([e])[0], this.device);
+    if (pressed === "practice") return this.nav.practice(libraryChoices([e])[0], this.device, () => this.nav.library());
     if (pressed === "copy") { sfx.menuConfirm(); this.copyDrawing(e); }
     if (pressed === "retry") this.retry(e);
     if (pressed === "public") this.flipPublic(e);
