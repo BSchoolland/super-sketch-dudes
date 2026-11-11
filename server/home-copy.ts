@@ -10,7 +10,7 @@ export const HOME_COPY = {
   name: "Super Sketch Dudes",
   pitch: "Draw anything. It becomes a fighter. Then knock your friends off the stage.",
   play: "PLAY",
-  playNote: "Free, in your browser. Keyboard or controller.",
+  playNote: "Free, in your browser. Keyboard, controller or touch.",
   clipLabel: "A stick figure with a sword is drawn, turns into a fighter and knocks out another fighter.",
 
   howTitle: "How it works",
