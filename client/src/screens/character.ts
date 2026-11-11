@@ -16,22 +16,29 @@ export type ArtSource = Pick<LibraryEntry, "id" | "status" | "bundleUrl" | "draw
  * The drawing, or once the forge is done the fighter itself idling (big enough, with the original
  * drawing pinned to its corner). Until its bundle has loaded, a ready character shows its drawing.
  */
-const FADE_MS = 250;
+const FADE_MS = 300, LOADING_ALPHA = 0.45;
 
 export function drawCharacterArt(ctx: CanvasRenderingContext2D, ch: ArtSource | null, x: number, y: number, size: number, t: number, picked = false): void {
   if (!ch) { drawImageIn(ctx, null, x, y, size, "—"); inkRect(ctx, x, y, size, size, PENCIL, 1.2); return; }
   const load = ch.status === "ready" && ch.bundleUrl ? fighterLoad(ch.bundleUrl) : null;
   const def = load?.state === "ready" ? roster[ch.id] : null;
   const loading = !!load && load.state === "loading";
-  if (def) {
-    drawImageIn(ctx, null, x, y, size);
-    const pad = size * 0.08;
-    // fades in, so a card whose fighter just arrived doesn't pop
+  // while its fighter loads the card shows the drawing, faint, then the fighter fades in over it rather than popping
+  const shown = def ? Math.min(1, (performance.now() - load!.readyAt) / FADE_MS) : 0;
+  drawImageIn(ctx, null, x, y, size);
+  if (shown < 1) {
     ctx.save();
-    ctx.globalAlpha *= Math.min(1, (performance.now() - load!.readyAt) / FADE_MS);
+    if (loading || def) ctx.globalAlpha *= LOADING_ALPHA * (1 - shown);
+    drawImageIn(ctx, ch.drawingUrl, x, y, size, ch.status === "failed" ? "no drawing" : "");
+    ctx.restore();
+  }
+  if (def) {
+    const pad = size * 0.08;
+    ctx.save();
+    ctx.globalAlpha *= shown;
     drawFighterPortrait(ctx, def, `art@${Math.round(x)},${Math.round(y)}`, { x: x + pad, y: y + pad, w: size - pad * 2, h: size - pad * 2 }, { picked });
     ctx.restore();
-  } else drawImageIn(ctx, loading ? null : ch.drawingUrl, x, y, size, ch.status === "failed" ? "no drawing" : "");
+  }
   inkRect(ctx, x, y, size, size, INK, 1.6);
   if (def && size >= 200) {
     const inset = Math.round(size * 0.27);
