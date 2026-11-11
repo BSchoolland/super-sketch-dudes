@@ -24,17 +24,17 @@ export function unloadFighter(bundleUrl: string, id: string): void {
   unregisterFighter(id);
 }
 
-export interface FighterLoad { state: "loading" | "ready" | "failed"; error: string; promise: Promise<void>; /** How long it took, once settled. */ ms: number }
+export interface FighterLoad { state: "loading" | "ready" | "failed"; error: string; promise: Promise<void>; /** How long it took, once settled. */ ms: number; /** performance.now() when it became ready (art fades in from here). */ readyAt: number }
 const loads = new Map<string, FighterLoad>();
 
 /** Loads a generated fighter bundle once; the returned record says how it went (its promise settles either way). */
 export function fighterLoad(bundleUrl: string): FighterLoad {
   let f = loads.get(bundleUrl);
   if (f) return f;
-  const record: FighterLoad = { state: "loading", error: "", promise: Promise.resolve(), ms: 0 };
+  const record: FighterLoad = { state: "loading", error: "", promise: Promise.resolve(), ms: 0, readyAt: 0 };
   const t0 = performance.now();
   record.promise = loadGeneratedFighter(bundleUrl).then(
-    () => { record.state = "ready"; record.ms = Math.round(performance.now() - t0); },
+    () => { record.state = "ready"; record.readyAt = performance.now(); record.ms = Math.round(record.readyAt - t0); },
     (error: unknown) => {
       record.ms = Math.round(performance.now() - t0);
       console.error(`fighter bundle failed: ${bundleUrl}`, error);

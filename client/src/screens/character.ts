@@ -16,15 +16,22 @@ export type ArtSource = Pick<LibraryEntry, "id" | "status" | "bundleUrl" | "draw
  * The drawing, or once the forge is done the fighter itself idling (big enough, with the original
  * drawing pinned to its corner). Until its bundle has loaded, a ready character shows its drawing.
  */
+const FADE_MS = 250;
+
 export function drawCharacterArt(ctx: CanvasRenderingContext2D, ch: ArtSource | null, x: number, y: number, size: number, t: number, picked = false): void {
   if (!ch) { drawImageIn(ctx, null, x, y, size, "—"); inkRect(ctx, x, y, size, size, PENCIL, 1.2); return; }
   const load = ch.status === "ready" && ch.bundleUrl ? fighterLoad(ch.bundleUrl) : null;
   const def = load?.state === "ready" ? roster[ch.id] : null;
+  const loading = !!load && load.state === "loading";
   if (def) {
     drawImageIn(ctx, null, x, y, size);
     const pad = size * 0.08;
+    // fades in, so a card whose fighter just arrived doesn't pop
+    ctx.save();
+    ctx.globalAlpha *= Math.min(1, (performance.now() - load!.readyAt) / FADE_MS);
     drawFighterPortrait(ctx, def, `art@${Math.round(x)},${Math.round(y)}`, { x: x + pad, y: y + pad, w: size - pad * 2, h: size - pad * 2 }, { picked });
-  } else drawImageIn(ctx, ch.drawingUrl, x, y, size, ch.status === "failed" ? "no drawing" : "");
+    ctx.restore();
+  } else drawImageIn(ctx, loading ? null : ch.drawingUrl, x, y, size, ch.status === "failed" ? "no drawing" : "");
   inkRect(ctx, x, y, size, size, INK, 1.6);
   if (def && size >= 200) {
     const inset = Math.round(size * 0.27);
@@ -35,8 +42,8 @@ export function drawCharacterArt(ctx: CanvasRenderingContext2D, ch: ArtSource | 
     inkRect(ctx, 0, 0, inset, inset, INK, 1.6);
     ctx.restore();
   }
-  if (ch.status === "generating" || ch.status === "queued") {
-    // a pencil sweeping across while the forge works
+  if (ch.status === "generating" || ch.status === "queued" || loading) {
+    // a pencil sweeping across while it's being made, or while its fighter loads
     const band = size * 0.3, bx = x - band + ((t * 0.4) % 1) * (size + band);
     const g = ctx.createLinearGradient(bx, 0, bx + band, 0);
     g.addColorStop(0, "rgba(119,114,103,0)"); g.addColorStop(0.5, "rgba(119,114,103,0.16)"); g.addColorStop(1, "rgba(119,114,103,0)");
