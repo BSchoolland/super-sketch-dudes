@@ -15,4 +15,4 @@ rsync -az dist/client/assets/ ssd-server:~/$NAME/dist/client/assets/
 ssh ssd-server "find ~/$NAME/dist/client/assets -type f -mtime +7 -delete"
 rsync -az package.json package-lock.json ssd-server:~/$NAME/
 ssh ssd-server "cd ~/$NAME && npm install --omit=dev --no-audit --no-fund >/dev/null && set -a && [ -f .env ] && . ./.env; set +a; export PORT=$PORT BUILD=$BUILD SKETCHBATTLE_BASE=$BASE && (pm2 describe $NAME >/dev/null 2>&1 && pm2 restart $NAME --update-env || pm2 start dist/server.mjs --name $NAME) && pm2 save >/dev/null"
-echo "deployed: https://bschoolland.dev$BASE"
+echo "deployed: https://supersketchdudes.com$BASE (and bschoolland.dev$BASE)"
