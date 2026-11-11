@@ -28,10 +28,12 @@ import { forgetMaps } from "./maps";
 import { loadFighters, quickMatch } from "./quick";
 import { site, setSiteBase } from "./base";
 import { swap, type Handoff } from "./handoff";
+import { TitleScreen } from "./screens/title";
+import { closeAbout } from "./about";
 
 export interface MountOptions {
   canvas: HTMLCanvasElement;
-  /** URL prefix of the site (its /api and /ws), e.g. "/play/". */
+  /** URL prefix of the site (its /api and /ws), e.g. "/". */
   base: string;
   params: URLSearchParams;
   /** This bundle's hash, "" for the classic single-build page. */
@@ -170,6 +172,7 @@ export async function mount(opts: MountOptions): Promise<AppController> {
       next = launch ? signInScreen(nav) : nav.guest();
     }
     if (next) { screen = next; screen.enter?.(); noteScreen(screen.constructor.name); }
+    if (!(screen instanceof TitleScreen)) closeAbout();
     music.follow(screen instanceof VersusScreen ? screen : null);
     endInputFrame();
     endPointerTick();

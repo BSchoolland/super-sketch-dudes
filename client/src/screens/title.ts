@@ -1,4 +1,4 @@
-import { FONT, PENCIL, inkLine, inkPath } from "../render/paper";
+import { FONT, PAPER, PENCIL, inkLine, inkPath } from "../render/paper";
 import { VIEW_H, VIEW_W } from "../render/camera";
 import type { MenuInput } from "../input/devices";
 import { sfx } from "../audio/audio";
@@ -17,6 +17,8 @@ import { UpdateCard } from "./updatecard";
 import { FeedbackResponseCard } from "./feedbackcard";
 import { unseenResponses } from "../feedback";
 import { MENU_CARD } from "../../../shared/stages/menu";
+import { HOME_COPY } from "../../../server/home-copy";
+import { aboutOpen, hasAbout, openAbout } from "../about";
 
 const MENU_Y = MENU_CARD.y0, MENU_STEP = MENU_CARD.step;
 
@@ -38,6 +40,23 @@ function drawFeedbackNote(ctx: CanvasRenderingContext2D, sel: boolean): void {
   ctx.fill();
   ctx.lineWidth = sel ? 4.5 : 2.4; ctx.strokeStyle = INK; ctx.stroke();
   title(ctx, "FEEDBACK", w / 2, h / 2 + 16, 46, INK);
+  ctx.restore();
+}
+
+/** The tab on the bottom edge that opens the page's about sections. */
+const ABOUT = { x: VIEW_W - 430, y: VIEW_H - 46, w: 168, h: 50 };
+
+function drawAboutTab(ctx: CanvasRenderingContext2D, over: boolean): void {
+  const { x, y, w, h } = ABOUT;
+  ctx.save();
+  ctx.translate(x, y);
+  inkPath(ctx, [[0, h], [2, 9], [12, 0], [w - 12, 0], [w - 2, 9], [w, h]], false, 11);
+  ctx.fillStyle = PAPER;
+  ctx.fill();
+  ctx.lineWidth = over ? 3 : 1.6; ctx.strokeStyle = INK; ctx.stroke();
+  label(ctx, HOME_COPY.tab, w / 2 - 14, 34, 32, INK, "center", 700);
+  inkPath(ctx, [[w - 46, 18], [w - 36, 28], [w - 26, 18]], false, 3);
+  ctx.lineWidth = 2.2; ctx.stroke();
   ctx.restore();
 }
 
@@ -125,6 +144,7 @@ export class TitleScreen implements Screen {
     return this.onPick(mode);
   }
   update(dt: number, m: MenuInput): Screen | null {
+    if (aboutOpen()) return null;
     if (this.whatsNew) {
       if (this.whatsNew.update(dt, m)) this.whatsNew = null;
       return null;
@@ -148,7 +168,7 @@ export class TitleScreen implements Screen {
     this.t += dt;
     bg(ctx, this.t);
     drawLogo(ctx, 170);
-    const live = !this.whatsNew && !this.responses;
+    const live = !this.whatsNew && !this.responses && !aboutOpen();
     // a fighter in the brawl is on top of the cards it stands on: it takes the hover and the click
     const under = live && pointer.present && this.brawl ? this.brawl.at(pointer.x, pointer.y) : null;
     const tapped = live && pointer.clicked && this.brawl ? this.brawl.at(pointer.tapX, pointer.tapY) : null;
@@ -181,6 +201,12 @@ export class TitleScreen implements Screen {
     hint(ctx, "click, or arrows + Enter · gamepad: stick + A");
     label(ctx, `build ${__BUILD__}`, VIEW_W - 20, VIEW_H - 16, 14, "rgba(41,39,34,0.5)", "right", 400);
     if (!activity) drawLegalLinks(ctx, live && !under && !tapped);
+    if (hasAbout && !activity) {
+      const b = ABOUT, over = live && !under && hover(b.x, b.y, b.w, b.h);
+      if (over) document.body.style.cursor = "pointer";
+      if (live && !tapped && clicked(b.x, b.y, b.w, b.h)) openAbout();
+      drawAboutTab(ctx, over);
+    }
     if (under) { this.brawl!.drawHover(ctx, under); document.body.style.cursor = "pointer"; }
     if (this.whatsNew) this.whatsNew.draw(ctx, dt);
     else this.responses?.draw(ctx);

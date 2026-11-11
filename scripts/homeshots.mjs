@@ -1,4 +1,4 @@
-// The landing page's pictures: screenshots, the drawing → fighter → KO clip, the share image. Writes client/public/home/.
+// The front page's pictures: screenshots, the drawing → fighter → KO clip, the share image. Writes them into client/public/.
 // Starts its own server (DEV_LOGIN, a scratch data dir), Vite and scripts/fake-forge.mjs, whose fighter is the
 // sword-guy exemplar, so the clip draws a stick figure with a sword.
 //   node scripts/homeshots.mjs   (SERVER_PORT, VITE_PORT override 3651 / 5851; needs ffmpeg and cwebp)
@@ -9,8 +9,8 @@ import os from "node:os";
 import path from "node:path";
 
 const SERVER_PORT = Number(process.env.SERVER_PORT ?? 3651), VITE_PORT = Number(process.env.VITE_PORT ?? 5851), TOKEN = "devtoken";
-const base = `http://localhost:${VITE_PORT}/sketch-battle/`;
-const out = path.resolve("client/public/home");
+const base = `http://localhost:${VITE_PORT}/`;
+const out = path.resolve("client/public");
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "homeshots-"));
 const data = path.join(work, "data");
 const children = [];
@@ -60,7 +60,7 @@ try {
     if (!b) throw new Error(`no ${id} button`);
     await p.mouse.click(...at(b.x + b.w / 2, b.y + b.h / 2));
   };
-  const shot = async (name, width = 960) => { const png = path.join(work, `${name}.png`); await p.screenshot({ path: png }); webp(png, `shots/${name}.webp`, width); };
+  const shot = async (name, width = 960) => { const png = path.join(work, `${name}.png`); await p.screenshot({ path: png }); webp(png, `screenshots/${name}.webp`, width); };
 
   await p.goto(base);
   await on("TitleScreen");
@@ -134,16 +134,12 @@ try {
   const filter = parts.map(([a, b, speed], i) => `[0:v]trim=${a.toFixed(2)}:${b.toFixed(2)},setpts=(PTS-STARTPTS)/${speed},scale=960:540:flags=lanczos,fps=24[v${i}]`).join(";")
     + `;${parts.map((_, i) => `[v${i}]`).join("")}concat=n=${parts.length}:v=1:a=0[v]`;
   execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-i", video, "-filter_complex", filter, "-map", "[v]", "-an", "-c:v", "libx264", "-profile:v", "high", "-pix_fmt", "yuv420p", "-crf", "30", "-preset", "slow", "-movflags", "+faststart", path.join(out, "clip.mp4")]);
-  const poster = path.join(work, "poster.png");
-  // the finished drawing
-  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-ss", ((marks.drawn - marks.draw) / drawSpeed - 0.2).toFixed(2), "-i", path.join(out, "clip.mp4"), "-frames:v", "1", poster]);
-  webp(poster, "clip.webp", 960);
 
   // the share image: the name over the fight
   const og = await (await browser.newContext({ viewport: { width: 1200, height: 630 } })).newPage();
   const fightPng = path.join(work, "fight.png");
   await og.setContent(`<style>
-@font-face { font-family: P; src: url("data:font/woff2;base64,${fs.readFileSync(path.join(out, "patrick-hand.woff2")).toString("base64")}"); }
+@font-face { font-family: P; src: url("data:font/ttf;base64,${fs.readFileSync(path.join(out, "fonts/PatrickHand-Regular.ttf")).toString("base64")}"); }
 body { margin: 0; width: 1200px; height: 630px; background: #f4efe4; font-family: P; color: #292722; position: relative; overflow: hidden; }
 img { position: absolute; left: 0; top: 0; width: 1200px; height: 675px; object-fit: cover; }
 h1 { position: absolute; left: 40px; top: 26px; margin: 0; font-weight: normal; font-size: 104px; line-height: .9; background: #f4efe4; padding: 14px 28px 20px; border: 3px solid #292722; box-shadow: 8px 9px 0 rgba(41,39,34,.12); transform: rotate(-1deg); }
@@ -153,7 +149,7 @@ h1 span { display: block; font-size: 46px; margin-left: 6px; }
   const ogPng = path.join(work, "og.png");
   await og.screenshot({ path: ogPng });
   execFileSync("convert", [ogPng, "-quality", "84", path.join(out, "og.jpg")]);
-  for (const f of ["clip.mp4", "clip.webp", "og.jpg", "shots/draw.webp", "shots/alive.webp", "shots/fight.webp"]) console.log(`${f}: ${(fs.statSync(path.join(out, f)).size / 1024).toFixed(0)} KB`);
+  for (const f of ["clip.mp4", "og.jpg", "screenshots/draw.webp", "screenshots/alive.webp", "screenshots/fight.webp"]) console.log(`${f}: ${(fs.statSync(path.join(out, f)).size / 1024).toFixed(0)} KB`);
 } finally {
   await browser?.close();
   for (const c of children) { try { process.kill(-c.pid); } catch (e) { if (e.code !== "ESRCH") throw e; } }

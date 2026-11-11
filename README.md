@@ -3,7 +3,7 @@
 A platform fighter in the browser. Two to four fighters, percent damage, knockback, blast zones,
 stocks. Keyboard or controller, couch or online.
 
-**Play:** https://supersketchdudes.com/play/
+**Play:** https://supersketchdudes.com/
 
 - `DESIGN.md` is what this is and why.
 - `CHARACTERS.md` is the roster: every fighter's fantasy, stats and frame data.
@@ -54,7 +54,7 @@ everything, respawn over the biggest block).
 
 ```
 npm install
-npm run dev          # Vite on :5175 + server on :3008, open http://localhost:5175/sketch-battle/
+npm run dev          # Vite on :5175 + server on :3008, open http://localhost:5175/
 npm run check        # typecheck + determinism lint + tests
 npm run ladder       # CPU vs CPU win-rate matrix
 npm run events       # read the wide events (see Wide events below)
@@ -66,7 +66,8 @@ node scripts/perfbench.mjs --throttle 4 --dpr 1.25   # frame times on a pretend 
 node scripts/activitycheck.mjs   # the Discord Activity end to end, Discord stubbed (starts its own servers)
 node scripts/touchcheck.mjs      # the touch controls on emulated phones with real multi-touch: VS BOTS to a KO, quick match and the Activity against a keyboard (starts its own servers)
 node scripts/frontdoorcheck.mjs  # guest play, signing in from a guest, the signup age question, /privacy and /terms (starts its own servers)
-node scripts/homeshots.mjs       # the landing page's screenshots, clip and share image into client/public/home/ (starts its own servers)
+node scripts/frontcheck.mjs      # the front page on the built server: the title's about tab, PLAY back up, no scrolling in matches or by touch, the old /play/ addresses (builds, starts its own server)
+node scripts/homeshots.mjs       # the about sections' screenshots, clip and share image into client/public/ (starts its own servers)
 scripts/deploy.sh    # build, ship to personal-server, restart pm2 "sketch-battle" (CI runs this on every push to master)
 ```
 

@@ -1,11 +1,13 @@
-// ===== EVERY WORD ON supersketchdudes.com =====
-// Visitors and search engines read all of this, the alt text and the meta tags too. Plain text: the page escapes it.
-// Never say "forge" here.
+// ===== EVERY WORD ON supersketchdudes.com BESIDES THE GAME'S OWN =====
+// The about sections under the game, and the title screen's tab that opens them. Visitors and search engines read all
+// of this, the alt text and the meta tags too. Plain text: the page escapes it. Never say "forge" here.
 
 export const HOME_COPY = {
   title: "Super Sketch Dudes: draw a fighter, then fight with it",
   description: "A free platform fighter in your browser. Draw a character, AI turns it into a fighter with its own moves, then knock your friends off the stage.",
   ogImageAlt: "Super Sketch Dudes: hand-drawn fighters battling on a sketchbook page",
+
+  tab: "about",
 
   name: "Super Sketch Dudes",
   pitch: "Draw anything. It becomes a fighter. Then knock your friends off the stage.",
@@ -34,7 +36,7 @@ export const HOME_COPY = {
 
   whereTitle: "Where to play",
   where: [
-    { title: "In your browser", text: "On any computer or phone, right here: press PLAY." },
+    { title: "In your browser", text: "On any computer or phone, right on this page: PLAY takes you up to the game." },
     { title: "In Discord", text: "As an Activity: start it in a voice channel and everyone in the call lands in the same room." },
   ],
 

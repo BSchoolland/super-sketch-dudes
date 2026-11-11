@@ -3,7 +3,7 @@
 // fake Discord, server and Vite, then:
 //   1. Ann and Bob open the same launch: both sign in with no sign-in screen, land in one room, and play a match
 //      over the relay with no RTCPeerConnection ever made; their session events say discord-activity.
-//   2. Cat opens another launch and lands in a room of her own.
+//   2. Cat opens another launch and lands in a room of her own; MENU takes her to a title with no about tab.
 //   3. Dee and Eve play the plain website (?dev=, BATTLE, CREATE LOBBY, JOIN ROOM): peer links are tried as before,
 //      and nothing about the Activity shows.
 // Usage: node scripts/activitycheck.mjs [--shots <dir>]
@@ -19,7 +19,7 @@ const SERVER_PORT = Number(process.env.SERVER_PORT ?? 3029), VITE_PORT = Number(
 const shotsAt = process.argv.indexOf("--shots");
 const shots = shotsAt > 0 ? process.argv[shotsAt + 1] : null;
 const data = fs.mkdtempSync(path.join(os.tmpdir(), "activitycheck-"));
-const base = `http://localhost:${VITE_PORT}/sketch-battle/`;
+const base = `http://localhost:${VITE_PORT}/`;
 const children = [];
 const fail = (message) => { throw new Error(message); };
 
@@ -71,7 +71,7 @@ try {
   const roomOf = (p) => p.evaluate(() => { const s = window.sketchbattle.screen; return { code: s.roomCode, call: !!s.context.room.call, screen: s.constructor.name }; });
   async function playMatch(pages, label) {
     for (const [i, p] of pages.entries()) await p.evaluate((id) => {
-      window.sketchbattle.screen.pick({ id, name: id.toUpperCase(), bundleUrl: `/sketch-battle/house/${id}/bundle.json?v=${window.sketchbattle.build}`, house: true, entry: null });
+      window.sketchbattle.screen.pick({ id, name: id.toUpperCase(), bundleUrl: `/house/${id}/bundle.json?v=${window.sketchbattle.build}`, house: true, entry: null });
     }, ["rocket", "wizard"][i]);
     await Promise.all(pages.map((p) => p.waitForFunction(() => window.sketchbattle.screen.lobbyDebug().members.every((m) => m.fighter))));
     for (const p of pages) await p.evaluate(() => window.sketchbattle.screen.toggleReady());
@@ -112,7 +112,7 @@ try {
     const m = await made(p);
     if (m.rtc !== 0) fail(`${name} made ${m.rtc} RTCPeerConnections`);
     // besides the relay, only Vite's own dev socket
-    const relay = m.sockets.filter((u) => new URL(u).pathname === "/sketch-battle/ws");
+    const relay = m.sockets.filter((u) => new URL(u).pathname === "/ws");
     if (!relay.length || m.sockets.some((u) => !relay.includes(u) && !new URL(u).searchParams.has("token"))) fail(`${name} opened sockets ${m.sockets.join(", ")}`);
   }
   console.log("  no RTCPeerConnection on either page; every socket was the relay");
@@ -123,6 +123,17 @@ try {
   const catRoom = await roomOf(cat);
   if (catRoom.code === annRoom.code || !catRoom.call) fail(`Cat's launch landed in ${JSON.stringify(catRoom)}`);
   console.log(`  Cat is alone in room ${catRoom.code}`);
+  // MENU to the title: the page has the about sections (Vite renders the front page), but the Activity never offers them
+  await cat.evaluate(() => window.sketchbattle.screen.leave());
+  await cat.waitForFunction(() => window.sketchbattle.screen.constructor.name === "TitleScreen", null, { timeout: 10000 });
+  await cat.waitForTimeout(800);
+  await cat.mouse.click(1280 - (430 - 84) * (2 / 3), 720 - 22 * (2 / 3));
+  await cat.mouse.wheel(0, 1200);
+  await cat.waitForTimeout(500);
+  const offered = await cat.evaluate(() => ({ about: !!document.getElementById("about"), open: document.documentElement.classList.contains("about"), y: window.scrollY, scrollable: document.documentElement.scrollHeight > window.innerHeight }));
+  if (!offered.about || offered.open || offered.y || offered.scrollable) fail(`the Activity's title offers the about sections: ${JSON.stringify(offered)}`);
+  if (shots) await cat.screenshot({ path: path.join(shots, "activity-title.png") });
+  console.log("  Cat's title has no about tab and the page doesn't scroll");
 
   console.log("3. the plain website");
   const dee = await page("Dee"), eve = await page("Eve");

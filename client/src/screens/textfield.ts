@@ -16,6 +16,13 @@ export interface TextFieldOptions {
   quiet?: boolean;
 }
 
+/** iOS zooms the page into a focused field set under 16px unless the page can't zoom: it can't while a field is up. */
+function lockZoom(on: boolean): void {
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
+  if (!meta) throw new Error("index.html has no viewport meta");
+  meta.content = meta.content.replace(/, maximum-scale=1$/, "") + (on ? ", maximum-scale=1" : "");
+}
+
 /**
  * A real <input> laid over the canvas, so phones raise their keyboard and passwords stay
  * passwords. The canvas draws the card behind it; `place` keeps it glued to view coordinates.
@@ -45,6 +52,7 @@ export class TextField {
       if (e.key === "Enter" && (!opts.multiline || e.ctrlKey || e.metaKey)) { e.preventDefault(); opts.onSubmit(this.value); }
       if (e.key === "Escape") { e.preventDefault(); opts.onCancel(); }
     });
+    lockZoom(true);
     overlay.appendChild(el);
     if (!opts.quiet) el.focus();
   }
@@ -68,5 +76,6 @@ export class TextField {
 
   remove(): void {
     this.el.remove();
+    if (!document.querySelector("#overlay input, #overlay textarea")) lockZoom(false);
   }
 }

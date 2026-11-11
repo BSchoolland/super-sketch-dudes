@@ -1,6 +1,7 @@
 import { B, EMPTY_INPUT, type InputFrame } from "../../../shared/input";
 import { bindingsOf } from "./bindings";
 import { endTouchTick, stopTouch, touchFrame, touchInUse } from "./touch";
+import { aboutOpen } from "../about";
 
 export type DeviceId = "kb1" | "kb2" | `pad${number}`;
 
@@ -13,8 +14,8 @@ const typedThisFrame: string[] = [];
 let anyPress = false;
 window.addEventListener("keydown", (e) => {
   if (e.repeat) return;
-  // text fields own their keystrokes
-  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+  // text fields own their keystrokes; the page does while the about sections are open
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || aboutOpen()) return;
   stopTouch();
   keys.add(e.code);
   pressedThisFrame.add(e.code);

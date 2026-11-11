@@ -2,7 +2,7 @@
 
 TypeScript, Vite, Canvas 2D on the client; Express + `ws` on the server; a shared deterministic
 sim used by both. Same shape as Kessler so it deploys the same way (pm2 process behind Apache
-at supersketchdudes.com/play).
+at supersketchdudes.com).
 
 ```
 sketch-battle/
@@ -21,7 +21,7 @@ sketch-battle/
     cpu.ts           bot controller: reads state, returns an input record
     rules.ts         stocks, time, KO, sudden death
   client/
-    index.html, vite.config.ts (base "/play/")
+    index.html, vite.config.ts (base "/")
     src/main.ts      boot, screen router
     src/render/      canvas renderer: camera, rigs, effects, particles, stages, hud
     src/input/       keyboard + gamepad -> input records per slot; device assignment
@@ -74,12 +74,20 @@ decision rule and reputation (moderation.ts, logged to moderation.jsonl with `na
 to wait; nothing is approved without them. `/forge/names/take-down {player}` gives a player a made-up name. The relay
 shows a room member by their session's name (`{ t: "name", session }`), never one the page claims.
 `node scripts/namecheck.mjs` walks it in real pages against `scripts/fake-name-judge.mjs`.
-## The landing page
+## The front page
 
-https://supersketchdudes.com/ is `<base>home/`: Apache proxies the whole domain there. `server/home.ts` renders it on
-each request with a strip of COMMUNITY's BEST (one per creator, listed characters only, their idle cells served at
-`home/fighters/<id>.png`); every word on it is in `server/home-copy.ts`. Its files are `client/public/home/`, all
-reached by relative URLs so they work at both addresses; PLAY and the privacy and terms links go to the game.
+https://supersketchdudes.com/ is the game, and search engines and link previews read it too: `server/home.ts` renders
+index.html with the title, description, canonical, sharing tags and JSON-LD in its head and the about sections after
+the canvas, on each request, with a strip of COMMUNITY's BEST (one per creator, listed characters only, their idle
+cells served at `fighters/<id>.png`). Every word of it is in `server/home-copy.ts`; Vite's dev server renders the same
+page with no strip. Its pictures are `client/public/` (`screenshots/`, `clip.mp4`, `og.jpg`, icons, `robots.txt`,
+`sitemap.xml`; `node scripts/homeshots.mjs` remakes them).
+
+The sections are `display: none` and the page can't scroll until the title screen's tab (bottom edge) opens them
+(`client/src/about.ts`): the page scrolls down to them and the game leaves the keys to the page. PLAY scrolls back up,
+and the page closes them when it's back at the top; any screen but the title closes them at once. Nothing of them
+loads before they open, so the game boots as it did without them. The Activity never shows the tab.
+`node scripts/frontcheck.mjs` checks all of it on the built server.
 
 ## Community characters
 
@@ -318,11 +326,10 @@ waits and joins when the room reopens, past six people (waiting counts) the rest
 of the game is reached through MENU. Discord's proxy carries no WebRTC, so no peer link is tried: every input goes
 by the relay. The session's `source` ref is `discord-activity`, and `activity` holds the launch digest and platform.
 
-URL mappings (Developer Portal, Activities > URL Mappings), in this order:
+URL mapping (Developer Portal, Activities > URL Mappings):
 
 ```
-/play           ->  supersketchdudes.com/play              the API, the relay, fighters, assets (the build's /play/ base)
-/               ->  supersketchdudes.com/play/discord      the page Discord loads (the server sends index.html for /discord)
+/               ->  supersketchdudes.com                   the page Discord loads, the API, the relay, fighters, assets
 ```
 
 `node scripts/activitycheck.mjs` plays it end to end with Discord stubbed: `?activity=stub&instance=<launch>&as=<name>`
@@ -357,7 +364,7 @@ sqlite dependency to lean on; `server/eventlog.ts` reads it back, newest snapsho
 
 ## Tooling
 
-- `npm run dev`: Vite on 5175 + server on 3008 with the /play/api and /play/ws proxies.
+- `npm run dev`: Vite on 5175 + server on 3008 with the /api, /gen, /games and /ws proxies.
 - `npm run build`, `npm start`: same as Kessler.
 - `npm run ladder`: every fighter vs every fighter, CPU tier 5 (UNFAIR), N matches each, prints a
   win-rate matrix and average stock length; fails if any matchup is outside 40/60 (warn only
@@ -382,17 +389,18 @@ sqlite dependency to lean on; `server/eventlog.ts` reads it back, newest snapsho
 Apache on personal-server, supersketchdudes.com vhost (`/etc/httpd/conf.d/supersketchdudes-le-ssl.conf`):
 
 ```
-RedirectMatch 302 ^/$ /play/
-RedirectMatch 301 ^/play$ /play/
-ProxyPass /play/ws ws://localhost:3008/ws
-ProxyPassReverse /play/ws ws://localhost:3008/ws
-ProxyPass /play/ http://localhost:3008/
-ProxyPassReverse /play/ http://localhost:3008/
+ProxyPass /ws ws://localhost:3008/ws
+ProxyPassReverse /ws ws://localhost:3008/ws
+ProxyPass / http://localhost:3008/
+ProxyPassReverse / http://localhost:3008/
 ```
 
-The server serves the client from `dist/client` at `/` and at `/play/` so it works both proxied and direct.
+The server serves the client at `/` and, if `SKETCHBATTLE_BASE` is set, under it too, so it works proxied with or
+without the base. The game was at /play/ for an afternoon: a page there gets a 301 to the same path without /play,
+and the API, the relay, /play/gen and /play/games still answer there for tabs opened then.
 
 The game used to live at bschoolland.dev/sketch-battle/. That vhost still proxies `/sketch-battle/` here, and a
-page asked for with `X-Forwarded-Host: bschoolland.dev` is server/oldhost.ts's: it sends the browser to /play/
-with its game storage carried in the URL fragment (client/src/move.ts takes it in). Fighter URLs in the data carry
-the build base (`/play/gen/…`); they were rewritten from `/sketch-battle/gen/` when the base moved.
+page asked for with `X-Forwarded-Host: bschoolland.dev` is server/oldhost.ts's: it sends the browser to
+https://supersketchdudes.com/ with its game storage carried in the URL fragment (client/src/move.ts takes it in).
+Fighter URLs in the data carry the build base (`/gen/…`); `scripts/migrate-base.mjs` rewrote `/play/gen/` and
+`/sketch-battle/gen/` when the base moved.

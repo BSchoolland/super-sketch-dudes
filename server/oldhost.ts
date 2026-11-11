@@ -5,7 +5,7 @@
  * for tabs that were open when the game moved.
  */
 export const OLD_HOST = "bschoolland.dev";
-export const GAME_URL = "https://supersketchdudes.com/play/";
+export const GAME_URL = "https://supersketchdudes.com/";
 
 export function oldHostPage(search: string): string {
   const to = JSON.stringify(`${GAME_URL}${search}`);

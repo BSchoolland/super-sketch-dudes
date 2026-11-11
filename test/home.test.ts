@@ -8,6 +8,8 @@ import { initLibrary } from "../server/library";
 import { attachHome } from "../server/home";
 
 let server: http.Server, port: number, dataDir: string;
+const INDEX = `<!doctype html><html><head><!--front-head--><title>GAME</title><!--/front-head--></head>
+<body><canvas id="game"></canvas><!--front-body--><!--/front-body--><script type="module" src="/assets/main.js"></script></body></html>`;
 const get = (p: string) => fetch(`http://127.0.0.1:${port}${p}`, { redirect: "manual" });
 
 const ready = (id: string, owner: string, createdAt: number, extra: object = {}) => ({
@@ -31,17 +33,27 @@ beforeAll(async () => {
   file("dev-dee", [ready("gen-private", "dev-dee", 5, { public: false }), ready("gen-gone", "dev-dee", 6, { deleted: true })]);
   file("guest-zed", [ready("gen-guest", "guest-zed", 7)]);
   initLibrary(dataDir);
+  fs.writeFileSync(path.join(dataDir, "index.html"), INDEX);
   const app = express();
-  attachHome(app, { base: "/sb", genDir: path.join(dataDir, "gen") });
+  attachHome(app, { at: (p) => [p, `/sb${p}`], base: "/sb/", indexFile: path.join(dataDir, "index.html"), genDir: path.join(dataDir, "gen") });
   server = http.createServer(app).listen(0, "127.0.0.1");
   await new Promise<void>((r) => server.once("listening", () => r()));
   port = (server.address() as { port: number }).port;
 });
 afterAll(() => { server.close(); fs.rmSync(dataDir, { recursive: true, force: true }); });
 
-describe("the landing page", () => {
+describe("the front page", () => {
+  it("is the game page with the about sections after the canvas, at every address of the page", async () => {
+    for (const p of ["/", "/sb/", "/index.html", "/auth", "/sb/auth"]) {
+      const html = await (await get(p)).text();
+      expect(html).not.toContain("<title>GAME</title>");
+      expect(html.indexOf(`<canvas id="game">`)).toBeLessThan(html.indexOf(`<div id="about">`));
+      expect(html.indexOf(`<div id="about">`)).toBeLessThan(html.indexOf(`<script type="module"`));
+    }
+  });
+
   it("shows only listed characters, one per creator, escaped", async () => {
-    const html = await (await get("/sb/home/")).text();
+    const html = await (await get("/")).text();
     const strip = [...html.matchAll(/fighters\/([\w-]+)\.png/g)].map((m) => m[1]);
     expect(strip.sort()).toEqual(["gen-ann2", "gen-bob"]);
     for (const hidden of ["gen-held", "gen-private", "gen-gone", "gen-guest", "Player dev-"]) expect(html).not.toContain(hidden);
@@ -49,26 +61,24 @@ describe("the landing page", () => {
   });
 
   it("serves a listed character's idle cell and nothing of a held, private, deleted or guest one", async () => {
-    expect(await (await get("/home/fighters/gen-bob.png")).text()).toBe("idle of gen-bob");
-    for (const id of ["gen-held", "gen-private", "gen-gone", "gen-guest", "..%2Fgen-bob"]) expect((await get(`/sb/home/fighters/${id}.png`)).status).toBe(404);
+    expect(await (await get("/fighters/gen-bob.png")).text()).toBe("idle of gen-bob");
+    for (const id of ["gen-held", "gen-private", "gen-gone", "gen-guest", "..%2Fgen-bob"]) expect((await get(`/sb/fighters/${id}.png`)).status).toBe(404);
   });
 
-  it("has the search and sharing tags, and JSON-LD that parses", async () => {
-    const html = await (await get("/home/")).text();
-    expect(html).toContain(`<link rel="canonical" href="https://supersketchdudes.com/">`);
-    expect(html).toContain(`<meta property="og:image" content="https://supersketchdudes.com/og.jpg">`);
+  it("has one title, the search and sharing tags, and JSON-LD that parses", async () => {
+    const html = await (await get("/")).text();
+    expect(html.match(/<title>/g)).toHaveLength(1);
+    expect(html).toContain(`<link rel="canonical" href="https://supersketchdudes.com/" />`);
+    expect(html).toContain(`<meta property="og:image" content="https://supersketchdudes.com/og.jpg" />`);
     expect(html).toMatch(/<h1>/);
-    expect(html).toContain(`href="https://supersketchdudes.com/play/?ref=home"`);
+    expect(html).toContain(`<a class="play card up" href="/sb/">`);
     const ld = JSON.parse(/<script type="application\/ld\+json">(.*?)<\/script>/s.exec(html)![1]);
     expect(ld).toMatchObject({ "@context": "https://schema.org", "@type": "VideoGame", url: "https://supersketchdudes.com/", offers: { price: "0" } });
     expect(html).not.toMatch(/forge/i);
   });
 
-  it("sends the bare path to the trailing slash, where the relative URLs work", async () => {
-    for (const p of ["/home", "/sb/home"]) {
-      const r = await get(p);
-      expect(r.status).toBe(301);
-      expect(r.headers.get("location")).toBe("/sb/home/");
-    }
+  it("refuses an index.html without the places for the sections", () => {
+    fs.writeFileSync(path.join(dataDir, "bare.html"), "<html><body><canvas></canvas></body></html>");
+    expect(() => attachHome(express(), { at: (p) => [p], base: "/", indexFile: path.join(dataDir, "bare.html"), genDir: dataDir })).toThrow(/front-head/);
   });
 });
