@@ -8,6 +8,7 @@ import { account, playingAsGuest } from "../account";
 import { ButtonMenu, type Button } from "./buttons";
 import { drawTabs, otherTabButton, type Tabs } from "./tabs";
 import { ControlsPage } from "./controls";
+import { RenameScreen } from "./rename";
 
 type SettingsTab = "general" | "controls";
 const TABS: Tabs<SettingsTab> = { left: { id: "general", text: "GENERAL" }, right: { id: "controls", text: "CONTROLS" } };
@@ -17,7 +18,8 @@ interface Row { id: string; name: string; get: () => string; step: (d: -1 | 1) =
 const ROW = { x: VIEW_W / 2 - 400, w: 800, h: 80, top: 220, gap: 100 };
 /** The centre of a row's ◀ value ▶. */
 const VALUE_X = ROW.x + ROW.w - 150;
-const SIGN_OUT = { w: 300, h: 80, y: 760 };
+/** CHANGE NAME and SIGN OUT, side by side under who is signed in. */
+const ACCOUNT = { w: 340, h: 80, y: 760, gap: 40 };
 
 const clamp01 = (v: number): number => Math.max(0, Math.min(1, Math.round(v * 10) / 10));
 
@@ -43,7 +45,10 @@ export class SettingsScreen implements Screen {
       step: (d) => { r.step(d); saveSettings(); },
     }));
     // a guest signing out would lose everything they made
-    if (!playingAsGuest()) b.push({ id: "signout", x: VIEW_W / 2 - SIGN_OUT.w / 2, y: SIGN_OUT.y, w: SIGN_OUT.w, h: SIGN_OUT.h, text: "SIGN OUT", size: 32 });
+    if (!playingAsGuest()) b.push(
+      { id: "name", x: VIEW_W / 2 - ACCOUNT.w - ACCOUNT.gap / 2, y: ACCOUNT.y, w: ACCOUNT.w, h: ACCOUNT.h, text: "CHANGE NAME", size: 32 },
+      { id: "signout", x: VIEW_W / 2 + ACCOUNT.gap / 2, y: ACCOUNT.y, w: ACCOUNT.w, h: ACCOUNT.h, text: "SIGN OUT", size: 32 },
+    );
     b.push(otherTabButton(TABS, this.tab));
     return b;
   }
@@ -59,6 +64,7 @@ export class SettingsScreen implements Screen {
     }
     const pressed = this.menu.update(this.buttons(), m, taps);
     if (pressed === "tab") { sfx.menuConfirm(); this.tab = "controls"; this.controls.show(taps.length ? null : m.from); }
+    if (pressed === "name") return new RenameScreen(() => this);
     if (pressed === "signout") { sfx.menuBack(); return this.onSignOut(); }
     if (m.back) { sfx.menuBack(); return this.onBack(); }
     return null;
@@ -82,7 +88,7 @@ export class SettingsScreen implements Screen {
       });
       const about = this.rows.find((r) => r.id === focused?.id)?.about?.();
       if (about) label(ctx, about, VIEW_W / 2, ROW.top + this.rows.length * ROW.gap + 26, 26, INK, "center");
-      if (account.player && !playingAsGuest()) label(ctx, `signed in as ${account.player.name}`, VIEW_W / 2, SIGN_OUT.y - 24, 26, PENCIL, "center", 600);
+      if (account.player && !playingAsGuest()) label(ctx, `signed in as ${account.player.name}`, VIEW_W / 2, ACCOUNT.y - 24, 26, PENCIL, "center", 600);
       this.menu.draw(ctx, buttons);
     }
     if (backButton(ctx) && !this.controls.busy) { sfx.menuBack(); goTo(this.onBack()); }

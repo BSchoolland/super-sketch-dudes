@@ -25,7 +25,7 @@ const log = (line: string) => console.log(`${new Date().toISOString().slice(11, 
 try {
   const payload = await runForge(job, drawing, dir, { progress: async (s) => log(`> ${s}`), log });
   const bundle: GeneratedBundle = {
-    id: job.fighterId, player, description: payload.description, source: payload.source,
+    id: job.fighterId, description: payload.description, source: payload.source,
     sprite: { ...payload.sprite, cells: Object.fromEntries(SPRITE_CELLS.map((c) => [c, `${url}/cells/${c}.png`])) },
   };
   fs.writeFileSync(path.join(dir, "bundle.json"), JSON.stringify(bundle));

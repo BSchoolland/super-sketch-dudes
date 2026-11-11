@@ -7,7 +7,7 @@ import { SPRITE_CELLS } from "../../shared/gen/sprite";
 
 const source = fs.readFileSync(new URL("../../forge/exemplar/sword-guy.fighter.js", import.meta.url), "utf8");
 const cells = Object.fromEntries(SPRITE_CELLS.map((c) => [c, ""]));
-buildGenerated({ id: "gen-fake-forge", source, sprite: { px: 512, feetPx: 448, heightPx: 360, anims: {}, cells }, player: "fake forge", description: "" }).then((def) => {
+buildGenerated({ id: "gen-fake-forge", source, sprite: { px: 512, feetPx: 448, heightPx: 360, anims: {}, cells }, description: "" }).then((def) => {
   registerFighter(def);
   process.stdout.write(JSON.stringify(studyFighter(def)));
 });

@@ -5,7 +5,7 @@ import { SPRITE_CELLS } from "../shared/gen/sprite";
 
 const source = readFileSync(new URL("../forge/exemplar/sword-guy.fighter.js", import.meta.url), "utf8");
 const sprite = { px: 512, feetPx: 448, heightPx: 300, anims: {}, cells: Object.fromEntries(SPRITE_CELLS.map((c) => [c, `/gen/x/${c}.png`])) };
-const bundle = (id: string, src: string) => ({ id, source: src, sprite, player: "t", description: "" });
+const bundle = (id: string, src: string) => ({ id, source: src, sprite, description: "" });
 
 describe("forge checks", () => {
   it("passes the exemplar and reports the ladder, recovery and kill percents", async () => {

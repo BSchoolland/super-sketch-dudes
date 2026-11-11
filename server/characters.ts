@@ -167,7 +167,7 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
     const owner = String(req.body?.owner ?? ""), id = String(req.body?.id ?? "");
     if (!owner || !/^gen-[\w-]+$/.test(id)) return res.status(400).json({ error: "owner and a gen-… id required" });
     try {
-      const result = await storeCharacter(id, String(req.body?.player ?? "player"), req.body);
+      const result = await storeCharacter(id, req.body);
       if (typeof req.body?.drawing === "string") { const f = path.join(dataDir, "gen", "drawings", `${id}.png`); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, Buffer.from(req.body.drawing, "base64")); }
       const entry = upsertCharacter({ id, owner, status: "ready", stage: "", error: null, ...result, drawingUrl: drawingUrlOf(id), createdAt: Date.now(), origin: "creator", public: true });
       res.json({ character: entry });

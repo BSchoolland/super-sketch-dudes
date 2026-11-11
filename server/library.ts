@@ -58,6 +58,19 @@ export function initLibrary(dataDir: string): void {
   plays = fs.existsSync(playsFile) ? JSON.parse(fs.readFileSync(playsFile, "utf8")) : {};
 }
 
+/** The name this player goes by, once they have a record. */
+export function nameOf(id: string): string | null {
+  return load(id).player?.name ?? null;
+}
+
+export function renamePlayer(id: string, name: string): Player {
+  const lib = load(id);
+  if (!lib.player) throw new Error(`renaming ${id}, who has no record`);
+  lib.player = { ...lib.player, name };
+  write(id);
+  return lib.player;
+}
+
 /** A room started a match with these fighters, one per player. */
 export function recordPlays(fighters: string[]): void {
   for (const id of fighters) plays[id] = (plays[id] ?? 0) + 1;

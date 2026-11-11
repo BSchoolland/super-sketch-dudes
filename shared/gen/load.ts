@@ -95,7 +95,6 @@ export interface GeneratedBundle {
   id: string;
   source: string;
   sprite: SpriteRig;
-  player: string;
   description: string;
   /** The forge's study of it for the CPU (cpu-study.ts). */
   cpu?: CpuStudy;
@@ -106,7 +105,7 @@ export async function buildGenerated(b: GeneratedBundle): Promise<FighterDef> {
   const make = await instantiateGenerated(b.source);
   let def: FighterDef;
   try { def = make(generatedApi); } catch (e) { throw new Error(`generated fighter factory threw: ${e instanceof Error ? e.message : String(e)}`); }
-  def = { ...def, id: b.id, sprite: b.sprite, generated: { player: b.player, description: b.description }, cpu: b.cpu };
+  def = { ...def, id: b.id, sprite: b.sprite, generated: { description: b.description }, cpu: b.cpu };
   if (!def.rig) def.rig = { anims: {}, loops: {} };
   const problems = validateGenerated(def);
   if (problems.length) throw new Error(`generated fighter ${b.id} invalid:\n${problems.join("\n")}`);

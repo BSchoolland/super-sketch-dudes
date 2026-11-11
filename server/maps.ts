@@ -61,6 +61,10 @@ export function moveMaps(from: string, to: Player): void {
   for (const m of mapsOf(from)) store({ ...m, owner: to.id, ownerName: to.name });
 }
 
+export function renameMapsOf(player: Player): void {
+  for (const m of mapsOf(player.id)) store({ ...m, ownerName: player.name });
+}
+
 export function forgetMaps(owner: string): void {
   for (const m of mapsOf(owner)) { maps.delete(m.id); fs.rmSync(fileOf(m.id)); }
 }

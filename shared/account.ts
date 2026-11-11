@@ -20,6 +20,9 @@ export interface Player {
   avatar: string | null;
 }
 
+/** The longest a player's name can be. */
+export const NAME_MAX = 14;
+
 /** Guests play without an account; their characters stay out of COMMUNITY until they sign in. */
 export const isGuest = (id: string): boolean => id.startsWith("guest-");
 

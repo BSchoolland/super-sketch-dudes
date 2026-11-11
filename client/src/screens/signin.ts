@@ -11,6 +11,7 @@ import { bg, card, label, title, type Screen, INK } from "./ui";
 import { RED } from "./character";
 import { ButtonMenu, type Button } from "./buttons";
 import { TextField } from "./textfield";
+import { NAME_MAX } from "../../../shared/account";
 import { drawLegalLinks, drawLogo } from "./title";
 
 const DOOR: Button[] = [
@@ -197,7 +198,7 @@ export class SignInScreen implements Screen {
     // created in page order so Tab walks the form
     const emailField = new TextField({ type: "email", autocomplete: "email", maxLength: 254, value: email, onSubmit: () => pass.el.focus(), onCancel: back });
     const pass = new TextField({ type: "password", autocomplete: mode === "signup" ? "new-password" : "current-password", maxLength: 200, quiet: true, value: password, onSubmit: () => (name ? name.el.focus() : this.submit()), onCancel: back });
-    const name = mode === "signup" ? new TextField({ maxLength: 14, upper: true, quiet: true, onSubmit: () => this.submit(), onCancel: back }) : null;
+    const name = mode === "signup" ? new TextField({ maxLength: NAME_MAX, upper: true, quiet: true, onSubmit: () => this.submit(), onCancel: back }) : null;
     this.fields = { email: emailField, password: pass, name };
   }
 

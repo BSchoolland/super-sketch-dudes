@@ -4,9 +4,12 @@ import crypto from "node:crypto";
 import type express from "express";
 import { DISCORD_APP_ID, GOOGLE_CLIENT_ID, SESSION_HEADER, isGuest, type LastPlayed, type News, type Player } from "../shared/account";
 import type { WideEvent } from "../shared/wide";
-import { markPlayed, seeNews } from "./library";
+import { markPlayed, nameOf, renamePlayer, seeNews } from "./library";
 import { adoptGuest, newGuest } from "./guests";
 import { clientIp } from "./school";
+import { randomName, typedName } from "./names";
+import { renameMapsOf } from "./maps";
+import { renameJobsOf } from "./forge";
 
 /**
  * Sign-in: the browser does Discord's implicit OAuth grant (no client secret), gets an access
@@ -14,7 +17,7 @@ import { clientIp } from "./school";
  * which the client sends on every request and on the lobby socket. Inside the Discord Activity
  * there is no redirect: the client gets a one-time code from the Embedded App SDK and we exchange
  * it for the access token with the app's client secret, then ask Discord the same way. Google is the same trip with
- * an ID token, which Google checks for us and we hold to our client ID and the client's nonce.
+ * an ID token, which Google checks for us and we hold to our client ID and the client's nonce; a Google player's name is one we pick (names.ts), never Google's.
  * Or an email and password, scrypt-hashed in accounts.json (the client asks a birth year first and keeps the answer to itself). A browser with
  * no session gets a guest (ids `guest-…`, guests.ts); signing in from a guest's session moves what the guest made to
  * the account. Sessions persist to disk. DEV_LOGIN=1 adds a name-only login for local tests.
@@ -71,10 +74,12 @@ export function endSessionsOf(id: string): void {
 }
 
 /**
- * A signed-in player, when they last played before this sign-in (null: never) and their NEW stickers. Signing in to an
- * account from a guest's session moves the guest's library to it and ends the guest.
+ * A signed-in player, when they last played before this sign-in (null: never) and their NEW stickers. `arriving` is who
+ * the sign-in says they are: a player with a record keeps the name on it. Signing in to an account from a guest's
+ * session moves the guest's library to it and ends the guest.
  */
-function issue(player: Player, req: express.Request, res: express.Response): { session: string; player: Player; lastPlayed: LastPlayed | null; news: News | null } {
+function issue(arriving: Player, req: express.Request, res: express.Response): { session: string; player: Player; lastPlayed: LastPlayed | null; news: News | null } {
+  const player: Player = { ...arriving, name: nameOf(arriving.id) ?? arriving.name };
   const was = playerOf(req);
   if (was && isGuest(was.id) && !isGuest(player.id)) {
     const moved = adoptGuest(was.id, player);
@@ -86,7 +91,7 @@ function issue(player: Player, req: express.Request, res: express.Response): { s
   return { session: token, player, ...markPlayed(player) };
 }
 
-const cleanName = (s: unknown): string => String(s ?? "").replace(/[^\w \-.!?]/g, "").slice(0, 14) || "someone";
+const cleanName = (s: unknown): string => typedName(s) || "someone";
 
 export function attachAuth(api: express.Router, opts: AuthOptions): void {
   file = path.join(opts.dataDir, "sessions.json");
@@ -141,10 +146,12 @@ export function attachAuth(api: express.Router, opts: AuthOptions): void {
     if (!idToken || !nonce) return res.status(400).json({ error: "idToken and nonce required" });
     const r = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
     if (!r.ok) return res.status(401).json({ error: `google said ${r.status}` });
-    const t = (await r.json()) as { aud: string; iss: string; sub: string; nonce?: string; name?: string; given_name?: string; picture?: string };
+    const t = (await r.json()) as { aud: string; iss: string; sub: string; nonce?: string; picture?: string };
     if (t.aud !== GOOGLE_CLIENT_ID || !["accounts.google.com", "https://accounts.google.com"].includes(t.iss)) return res.status(401).json({ error: "that token isn't for this game" });
     if (t.nonce !== nonce) return res.status(401).json({ error: "sign-in expired, try again" });
-    const player: Player = { id: `google-${t.sub}`, name: cleanName(t.given_name || t.name), avatar: t.picture ?? null };
+    // a guest who signs in keeps the name they've been playing under
+    const was = playerOf(req);
+    const player: Player = { id: `google-${t.sub}`, name: was && isGuest(was.id) ? was.name : randomName(), avatar: t.picture ?? null };
     res.json(issue(player, req, res));
   });
 
@@ -203,6 +210,22 @@ export function attachAuth(api: express.Router, opts: AuthOptions): void {
     const player = playerOf(req);
     if (!player) return res.status(401).json({ error: "not signed in" });
     res.json({ player });
+  });
+
+  // an account picks the name everyone sees: on their characters, their maps and in rooms
+  api.post("/me/name", (req, res) => {
+    const player = playerOf(req);
+    if (!player) return res.status(401).json({ error: "not signed in" });
+    if (isGuest(player.id)) return res.status(403).json({ error: "sign in to pick your own name" });
+    const name = typedName(req.body?.name);
+    if (!name) return res.status(400).json({ error: "a name needs letters or numbers" });
+    const renamed = renamePlayer(player.id, name);
+    for (const s of sessions.values()) if (s.player.id === renamed.id) s.player = renamed;
+    save();
+    for (const a of accounts.values()) if (a.player.id === renamed.id) { a.player = renamed; saveAccounts(); }
+    renameMapsOf(renamed);
+    renameJobsOf(renamed);
+    res.json({ player: renamed });
   });
 
   // a returning player with a saved session, opening the game

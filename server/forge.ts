@@ -208,7 +208,7 @@ export function enqueueJob(spec: { fighterId: string; player: Player; ip: string
 }
 
 /** Writes a finished character's files under /gen/<id>/ (validating the module) and returns what the library shows. */
-export async function storeCharacter(fighterId: string, playerName: string, b: any): Promise<NonNullable<ForgeJob["result"]>> {
+export async function storeCharacter(fighterId: string, b: any): Promise<NonNullable<ForgeJob["result"]>> {
   for (const k of ["name", "tagline", "description", "source"]) if (typeof b[k] !== "string") throw new Error(`${k} must be a string`);
   if (!b.sprite || typeof b.sprite !== "object") throw new Error("sprite missing");
   if (!b.cells || typeof b.cells !== "object") throw new Error("cells missing");
@@ -226,7 +226,7 @@ export async function storeCharacter(fighterId: string, playerName: string, b: a
   if (typeof b.sheet === "string") fs.writeFileSync(path.join(dir, "sheet.png"), Buffer.from(b.sheet, "base64"));
   const sprite = { px: Number(b.sprite.px), feetPx: Number(b.sprite.feetPx), heightPx: Number(b.sprite.heightPx), anims: b.sprite.anims && typeof b.sprite.anims === "object" ? b.sprite.anims : {}, cells };
   if (!isStudy(b.cpu)) throw new Error("cpu (the forge's CPU study) missing");
-  const bundle = { id: fighterId, player: playerName, description: b.description, source: b.source, sprite, cpu: b.cpu };
+  const bundle = { id: fighterId, description: b.description, source: b.source, sprite, cpu: b.cpu };
   await buildGenerated(bundle); // the forge already validated; this is the server refusing to serve a broken one
   fs.writeFileSync(path.join(dir, "bundle.json"), JSON.stringify(bundle));
   if (b.report !== undefined) fs.writeFileSync(path.join(dir, "report.json"), JSON.stringify(b.report));
@@ -281,6 +281,17 @@ export function charactersMade(): number {
   let n = 0;
   for (const job of jobs.values()) if (job.status === "done") n++;
   return n;
+}
+
+/** A renamed player's jobs still to finish carry the new name. */
+export function renameJobsOf(player: Player): void {
+  let renamed = false;
+  for (const job of jobs.values()) {
+    if (job.owner !== player.id || (job.status !== "queued" && job.status !== "running")) continue;
+    job.playerName = player.name;
+    renamed = true;
+  }
+  if (renamed) persist();
 }
 
 /** A guest signing in: their jobs, finished or not, are `to`'s; one still to finish lands in `to`'s library. */
@@ -401,7 +412,7 @@ export function attachForge(api: express.Router, opts: ForgeOptions): void {
     const job = jobs.get(req.params.id);
     if (!job || job.status !== "running") return res.status(409).json({ error: "job not running" });
     try {
-      job.result = await storeCharacter(job.fighterId, job.playerName, req.body ?? {});
+      job.result = await storeCharacter(job.fighterId, req.body ?? {});
       setStatus(job, "done", "");
       res.status(204).end();
     } catch (e) {

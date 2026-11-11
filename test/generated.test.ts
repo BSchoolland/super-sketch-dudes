@@ -18,7 +18,7 @@ describe("generated fighters", () => {
 
   it("the exemplar lints, builds, validates and registers", async () => {
     expect(lintGeneratedSource(source)).toEqual([]);
-    const def = await buildGenerated({ id: "gen-sword", source, sprite, player: "test", description: "a sword guy" });
+    const def = await buildGenerated({ id: "gen-sword", source, sprite, description: "a sword guy" });
     expect(validateGenerated(def)).toEqual([]);
     registerFighter(def);
     expect(roster["gen-sword"]).toBe(def);
@@ -26,7 +26,7 @@ describe("generated fighters", () => {
   });
 
   it("a 4-player CPU match with a generated fighter resimulates from a snapshot to the same hash", async () => {
-    const def = await buildGenerated({ id: "gen-sword", source, sprite, player: "test", description: "a sword guy" });
+    const def = await buildGenerated({ id: "gen-sword", source, sprite, description: "a sword guy" });
     registerFighter(def);
     def.cpu = studyFighter(def);
     const cfg = { stage: "proving", players: [{ fighter: "gen-sword", cpu: 5 }, { fighter: "woodstove", cpu: 5 }, { fighter: "slugbert", cpu: 5 }, { fighter: "gen-sword", cpu: 5 }], seed: 7 };
@@ -52,7 +52,7 @@ describe("generated fighters", () => {
   it("a hook that throws disables the move, drops the fighter to idle and reports it", async () => {
     const bad = source.replace("drive: ({ f, input, state }) => {", "drive: ({ f, input, state }) => {\n        if (f.frame === 3) throw new Error(\"kaboom\");");
     expect(bad).not.toBe(source);
-    const def = await buildGenerated({ id: "gen-bad", source: bad, sprite, player: "test", description: "" });
+    const def = await buildGenerated({ id: "gen-bad", source: bad, sprite, description: "" });
     registerFighter(def);
     const s = createMatch({ stage: "proving", players: [{ fighter: "gen-bad" }, { fighter: "woodstove" }], seed: 1 });
     const f = s.fighters[0];
@@ -70,7 +70,7 @@ describe("generated fighters", () => {
   });
 
   it("validates looks and the hitbox fx that name them", async () => {
-    const def = await buildGenerated({ id: "gen-look", source, sprite, player: "test", description: "" });
+    const def = await buildGenerated({ id: "gen-look", source, sprite, description: "" });
     expect(def.looks?.blade.color).toBe("#3f6fb5");
     const bad = { ...def, looks: { ...def.looks, weird: { cell: "nope", crop: [0, 0, 600, 10], shape: "cube", texture: "fur", trail: "rainbow", size: 2 } } } as unknown as typeof def;
     const problems = validateGenerated(bad, { strict: true });
@@ -85,7 +85,7 @@ describe("generated fighters", () => {
   });
 
   it("validates draws and the moves that name them", async () => {
-    const def = await buildGenerated({ id: "gen-draw", source, sprite, player: "test", description: "" });
+    const def = await buildGenerated({ id: "gen-draw", source, sprite, description: "" });
     expect(def.moves.fsmash.draw).toBe("fsmash");
     expect(typeof def.draws?.blade).toBe("function");
     const unnamed = { ...def, moves: { ...def.moves, jab1: { ...def.moves.jab1, draw: "missing" } } };
@@ -95,7 +95,7 @@ describe("generated fighters", () => {
   });
 
   it("loads fighters that animate a state since retired, and the forge still rejects new ones", async () => {
-    const def = await buildGenerated({ id: "gen-old", source, sprite: { ...sprite, anims: { ...sprite.anims, taunt: "idle" } }, player: "test", description: "" });
+    const def = await buildGenerated({ id: "gen-old", source, sprite: { ...sprite, anims: { ...sprite.anims, taunt: "idle" } }, description: "" });
     expect(validateGenerated(def)).toEqual([]);
     expect(validateGenerated(def, { strict: true })).toEqual(["sprite.anims.taunt is not a state animation"]);
   });
@@ -108,7 +108,7 @@ describe("generated fighters", () => {
 
   it("reports every validation problem at once", async () => {
     const broken = source.replace("fullHop: 13.5", "fullHop: 999").replace('mv("dtilt"', 'mv("dtiltx"');
-    await expect(buildGenerated({ id: "gen-broken", source: broken, sprite, player: "t", description: "" })).rejects.toThrow(/fullHop=999[\s\S]*dtilt\.id/);
+    await expect(buildGenerated({ id: "gen-broken", source: broken, sprite, description: "" })).rejects.toThrow(/fullHop=999[\s\S]*dtilt\.id/);
   });
 });
 

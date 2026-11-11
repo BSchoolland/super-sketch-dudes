@@ -10,7 +10,7 @@ export function bundleOf(js: string, cellsDir: string, anims: Record<string, str
   const meta = JSON.parse(fs.readFileSync(path.join(cellsDir, "cells.json"), "utf8")) as CellsMeta;
   const source = fs.readFileSync(js, "utf8");
   const cells = Object.fromEntries(Object.keys(meta.cells).map((c) => [c, `/gen/x/${c}.png`]));
-  return { bundle: { id: "gen-candidate", player: "player", description: "", source, sprite: { px: meta.px, feetPx: meta.feetPx, heightPx: meta.heightPx, anims, cells } }, meta };
+  return { bundle: { id: "gen-candidate", description: "", source, sprite: { px: meta.px, feetPx: meta.feetPx, heightPx: meta.heightPx, anims, cells } }, meta };
 }
 
 export async function runCheck(js: string, cellsDir: string, anims: Record<string, string> = {}): Promise<{ report: CheckReport; bundle: GeneratedBundle; meta: CellsMeta; height: number }> {

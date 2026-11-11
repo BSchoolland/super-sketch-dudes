@@ -5,20 +5,15 @@ import { forgetMaps, moveMaps } from "./maps";
 import { forgetForged, hasOpenJobs, moveJobs } from "./forge";
 import { moveReputation } from "./moderation";
 import { endSessionsOf } from "./auth";
+import { randomName } from "./names";
 
 /**
  * Guests: a real player (id `guest-…`) with a name picked here, made on a signed-out browser's first visit so
  * everything works without an account. Signing in moves what a guest made to the account; a guest who stops
  * coming back is deleted by `sweepGuests`.
  */
-// at most 7 + 1 + 6 characters: player names are 14 at most
-const ADJECTIVES = ["Brave", "Happy", "Lucky", "Sunny", "Jolly", "Speedy", "Mighty", "Clever", "Fuzzy", "Bouncy", "Sleepy", "Silly", "Zippy", "Cosmic", "Gentle", "Swift", "Bold", "Cheery", "Plucky", "Sparky", "Witty", "Breezy", "Snappy", "Dizzy", "Groovy", "Nimble", "Quiet", "Rapid", "Shiny", "Spicy", "Tiny", "Wild", "Wobbly", "Zesty", "Fancy", "Frosty", "Golden", "Humble", "Jumpy", "Kind", "Mellow", "Noble", "Peppy", "Stormy", "Turbo", "Wacky", "Daring", "Merry", "Proud", "Cozy"];
-const ANIMALS = ["Otter", "Panda", "Koala", "Tiger", "Fox", "Owl", "Badger", "Moose", "Gecko", "Llama", "Lemur", "Rhino", "Hippo", "Bison", "Crab", "Duck", "Eagle", "Ferret", "Frog", "Goat", "Hawk", "Heron", "Kiwi", "Lion", "Lynx", "Mole", "Newt", "Orca", "Parrot", "Puffin", "Quail", "Rabbit", "Raven", "Seal", "Shark", "Sloth", "Squid", "Snail", "Toad", "Turtle", "Walrus", "Wombat", "Yak", "Zebra", "Beaver", "Camel", "Dingo", "Donkey", "Gopher", "Pony"];
-
-const pick = (words: string[]): string => words[crypto.randomInt(words.length)];
-
 export function newGuest(): Player {
-  return { id: `guest-${crypto.randomBytes(9).toString("hex")}`, name: `${pick(ADJECTIVES)} ${pick(ANIMALS)}`, avatar: null };
+  return { id: `guest-${crypto.randomBytes(9).toString("hex")}`, name: randomName(), avatar: null };
 }
 
 /** The guest `from` signed in as `to`: everything they made is `to`'s and the guest is over. */

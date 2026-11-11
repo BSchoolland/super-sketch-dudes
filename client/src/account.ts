@@ -92,16 +92,21 @@ export function unfinishedSignIn(): string | null {
   return provider && `${PROVIDER_NAME[provider]} sign-in didn't finish. School Chromebooks often block it: try EMAIL & PASSWORD`;
 }
 
-/** Posts credentials to an /auth endpoint and keeps the session it hands back. Throws the server's reason on failure. */
-async function authenticate(path: string, body: object): Promise<void> {
+/** POSTs JSON with the session, if there is one. Throws the server's own reason when it says no; `what` names the try when it gave none. */
+async function ask<T>(path: string, body: object, what: string): Promise<T> {
   const headers: Record<string, string> = { "content-type": "application/json", "x-trace-id": sessionTrace() };
   if (account.session) headers[SESSION_HEADER] = account.session;
-  const res = await fetch(`${site.base}api/auth/${path}`, { method: "POST", headers, body: JSON.stringify(body) });
+  const res = await fetch(`${site.base}api${path}`, { method: "POST", headers, body: JSON.stringify(body) });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text.startsWith("{") ? (JSON.parse(text) as { error: string }).error : `sign-in failed: HTTP ${res.status}`);
+    throw new Error(text.startsWith("{") ? (JSON.parse(text) as { error: string }).error : `${what} failed: HTTP ${res.status}`);
   }
-  const signedInAs = (await res.json()) as { session: string; player: Player; lastPlayed: LastPlayed | null; news: News | null };
+  return (await res.json()) as T;
+}
+
+/** Posts credentials to an /auth endpoint and keeps the session it hands back. */
+async function authenticate(path: string, body: object): Promise<void> {
+  const signedInAs = await ask<{ session: string; player: Player; lastPlayed: LastPlayed | null; news: News | null }>(`/auth/${path}`, body, "sign-in");
   account.session = signedInAs.session; account.player = signedInAs.player;
   played(signedInAs);
   save();
@@ -155,6 +160,12 @@ export async function activitySignIn(code: string): Promise<void> {
   const earlier = account.session;
   await authenticate("discord/activity", { code });
   if (earlier) endSession(earlier);
+}
+
+/** An account picks the name other players see. */
+export async function rename(name: string): Promise<void> {
+  account.player = (await ask<{ player: Player }>("/me/name", { name }, "renaming")).player;
+  save();
 }
 
 function endSession(token: string): void {

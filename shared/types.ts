@@ -235,8 +235,8 @@ export interface FighterDef {
   rig: Rig;
   palette: Palette;
   sprite: SpriteRig;
-  /** Player-generated fighters carry who drew them and the description the agent worked from. */
-  generated?: { player: string; description: string };
+  /** Player-generated fighters carry the description the agent worked from. */
+  generated?: { description: string };
   /** Initial value of fighter.special (must be a plain object). */
   special: () => Record<string, number>;
   /** Alternate forms, and which one the fighter is in (null/undefined = base). Read every frame; keep it a pure function of the fighter. */
