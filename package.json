@@ -6,7 +6,7 @@
   "scripts": {
     "test": "vitest run",
     "dev": "concurrently -k \"vite --config client/vite.config.ts\" \"tsx watch server/index.ts\"",
-    "build": "vite build --config client/vite.config.ts && esbuild server/index.ts --bundle --platform=node --format=esm --outfile=dist/server.mjs --packages=external && esbuild scripts/events.ts --bundle --platform=node --format=esm --outfile=dist/events.mjs --packages=external && esbuild scripts/funnel.ts --bundle --platform=node --format=esm --outfile=dist/funnel.mjs --packages=external",
+    "build": "vite build --config client/vite.config.ts && esbuild server/index.ts --bundle --platform=node --format=esm --outfile=dist/server.mjs --packages=external && esbuild scripts/events.ts --bundle --platform=node --format=esm --outfile=dist/events.mjs --packages=external && esbuild scripts/funnel.ts --bundle --platform=node --format=esm --outfile=dist/funnel.mjs --packages=external && esbuild scripts/journey.ts --bundle --platform=node --format=esm --outfile=dist/journey.mjs --packages=external",
     "start": "node dist/server.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check": "npm run typecheck && node scripts/lint-determinism.mjs && vitest run",
@@ -15,6 +15,7 @@
     "shots": "node scripts/shots.mjs",
     "events": "tsx scripts/events.ts",
     "funnel": "tsx scripts/funnel.ts",
+    "journey": "tsx scripts/journey.ts",
     "forge-budget": "tsx scripts/forge-budget.ts"
   },
   "keywords": [],
