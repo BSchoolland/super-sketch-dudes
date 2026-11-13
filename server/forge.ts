@@ -30,6 +30,8 @@ export interface ForgeJob extends BudgetJob {
   drawingPath: string;
   status: "queued" | "running" | "done" | "failed";
   stage: string;
+  /** When it moved onto `stage`, ms. */
+  stageAt: number;
   error: string | null;
   claimedAt: number;
   attempts: number;
@@ -72,6 +74,7 @@ function restore(): void {
     job.ipKey ??= null;
     job.blocked ??= job.error?.startsWith(BLOCKED_ERROR) ?? false;
     job.retries ??= 0;
+    job.stageAt ??= Date.now();
     jobs.set(job.id, job);
     if (job.status === "queued") { queue.push(job.id); restored.push(job); }
     // the worker outlives a server restart and is still on it: keep it running; the stale-claim
@@ -100,7 +103,8 @@ const playerError = (job: ForgeJob): string | null =>
 export function entryOf(job: ForgeJob): LibraryEntry {
   return {
     ...(retryable(job) ? { retryable: true } : {}),
-    id: job.fighterId, owner: job.owner, status: charStatusOf(job), stage: job.stage, error: playerError(job),
+    id: job.fighterId, owner: job.owner, status: charStatusOf(job), stage: job.stage,
+    ...(job.status === "queued" || job.status === "running" ? { stageAt: job.stageAt } : {}), error: playerError(job),
     name: job.result?.name ?? null, tagline: job.result?.tagline ?? null, description: job.result?.description ?? null,
     drawingUrl: drawingUrlOf(job.fighterId), bundleUrl: job.result?.bundleUrl ?? null, sheetUrl: job.result?.sheetUrl ?? null,
     createdAt: job.createdAt, origin: job.origin, public: job.public,
@@ -182,7 +186,7 @@ export function retryJob(player: Player, fighterId: string, parent: string | nul
   if (!retryable(job)) return job.blocked ? "the moderator blocked this one: it can't be retried" : job.status !== "failed" ? "it hasn't failed" : "it was already retried";
   job.retries++;
   job.attempts = 0;
-  job.status = "queued"; job.stage = "waiting in line"; job.error = null;
+  job.status = "queued"; job.stage = "waiting in line"; job.stageAt = Date.now(); job.error = null;
   queue.push(job.id);
   openJobEvent(job, parent).set("retry", job.retries);
   changed(job, player);
@@ -197,7 +201,7 @@ export function enqueueJob(spec: { fighterId: string; player: Player; ip: string
   fs.writeFileSync(drawingPath, spec.png);
   const job: ForgeJob = {
     id: crypto.randomBytes(6).toString("hex"), fighterId: spec.fighterId, owner: spec.player.id, playerName: spec.player.name,
-    drawingPath, status: "queued", stage: "waiting in line", error: null, claimedAt: 0, attempts: 0, claims: [], allowance: spec.allowance,
+    drawingPath, status: "queued", stage: "waiting in line", stageAt: Date.now(), error: null, claimedAt: 0, attempts: 0, claims: [], allowance: spec.allowance,
     ipKey: spec.allowance === "guest" ? ipKeyOf(spec.ip) : null, blocked: false, retries: 0, origin: spec.origin, hint: spec.hint ?? null, public: spec.public, createdAt: Date.now(), moderation: null, result: null,
   };
   jobs.set(job.id, job);
@@ -337,6 +341,7 @@ export function attachForge(api: express.Router, opts: ForgeOptions): void {
   restore();
 
   const setStatus = (job: ForgeJob, status: ForgeJob["status"], stage: string, error: string | null = null): void => {
+    if (stage !== job.stage) job.stageAt = Date.now();
     job.status = status; job.stage = stage; job.error = error;
     changed(job);
   };

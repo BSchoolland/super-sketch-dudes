@@ -7,8 +7,9 @@ import { libraryChoices, myLibrary, refreshLibrary } from "../fighters";
 import type { LibraryEntry } from "../../../shared/account";
 import { bg, hover, label, type Screen } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
-import { characterStatus, drawCharacterArt, etaWords, forgeEta, forgeOpens, forgeStep, RED } from "./character";
-import { INK, PENCIL, inkRect } from "../render/paper";
+import { characterStatus, drawCharacterArt, forgeOpens, RED } from "./character";
+import { etaWords, forgeProgress } from "./forge-progress";
+import { INK, PENCIL, hatch, inkLine, inkRect } from "../render/paper";
 import { wrapped } from "./text";
 import { CharacterDetail, moveRows } from "./charcard";
 import type { Nav } from "./nav";
@@ -24,10 +25,8 @@ export class ForgeScreen implements Screen {
   private sincepoll = 0;
   private polling = false;
   private pollError = "";
-  /** The bar: where it's drawn up to, and when the forge moved onto the step it's on. */
-  private shown = 0;
-  private stage = "";
-  private stageAt = 0;
+  /** Where the bar is drawn up to; null until the first frame shows where the forge already is. */
+  private shown: number | null = null;
 
   private retrying = false;
 
@@ -85,27 +84,25 @@ export class ForgeScreen implements Screen {
     this.menu.draw(ctx, this.buttons());
   }
 
-  /**
-   * How far along the forge is: each step starts where it typically does and creeps toward the next
-   * step's start, slowing as it goes, so a long step never looks finished. The bar never goes back.
-   */
+  /** How far along the forge is. The bar glides to each new reading and never goes back. */
   private drawProgress(ctx: CanvasRenderingContext2D, e: LibraryEntry, y: number, dt: number): void {
-    const stage = e.stage || (e.status === "queued" ? "waiting in line" : "reading the drawing");
-    if (stage !== this.stage) { this.stage = stage; this.stageAt = this.t; }
-    const step = forgeStep(stage);
-    const target = step.start + (step.end - step.start) * (1 - Math.exp(-(this.t - this.stageAt) / Math.max(4, step.s * 0.7)));
-    this.shown = Math.max(this.shown, this.shown + (target - this.shown) * Math.min(1, dt * 3));
-    const w = 760, h = 34, x = (VIEW_W - w) / 2;
-    ctx.save();
-    ctx.fillStyle = "rgba(119,114,103,0.12)"; ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = INK; ctx.fillRect(x, y, w * this.shown, h);
-    ctx.restore();
+    const p = forgeProgress(e);
+    this.shown = this.shown === null ? p.done : Math.max(this.shown, this.shown + (p.done - this.shown) * Math.min(1, dt * 3));
+    // shaded in pencil, its edge still being drawn: alive even while a long step creeps
+    const w = 760, h = 34, x = (VIEW_W - w) / 2, fill = w * this.shown;
+    if (fill > 0) {
+      ctx.save();
+      ctx.beginPath(); ctx.rect(x, y, fill, h); ctx.clip();
+      ctx.globalAlpha = 0.22; ctx.fillStyle = INK; ctx.fillRect(x, y, fill, h);
+      ctx.globalAlpha = 1; hatch(ctx, x, y, fill, h, INK);
+      ctx.restore();
+      inkLine(ctx, x + fill, y + 2, x + fill, y + h - 2, INK, 3, 7, true);
+    }
     inkRect(ctx, x, y, w, h, INK, 2);
     const dots = ".".repeat(1 + (Math.floor(this.t * 2) % 3));
     const resting = e.status === "queued" ? myLibrary.forge?.resting : null;
-    label(ctx, `${resting ? "Waiting in line" : step.label}${dots}`, VIEW_W / 2, y + h + 50, 34, e.status === "queued" ? PENCIL : INK);
-    const eta = forgeEta(e);
-    const below = resting ? (resting.until ? `back ${forgeOpens(resting.until)}` : resting.reason!) : eta !== null ? etaWords(eta) : "";
+    label(ctx, `${resting ? "Waiting in line" : p.label}${dots}`, VIEW_W / 2, y + h + 50, 34, e.status === "queued" ? PENCIL : INK);
+    const below = resting ? (resting.until ? `back ${forgeOpens(resting.until)}` : resting.reason!) : p.etaS !== null ? etaWords(p.etaS) : "";
     if (below) label(ctx, below, VIEW_W / 2, y + h + 92, 26, PENCIL);
   }
 

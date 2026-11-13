@@ -38,6 +38,8 @@ export interface LibraryEntry {
   owner: string;
   status: CharStatus;
   stage: string;
+  /** While it's queued or forging: when it moved onto `stage`, by the server's clock (ms). */
+  stageAt?: number;
   error: string | null;
   name: string | null;
   tagline: string | null;

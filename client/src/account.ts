@@ -190,12 +190,26 @@ export function signOut(): void {
   localStorage.removeItem(KEY);
 }
 
+/** How far the server's clock is ahead of this one, ms, from the Date header of its responses (whole seconds). */
+let serverAhead: number | null = null;
+function heardClock(res: Response): void {
+  const date = res.headers.get("date");
+  if (!date) return;
+  const ahead = Date.parse(date) + 500 - Date.now();
+  // a second's rounding is noise; only a real jump (the device's clock changed) moves it
+  if (serverAhead === null || Math.abs(ahead - serverAhead) > 2000) serverAhead = ahead;
+}
+
+/** Now by the server's clock, ms: what server timestamps (a forge's `stageAt`) are measured against. */
+export const serverNow = (): number => Date.now() + (serverAhead ?? 0);
+
 /** fetch with the session header; throws on HTTP errors so callers never see a half result. */
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = { ...(init.headers as Record<string, string> ?? {}), "x-trace-id": sessionTrace() };
   if (account.session) headers[SESSION_HEADER] = account.session;
   if (init.body && !headers["content-type"]) headers["content-type"] = "application/json";
   const res = await fetch(`${site.base}api${path}`, { ...init, headers });
+  heardClock(res);
   if (res.status === 401) { signOut(); throw new Error("signed out"); }
   if (!res.ok) throw new Error(`${path}: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
