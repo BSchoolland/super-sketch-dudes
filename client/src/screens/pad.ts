@@ -78,6 +78,8 @@ export class DrawPad {
   /** Goes up with every mark added or undone. */
   revision = 0;
   private marks: Mark[] = [];
+  /** Marks taken off by undo, most recent last; any new mark drops them. */
+  private undone: Mark[] = [];
   private current: { id: number; stroke: Stroke } | null = null;
   private committed: HTMLCanvasElement;
   private cg: CanvasRenderingContext2D;
@@ -111,27 +113,31 @@ export class DrawPad {
     return this.marks.length > 0;
   }
 
+  get canRedo(): boolean {
+    return this.undone.length > 0;
+  }
+
   undo(): void {
     if (this.locked || !this.marks.length) return;
-    this.marks.pop();
+    this.undone.push(this.marks.pop()!);
     this.revision++;
     this.replay();
   }
 
+  redo(): void {
+    if (this.locked || !this.undone.length) return;
+    this.put(this.undone.pop()!);
+  }
+
   clear(): void {
     if (this.locked || this.blank) return;
-    this.marks.push("clear");
-    this.revision++;
-    this.replay();
+    this.add("clear");
   }
 
   /** Lays down a whole picture (a copied character's drawing, an attached image); it undoes and clears like any mark. */
   startFrom(img: HTMLImageElement): void {
     this.finishStroke();
-    this.marks.push({ kind: "picture", img });
-    this.revision++;
-    paint(this.cg, { kind: "picture", img });
-    this.liveDirty = true;
+    this.add({ kind: "picture", img });
   }
 
   toPng(): string {
@@ -176,19 +182,25 @@ export class DrawPad {
     this.current = null;
     // a tap that ended where it started is a dot
     if (stroke.points.length === 4 && stroke.points[0] === stroke.points[2] && stroke.points[1] === stroke.points[3]) stroke.points.length = 2;
-    this.marks.push(stroke);
-    this.revision++;
-    paint(this.cg, stroke);
-    this.liveDirty = true;
+    this.add(stroke);
   }
 
   private fill(x: number, y: number): void {
     const fill = floodFill(this.cg, x, y, this.tool.color);
     if (!fill) { this.leakedAt = performance.now(); return; }
-    this.marks.push(fill);
+    this.add(fill);
+  }
+
+  private add(mark: Mark): void {
+    this.undone.length = 0;
+    this.put(mark);
+  }
+
+  private put(mark: Mark): void {
+    this.marks.push(mark);
     this.revision++;
-    paint(this.cg, fill);
-    this.liveDirty = true;
+    if (mark === "clear") this.replay();
+    else { paint(this.cg, mark); this.liveDirty = true; }
   }
 
   private replay(): void {

@@ -14,13 +14,15 @@ const TOOLS = () => (settings.advanced ? ["pencil", "eraser", "fill", "pick"] : 
 const toolW = () => (settings.advanced ? 79 : 108);
 
 /**
- * The tool column left of a draw pad: colours, a custom colour, pencil, eraser, fill, sizes, undo, clear.
+ * The tool column left of a draw pad: colours, a custom colour, pencil, eraser, fill, sizes, undo, redo, clear.
  * The ADVANCED toggle adds a colour wheel in the screen's right column, above its buttons, a swatch holding its
- * last pick, and an eyedropper that sets the wheel from the drawing. Ctrl+Z undoes while attached.
+ * last pick, and an eyedropper that sets the wheel from the drawing. Ctrl+Z undoes and Ctrl+Shift+Z or Ctrl+Y redoes while attached.
  */
 export class PadTools {
   private readonly onKey = (e: KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && e.code === "KeyZ") { e.preventDefault(); this.pad.undo(); }
+    if (!(e.ctrlKey || e.metaKey)) return;
+    if (e.code === "KeyY" || (e.code === "KeyZ" && e.shiftKey)) { e.preventDefault(); this.pad.redo(); }
+    else if (e.code === "KeyZ") { e.preventDefault(); this.pad.undo(); }
   };
 
   private wheel = new ColorWheel(1660, 405, 170);
@@ -73,7 +75,8 @@ export class PadTools {
     if (settings.advanced) b.push({ id: "wheel", x: LEFT + COLORS.length * swatchW(), y: 100, w: swatchW(), h: 64, text: "", custom: true });
     TOOLS().forEach((id, i) => b.push({ id, x: LEFT + i * (toolW() + 8), y: 214, w: toolW(), h: 84, text: "", custom: true }));
     SIZES.forEach((_, i) => b.push({ id: `size${i}`, x: LEFT + i * 70, y: 422, w: 60, h: 90, text: "", custom: true }));
-    b.push({ id: "undo", x: LEFT, y: 590, w: COL_W, h: 84, text: "UNDO", size: 36, disabled: !this.pad.canUndo });
+    b.push({ id: "undo", x: LEFT, y: 590, w: COL_W / 2 - 4, h: 84, text: "UNDO", size: 36, disabled: !this.pad.canUndo });
+    b.push({ id: "redo", x: LEFT + COL_W / 2 + 4, y: 590, w: COL_W / 2 - 4, h: 84, text: "REDO", size: 36, disabled: !this.pad.canRedo });
     b.push({ id: "clear", x: LEFT, y: 700, w: COL_W, h: 84, text: "CLEAR", size: 36, disabled: this.pad.blank });
     b.push({ id: "advanced", x: LEFT, y: 810, w: COL_W, h: 70, text: "ADVANCED", size: 30, checked: settings.advanced });
     return b;
@@ -93,6 +96,7 @@ export class PadTools {
     else if (id === "wheel") this.choose(this.custom ?? this.wheel.color);
     else if (id.startsWith("size")) pad.size = Number(id.slice(4));
     else if (id === "undo") pad.undo();
+    else if (id === "redo") pad.redo();
     else if (id === "clear") pad.clear();
     else if (id === "advanced") {
       settings.advanced = !settings.advanced;
@@ -103,7 +107,7 @@ export class PadTools {
     return true;
   }
 
-  /** Draws the custom tool cards; the caller's ButtonMenu draws UNDO, CLEAR and ADVANCED. */
+  /** Draws the custom tool cards; the caller's ButtonMenu draws UNDO, REDO, CLEAR and ADVANCED. */
   draw(ctx: CanvasRenderingContext2D, buttons: Button[], focus: string | undefined): void {
     const tool = this.pad.tool;
     const at = (id: string) => buttons.find((candidate) => candidate.id === id)!;
