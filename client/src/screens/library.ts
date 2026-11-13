@@ -12,6 +12,7 @@ import { drawCharacterArt, drawCharacterCell, forgeWords, preloadArt, PRELOAD_RO
 import { wrapped } from "./text";
 import { CharacterDetail, COL_W, COL_X, moveRows, type MoveRow } from "./charcard";
 import { DrawPad } from "./pad";
+import { picturePixels } from "./padtools";
 import { PAD } from "./create";
 import type { Nav } from "./nav";
 import { drawCharTabs, otherCharTab } from "./chartabs";
@@ -89,14 +90,17 @@ export class LibraryScreen implements Screen {
   /** Opens the creator with this character's drawing already on the pad, or on why it can't take one now. */
   private copyDrawing(e: LibraryEntry): void {
     if (myLibrary.forge && forgeWords(myLibrary.forge).blocked) { this.next = this.nav.create(); return; }
-    const img = new Image();
-    img.onload = () => {
-      const pad = new DrawPad(PAD);
-      pad.startFrom(img);
-      this.next = this.nav.create(pad, { name: e.name ?? "", description: "" });
-    };
-    img.onerror = () => { this.problem = "couldn't load that drawing"; console.error(`copy drawing failed: ${e.drawingUrl}`); };
-    img.src = e.drawingUrl;
+    fetch(e.drawingUrl).then(async (res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return picturePixels(await res.blob());
+    }).then(
+      (pixels) => {
+        const pad = new DrawPad(PAD);
+        pad.startFrom(pixels);
+        this.next = this.nav.create(pad, { name: e.name ?? "", description: "" });
+      },
+      (error: unknown) => { this.problem = "couldn't load that drawing"; console.error(`copy drawing failed: ${e.drawingUrl}`, error); },
+    );
   }
 
   update(dt: number, m: MenuInput): Screen | null {

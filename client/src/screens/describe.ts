@@ -98,11 +98,14 @@ export class DescribeScreen implements Screen {
 
   private send(): void {
     if (this.sending) return;
-    const out = padPng(this.pad);
-    if ("problem" in out) { this.problem = out.problem; console.error(out.problem); return; }
     this.sending = true;
     this.problem = "";
-    library.create(out.png, { name: this.name.value.trim(), description: this.description.value.trim() }, this.pub).then(
+    const hint = { name: this.name.value.trim(), description: this.description.value.trim() };
+    (async () => {
+      const out = await padPng(this.pad);
+      if ("problem" in out) throw new Error(out.problem);
+      return library.create(out.png, hint, this.pub);
+    })().then(
       ({ forge }) => { myLibrary.forge = forge; sfx.menuConfirm(); this.next = this.nav.library(); },
       (error: unknown) => {
         console.error("character upload failed", error);

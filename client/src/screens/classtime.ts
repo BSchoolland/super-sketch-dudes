@@ -4,7 +4,7 @@ import type { MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
 import { sfx } from "../audio/audio";
 import { api, signedIn } from "../account";
-import { feedbackApi, loadImage } from "../feedback";
+import { feedbackApi } from "../feedback";
 import { FEEDBACK_MAX, type FeedbackItem } from "../../../shared/feedback";
 import { classTime, tryClassPass } from "../classtime";
 import { bg, card, label, title, type Screen, INK } from "./ui";
@@ -13,7 +13,7 @@ import { RED } from "./character";
 import { TextField } from "./textfield";
 import { wrapLines } from "./text";
 import { DrawPad } from "./pad";
-import { PadTools, padPng } from "./padtools";
+import { PadTools, padPng, picturePixels } from "./padtools";
 import { FeedbackListScreen } from "./feedbacklist";
 
 const NOTE_W = 1240, NOTE_X = (VIEW_W - NOTE_W) / 2, SIZE = 27, LINE = SIZE * 1.3, GAP = 18;
@@ -184,15 +184,13 @@ export class FeedbackScreen implements Screen {
   private send(): void {
     const text = this.field.value.trim();
     if (this.sending || this.sent || (!text && this.pad.blank)) return;
-    let png: string | undefined;
-    if (!this.pad.blank) {
-      const out = padPng(this.pad);
-      if ("problem" in out) { this.problem = out.problem; return; }
-      png = out.png;
-    }
     this.sending = true;
     this.problem = "";
-    api<void>("/feedback", { method: "POST", body: JSON.stringify({ text, png }) }).then(
+    (async () => {
+      const out = this.pad.blank ? null : await padPng(this.pad);
+      if (out && "problem" in out) throw new Error(out.problem);
+      return api<void>("/feedback", { method: "POST", body: JSON.stringify({ text, png: out?.png }) });
+    })().then(
       () => { this.sent = true; this.sending = false; this.field.el.style.display = "none"; this.menu.focus = 0; sfx.menuConfirm(); if (signedIn()) void this.loadPast(); },
       (e: unknown) => { console.error("feedback failed", e); this.problem = e instanceof Error ? e.message : String(e); this.sending = false; },
     );
@@ -259,9 +257,9 @@ export class SketchScreen implements Screen {
 
   private lay(file: File): void {
     this.problem = "";
-    loadImage(URL.createObjectURL(file)).then(
-      (img) => this.tools.pad.startFrom(img),
-      (e: unknown) => { console.error("attaching an image failed", e); this.problem = `couldn't read ${file.name} as an image`; },
+    picturePixels(file).then(
+      (pixels) => this.tools.pad.startFrom(pixels),
+      (e: unknown) => { console.error("attaching an image failed", e); this.problem = `couldn't use ${file.name}: ${e instanceof Error ? e.message : String(e)}`; },
     );
   }
 

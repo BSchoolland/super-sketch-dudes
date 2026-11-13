@@ -61,16 +61,9 @@ export function feedbackSketch(name: string): Sketch {
   return "loading";
 }
 
-/** A feedback sketch as a loaded image, to draw on. */
-export async function feedbackSketchImage(name: string): Promise<HTMLImageElement> {
-  return loadImage(await sketchUrl(name));
-}
-
-export function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(`image failed to load: ${src}`));
-    img.src = src;
-  });
+/** A feedback sketch's bytes, to draw on. */
+export async function feedbackSketchBlob(name: string): Promise<Blob> {
+  const res = await fetch(await sketchUrl(name));
+  if (!res.ok) throw new Error(`sketch ${name}: HTTP ${res.status}`);
+  return res.blob();
 }

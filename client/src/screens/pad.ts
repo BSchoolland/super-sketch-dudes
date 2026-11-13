@@ -1,6 +1,8 @@
 import { onPointer, type PointerStroke } from "../input/pointer";
 import { PAPER, INK } from "../render/paper";
-import { fillPixels } from "./fill";
+import { fillPixels, type FillPixels } from "./fill";
+import { encodePng, type Pixels } from "./png";
+import { Raster, type Patch, type Rgb } from "./raster";
 
 export const PAD_PX = 768;
 /** Pen colours, black first. Lines are solid: the sheet model reads clean ink best. */
@@ -13,21 +15,22 @@ export interface Tool { kind: ToolKind; color: string }
 type StrokeKind = "pen" | "eraser";
 interface Stroke { kind: StrokeKind; color: string; width: number; points: number[] }
 /** A picture laid down whole: an earlier character's drawing to start from. */
-interface Picture { kind: "picture"; img: HTMLImageElement }
-/** A filled region, kept as pixels cropped to its bounds so replay is exact. */
-interface Fill { kind: "fill"; x: number; y: number; layer: HTMLCanvasElement }
+interface Picture { kind: "picture"; pixels: Pixels }
+/** A filled region, kept as pixels cropped to its bounds so redo is exact. */
+interface Fill { kind: "fill"; px: FillPixels }
 type Mark = Stroke | Picture | Fill | "clear";
 
 const BASE_WIDTH: Record<StrokeKind, number> = { pen: 18, eraser: 40 };
 
-function paint(g: CanvasRenderingContext2D, s: Stroke | Picture | Fill): void {
-  if (s.kind === "fill") { g.drawImage(s.layer, s.x, s.y); return; }
-  if (s.kind === "picture") {
-    const k = PAD_PX / Math.max(s.img.naturalWidth, s.img.naturalHeight);
-    const w = s.img.naturalWidth * k, h = s.img.naturalHeight * k;
-    g.drawImage(s.img, (PAD_PX - w) / 2, (PAD_PX - h) / 2, w, h);
-    return;
-  }
+function paint(r: Raster, m: Mark): Patch {
+  if (m === "clear") return r.paper(hexRgb(PAPER));
+  if (m.kind === "fill") return r.fill(m.px);
+  if (m.kind === "picture") return r.picture(m.pixels);
+  return r.stroke(m.points, m.width, hexRgb(m.kind === "eraser" ? PAPER : m.color));
+}
+
+/** The stroke under the pen, drawn straight onto the screen; the raster takes it over when the pen lifts. */
+function paintLive(g: CanvasRenderingContext2D, s: Stroke): void {
   const p = s.points;
   g.save();
   g.strokeStyle = g.fillStyle = s.kind === "eraser" ? PAPER : s.color;
@@ -35,7 +38,6 @@ function paint(g: CanvasRenderingContext2D, s: Stroke | Picture | Fill): void {
   if (p.length === 2) {
     g.beginPath(); g.arc(p[0], p[1], s.width / 2, 0, Math.PI * 2); g.fill();
   } else {
-    // quadratic through the midpoints: smooth without lagging behind the pen
     g.beginPath(); g.moveTo(p[0], p[1]);
     for (let i = 2; i < p.length - 2; i += 2) g.quadraticCurveTo(p[i], p[i + 1], (p[i] + p[i + 2]) / 2, (p[i + 1] + p[i + 3]) / 2);
     g.lineTo(p[p.length - 2], p[p.length - 1]);
@@ -52,21 +54,16 @@ function canvas(w = PAD_PX, h = PAD_PX): [HTMLCanvasElement, CanvasRenderingCont
   return [c, g];
 }
 
-function hexRgb(hex: string): [number, number, number] {
+function hexRgb(hex: string): Rgb {
   const n = parseInt(hex.slice(1), 16);
   return [n >> 16, (n >> 8) & 255, n & 255];
 }
 
-/** Flood fills from (sx, sy) on `g` in `color`; null when the region reaches the pad's edge (it would flood the background). */
-function floodFill(g: CanvasRenderingContext2D, sx: number, sy: number, color: string): Fill | null {
-  const px = fillPixels(g.getImageData(0, 0, PAD_PX, PAD_PX).data, PAD_PX, sx, sy, hexRgb(color));
-  if (!px) return null;
-  const [layer, lg] = canvas(px.w, px.h);
-  lg.putImageData(new ImageData(px.data, px.w, px.h), 0, 0);
-  return { kind: "fill", x: px.x, y: px.y, layer };
-}
-
-/** The 768x768 drawing: a stack of marks (strokes and clears) replayed onto paper, so undo is exact. */
+/**
+ * The 768x768 drawing: a stack of marks (strokes, fills, pictures and clears) painted onto paper in a Raster, each
+ * keeping what it painted over so undo is exact, and the PNG sent is what was drawn whatever the browser does to
+ * canvas readback.
+ */
 export class DrawPad {
   tool: Tool = { kind: "pen", color: INK };
   size = 2;
@@ -77,10 +74,12 @@ export class DrawPad {
   onPick: ((r: number, g: number, b: number) => void) | null = null;
   /** Goes up with every mark added or undone. */
   revision = 0;
-  private marks: Mark[] = [];
+  private marks: { mark: Mark; patch: Patch }[] = [];
   /** Marks taken off by undo, most recent last; any new mark drops them. */
   private undone: Mark[] = [];
   private current: { id: number; stroke: Stroke } | null = null;
+  private raster = new Raster(PAD_PX);
+  /** The raster on screen: written to, never read back. */
   private committed: HTMLCanvasElement;
   private cg: CanvasRenderingContext2D;
   private live: HTMLCanvasElement;
@@ -91,7 +90,8 @@ export class DrawPad {
   constructor(public rect: { x: number; y: number; w: number; h: number }) {
     [this.committed, this.cg] = canvas();
     [this.live, this.lg] = canvas();
-    this.replay();
+    this.raster.paper(hexRgb(PAPER));
+    this.show();
   }
 
   attach(): void {
@@ -105,8 +105,7 @@ export class DrawPad {
   }
 
   get blank(): boolean {
-    const last = this.marks.lastIndexOf("clear");
-    return this.marks.length === last + 1;
+    return !this.marks.length || this.marks[this.marks.length - 1].mark === "clear";
   }
 
   get canUndo(): boolean {
@@ -119,9 +118,11 @@ export class DrawPad {
 
   undo(): void {
     if (this.locked || !this.marks.length) return;
-    this.undone.push(this.marks.pop()!);
+    const { mark, patch } = this.marks.pop()!;
+    this.raster.restore(patch);
+    this.undone.push(mark);
     this.revision++;
-    this.replay();
+    this.show();
   }
 
   redo(): void {
@@ -135,20 +136,24 @@ export class DrawPad {
   }
 
   /** Lays down a whole picture (a copied character's drawing, an attached image); it undoes and clears like any mark. */
-  startFrom(img: HTMLImageElement): void {
+  startFrom(pixels: Pixels): void {
     this.finishStroke();
-    this.add({ kind: "picture", img });
+    this.add({ kind: "picture", pixels });
   }
 
-  toPng(): string {
+  /** The drawing as a PNG data URL. */
+  async toPng(): Promise<string> {
     this.finishStroke();
-    return this.committed.toDataURL("image/png");
+    const bytes = await encodePng(this.raster.pixels);
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return `data:image/png;base64,${btoa(bin)}`;
   }
 
   draw(ctx: CanvasRenderingContext2D, at = this.rect): void {
     if (this.liveDirty) {
       this.lg.drawImage(this.committed, 0, 0);
-      if (this.current) paint(this.lg, this.current.stroke);
+      if (this.current) paintLive(this.lg, this.current.stroke);
       this.liveDirty = false;
     }
     const { x, y, w, h } = at;
@@ -165,7 +170,7 @@ export class DrawPad {
       if (this.current || px < 0 || py < 0 || px > PAD_PX || py > PAD_PX) return;
       const ix = Math.min(PAD_PX - 1, Math.floor(px)), iy = Math.min(PAD_PX - 1, Math.floor(py));
       if (this.tool.kind === "fill") { this.fill(ix, iy); return; }
-      if (this.tool.kind === "pick") { const [r, g, b] = this.cg.getImageData(ix, iy, 1, 1).data; this.onPick?.(r, g, b); return; }
+      if (this.tool.kind === "pick") { const [r, g, b] = this.raster.pixel(ix, iy); this.onPick?.(r, g, b); return; }
       this.current = { id: e.id, stroke: { kind: this.tool.kind, color: this.tool.color, width: BASE_WIDTH[this.tool.kind] * SIZES[this.size], points: [px, py] } };
       this.liveDirty = true;
       return;
@@ -185,10 +190,11 @@ export class DrawPad {
     this.add(stroke);
   }
 
+  /** Refused (null from fillPixels) when the region reaches the pad's edge: it would flood the background. */
   private fill(x: number, y: number): void {
-    const fill = floodFill(this.cg, x, y, this.tool.color);
-    if (!fill) { this.leakedAt = performance.now(); return; }
-    this.add(fill);
+    const px = fillPixels(this.raster.data, PAD_PX, x, y, hexRgb(this.tool.color));
+    if (!px) { this.leakedAt = performance.now(); return; }
+    this.add({ kind: "fill", px });
   }
 
   private add(mark: Mark): void {
@@ -197,19 +203,13 @@ export class DrawPad {
   }
 
   private put(mark: Mark): void {
-    this.marks.push(mark);
+    this.marks.push({ mark, patch: paint(this.raster, mark) });
     this.revision++;
-    if (mark === "clear") this.replay();
-    else { paint(this.cg, mark); this.liveDirty = true; }
+    this.show();
   }
 
-  private replay(): void {
-    const g = this.cg;
-    g.globalCompositeOperation = "source-over";
-    g.fillStyle = PAPER;
-    g.fillRect(0, 0, PAD_PX, PAD_PX);
-    const from = this.marks.lastIndexOf("clear") + 1;
-    for (const mark of this.marks.slice(from)) if (mark !== "clear") paint(g, mark);
+  private show(): void {
+    this.cg.putImageData(new ImageData(this.raster.data, PAD_PX, PAD_PX), 0, 0);
     this.liveDirty = true;
   }
 }

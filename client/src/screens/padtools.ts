@@ -5,6 +5,7 @@ import { onPointer, type PointerStroke } from "../input/pointer";
 import type { Button } from "./buttons";
 import { DrawPad, COLORS, SIZES } from "./pad";
 import { ColorWheel } from "./colorwheel";
+import { decodePng, isPng, type Pixels } from "./png";
 
 const LEFT = 90, COL_W = 340;
 /** Swatch width: the colour wheel takes a ninth slot in advanced mode. */
@@ -162,12 +163,24 @@ export class PadTools {
   }
 }
 
-/** The pad as a PNG data URL, or why it can't be sent. */
 /**
- * Whether this browser hands back what was drawn on a canvas. Firefox's fingerprinting protection (and some privacy
- * add-ons) return a placeholder, a stripe pattern, instead, which would send the forge a picture of stripes.
+ * A picture's pixels for the pad. PNGs are decoded here; other formats only through a canvas, and Firefox's
+ * fingerprinting protection (and some privacy add-ons) hand back noise from that, so there they're refused.
  */
-export function canvasReadable(): boolean {
+export async function picturePixels(blob: Blob): Promise<Pixels> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  if (isPng(bytes)) return decodePng(bytes);
+  if (!canvasReadable()) throw new Error("this browser scrambles pictures read through a canvas (a privacy setting): use a PNG");
+  const bmp = await createImageBitmap(blob);
+  const c = document.createElement("canvas");
+  c.width = bmp.width; c.height = bmp.height;
+  const g = c.getContext("2d", { willReadFrequently: true })!;
+  g.drawImage(bmp, 0, 0);
+  return { w: c.width, h: c.height, data: g.getImageData(0, 0, c.width, c.height).data };
+}
+
+/** Whether this browser hands back what was drawn on a canvas, rather than a scrambled placeholder. */
+function canvasReadable(): boolean {
   const c = document.createElement("canvas");
   c.width = c.height = 8;
   const g = c.getContext("2d", { willReadFrequently: true })!;
@@ -182,9 +195,9 @@ export function canvasReadable(): boolean {
   return true;
 }
 
-export function padPng(pad: DrawPad): { png: string } | { problem: string } {
-  if (!canvasReadable()) return { problem: "your browser is scrambling drawings (a privacy setting), so this one can't be sent: allow canvas images for this site, or try another browser" };
-  const png = pad.toPng();
+/** The pad as a PNG data URL, or why it can't be sent. */
+export async function padPng(pad: DrawPad): Promise<{ png: string } | { problem: string }> {
+  const png = await pad.toPng();
   const bytes = Math.floor(((png.length - png.indexOf(",") - 1) * 3) / 4);
   if (bytes > DRAW_PNG_MAX_BYTES) return { problem: `this drawing is ${Math.round(bytes / 1000)} KB; the limit is ${DRAW_PNG_MAX_BYTES / 1000} KB` };
   return { png };

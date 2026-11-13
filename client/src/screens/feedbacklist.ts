@@ -3,7 +3,7 @@ import { PENCIL } from "../render/paper";
 import type { MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
 import { sfx } from "../audio/audio";
-import { feedbackApi, feedbackSketchImage, markSeen } from "../feedback";
+import { feedbackApi, feedbackSketchBlob, markSeen } from "../feedback";
 import { RESPONSE_MAX, type FeedbackItem } from "../../../shared/feedback";
 import { bg, card, label, title, type Screen, INK } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
@@ -11,7 +11,7 @@ import { RED } from "./character";
 import { TextField } from "./textfield";
 import { drawExchange, drawSketch } from "./feedbackcard";
 import { DrawPad } from "./pad";
-import { padPng } from "./padtools";
+import { padPng, picturePixels } from "./padtools";
 import { SketchScreen, SKETCH_PAD } from "./classtime";
 import { ScrollView } from "./scroll";
 
@@ -118,8 +118,8 @@ export class FeedbackDetailScreen implements Screen {
   private loadImage(name: string): void {
     const pad = this.pad!;
     this.loadingImage = true;
-    feedbackSketchImage(name).then(
-      (img) => { pad.startFrom(img); this.sentRevision = pad.revision; this.loadingImage = false; },
+    feedbackSketchBlob(name).then(picturePixels).then(
+      (pixels) => { pad.startFrom(pixels); this.sentRevision = pad.revision; this.loadingImage = false; },
       (e: unknown) => { console.error(`response image ${name} failed`, e); this.problem = `your image failed to load: ${e instanceof Error ? e.message : String(e)}`; },
     );
   }
@@ -183,16 +183,14 @@ export class FeedbackDetailScreen implements Screen {
     if (!this.field || !pad || this.sending || this.loadingImage) return;
     const text = this.field.value.trim();
     if (!text && pad.blank) return;
-    let png: string | undefined;
-    if (!pad.blank) {
-      const out = padPng(pad);
-      if ("problem" in out) { this.problem = out.problem; return; }
-      png = out.png;
-    }
     const revision = pad.revision;
     this.sending = true;
     this.problem = "";
-    feedbackApi.respond(this.item.id, text, png).then(
+    (async () => {
+      const out = pad.blank ? null : await padPng(pad);
+      if (out && "problem" in out) throw new Error(out.problem);
+      return feedbackApi.respond(this.item.id, text, out?.png);
+    })().then(
       ({ item }) => { Object.assign(this.item, item); this.sentRevision = revision; this.sending = false; sfx.menuConfirm(); },
       (e: unknown) => { console.error("feedback response failed", e); this.problem = e instanceof Error ? e.message : String(e); this.sending = false; },
     );
