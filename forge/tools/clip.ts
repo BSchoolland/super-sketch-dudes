@@ -24,6 +24,8 @@ const fast = args.includes("--fast");
 // --bars gear=1,ammo=3: set before every move, to film a form other than the first
 const bars = Object.fromEntries((opt("bars") ?? "").split(",").filter(Boolean).map((kv) => { const [k, v] = kv.split("="); return [k, Number(v)]; }));
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "clip-"));
+// thousands of frames per run: gone when the process is, however it ends short of a kill
+process.on("exit", () => fs.rmSync(work, { recursive: true, force: true }));
 const sheets = out.replace(/\.mp4$/, "") + "-frames";
 fs.mkdirSync(sheets, { recursive: true });
 
