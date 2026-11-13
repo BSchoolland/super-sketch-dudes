@@ -3,8 +3,8 @@ import { FramePacer } from "./render/pacing";
 import "./style.css";
 import { VIEW_H, VIEW_W } from "./render/camera";
 import { PAPER } from "./render/paper";
-import { connectedPads, endInputFrame, readMenu, type DeviceId } from "./input/devices";
-import { attachPointer, endPointerFrame, endPointerTick, setPointerTransform } from "./input/pointer";
+import { connectedPads, endInputFrame, readMenu, type DeviceId, type MenuInput } from "./input/devices";
+import { attachPointer, endPointerFrame, endPointerTick, pointer, setPointerTransform } from "./input/pointer";
 import { attachTouch, pad, touchInUse, touchLive, touchShown } from "./input/touch";
 import { drawSideways } from "./render/touchcontrols";
 import { OnlineScreen } from "./screens/online";
@@ -30,6 +30,9 @@ import { site, setSiteBase } from "./base";
 import { swap, type Handoff } from "./handoff";
 import { TitleScreen } from "./screens/title";
 import { closeAbout } from "./about";
+import { tourCardUp, tourDraw, tourSaw, tourTick, tourUpdate } from "./screens/tour";
+
+const NO_MENU: MenuInput = { up: false, down: false, left: false, right: false, confirm: false, back: false, start: false, any: false, from: null };
 
 export interface MountOptions {
   canvas: HTMLCanvasElement;
@@ -156,7 +159,9 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     last = now;
     const menu = readMenu(allDevices());
     if (screen instanceof VersusScreen) screen.armControls();
-    let next = screen.update(dt, menu) ?? takeHandoff();
+    // a tour card takes the input; the screen under it keeps ticking (a lobby stays connected)
+    const carded = tourCardUp(screen);
+    let next = (carded ? tourUpdate(menu, nav) : null) ?? screen.update(dt, carded ? NO_MENU : menu) ?? takeHandoff();
     // signed out (a 401 anywhere): a fresh guest on the website, the door in the Activity, except mid-match or on a no-account page
     const current = next ?? screen;
     // class time takes over anywhere but a match in progress
@@ -171,7 +176,8 @@ export async function mount(opts: MountOptions): Promise<AppController> {
       forgetMaps();
       next = launch ? signInScreen(nav) : nav.guest();
     }
-    if (next) { screen = next; screen.enter?.(); noteScreen(screen.constructor.name); }
+    if (next) { tourSaw(screen, next); screen = next; screen.enter?.(); noteScreen(screen.constructor.name); }
+    tourTick(dt, screen);
     if (!(screen instanceof TitleScreen)) closeAbout();
     music.follow(screen instanceof VersusScreen ? screen : null);
     endInputFrame();
@@ -223,7 +229,12 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     ctx.setTransform(scale, 0, 0, scale, offX, offY);
     ctx.save();
     ctx.beginPath(); ctx.rect(0, 0, VIEW_W, VIEW_H); ctx.clip();
+    // under a tour card the screen sees no pointer: its own buttons can't be hovered or clicked through the card
+    const carded = tourCardUp(screen), present = pointer.present, clicked = pointer.clicked;
+    if (carded) { pointer.present = false; pointer.clicked = false; }
     screen.draw(ctx, Math.min(0.1, sinceDraw / 1000));
+    if (carded) { pointer.present = present; pointer.clicked = clicked; }
+    tourDraw(ctx, screen);
     ctx.restore();
     endPointerFrame();
     requestAnimationFrame(frame);

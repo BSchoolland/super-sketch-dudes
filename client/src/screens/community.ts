@@ -14,6 +14,7 @@ import type { Nav } from "./nav";
 import { TextField } from "./textfield";
 import { drawCharTabs, otherCharTab } from "./chartabs";
 import { ScrollView, type Rect } from "./scroll";
+import { tourSaved } from "./tour";
 
 const COLS = 6, ART = 250, GAP = 50, ROW_H = 350, TOP = 250, BOTTOM = VIEW_H - 180;
 const PAD_TOP = 30;
@@ -207,7 +208,7 @@ export class CommunityScreen implements Screen {
         c.saved = saved;
         await refreshLibrary();
         this.saving = false;
-        if (saved) { sfx.menuConfirm(); this.next = this.nav.library(); }
+        if (saved) { sfx.menuConfirm(); tourSaved(c.id); this.next = this.nav.library(); }
       },
       (error: unknown) => {
         console.error(`save ${c.id} failed`, error);

@@ -53,6 +53,7 @@ export function menus(): Nav {
       // VS BOTS is a room like the others: one nobody else can find, started with a bot in it
       return new OnlineScreen(menu, entry, fighter ?? null);
     }, () => nav.title()),
+    bots: (fighter) => new OnlineScreen(() => nav.battle(fighter), "bots", fighter ?? null),
     practice: (you, device, back) => {
       const dummy = practiceDummy.choice;
       if (!dummy) throw new Error("practice without a dummy");

@@ -25,6 +25,8 @@ export interface Nav {
   call(): Screen;
   /** BATTLE: quick match, a lobby, or bots; `fighter` starts out picked there (a character's FIGHT button). */
   battle(fighter?: FighterChoice): Screen;
+  /** VS BOTS straight away, `fighter` picked if given; leaving goes to BATTLE. */
+  bots(fighter?: FighterChoice): Screen;
   /** PRACTICE: Proving Ground against the practice dummy, which never fights back. `back`: where leaving it goes. */
   practice(fighter: Pick<FighterChoice, "id" | "bundleUrl">, device: DeviceId, back: () => Screen): Screen;
   /** MAPS: the player's maps. */

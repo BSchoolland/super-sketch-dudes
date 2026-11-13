@@ -13,6 +13,7 @@ import type { DrawPad } from "./pad";
 import { padPng } from "./padtools";
 import { TextField } from "./textfield";
 import type { CharacterHint, Nav } from "./nav";
+import { tourBegin } from "./tour";
 
 const ART = { x: 120, y: 150, w: 720, h: 720 };
 const FORM_X = 960, FORM_W = 840;
@@ -106,7 +107,14 @@ export class DescribeScreen implements Screen {
       if ("problem" in out) throw new Error(out.problem);
       return library.create(out.png, hint, this.pub);
     })().then(
-      ({ forge }) => { myLibrary.forge = forge; sfx.menuConfirm(); this.next = this.nav.library(); },
+      ({ character, forge }) => {
+        const hadOwn = (myLibrary.entries ?? []).some((e) => !e.starter && !e.saved);
+        myLibrary.forge = forge;
+        if (myLibrary.entries) myLibrary.entries = [character, ...myLibrary.entries];
+        sfx.menuConfirm();
+        tourBegin(character, hadOwn);
+        this.next = this.nav.library();
+      },
       (error: unknown) => {
         console.error("character upload failed", error);
         this.problem = error instanceof Error ? error.message : String(error);
