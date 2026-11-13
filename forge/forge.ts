@@ -120,6 +120,8 @@ export function runAgent(wt: string, prompt: string, dir: string, io: ForgeIO, f
   return new Promise<AgentResult>((resolve, reject) => {
     const child = spawn(AGENT_BIN, ["-p", "--model", AGENT_MODEL, ...(AGENT_EFFORT ? ["--effort", AGENT_EFFORT] : []), "--dangerously-skip-permissions", "--output-format", "stream-json", "--verbose"], { cwd: wt, stdio: ["pipe", "pipe", "pipe"], env: { ...process.env, FORGE_SHEET_LEDGER: ledger } });
     let buf = "", err = "", timedOut = false, costUsd = 0, text = "", sessionId = "", lost = "", reached = -1;
+    // a background task finishing wakes the agent for another turn with its own result: the first one is the answer
+    const results: string[] = [];
     const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, TIMEOUT_MS);
     const onLine = (line: string) => {
       log.write(line + "\n");
@@ -145,7 +147,7 @@ export function runAgent(wt: string, prompt: string, dir: string, io: ForgeIO, f
           io.log(`${b.name} ${cmd.slice(0, 120)}`);
         } else if (b.type === "text" && b.text) text = b.text;
       }
-      if (e.type === "result") { costUsd = Number(e.total_cost_usd ?? 0); sessionId = String(e.session_id ?? ""); if (e.result) text = String(e.result); }
+      if (e.type === "result") { costUsd = Number(e.total_cost_usd ?? 0); sessionId = String(e.session_id ?? ""); if (e.result) results.push(String(e.result)); }
     };
     child.stdout.on("data", (d) => { buf += d; let i; while ((i = buf.indexOf("\n")) >= 0) { onLine(buf.slice(0, i)); buf = buf.slice(i + 1); } });
     child.stderr.on("data", (d) => (err += d));
@@ -155,7 +157,7 @@ export function runAgent(wt: string, prompt: string, dir: string, io: ForgeIO, f
       if (timedOut) return reject(new ForgeError(`the agent ran out of time (${TIMEOUT_MS / 60000} minutes)`));
       if (lost) return reject(new Error(`the site stopped this job: ${lost}`));
       if (code !== 0 && !finished()) return reject(new Error(`agent exited ${code}: ${(err || text).trim().slice(-400)}`));
-      resolve({ costUsd, text, sessionId });
+      resolve({ costUsd, text: results.length ? results.join("\n\n") : text, sessionId });
     });
     child.stdin.end(prompt);
   });

@@ -220,7 +220,7 @@ function drawCard(ctx: CanvasRenderingContext2D, which: Card): void {
       wrapped(ctx, "Your drawing is a fighter now. Take it into a battle.", CX + 390, CY + 210, CARD.w - 440, 32, INK, 4, "left");
       break;
     case "failed":
-      text("COULDN'T CREATE THAT ONE", e?.error ?? "Something went wrong making it.", RED);
+      text("CREATION FAILED", e?.error ?? "Something went wrong making it.", RED);
       break;
   }
   menu.draw(ctx, buttons(which));
