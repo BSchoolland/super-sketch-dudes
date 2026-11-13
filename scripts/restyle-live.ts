@@ -1,7 +1,7 @@
 // Restyles live characters and publishes each as a new version of itself: download its bundle and cells, run
 // forge/restyle.ts (which keeps the result only if it plays the same on every frame), study it for the CPU, and
-// POST it to /api/characters/:id/source. Four at a time.
-// Usage: npx tsx scripts/restyle-live.ts <outdir> <fighterId>=<bundleUrl> ... [--dry]   (--dry: restyle, don't publish)
+// POST it to /api/characters/:id/source. Four at a time unless --jobs says otherwise.
+// Usage: npx tsx scripts/restyle-live.ts <outdir> <fighterId>=<bundleUrl> ... [--dry] [--jobs N]   (--dry: restyle, don't publish)
 // SITE and FORGE_TOKEN come from the forge's env (forge/env.ts).
 import fs from "node:fs";
 import path from "node:path";
@@ -11,6 +11,9 @@ import { loadForgeEnv } from "../forge/env";
 loadForgeEnv();
 const args = process.argv.slice(2);
 const dry = args.includes("--dry");
+const jobsAt = args.indexOf("--jobs");
+const jobs = jobsAt >= 0 ? Number(args.splice(jobsAt, 2)[1]) : 4;
+if (!(jobs >= 1)) { console.error("--jobs takes a whole number, 1 or more"); process.exit(2); }
 const [outRoot, ...pairs] = args.filter((a) => a !== "--dry");
 const site = process.env.SITE, token = process.env.FORGE_TOKEN;
 if (!outRoot || !pairs.length || !pairs.every((p) => p.includes("="))) { console.error("usage: npx tsx scripts/restyle-live.ts <outdir> <fighterId>=<bundleUrl> ... [--dry]"); process.exit(2); }
@@ -54,7 +57,7 @@ async function restyle(id: string, bundleUrl: string): Promise<string> {
 
 const queue = pairs.map((p) => { const i = p.indexOf("="); return [p.slice(0, i), p.slice(i + 1)] as const; });
 const results: string[] = [];
-await Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
+await Promise.all(Array.from({ length: Math.min(jobs, queue.length) }, async () => {
   for (let next = queue.shift(); next; next = queue.shift()) {
     const [id, url] = next, t0 = Date.now();
     const line = await restyle(id, url).then((r) => `${id}: ${r}`, (e: Error) => `${id}: FAILED ${e.message}`);
