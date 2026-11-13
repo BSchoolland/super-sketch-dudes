@@ -7,6 +7,7 @@ import { wrapped } from "./text";
 import { drawFighterPortrait } from "./portrait";
 import { fighterLoad } from "../gen";
 import { roster } from "../../../shared/fighters/index";
+import { FORGE_STEPS } from "../../../shared/forge-steps";
 
 export const RED = "#c0392b";
 
@@ -70,26 +71,14 @@ export function drawCharacterArt(ctx: CanvasRenderingContext2D, ch: ArtSource | 
   }
 }
 
-/**
- * The forge's steps as the player sees them: what's happening in plain words, and where on the
- * progress bar the step starts. Starts are the median share of the whole forge each step begins
- * at, from the forge worker's timestamps over real forges (about 280 s from claim to done: the poses
- * are drawn by ~45 s, the moves written by ~145 s, testing runs until ~260 s).
- */
-const FORGE_STEPS: { stage: RegExp; label: string; start: number }[] = [
-  { stage: /line/, label: "Waiting in line", start: 0 },
-  { stage: /reading the drawing/, label: "Looking at your drawing", start: 0.005 },
-  { stage: /agent is making it/, label: "Looking at your drawing", start: 0.01 },
-  { stage: /designing the moves/, label: "Adding moves", start: 0.17 },
-  { stage: /drawing the (sheet|animation)|designing the moveset/, label: "Animating your character", start: 0.02 },
-  { stage: /cutting out/, label: "Animating your character", start: 0.1 },
-  { stage: /writing the fighter/, label: "Finalizing attacks", start: 0.52 },
-  { stage: /balance testing/, label: "Testing character", start: 0.55 },
-  { stage: /final checks|upload/, label: "Finishing touches", start: 0.93 },
-];
+/** A typical forge from claim to done, in seconds. */
+const FORGE_TOTAL_S = FORGE_STEPS.reduce((t, s) => t + s.s, 0);
 
-/** A typical forge from claim to done, in seconds: progress and ETAs pace each step against it. */
-export const FORGE_S = 420;
+/** Each step's share of the progress bar: it starts where the steps before it typically add up to. */
+const STEP_SPANS = FORGE_STEPS.map((step, i) => {
+  const before = FORGE_STEPS.slice(0, i).reduce((t, s) => t + s.s, 0);
+  return { label: step.label, s: step.s, start: before / FORGE_TOTAL_S, end: (before + step.s) / FORGE_TOTAL_S };
+});
 
 /** When each forging character moved onto the step it's on, as this page saw it. */
 const stepSince = new Map<string, { stage: string; at: number }>();
@@ -106,8 +95,7 @@ export function forgeEta(e: Pick<LibraryEntry, "id" | "status" | "stage">): numb
   let seen = stepSince.get(e.id);
   if (!seen || seen.stage !== stage) { seen = { stage, at: now }; stepSince.set(e.id, seen); }
   const step = forgeStep(stage);
-  const inStep = (step.end - step.start) * FORGE_S - (now - seen.at);
-  return (1 - step.end) * FORGE_S + Math.max(inStep, 5);
+  return (1 - step.end) * FORGE_TOTAL_S + Math.max(step.s - (now - seen.at), 5);
 }
 
 /** An ETA in words: "about 3 min left", "under a minute left". */
@@ -115,13 +103,10 @@ export function etaWords(s: number): string {
   return s < 60 ? "under a minute left" : `about ${Math.round(s / 60)} min left`;
 }
 
-/** Where a forge stage sits: its words, and the progress-bar span it covers. */
-export function forgeStep(stage: string): { label: string; start: number; end: number } {
-  const i = FORGE_STEPS.findIndex((s) => s.stage.test(stage));
-  if (i < 0) return { label: stage, start: 0, end: 0.05 };
-  const start = FORGE_STEPS[i].start;
-  const end = Math.min(1, ...FORGE_STEPS.filter((s) => s.start > start).map((s) => s.start));
-  return { label: FORGE_STEPS[i].label, start, end };
+/** Where a forge stage sits: its words, its typical seconds, and the progress-bar span it covers. */
+export function forgeStep(stage: string): { label: string; s: number; start: number; end: number } {
+  const i = FORGE_STEPS.findIndex((s) => s.stage === stage);
+  return i < 0 ? { label: stage, s: 4, start: 0, end: 0.02 } : STEP_SPANS[i];
 }
 
 /** When the forge opens again, in the player's own time: "Friday at 11 AM". */

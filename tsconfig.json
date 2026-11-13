@@ -12,5 +12,6 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["shared", "client/src", "server", "scripts", "test", "forge"]
+  "include": ["shared", "client/src", "server", "scripts", "test", "forge"],
+  "exclude": ["forge/runs", "forge/work"]
 }

@@ -7,7 +7,7 @@ import { libraryChoices, myLibrary, refreshLibrary } from "../fighters";
 import type { LibraryEntry } from "../../../shared/account";
 import { bg, hover, label, type Screen } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
-import { characterStatus, drawCharacterArt, etaWords, forgeEta, forgeOpens, forgeStep, FORGE_S, RED } from "./character";
+import { characterStatus, drawCharacterArt, etaWords, forgeEta, forgeOpens, forgeStep, RED } from "./character";
 import { INK, PENCIL, inkRect } from "../render/paper";
 import { wrapped } from "./text";
 import { CharacterDetail, moveRows } from "./charcard";
@@ -93,8 +93,7 @@ export class ForgeScreen implements Screen {
     const stage = e.stage || (e.status === "queued" ? "waiting in line" : "reading the drawing");
     if (stage !== this.stage) { this.stage = stage; this.stageAt = this.t; }
     const step = forgeStep(stage);
-    const span = step.end - step.start;
-    const target = step.start + span * (1 - Math.exp(-(this.t - this.stageAt) / Math.max(4, span * FORGE_S * 0.7)));
+    const target = step.start + (step.end - step.start) * (1 - Math.exp(-(this.t - this.stageAt) / Math.max(4, step.s * 0.7)));
     this.shown = Math.max(this.shown, this.shown + (target - this.shown) * Math.min(1, dt * 3));
     const w = 760, h = 34, x = (VIEW_W - w) / 2;
     ctx.save();

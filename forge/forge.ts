@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import type { CheckReport } from "./checks";
 import type { CpuStudy } from "../shared/cpu-study";
 import { FORGE_JOB_MINUTES } from "../shared/config";
+import { AGENT_STAGES } from "../shared/forge-steps";
 
 export const AGENT_MODEL = process.env.FORGE_MODEL ?? "claude-opus-5-5";
 const AGENT_EFFORT = process.env.FORGE_EFFORT;
@@ -53,8 +54,6 @@ export interface ForgeIO {
 /** A failure the job should be failed with, message as the players will see it. */
 export class ForgeError extends Error {}
 
-/** The steps the agent's tool use announces, in the order a forge goes through them. */
-const STAGE_ORDER = ["drawing the animation", "designing the moves", "writing the fighter", "balance testing", "final checks and upload"];
 
 export async function runForge(job: JobSpec, drawingSrc: string, dir: string, io: ForgeIO): Promise<CompletePayload> {
   const t0 = Date.now();
@@ -128,12 +127,15 @@ export function runAgent(wt: string, prompt: string, dir: string, io: ForgeIO, f
       if (e.type === "assistant") for (const b of e.message?.content ?? []) {
         if (b.type === "tool_use") {
           const cmd = String(b.input?.command ?? b.input?.file_path ?? "");
-          const stage = /tools\/sheet/.test(cmd) ? "drawing the animation"
+          // a tool counts when it runs, not when the agent greps or reads its source
+          const runs = (tool: string) => b.name === "Bash" && new RegExp(`tsx\\s+\\S*tools/${tool}\\b`).test(cmd);
+          // latest step first: one command often checks and then deploys
+          const stage = runs("deploy") ? "final checks and upload" : runs("check") ? "balance testing"
+            : /\.fighter\.js/.test(cmd) && b.name === "Write" ? "writing the fighter"
             // the agent opening the cut-out cells means the drawing is done and it's on to the moves
             : b.name === "Read" && /\/cells\//.test(cmd) ? "designing the moves"
-            : /tools\/check/.test(cmd) ? "balance testing" : /tools\/deploy/.test(cmd) ? "final checks and upload"
-            : /\.fighter\.js/.test(cmd) && b.name === "Write" ? "writing the fighter" : null;
-          const step = stage ? STAGE_ORDER.indexOf(stage) : -1;
+            : runs("sheet") ? "drawing the animation" : null;
+          const step = stage ? AGENT_STAGES.indexOf(stage) : -1;
           // steps only move forward (a later look at the cells isn't a step back); the server no longer
           // having this job running (it gave it to someone else) stops the work
           if (stage && step > reached) {
