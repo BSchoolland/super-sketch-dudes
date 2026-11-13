@@ -7,7 +7,7 @@ export const PAD_PX = 768;
 export const COLORS = [INK, "#e4483f", "#e98a2d", "#ddb51d", "#329854", "#287ad4", "#8b5a2b", "#7b4fb8"];
 export const SIZES = [0.25, 0.6, 1, 1.5, 2.2];
 
-export type ToolKind = "pen" | "eraser" | "fill";
+export type ToolKind = "pen" | "eraser" | "fill" | "pick";
 export interface Tool { kind: ToolKind; color: string }
 
 type StrokeKind = "pen" | "eraser";
@@ -73,6 +73,8 @@ export class DrawPad {
   locked = false;
   /** When (performance.now) a fill was last refused for reaching the edge. */
   leakedAt = -Infinity;
+  /** Called with the pixel under a press while the tool is "pick". */
+  onPick: ((r: number, g: number, b: number) => void) | null = null;
   /** Goes up with every mark added or undone. */
   revision = 0;
   private marks: Mark[] = [];
@@ -155,7 +157,9 @@ export class DrawPad {
     if (e.phase === "down") {
       const [px, py] = pts[0];
       if (this.current || px < 0 || py < 0 || px > PAD_PX || py > PAD_PX) return;
-      if (this.tool.kind === "fill") { this.fill(Math.min(PAD_PX - 1, Math.floor(px)), Math.min(PAD_PX - 1, Math.floor(py))); return; }
+      const ix = Math.min(PAD_PX - 1, Math.floor(px)), iy = Math.min(PAD_PX - 1, Math.floor(py));
+      if (this.tool.kind === "fill") { this.fill(ix, iy); return; }
+      if (this.tool.kind === "pick") { const [r, g, b] = this.cg.getImageData(ix, iy, 1, 1).data; this.onPick?.(r, g, b); return; }
       this.current = { id: e.id, stroke: { kind: this.tool.kind, color: this.tool.color, width: BASE_WIDTH[this.tool.kind] * SIZES[this.size], points: [px, py] } };
       this.liveDirty = true;
       return;

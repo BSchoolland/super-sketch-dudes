@@ -9,23 +9,35 @@ import { ColorWheel } from "./colorwheel";
 const LEFT = 90, COL_W = 340;
 /** Swatch width: the colour wheel takes a ninth slot in advanced mode. */
 const swatchW = () => (settings.advanced ? 37 : 42);
+/** Tool cards: the eyedropper takes a fourth slot in advanced mode. */
+const TOOLS = () => (settings.advanced ? ["pencil", "eraser", "fill", "pick"] : ["pencil", "eraser", "fill"]);
+const toolW = () => (settings.advanced ? 79 : 108);
 
 /**
  * The tool column left of a draw pad: colours, a custom colour, pencil, eraser, fill, sizes, undo, clear.
- * The ADVANCED toggle adds a colour wheel in the screen's right column, above its buttons, and a swatch holding its
- * last pick. Ctrl+Z undoes while attached.
+ * The ADVANCED toggle adds a colour wheel in the screen's right column, above its buttons, a swatch holding its
+ * last pick, and an eyedropper that sets the wheel from the drawing. Ctrl+Z undoes while attached.
  */
 export class PadTools {
   private readonly onKey = (e: KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.code === "KeyZ") { e.preventDefault(); this.pad.undo(); }
   };
 
-  private wheel = new ColorWheel(1660, 370, 140, { x: 1515, y: 545, w: 290, h: 40 });
+  private wheel = new ColorWheel(1660, 405, 170);
   /** The last colour picked on the wheel, kept for its swatch. */
   private custom: string | null = null;
   private unsubscribe: (() => void) | null = null;
 
-  constructor(readonly pad: DrawPad) {}
+  /** The tool the eyedropper hands back to once it has picked. */
+  private beforePick: "pen" | "fill" = "pen";
+
+  constructor(readonly pad: DrawPad) {
+    pad.onPick = (r, g, b) => {
+      this.wheel.setRgb(r, g, b);
+      this.custom = this.wheel.color;
+      pad.tool = { kind: this.beforePick, color: this.custom };
+    };
+  }
 
   attach(): void {
     this.pad.attach();
@@ -52,7 +64,7 @@ export class PadTools {
     const b: Button[] = [];
     COLORS.forEach((_, i) => b.push({ id: `color${i}`, x: LEFT + i * swatchW(), y: 100, w: swatchW(), h: 64, text: "", custom: true }));
     if (settings.advanced) b.push({ id: "wheel", x: LEFT + COLORS.length * swatchW(), y: 100, w: swatchW(), h: 64, text: "", custom: true });
-    ["pencil", "eraser", "fill"].forEach((id, i) => b.push({ id, x: LEFT + i * 116, y: 214, w: 108, h: 84, text: "", custom: true }));
+    TOOLS().forEach((id, i) => b.push({ id, x: LEFT + i * (toolW() + 8), y: 214, w: toolW(), h: 84, text: "", custom: true }));
     SIZES.forEach((_, i) => b.push({ id: `size${i}`, x: LEFT + i * 70, y: 422, w: 60, h: 90, text: "", custom: true }));
     b.push({ id: "undo", x: LEFT, y: 590, w: COL_W, h: 84, text: "UNDO", size: 36, disabled: !this.pad.canUndo });
     b.push({ id: "clear", x: LEFT, y: 700, w: COL_W, h: 84, text: "CLEAR", size: 36, disabled: this.pad.blank });
@@ -66,12 +78,20 @@ export class PadTools {
     if (id === "pencil") pad.tool = { kind: "pen", color: pad.tool.color };
     else if (id === "eraser") pad.tool = { kind: "eraser", color: pad.tool.color };
     else if (id === "fill") pad.tool = { kind: "fill", color: pad.tool.color };
+    else if (id === "pick") {
+      if (pad.tool.kind === "pen" || pad.tool.kind === "fill") this.beforePick = pad.tool.kind;
+      pad.tool = { kind: "pick", color: pad.tool.color };
+    }
     else if (id.startsWith("color")) this.pick(COLORS[Number(id.slice(5))]);
     else if (id === "wheel") this.pick(this.custom ?? this.wheel.color);
     else if (id.startsWith("size")) pad.size = Number(id.slice(4));
     else if (id === "undo") pad.undo();
     else if (id === "clear") pad.clear();
-    else if (id === "advanced") { settings.advanced = !settings.advanced; saveSettings(); }
+    else if (id === "advanced") {
+      settings.advanced = !settings.advanced;
+      saveSettings();
+      if (!settings.advanced && pad.tool.kind === "pick") pad.tool = { kind: this.beforePick, color: pad.tool.color };
+    }
     else return false;
     return true;
   }
@@ -83,11 +103,12 @@ export class PadTools {
     const toolCard = (id: string, text: string, active: boolean) => {
       const b = at(id);
       card(ctx, b.x, b.y, b.w, b.h, INK, active || focus === id);
-      title(ctx, text, b.x + b.w / 2, b.y + 54, 30, active ? INK : PENCIL, "center", b.w - 12);
+      title(ctx, text, b.x + b.w / 2, b.y + 54, settings.advanced ? 26 : 30, active ? INK : PENCIL, "center", b.w - 12);
     };
     toolCard("pencil", "pencil", tool.kind === "pen");
     toolCard("eraser", "eraser", tool.kind === "eraser");
     toolCard("fill", "fill", tool.kind === "fill");
+    if (settings.advanced) toolCard("pick", "pick", tool.kind === "pick");
     SIZES.forEach((size, i) => {
       const b = at(`size${i}`);
       card(ctx, b.x, b.y, b.w, b.h, INK, this.pad.size === i || focus === b.id);
@@ -102,7 +123,7 @@ export class PadTools {
     }
     COLORS.forEach((color, i) => {
       const b = at(`color${i}`);
-      const active = tool.kind !== "eraser" && tool.color === color;
+      const active = tool.kind !== "eraser" && tool.kind !== "pick" && tool.color === color;
       ctx.save();
       ctx.fillStyle = color;
       ctx.beginPath(); ctx.arc(b.x + b.w / 2, b.y + 32, active ? 18 : 14, 0, Math.PI * 2); ctx.fill();
@@ -114,7 +135,7 @@ export class PadTools {
 
   private drawWheelSwatch(ctx: CanvasRenderingContext2D, w: Button, focus: string | undefined): void {
     const tool = this.pad.tool, wx = w.x + w.w / 2, wy = w.y + 32;
-    const active = tool.kind !== "eraser" && tool.color === this.custom && !COLORS.includes(tool.color);
+    const active = tool.kind !== "eraser" && tool.kind !== "pick" && tool.color === this.custom && !COLORS.includes(tool.color);
     const rainbow = ctx.createConicGradient(0, wx, wy);
     ["#f00", "#ff0", "#0f0", "#0ff", "#00f", "#f0f", "#f00"].forEach((c, i) => rainbow.addColorStop(i / 6, c));
     ctx.save();
