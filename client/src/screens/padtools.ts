@@ -60,6 +60,13 @@ export class PadTools {
     this.pad.tool = { kind: this.pad.tool.kind === "fill" ? "fill" : "pen", color };
   }
 
+  /** A swatch press: the colour, with the wheel moved to it. */
+  private choose(color: string): void {
+    const n = parseInt(color.slice(1), 16);
+    this.wheel.setRgb(n >> 16, (n >> 8) & 255, n & 255);
+    this.pick(color);
+  }
+
   buttons(): Button[] {
     const b: Button[] = [];
     COLORS.forEach((_, i) => b.push({ id: `color${i}`, x: LEFT + i * swatchW(), y: 100, w: swatchW(), h: 64, text: "", custom: true }));
@@ -82,8 +89,8 @@ export class PadTools {
       if (pad.tool.kind === "pen" || pad.tool.kind === "fill") this.beforePick = pad.tool.kind;
       pad.tool = { kind: "pick", color: pad.tool.color };
     }
-    else if (id.startsWith("color")) this.pick(COLORS[Number(id.slice(5))]);
-    else if (id === "wheel") this.pick(this.custom ?? this.wheel.color);
+    else if (id.startsWith("color")) this.choose(COLORS[Number(id.slice(5))]);
+    else if (id === "wheel") this.choose(this.custom ?? this.wheel.color);
     else if (id.startsWith("size")) pad.size = Number(id.slice(4));
     else if (id === "undo") pad.undo();
     else if (id === "clear") pad.clear();
