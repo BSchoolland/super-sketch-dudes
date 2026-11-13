@@ -37,10 +37,14 @@ initEvents(DATA_DIR);
 const processEvent = watchProcess({ port: PORT, base: BASE, node: process.version }, () => saveHandoff(DATA_DIR));
 
 const app = express();
+// API answers are never cached or revalidated: Safari can turn a 304 into an empty body when its copy is gone,
+// which every JSON caller then fails to parse ("The string did not match the expected pattern")
+app.set("etag", false);
 // forge completions carry nine PNG cells + a sheet as base64; a new character carries its drawing
 app.use((req, res, next) => express.json({ limit: req.path.includes("/forge/") || req.path.endsWith("/characters/import") || req.path.endsWith("/cells") ? "12mb" : req.path.endsWith("/cpu") ? "4mb" : req.path.includes("/games") ? "40mb" : req.path.endsWith("/events") ? "256kb" : req.path.endsWith("/source") ? "4mb" : req.path.endsWith("/characters") || req.path.endsWith("/feedback") || req.path.endsWith("/feedback/response") ? "2mb" : req.path.includes("/maps") ? "80kb" : "8kb" })(req, res, next));
 const api = express.Router();
 app.use(at("/api", `${PLAY}/api`), api);
+api.use((_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
 api.use(requestEvents());
 
 api.get("/health", (_req, res) => res.json({ ok: true, build: process.env.BUILD ?? "dev" }));
@@ -102,8 +106,7 @@ api.post("/log", (req, res) => {
 api.use(requestErrors());
 
 const clientDir = fs.existsSync(path.join(root, "dist", "client")) ? path.join(root, "dist", "client") : path.join(root, "client");
-// house fighters keep their URLs across builds, so they revalidate (ETag) instead of sitting in the browser cache
-const staticOpts = { maxAge: "1h", setHeaders: (res: express.Response, p: string) => { if (p.endsWith(".html") || p.includes(`${path.sep}house${path.sep}`)) res.setHeader("Cache-Control", "no-cache"); } };
+const staticOpts = { maxAge: "1h", setHeaders: (res: express.Response, p: string) => { if (p.endsWith(".html")) res.setHeader("Cache-Control", "no-cache"); } };
 // the game's old host: its page sends the browser to the new home
 app.get([...at("/"), ...at("/index.html")], (req, res, next) => {
   if (req.get("x-forwarded-host") !== OLD_HOST) return next();
@@ -114,6 +117,9 @@ app.get([...at("/"), ...at("/index.html")], (req, res, next) => {
 if (BASE !== PLAY) app.get(/^\/play(\/|$)/, (req, res) => res.redirect(301, req.originalUrl.slice(PLAY.length) || "/"));
 // the game page; Discord and Google send the signed-in browser back to /auth with the token in the URL fragment
 attachHome(app, { at, base: `${BASE}/`, indexFile: path.join(clientDir, "index.html"), genDir });
+// house fighters keep their URLs across builds, so they're kept only briefly, with no ETag or Last-Modified: a browser
+// downloads them again rather than revalidating (Safari can turn a 304 into an empty body)
+app.use(at("/house"), express.static(path.join(clientDir, "house"), { maxAge: "5m", etag: false, lastModified: false }));
 app.use(at("/"), express.static(clientDir, staticOpts));
 // the privacy notice and terms: plain pages beside the game (privacy.html is the URL Google's consent screen has)
 for (const page of ["privacy", "terms"]) app.get(at(`/${page}`), (_req, res) => res.sendFile(path.join(clientDir, `${page}.html`)));
