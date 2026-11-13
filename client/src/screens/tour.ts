@@ -203,10 +203,10 @@ function drawCard(ctx: CanvasRenderingContext2D, which: Card): void {
   };
   switch (which) {
     case "intro":
-      text("YOUR FIGHTER IS COMING TO LIFE", `It takes about 10 minutes. While you wait: have a battle, find a fighter you like in COMMUNITY and save it, then battle with that one. Yours should be ready by then.`);
+      text("YOUR FIGHTER IS BEING CREATED", `It takes about 10 minutes. While you wait: have a battle, find a fighter you like in COMMUNITY and save it, then battle with that one. Yours should be ready by then.`);
       break;
     case "afterBattle":
-      text("NICE FIGHT", `Next: COMMUNITY is everyone else's drawings, brought to life. Find one you like and SAVE it. Yours: ${eta()}.`);
+      text("NICE FIGHT", `Next: COMMUNITY is everyone else's fighters. Find one you like and SAVE it. Yours: ${eta()}.`);
       break;
     case "afterSave":
       text("SAVED", `${choiceName(tour!.saved)} is in your characters now. Take it into a battle.`);
@@ -220,7 +220,7 @@ function drawCard(ctx: CanvasRenderingContext2D, which: Card): void {
       wrapped(ctx, "Your drawing is a fighter now. Take it into a battle.", CX + 390, CY + 210, CARD.w - 440, 32, INK, 4, "left");
       break;
     case "failed":
-      text("THAT ONE DIDN'T COME TO LIFE", e?.error ?? "Something went wrong making it.", RED);
+      text("COULDN'T CREATE THAT ONE", e?.error ?? "Something went wrong making it.", RED);
       break;
   }
   menu.draw(ctx, buttons(which));

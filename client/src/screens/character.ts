@@ -110,7 +110,7 @@ export function forgeWords(st: ForgeStanding): { title: string | null; text: str
     };
     case null: break;
   }
-  if (st.resting) return { title: "NEW CHARACTERS ARE PAUSED", text: `${rest} Draw one now and it comes to life ${st.resting.until ? "then" : "when they're back"}.`, short: restShort, blocked: false };
+  if (st.resting) return { title: "NEW CHARACTERS ARE PAUSED", text: `${rest} Draw one now and it'll be created ${st.resting.until ? "then" : "when they're back"}.`, short: restShort, blocked: false };
   const left = st.left === null ? "" : st.kind === "guest" ? `${characters(st.left)} left as a guest` : `${characters(st.left)} left today`;
   return { title: null, text: left, short: left, blocked: false };
 }

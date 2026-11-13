@@ -98,7 +98,7 @@ const retryable = (job: ForgeJob): boolean => job.status === "failed" && !job.bl
 
 /** What a player reads about a failed character: the moderator's reason is written for them, the rest is our plumbing. */
 const playerError = (job: ForgeJob): string | null =>
-  job.status !== "failed" || !job.error ? job.error : job.blocked ? job.error : "Something went wrong bringing this one to life. Sorry!";
+  job.status !== "failed" || !job.error ? job.error : job.blocked ? job.error : "Something went wrong creating this one. Sorry!";
 
 export function entryOf(job: ForgeJob): LibraryEntry {
   return {

@@ -18,7 +18,7 @@ export const HOME_COPY = {
   howTitle: "How it works",
   steps: [
     { title: "1. Draw", text: "Draw any character you can imagine. Stick figures, dragons, superheroes, a walrus...", alt: "The drawing screen with a stick figure holding a sword" },
-    { title: "2. It comes to life", text: "In a few minutes it's a fighter with all-new moves and abilities.", alt: "The finished fighter next to the drawing it was made from" },
+    { title: "2. It becomes a fighter", text: "In a few minutes it's a fighter with all-new moves and abilities.", alt: "The finished fighter next to the drawing it was made from" },
     { title: "3. Fight", text: "Battle with up to six players online with a room code, or against bots.", alt: "Four hand-drawn fighters in a match" },
   ],
 
