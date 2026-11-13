@@ -163,7 +163,27 @@ export class PadTools {
 }
 
 /** The pad as a PNG data URL, or why it can't be sent. */
+/**
+ * Whether this browser hands back what was drawn on a canvas. Firefox's fingerprinting protection (and some privacy
+ * add-ons) return a placeholder, a stripe pattern, instead, which would send the forge a picture of stripes.
+ */
+export function canvasReadable(): boolean {
+  const c = document.createElement("canvas");
+  c.width = c.height = 8;
+  const g = c.getContext("2d", { willReadFrequently: true })!;
+  g.fillStyle = "#d02020"; g.fillRect(0, 0, 4, 8);
+  g.fillStyle = "#2040d0"; g.fillRect(4, 0, 4, 8);
+  const d = g.getImageData(0, 0, 8, 8).data;
+  const near = (i: number, r: number, gr: number, b: number) => Math.abs(d[i] - r) < 24 && Math.abs(d[i + 1] - gr) < 24 && Math.abs(d[i + 2] - b) < 24;
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
+    const i = (y * 8 + x) * 4;
+    if (!(x < 4 ? near(i, 0xd0, 0x20, 0x20) : near(i, 0x20, 0x40, 0xd0))) return false;
+  }
+  return true;
+}
+
 export function padPng(pad: DrawPad): { png: string } | { problem: string } {
+  if (!canvasReadable()) return { problem: "your browser is scrambling drawings (a privacy setting), so this one can't be sent: allow canvas images for this site, or try another browser" };
   const png = pad.toPng();
   const bytes = Math.floor(((png.length - png.indexOf(",") - 1) * 3) / 4);
   if (bytes > DRAW_PNG_MAX_BYTES) return { problem: `this drawing is ${Math.round(bytes / 1000)} KB; the limit is ${DRAW_PNG_MAX_BYTES / 1000} KB` };
