@@ -1,0 +1,14 @@
+{
+  "name": "Super Sketch Dudes",
+  "short_name": "Sketch Dudes",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#f4efe4",
+  "theme_color": "#f4efe4",
+  "icons": [
+    { "src": "./icon.png", "sizes": "256x256", "type": "image/png" },
+    { "src": "./apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

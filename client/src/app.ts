@@ -30,6 +30,7 @@ import { site, setSiteBase } from "./base";
 import { swap, type Handoff } from "./handoff";
 import { TitleScreen } from "./screens/title";
 import { closeAbout } from "./about";
+import { startBars } from "./bars";
 import { tourCardUp, tourDraw, tourSaw, tourTick, tourUpdate } from "./screens/tour";
 
 const NO_MENU: MenuInput = { up: false, down: false, left: false, right: false, confirm: false, back: false, start: false, any: false, from: null };
@@ -63,6 +64,8 @@ export async function mount(opts: MountOptions): Promise<AppController> {
   const canvas = opts.canvas;
   const launch = activityLaunch(opts.params, location.host, import.meta.env.DEV);
   const stopTelemetry = startTelemetry({ canvas, bundle: swap.hash, continues: opts.resume?.session, ...(launch ? { launch: "discord-activity" } : {}) });
+  // the website's own page: not the Activity, not the swappable shell (it would start them again at every swap)
+  if (!launch && !shellSwap) startBars(canvas);
   const stopClassTime = watchClassTime();
   loadSettings();
   setVolume(settings.volume);

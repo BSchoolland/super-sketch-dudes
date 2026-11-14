@@ -83,7 +83,7 @@ cells served at `fighters/<id>.png`). Every word of it is in `server/home-copy.t
 page with no strip. Its pictures are `client/public/` (`screenshots/`, `clip.mp4`, `og.jpg`, icons, `robots.txt`,
 `sitemap.xml`; `node scripts/homeshots.mjs` remakes them).
 
-The sections are `display: none` and the page can't scroll until the title screen's tab (bottom edge) opens them
+The sections are `display: none` and the page can't scroll (an iPhone's browser aside: "The browser's bars") until the title screen's tab (bottom edge) opens them
 (`client/src/about.ts`): the page scrolls down to them and the game leaves the keys to the page. PLAY scrolls back up,
 and the page closes them when it's back at the top; any screen but the title closes them at once. Nothing of them
 loads before they open, so the game boots as it did without them. The Activity never shows the tab.
@@ -231,6 +231,27 @@ squat ends: a short hop. A match screen arms the controls every tick (`VersusScr
 they are live only while it runs; the HUD keeps to the space between them (`Renderer.hudBand`). Upright, the app draws
 a "turn your phone sideways" page instead of the match and a local match pauses. A match played on them counts on
 the session's `touch.matches`, which the funnel's "on touch" column reads.
+
+### The browser's bars
+
+`client/src/bars.ts` keeps a phone's browser bars out of the game, on the website's own page only (not the Activity,
+not the shell, not inside any iframe) and only where the primary pointer is coarse; a desktop gets none of it, not
+even the manifest link. Opened from the home screen (`manifest.webmanifest`, display fullscreen, added at run time;
+`apple-mobile-web-app-capable` in index.html) there are no bars. Otherwise:
+
+- Android and iPads: a touch on the canvas goes fullscreen and locks landscape, except while a match screen is up or
+  the about sections are open. Opening the sections leaves fullscreen: in it, Chrome won't let a reader zoom them.
+- iPhones (every iPhone browser is WebKit, with no Fullscreen API; the bars collapse only when a finger scrolls the
+  page): `html.swipe` makes the page scrollable and 150vh tall, and in landscape a "SWIPE UP TO PLAY" card covers the
+  game until the viewport has grown to the screen's height (or by 40px, for a browser whose bars tuck to a strip).
+  After 6 s it offers "tap to play anyway", for the rest of the page's life. Once the bars are tucked nothing may
+  scroll the page or they come back: the canvas is `touch-action: none`, and a document listener cancels every
+  touchmove and pinch except on the card, in the open about sections, or in a text box with more to show. The card
+  stays down while the sections are open or a text field has the keyboard.
+
+What happened is on the session's `bars` list (mode, the card shown and why it went, with the viewport and screen).
+`node scripts/barscheck.mjs` checks it in emulation (WebKit iPhone, Chromium Android, a desktop, an iframe): the bars
+are a viewport shorter than the screen there, so a real phone is still the only test of the swipe itself.
 
 ## Rendering
 
