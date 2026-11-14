@@ -12,7 +12,7 @@ import type { HouseId } from "../shared/house";
 import { loadHouse } from "../test/house";
 
 export interface Failure { kind: "hard" | "hook"; msg: string }
-export interface CheckInput { bundle: GeneratedBundle; height: number }
+export interface CheckInput { bundle: GeneratedBundle }
 export interface CheckReport {
   ok: boolean;
   failures: Failure[];
@@ -42,7 +42,7 @@ class HookLog {
 }
 
 export async function runChecks(input: CheckInput): Promise<CheckReport> {
-  const { bundle, height } = input;
+  const { bundle } = input;
   const id = bundle.id;
   const r: CheckReport = { ok: false, failures: [], soft: [], ladder: {}, recovery: null, killPercents: {}, movesUsed: [], timings: {} };
   const hard = (msg: string) => r.failures.push({ kind: "hard", msg });
@@ -61,7 +61,6 @@ export async function runChecks(input: CheckInput): Promise<CheckReport> {
     return r;
   }
   for (const l of validateGenerated(def, { strict: true })) hard(`build: ${l}`);
-  if (def.stats.height !== height) hard(`stats.height is ${def.stats.height} but the cell boxes were converted at ${height}; set stats.height = ${height} so the drawing and the hitboxes line up`);
   if (!def.moves.uspecial.helpless || !def.moves.uspecial.ledgeOk) hard("uspecial must have helpless: true and ledgeOk: true");
 
   const hooks = new HookLog();
@@ -133,7 +132,7 @@ export async function runChecks(input: CheckInput): Promise<CheckReport> {
       row.dealtPerMatch = Math.round(row.dealtPerMatch / LADDER_MATCHES);
       r.ladder[opp] = row;
     }
-    if (dealt === 0) hard(`ladder: dealt 0% in ${LADDER.length * LADDER_MATCHES} UNFAIR CPU matches. The CPU can't land anything: check hitbox positions (x forward, y negative is UP), active frames inside total, and that jab1/ftilt/fsmash have hitboxes near the body (x 20-120, y -20..-${height})`);
+    if (dealt === 0) hard(`ladder: dealt 0% in ${LADDER.length * LADDER_MATCHES} UNFAIR CPU matches. The CPU can't land anything: check hitbox positions (x forward, y negative is UP), active frames inside total, and that jab1/ftilt/fsmash have hitboxes near the body (x 20-120, y -20..-${def.stats.height})`);
     const all = Object.values(r.ladder);
     const w = all.reduce((a, x) => a + x.wins, 0), total = LADDER.length * LADDER_MATCHES;
     const secs = all.reduce((a, x) => a + x.avgSeconds, 0) / all.length;

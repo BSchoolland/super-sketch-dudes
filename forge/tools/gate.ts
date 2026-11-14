@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { buildGenerated, type GeneratedBundle } from "../../shared/gen/load";
+import type { GeneratedBundle } from "../../shared/gen/load";
 import { runChecks, type CheckReport } from "../checks";
 
 export interface CellsMeta { px: number; feetPx: number; heightPx: number; cells: Record<string, { box: number[] }> }
@@ -13,12 +13,10 @@ export function bundleOf(js: string, cellsDir: string, anims: Record<string, str
   return { bundle: { id: "gen-candidate", description: "", source, sprite: { px: meta.px, feetPx: meta.feetPx, heightPx: meta.heightPx, anims, cells } }, meta };
 }
 
-export async function runCheck(js: string, cellsDir: string, anims: Record<string, string> = {}): Promise<{ report: CheckReport; bundle: GeneratedBundle; meta: CellsMeta; height: number }> {
+export async function runCheck(js: string, cellsDir: string, anims: Record<string, string> = {}): Promise<{ report: CheckReport; bundle: GeneratedBundle; meta: CellsMeta }> {
   const { bundle, meta } = bundleOf(js, cellsDir, anims);
-  let height = 120;
-  try { height = (await buildGenerated(bundle)).stats.height; } catch { /* the checks report the build problem */ }
-  const report = await runChecks({ bundle, height });
-  return { report, bundle, meta, height };
+  const report = await runChecks({ bundle });
+  return { report, bundle, meta };
 }
 
 export function printReport(r: CheckReport): void {

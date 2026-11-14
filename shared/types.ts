@@ -163,8 +163,8 @@ export interface Palette {
 /**
  * A fighter drawn from a sheet of hand-drawn cells. Every cell is a
  * square PNG of `px` pixels with the character facing right, horizontally centred, feet on
- * the row `feetPx` from the top, and drawn so the idle cell's content is `heightPx` tall.
- * The renderer maps `heightPx` onto `stats.height`, so all cells share one world scale.
+ * the row `feetPx` from the top. `heightPx` is how many cell pixels tall the idle body is (props held
+ * above it don't count); the renderer maps it onto `stats.height`, so all cells share one world scale.
  */
 export interface SpriteRig {
   /** Cell name -> image URL (or data URL). Names are the SPRITE_CELLS in gen/sprite.ts. */

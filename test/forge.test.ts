@@ -9,7 +9,7 @@ const bundle = (id: string, src: string) => ({ id, source: src, sprite, descript
 
 describe("forge checks", () => {
   it("passes the exemplar and reports the ladder, recovery and kill percents", async () => {
-    const r = await runChecks({ bundle: bundle("gen-forge-ok", source), height: 120 });
+    const r = await runChecks({ bundle: bundle("gen-forge-ok", source) });
     expect(r.failures).toEqual([]);
     expect(Object.keys(r.ladder)).toEqual(["woodstove", "slugbert", "rocket", "wizard"]);
     expect(r.recovery).toBeGreaterThanOrEqual(6);
@@ -18,25 +18,24 @@ describe("forge checks", () => {
 
   it("passes the second exemplar, the caster", async () => {
     const wizard = readFileSync(new URL("../forge/exemplar/fire-wizard.fighter.js", import.meta.url), "utf8");
-    const r = await runChecks({ bundle: bundle("gen-forge-wizard", wizard), height: 118 });
+    const r = await runChecks({ bundle: bundle("gen-forge-wizard", wizard) });
     expect(r.failures).toEqual([]);
   });
 
-  it("fails a fighter whose uspecial doesn't rise, a throwing hook and the wrong height, each with a specific message", async () => {
+  it("fails a fighter whose uspecial doesn't rise, and a throwing hook, each with a specific message", async () => {
     const broken = source
       .replace("f.vy = -11 + (f.frame - 5) * 0.3;", "f.vy = 2;").replace("jumps: 2", "jumps: 1")
       .replace("drive: ({ f, input, state }) => {", "drive: ({ f, input, state }) => {\n        if (f.frame === 3) throw new Error(\"kaboom\");");
     expect(broken).not.toBe(source);
-    const r = await runChecks({ bundle: bundle("gen-forge-bad", broken), height: 100 });
+    const r = await runChecks({ bundle: bundle("gen-forge-bad", broken) });
     const msgs = r.failures.map((f) => f.msg).join("\n");
-    expect(msgs).toMatch(/stats\.height is 120 .* set stats\.height = 100/);
     expect(msgs).toMatch(/recovery: .* made it back [0-5]\/10/);
     expect(msgs).toMatch(/hook of move sspecial threw \d+x: "kaboom"/);
     expect(r.ok).toBe(false);
   });
 
   it("stops at lint and build problems", async () => {
-    const r = await runChecks({ bundle: bundle("gen-forge-lint", source.replace("const stats = {", "const r0 = Math.random();\n  const stats = {")), height: 120 });
+    const r = await runChecks({ bundle: bundle("gen-forge-lint", source.replace("const stats = {", "const r0 = Math.random();\n  const stats = {")) });
     expect(r.failures.map((f) => f.msg)).toEqual([expect.stringMatching(/^lint: line \d+: non-deterministic Math/)]);
   });
 });

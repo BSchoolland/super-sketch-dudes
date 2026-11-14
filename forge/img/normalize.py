@@ -180,7 +180,10 @@ def main():
     if os.path.exists(meta_path):
         prev = json.load(open(meta_path))
         if (prev["px"], prev["feetPx"]) != (px, feet): sys.exit("cells.json in the out dir has a different px/feet")
-        prev["cells"].update(meta["cells"]); meta = prev
+        prev["cells"].update(meta["cells"])
+        # a redrawn base sheet is a new idle drawing: its height (and any body line on the old one) starts over
+        if not opts["prefix"] and not opts["names"]: prev["heightPx"] = meta["heightPx"]
+        meta = prev
     json.dump(meta, open(meta_path, "w"), indent=1)
     print(json.dumps({"scale": round(scale, 3), "idleBox": idle_box}))
 

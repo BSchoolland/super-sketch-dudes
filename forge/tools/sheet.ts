@@ -2,6 +2,7 @@
 //   npx tsx forge/tools/sheet.ts <drawing.png> <outdir> [--mirror] [--note "what to do differently"] [--from-drawing] [--from-rig rig.json]
 // Writes <outdir>/sheet.png, <outdir>/<cell>.png for idle walk jump atk-fwd atk-up atk-down hit launched block,
 // and <outdir>/cells.json (px, feetPx, heightPx and each cell's content box). --mirror flips every cell.
+// heightPx starts as the whole idle drawing; forge/tools/body.ts moves it to the top of the body.
 // An existing sheet.png is reused; --note redraws it with that note to the image model, and --from-drawing
 // replaces it with nine copies of the drawing itself (no image model). --from-rig cuts the drawing into the parts
 // rig.json outlines and poses them nine ways (see forge/img/rig.py); it also writes <outdir>/rig-parts.png showing the cut.
