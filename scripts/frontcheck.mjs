@@ -5,7 +5,8 @@
 //   2. The title's tab opens the sections: the page scrolls to them, the keys scroll the page and not the menu, the
 //      pictures load; PLAY scrolls back up to the game, which takes the keys again; so does scrolling back up.
 //   3. A match: no tab, no scrolling.
-//   4. A phone, sideways and upright: the tab by touch, PLAY by touch; a touch match never scrolls the page.
+//   4. A phone, sideways and upright (the game turned, client/src/turn.ts): the tab by touch, the sections upright, PLAY
+//      by touch; a touch match never scrolls the page.
 //   5. The addresses: /play/... redirects, /play/gen/ and /gen/ both serve fighters, robots.txt and sitemap.xml.
 // Usage: node scripts/frontcheck.mjs [--shots <dir>]   (screenshots default to /tmp/ssd-front-shots; SERVER_PORT 3731)
 import { chromium } from "playwright";
@@ -13,6 +14,7 @@ import { spawn, execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { viewToCss } from "./lib/view.mjs";
 
 const SERVER_PORT = Number(process.env.SERVER_PORT ?? 3731);
 const shotsAt = process.argv.indexOf("--shots");
@@ -68,25 +70,28 @@ class Fingers {
   }
 }
 
-/** A view point in CSS pixels on a page of this size. */
+/** A view point in CSS pixels on a page of this size. The only upright page is a phone's, which turns the game. */
 function toCss(page, vx, vy) {
-  const { width: w, height: h } = page.viewportSize();
-  const s = Math.min(w / 1920, h / 1080);
-  return [(w - 1920 * s) / 2 + vx * s, (h - 1080 * s) / 2 + vy * s];
+  const v = page.viewportSize();
+  return viewToCss(v, v.height > v.width, vx, vy);
 }
 
 const scrollState = (p) => p.evaluate(() => ({
   y: window.scrollY, open: document.documentElement.classList.contains("about"),
   scrollable: document.documentElement.scrollHeight > window.innerHeight, scrollbar: window.innerWidth - document.documentElement.clientWidth,
   canvas: [document.getElementById("game").clientWidth, document.getElementById("game").clientHeight, window.innerWidth, window.innerHeight],
-  about: document.getElementById("about").offsetTop,
+  about: document.getElementById("about").offsetTop, turned: document.documentElement.classList.contains("turned"),
 }));
 async function locked(p, label) {
   const s = await scrollState(p);
   const zoom = await p.evaluate(() => window.visualViewport.scale);
   if (zoom !== 1) fail(`${label}: the page is zoomed to ${zoom}`);
   if (s.y !== 0 || s.open || s.scrollable || s.scrollbar) fail(`${label}: the page can scroll: ${JSON.stringify(s)}`);
-  if (s.canvas[0] !== s.canvas[2] || s.canvas[1] !== s.canvas[3]) fail(`${label}: the canvas isn't the viewport: ${s.canvas}`);
+  // a phone held upright turns the game: the canvas is the viewport on its side
+  const [w, h] = s.turned ? [s.canvas[3], s.canvas[2]] : [s.canvas[2], s.canvas[3]];
+  if (s.canvas[0] !== w || s.canvas[1] !== h) fail(`${label}: the canvas isn't the viewport: ${s.canvas}`);
+  const v = p.viewportSize(), handheld = await p.evaluate(() => document.documentElement.classList.contains("handheld"));
+  if (s.turned !== (handheld && v.height > v.width)) fail(`${label}: turned is ${s.turned} at ${v.width}x${v.height}`);
 }
 /** Waits for a smooth scroll to stop. */
 async function settled(p) {
@@ -204,6 +209,7 @@ try {
     await f.tap(...toCss(p, TAB.x, TAB.y));
     await p.waitForFunction(() => document.documentElement.classList.contains("about"));
     await settled(p);
+    if (await p.evaluate(() => document.documentElement.classList.contains("turned"))) fail(`${name}: the about sections are turned`);
     await p.screenshot({ path: path.join(shots, `${name}-2-about.png`) });
     await p.evaluate(() => window.scrollBy(0, window.innerHeight * 2));
     await settled(p);

@@ -6,7 +6,8 @@
 //      the bars back: the card again, scrolled to the top. The way past it works. Bars that spring back twice retire it.
 //   3. The iPhone's about tab: the sections scroll and the card stays down; PLAY comes back.
 //   4. An iPhone touch match, with the bars tucked: the controls, and touches move nothing.
-//   5. An iPhone upright: no card. Inside an iframe: nothing at all.
+//   5. An iPhone upright: the game turned (client/src/turn.ts) and the card turned with it, SWIPE LEFT; bars tucked
+//      upright, it goes. Inside an iframe: nothing at all.
 //   6. An Android phone (Chromium): a tap on the title goes fullscreen; the about tab leaves it; a touch match.
 // Usage: node scripts/barscheck.mjs [--shots <dir>]   (screenshots default to /tmp/ssd-bars-shots; SERVER_PORT 3931)
 import { chromium, webkit, devices } from "playwright";
@@ -28,6 +29,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const IPHONE = devices["iPhone 15 landscape"];
 const TUCKED = { width: 852, height: 393 };
 const IPHONE_UP = devices["iPhone 15"];
+/** Upright, the status bar and a strip of the browser stay: tucked is the viewport grown well past the bars-out 659. */
+const TUCKED_UP = { width: 393, height: 760 };
 const ANDROID = devices["Pixel 7 landscape"];
 const DESKTOP = { viewport: { width: 1280, height: 720 } };
 /** The title's tab, in the 1920x1080 view (client/src/screens/title.ts). */
@@ -44,7 +47,7 @@ const state = (p) => p.evaluate(() => {
   const c = document.getElementById("game");
   return {
     cls: document.documentElement.className, manifest: !!document.querySelector('link[rel="manifest"]'),
-    gate: gate ? !gate.hidden : null, through: gate ? !gate.querySelector("button").hidden : null,
+    gate: gate ? !gate.hidden : null, through: gate ? !gate.querySelector("button").hidden : null, words: gate?.querySelector("b").textContent ?? null,
     y: window.scrollY, scrollable: document.documentElement.scrollHeight > window.innerHeight,
     canvas: [c.clientWidth, c.clientHeight, window.innerWidth, window.innerHeight],
   };
@@ -70,7 +73,9 @@ async function settled(p) {
 }
 function same(label, s, want) {
   for (const [k, v] of Object.entries(want)) if (JSON.stringify(s[k]) !== JSON.stringify(v)) fail(`${label}: ${k} is ${JSON.stringify(s[k])}, not ${JSON.stringify(v)} (${JSON.stringify(s)})`);
-  if (s.canvas[0] !== s.canvas[2] || s.canvas[1] !== s.canvas[3]) fail(`${label}: the canvas isn't the viewport: ${s.canvas}`);
+  // turned, the canvas is the viewport on its side
+  const [w, h] = s.cls.split(" ").includes("turned") ? [s.canvas[3], s.canvas[2]] : [s.canvas[2], s.canvas[3]];
+  if (s.canvas[0] !== w || s.canvas[1] !== h) fail(`${label}: the canvas isn't the viewport: ${s.canvas}`);
 }
 
 let server, chrome, safari;
@@ -204,8 +209,15 @@ try {
   await iu.goto(site);
   await toTitle(iu);
   await sleep(800);
-  same("iphone upright", await state(iu), { cls: "handheld swipe", gate: false });
-  await iu.screenshot({ path: path.join(shots, "iphone-8-upright.png") });
+  same("iphone upright", await state(iu), { cls: "handheld turned swipe", gate: true, words: "SWIPE LEFT TO PLAY" });
+  if (await touchmoveHeld(iu, "#swipe")) fail("a swipe on the upright card was cancelled");
+  await iu.screenshot({ path: path.join(shots, "iphone-8-upright-card.png") });
+  await iu.evaluate(() => window.scrollTo({ top: 120, behavior: "instant" }));
+  await iu.setViewportSize(TUCKED_UP);
+  await sleep(700);
+  same("iphone upright tucked", await state(iu), { cls: "handheld turned swipe", gate: false, y: 120 });
+  if (!(await touchmoveHeld(iu, "#game"))) fail("upright, bars tucked: a touchmove on the game could scroll the page");
+  await iu.screenshot({ path: path.join(shots, "iphone-9-upright-tucked.png") });
   const fr = await page(safari, "iphone iframe", IPHONE);
   await fr.goto(`${site}/robots.txt`);
   await fr.setContent(`<iframe src="${site}/" style="border:0;width:100vw;height:100vh"></iframe>`);
@@ -213,7 +225,7 @@ try {
   await inner.waitForFunction(() => Array.isArray(window.sketchbattle?.screen?.items), null, { timeout: 30000 });
   const framed = await inner.evaluate(() => [document.documentElement.className, !!document.getElementById("swipe"), !!document.querySelector('link[rel="manifest"]')]);
   if (framed.join() !== ",false,false") fail(`inside an iframe the page did something: ${framed}`);
-  console.log("  upright: no card; in an iframe: no class, card or manifest");
+  console.log("  upright: the game turned and the card with it (SWIPE LEFT); bars tucked, it goes; in an iframe: no class, card or manifest");
 
   console.log("6. an Android phone");
   const an = await page(chrome, "android", ANDROID);

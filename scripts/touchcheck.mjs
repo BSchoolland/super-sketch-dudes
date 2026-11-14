@@ -2,7 +2,7 @@
 // own fake Discord, server and Vite, then:
 //   1. A phone held sideways taps its way to VS BOTS and plays it by touch alone: moves, jumps, attacks, smashes,
 //      specials, shields, holds the stick and two buttons at once, pauses and resumes, and KOs the bot.
-//   2. The phone turned upright mid-match: the match pauses under a "turn your phone sideways" prompt.
+//   2. The phone turned upright mid-match: the game turns with it (client/src/turn.ts) and play carries on by touch.
 //   3. QUICK MATCH, the phone on touch against a desktop on the keyboard: both clients hash the same state.
 //   4. The Discord Activity (stubbed) on the phone: the call room, played by touch against a desktop.
 //   5. A tablet's match, and the settings page's touch view on the phone.
@@ -16,6 +16,7 @@ import os from "node:os";
 import path from "node:path";
 import { startFakeDiscord } from "./fake-discord.mjs";
 import { signIn } from "./menu-nav.mjs";
+import { viewToCss } from "./lib/view.mjs";
 
 const SERVER_PORT = Number(process.env.SERVER_PORT ?? 3341), VITE_PORT = Number(process.env.VITE_PORT ?? 5541), SECRET = "touchcheck-secret";
 const shotsAt = process.argv.indexOf("--shots");
@@ -72,10 +73,10 @@ class Fingers {
     await this.press(90, x, y); await sleep(hold); await this.lift(90);
   }
   async toCss(vx, vy) {
-    // the size is cached: a round trip per finger move would spread a flick over many ticks
-    const { width: w, height: h } = this.page.viewportSize();
-    const s = Math.min(w / 1920, h / 1080);
-    return [(w - 1920 * s) / 2 + vx * s, (h - 1080 * s) / 2 + vy * s];
+    // the size is cached: a round trip per finger move would spread a flick over many ticks. Every page fingers
+    // touch is handheld, so upright is turned.
+    const v = this.page.viewportSize();
+    return viewToCss(v, v.height > v.width, vx, vy);
   }
 }
 
@@ -88,11 +89,11 @@ class Thumbs {
   /** Pushes the stick to (dx, dy) of a full push: in one event (a flick) or over `ms`. */
   async push(dx, dy, ms = 0) {
     if (!this.f.down.has(1)) await this.stickDown();
-    const [hx, hy] = this.home, s = (await this.f.toCss(this.l.stick.r, 0))[0] - (await this.f.toCss(0, 0))[0];
+    const { x, y, r } = this.l.stick;
+    const [tx, ty] = await this.f.toCss(x + dx * r, y + dy * r);
     const steps = ms ? Math.max(2, Math.round(ms / 16)) : 1;
     const from = this.f.down.get(1);
     for (let i = 1; i <= steps; i++) {
-      const tx = hx + dx * s, ty = hy + dy * s;
       await this.f.move(1, from.x + ((tx - from.x) * i) / steps, from.y + ((ty - from.y) * i) / steps);
       if (ms) await sleep(16);
     }
@@ -280,17 +281,25 @@ try {
   // 2. turned upright mid-match
   console.log("2. the phone turned upright");
   if (!(await phone.evaluate(() => !!document.fullscreenElement))) fail("the phone's menu taps didn't go fullscreen");
+  const sidewaysFrame = (await me(phone)).frame;
   await turn(phone, { width: 390, height: 844 });
   await sleep(300);
-  const upright = await phone.evaluate(() => ({ sideways: window.sketchbattle.screen.sideways, paused: window.sketchbattle.screen.match.paused, live: window.sketchbattle.touch.live }));
-  await phone.screenshot({ path: path.join(shots, "phone-portrait-prompt.png") });
-  if (!upright.sideways || !upright.paused || upright.live) fail(`upright: ${JSON.stringify(upright)}`);
+  const upright = await phone.evaluate(() => ({ turned: document.documentElement.classList.contains("turned"), paused: window.sketchbattle.screen.match.paused, live: window.sketchbattle.touch.live, frame: window.sketchbattle.screen.match.state.frame }));
+  if (!upright.turned || upright.paused || !upright.live || upright.frame <= sidewaysFrame) fail(`upright: ${JSON.stringify(upright)}`);
+  await t.layout();
+  await phone.waitForFunction(() => window.sketchbattle.screen.match.state.fighters[0].grounded, null, { timeout: 8000 });
+  before = await me(phone);
+  await t.push(before.x > 0 ? -1 : 1, 0, 60); await sleep(400);
+  await phone.screenshot({ path: path.join(shots, "phone-portrait-turned-match.png") });
+  await t.release();
+  after = await me(phone);
+  if (Math.abs(after.x - before.x) < 20 || Math.sign(after.x - before.x) !== (before.x > 0 ? -1 : 1)) fail(`upright, the stick moved the fighter ${after.x - before.x}`);
+  await move("upright ATTACK", () => t.tap("attack"), ["jab1"]);
   await turn(phone, PHONE.viewport);
   await sleep(300);
-  await pf.tapView(960, 540 + 80 + 32);
-  await sleep(200);
-  if (await phone.evaluate(() => window.sketchbattle.screen.match.paused)) fail("RESUME after turning back didn't resume");
-  console.log("  upright: prompt up, match paused, controls down; sideways again and RESUME carries on");
+  await t.layout();
+  if (await phone.evaluate(() => window.sketchbattle.screen.match.paused || !window.sketchbattle.touch.live)) fail("sideways again, the match stopped");
+  console.log(`  upright: the game turned, the match running (frame ${upright.frame}), the stick steers (${Math.round(after.x - before.x)}) and ATTACK jabs; sideways again it carries on`);
 
   // 1, continued: KO the bot
   console.log("1. (continued) KO the bot by touch");
@@ -425,7 +434,8 @@ try {
   await tf.liftAll();
   await turn(tablet, { width: 820, height: 1180 });
   await sleep(300);
-  await tablet.screenshot({ path: path.join(shots, "tablet-portrait-prompt.png") });
+  if (!(await tablet.evaluate(() => document.documentElement.classList.contains("turned") && window.sketchbattle.touch.live))) fail("the tablet upright isn't turned and playing");
+  await tablet.screenshot({ path: path.join(shots, "tablet-portrait-turned.png") });
   await phone.goto(`${base}?dev=Tess`);
   await phone.waitForFunction(() => Array.isArray(window.sketchbattle?.screen?.items), null, { timeout: 15000 });
   await phone.evaluate(() => { const s = window.sketchbattle.screen; s.sel = s.items.findIndex((i) => i.id === "settings"); });
@@ -444,7 +454,7 @@ try {
   const size = await phone.evaluate(() => JSON.parse(localStorage.getItem("sketchbattle.settings")).touchSize);
   if (size !== 1.3) fail(`two taps on SIZE's right half made it ${size}`);
   await phone.screenshot({ path: path.join(shots, "phone-settings-touch-bigger.png") });
-  console.log(`  tablet match and upright prompt shot; settings' touch view up by tap, SIZE stepped to ${size * 100}%`);
+  console.log(`  tablet match, upright turned and live; settings' touch view up by tap, SIZE stepped to ${size * 100}%`);
 
   console.log("6. a desktop with no touchscreen");
   const plain = await page("plain", DESKTOP);
