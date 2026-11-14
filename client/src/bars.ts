@@ -15,6 +15,8 @@ const IPHONE = /iPhone|iPod/.test(navigator.userAgent);
 const root = document.documentElement;
 /** How long the card waits before offering a way past it, for a browser whose bars a swipe doesn't move. */
 const PATIENCE_MS = 6000;
+/** Bars back this soon after tucking count as a bounce; some browsers (the Google app) won't keep them down, and the card retires after two. */
+const BOUNCE_MS = 1500, BOUNCES = 2;
 
 let started = false;
 
@@ -95,7 +97,7 @@ function swipeGate(): void {
   note("swipe");
   root.classList.add("swipe");
   const { gate, through } = gateCard();
-  let shownAt = 0, gaveUp = false;
+  let shownAt = 0, tuckedAt = -Infinity, bounces = 0, gaveUp = false;
   /** The landscape viewport's height with the bars out, at this width: a browser whose bars collapse to a strip never reaches the screen's. */
   let low = { w: 0, h: 0 };
   const typing = () => document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement;
@@ -107,6 +109,11 @@ function swipeGate(): void {
     if (landscape && !typing() && (low.w !== w || h < low.h)) low = { w, h };
     const tucked = h >= Math.min(screen.width, screen.height) - 24 || h >= low.h + 40;
     const show = landscape && !tucked && !typing() && !aboutOpen() && !gaveUp;
+    if (show && gate.hidden && performance.now() - tuckedAt < BOUNCE_MS && ++bounces >= BOUNCES) {
+      gaveUp = true;
+      note("bars bounce back", w, h);
+      return;
+    }
     if (show && gate.hidden) {
       gate.hidden = false;
       shownAt = performance.now();
@@ -115,6 +122,7 @@ function swipeGate(): void {
       note("gate", w, h, screen.width, screen.height);
     } else if (!show && !gate.hidden) {
       gate.hidden = true;
+      if (tucked) tuckedAt = performance.now();
       note(tucked ? "tucked" : gaveUp ? "gave up" : "gate down", w, h);
     }
     through.hidden = !(show && performance.now() - shownAt > PATIENCE_MS);

@@ -3,7 +3,7 @@
 //   1. A desktop is untouched: no handheld class, no manifest, no card, the page doesn't scroll.
 //   2. An iPhone (WebKit) sideways with its bars out: the SWIPE UP card; after 6 s, "tap to play anyway".
 //      The bars tucked: the card goes, the page is taller than the screen but no touch on the game can move it;
-//      the bars back: the card again, scrolled to the top. The way past it works.
+//      the bars back: the card again, scrolled to the top. The way past it works. Bars that spring back twice retire it.
 //   3. The iPhone's about tab: the sections scroll and the card stays down; PLAY comes back.
 //   4. An iPhone touch match, with the bars tucked: the controls, and touches move nothing.
 //   5. An iPhone upright: no card. Inside an iframe: nothing at all.
@@ -138,6 +138,25 @@ try {
   same("iphone gave up", await state(ip), { gate: false });
   if (!(await touchmoveHeld(ip, "#game"))) fail("after the way past the card, a touchmove on the game could scroll the page");
   await ip.screenshot({ path: path.join(shots, "iphone-4-played-anyway.png") });
+
+  // the Google app: a swipe tucks the bars and they spring straight back; after two of those the card retires
+  const gsa = await page(safari, "iphone-bounce", IPHONE);
+  await gsa.goto(site);
+  await toTitle(gsa);
+  await sleep(800);
+  for (let i = 0; i < 2; i++) {
+    await gsa.setViewportSize(TUCKED);
+    await sleep(600);
+    same(`bounce ${i + 1} tucked`, await state(gsa), { gate: false });
+    await gsa.setViewportSize(IPHONE.viewport);
+    await sleep(600);
+    same(`bounce ${i + 1} back`, await state(gsa), { gate: i === 0 });
+    if (i === 0) await sleep(1000);
+  }
+  await sleep(1500);
+  same("bounced twice", await state(gsa), { gate: false });
+  if (!(await touchmoveHeld(gsa, "#game"))) fail("after the bars bounced, a touchmove on the game could scroll the page");
+  console.log("  bars that spring back twice: the card retires and the game plays");
   console.log("  bars back: the card again, at the top; tap to play anyway takes it down for good");
 
   console.log("3. the iPhone's about tab");
@@ -234,6 +253,10 @@ try {
 } finally {
   await chrome?.close();
   await safari?.close();
-  server?.kill();
+  if (server && server.exitCode === null) {
+    const exited = new Promise((r) => server.once("exit", r));
+    server.kill();
+    await exited;
+  }
   fs.rmSync(data, { recursive: true, force: true });
 }
