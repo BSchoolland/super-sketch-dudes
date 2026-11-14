@@ -228,9 +228,19 @@ middle of a stick over several frames, so a fast push is sent as one frame at re
 as a flick (dash from a walk, roll, spot dodge, platform drop); ATTACK within 8 frames of a flick adds a 2-frame
 right-stick pulse, the keyboard SMASH key's, for the smash. JUMP with ATTACK within 3 frames drops JUMP before the jump
 squat ends: a short hop. A match screen arms the controls every tick (`VersusScreen.armControls`, from app.ts) and
-they are live only while it runs; the HUD keeps to the space between them (`Renderer.hudBand`). Upright, the app draws
-a "turn your phone sideways" page instead of the match and a local match pauses. A match played on them counts on
-the session's `touch.matches`, which the funnel's "on touch" column reads.
+they are live only while it runs; the HUD keeps to the space between them (`Renderer.hudBand`). A match played on them
+counts on the session's `touch.matches`, which the funnel's "on touch" column reads.
+
+### Held upright
+
+The game is always landscape. On the website's own page on a phone or tablet (the gate bars.ts uses below), a
+viewport taller than wide turns the stage (`#stage` in index.html: the canvas and `#overlay`, where the text fields
+are) a quarter clockwise at the screen's full size (`client/src/turn.ts`, `html.turned`), so the player just turns the
+phone; with the phone's rotation lock on, the game reads right held sideways. Menus and matches alike, mid-match too:
+a turn is a resize. Pointer events arrive in screen coordinates and `toView` (input/pointer.ts) turns them back, so
+taps, the controls, the draw pad and the text fields need nothing of their own. While the about sections are open
+nothing is turned: they are a web page, read upright, and PLAY brings the turned game back.
+`node scripts/turncheck.mjs` checks it in emulation.
 
 ### The browser's bars
 
@@ -242,8 +252,10 @@ even the manifest link. Opened from the home screen (`manifest.webmanifest`, dis
 - Android and iPads: a touch on the canvas goes fullscreen and locks landscape, except while a match screen is up or
   the about sections are open. Opening the sections leaves fullscreen: in it, Chrome won't let a reader zoom them.
 - iPhones (every iPhone browser is WebKit, with no Fullscreen API; the bars collapse only when a finger scrolls the
-  page): `html.swipe` makes the page scrollable and 150vh tall, and in landscape a "SWIPE UP TO PLAY" card covers the
-  game until the viewport has grown to the screen's height (or by 40px, for a browser whose bars tuck to a strip).
+  page): `html.swipe` makes the page scrollable and 300vh tall, and a "SWIPE UP TO PLAY" card covers the game until
+  the viewport has grown to the screen's height (upright, to within 110px of it, the status bar staying) or by 40px,
+  for a browser whose bars tuck to a strip. Turned, the card's box stays upright, so its swipe scrolls the page, and
+  its words turn with the game: "SWIPE LEFT", the arrow pointing up the screen.
   After 6 s it offers "tap to play anyway", for the rest of the page's life. Once the bars are tucked nothing may
   scroll the page or they come back: the canvas is `touch-action: none`, and a document listener cancels every
   touchmove and pinch except on the card, in the open about sections, or in a text box with more to show. The card

@@ -6,7 +6,6 @@ import { PAPER } from "./render/paper";
 import { connectedPads, endInputFrame, readMenu, type DeviceId, type MenuInput } from "./input/devices";
 import { attachPointer, endPointerFrame, endPointerTick, pointer, setPointerTransform } from "./input/pointer";
 import { attachTouch, pad, touchInUse, touchLive, touchShown } from "./input/touch";
-import { drawSideways } from "./render/touchcontrols";
 import { OnlineScreen } from "./screens/online";
 import { NetVersusScreen } from "./screens/netversus";
 import { VersusScreen } from "./screens/versus";
@@ -32,6 +31,7 @@ import { swap, type Handoff } from "./handoff";
 import { TitleScreen } from "./screens/title";
 import { closeAbout } from "./about";
 import { startBars } from "./bars";
+import { onStage, stageSize, turned } from "./turn";
 import { tourCardUp, tourDraw, tourSaw, tourTick, tourUpdate } from "./screens/tour";
 
 const NO_MENU: MenuInput = { up: false, down: false, left: false, right: false, confirm: false, back: false, start: false, any: false, from: null };
@@ -77,19 +77,19 @@ export async function mount(opts: MountOptions): Promise<AppController> {
   const pacer = new FramePacer(() => resize());
   function resize(): void {
     const dpr = Math.min(2, window.devicePixelRatio || 1) * pacer.quality;
-    const w = window.innerWidth, h = window.innerHeight;
+    const { w, h } = stageSize();
     canvas.width = Math.floor(w * dpr); canvas.height = Math.floor(h * dpr);
     scale = Math.min(w / VIEW_W, h / VIEW_H) * dpr;
     offX = (canvas.width - VIEW_W * scale) / 2;
     offY = (canvas.height - VIEW_H * scale) / 2;
     setPointerTransform(scale / dpr, offX / dpr, offY / dpr);
     setSpriteScale(scale);
-    noteView({ w, h, dpr, canvasW: canvas.width, canvasH: canvas.height, scale, quality: pacer.quality });
+    noteView({ w, h, turned: turned(), dpr, canvasW: canvas.width, canvasH: canvas.height, scale, quality: pacer.quality });
   }
   const detachPointer = attachPointer(canvas);
   // after the pointer's listeners: a finger the controls take is claimed from the taps
   const detachTouch = attachTouch(canvas);
-  window.addEventListener("resize", resize);
+  const stopStage = onStage(resize);
   resize();
 
   function allDevices(): DeviceId[] {
@@ -220,12 +220,6 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     pacer.drew(now);
     lastDraw = now;
     document.body.style.cursor = "default";
-    if (screen instanceof VersusScreen && screen.sideways) {
-      drawSideways(ctx, canvas.width, canvas.height);
-      endPointerFrame();
-      requestAnimationFrame(frame);
-      return;
-    }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = PAPER;
     // only the letterbox bars: every screen paints the whole view, and a full-canvas fill is the priciest thing a potato does per frame
@@ -251,7 +245,7 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     stop() {
       running = false;
       ticker.terminate();
-      window.removeEventListener("resize", resize);
+      stopStage();
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pageshow", onPageShow);
       detachPointer();

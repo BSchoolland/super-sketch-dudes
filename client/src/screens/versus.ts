@@ -2,7 +2,7 @@ import { VIEW_H, VIEW_W } from "../render/camera";
 import type { PreviewApi } from "../preview";
 import type { MenuInput } from "../input/devices";
 import { rumble } from "../input/devices";
-import { armTouch, pad, portrait, touchLive, touchShown } from "../input/touch";
+import { armTouch, pad, touchLive, touchShown } from "../input/touch";
 import { drawTouchControls } from "../render/touchcontrols";
 import { noteTouchMatch } from "../telemetry/events";
 import { LocalMatch, type MatchDriver, type SlotSource } from "../match";
@@ -39,8 +39,6 @@ export class VersusScreen implements Screen {
   preview: PreviewApi | null = null;
   /** REMATCH / MENU on the result screen; a mode that moves on by itself turns them off. */
   endButtons = true;
-  /** On a touchscreen held upright: the app asks for it turned instead of drawing the match. */
-  sideways = false;
   private touchNoted = false;
   constructor(cfg: MatchConfig, sources: SlotSource[], private onExit: () => Screen, private onRematch: () => Screen, training = false, driver?: MatchDriver) {
     this.match = driver ?? new LocalMatch(cfg, sources);
@@ -62,10 +60,7 @@ export class VersusScreen implements Screen {
   /** The touch controls for this tick, before update: up while the match runs, for keyboard 1 (whom they play as). */
   armControls(): void {
     const shown = touchShown() && this.match.sources.some((s) => s.device === "kb1");
-    this.sideways = shown && portrait();
-    // turned upright mid-fight: a match that can wait does
-    if (this.sideways && this.match instanceof LocalMatch && this.countdown <= 0 && this.running()) this.match.paused = true;
-    armTouch(shown && !this.sideways && this.running(), this.match instanceof LocalMatch);
+    armTouch(shown && this.running(), this.match instanceof LocalMatch);
   }
 
   update(dt: number, m: MenuInput): Screen | null {

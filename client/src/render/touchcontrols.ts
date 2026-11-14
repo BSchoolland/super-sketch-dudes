@@ -1,4 +1,4 @@
-import { FONT, INK, PAPER, PENCIL, hatch, inkArc, inkLine, inkPath } from "./paper";
+import { FONT, INK, PAPER, PENCIL, hatch, inkArc, inkLine } from "./paper";
 import { TOUCH_BUTTONS, type Circle, type TouchButton, type TouchLayout } from "../input/touchpad";
 
 const WORD: Record<TouchButton, string> = { attack: "ATTACK", special: "SPECIAL", jump: "JUMP", shield: "SHIELD" };
@@ -49,41 +49,5 @@ export function drawTouchControls(ctx: CanvasRenderingContext2D, look: TouchLook
     inkLine(ctx, p.x - p.r * 0.22, p.y - p.r * 0.36, p.x - p.r * 0.22, p.y + p.r * 0.36, INK, Math.max(3, p.r * 0.14), 5);
     inkLine(ctx, p.x + p.r * 0.22, p.y - p.r * 0.36, p.x + p.r * 0.22, p.y + p.r * 0.36, INK, Math.max(3, p.r * 0.14), 6);
   }
-  ctx.restore();
-}
-
-/** A phone held upright, over everything, asking to be turned: drawn in canvas pixels, `w` x `h`. */
-export function drawSideways(ctx: CanvasRenderingContext2D, w: number, h: number): void {
-  ctx.save();
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = PAPER;
-  ctx.fillRect(0, 0, w, h);
-  const s = Math.min(w, h) / 100;
-  const cx = w / 2, cy = h * 0.42;
-  ctx.lineCap = "round"; ctx.lineJoin = "round";
-  // the phone, tipping over onto its side
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate(-0.35);
-  const pw = 26 * s, ph = 46 * s;
-  ctx.fillStyle = PAPER;
-  ctx.fillRect(-pw / 2, -ph / 2, pw, ph);
-  ctx.strokeStyle = INK; ctx.lineWidth = 1.2 * s;
-  inkPath(ctx, [[-pw / 2, -ph / 2], [pw / 2, -ph / 2], [pw / 2, ph / 2], [-pw / 2, ph / 2]], true, 3);
-  ctx.stroke();
-  ctx.lineWidth = 0.6 * s;
-  inkPath(ctx, [[-pw / 2 + 3 * s, -ph / 2 + 5 * s], [pw / 2 - 3 * s, -ph / 2 + 5 * s], [pw / 2 - 3 * s, ph / 2 - 5 * s], [-pw / 2 + 3 * s, ph / 2 - 5 * s]], true, 4);
-  ctx.stroke();
-  ctx.restore();
-  // the turn
-  inkArc(ctx, cx, cy, 34 * s, -Math.PI * 0.95, -Math.PI * 0.35, INK, 1.2 * s, 9);
-  const ex = cx + Math.cos(-Math.PI * 0.35) * 34 * s, ey = cy + Math.sin(-Math.PI * 0.35) * 34 * s;
-  inkLine(ctx, ex, ey, ex - 7 * s, ey - 1 * s, INK, 1.2 * s, 2);
-  inkLine(ctx, ex, ey, ex + 1 * s, ey - 7 * s, INK, 1.2 * s, 3);
-  ctx.fillStyle = INK;
-  ctx.textAlign = "center";
-  ctx.font = `900 ${Math.round(9 * s)}px ${FONT}`;
-  ctx.fillText("TURN YOUR PHONE", cx, h * 0.42 + 46 * s, w * 0.9);
-  ctx.fillText("SIDEWAYS", cx, h * 0.42 + 57 * s, w * 0.9);
   ctx.restore();
 }

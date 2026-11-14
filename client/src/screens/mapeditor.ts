@@ -3,7 +3,7 @@ import { INK, PAPER, PENCIL, drawPaper, inkLine, inkRect } from "../render/paper
 import { drawStage } from "../render/stage";
 import { SLOT_COLORS } from "../render/hud";
 import { platformMotion } from "../../../shared/physics";
-import { onPointer, pointer, type PointerStroke, type ViewPoint } from "../input/pointer";
+import { onPointer, pointer, toView, type PointerStroke, type ViewPoint } from "../input/pointer";
 import type { MenuInput } from "../input/devices";
 import { sfx } from "../audio/audio";
 import { account } from "../account";
@@ -429,10 +429,7 @@ export class MapEditorScreen implements Screen {
   }
 
   private wheel(e: WheelEvent): void {
-    const canvas = e.currentTarget as HTMLCanvasElement;
-    const r = canvas.getBoundingClientRect();
-    const scale = Math.min(r.width / VIEW_W, r.height / VIEW_H);
-    const v = { x: (e.clientX - r.left - (r.width - VIEW_W * scale) / 2) / scale, y: (e.clientY - r.top - (r.height - VIEW_H * scale) / 2) / scale };
+    const v = toView(e.clientX, e.clientY);
     const before = this.toWorld(v);
     this.zoom = Math.max(ZOOM.min, Math.min(ZOOM.max, this.zoom * Math.pow(1.0015, -e.deltaY)));
     const after = this.toWorld(v);

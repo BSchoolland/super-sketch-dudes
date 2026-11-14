@@ -40,17 +40,12 @@ export function touchShown(): boolean {
   return config.setting === "always" || touchInUse();
 }
 
-/** The screen is taller than wide: a match asks for the phone turned sideways. */
-export function portrait(): boolean {
-  return innerHeight > innerWidth;
-}
-
 /** The controls' layout on this screen at the player's size. */
 export function currentLayout() {
   return touchLayout(VIEW_W, VIEW_H, viewScale(), config.size);
 }
 
-/** A match screen, every tick it is up: `live` while fingers play (not paused, over or turned sideways). */
+/** A match screen, every tick it is up: `live` while fingers play (not paused or over). */
 export function armTouch(live: boolean, pauseable: boolean): void {
   if (match.live && !live) pad.clear();
   match = { live, pauseable, at: tick };

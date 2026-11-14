@@ -17,8 +17,8 @@ let bundle = "";
 const consoleError = console.error;
 
 /** `quality` is the frame pacer's resolution step: dpr already includes it. */
-export interface View { w: number; h: number; dpr: number; canvasW: number; canvasH: number; scale: number; quality: number }
-export const view: View = { w: 0, h: 0, dpr: 1, canvasW: 0, canvasH: 0, scale: 0, quality: 1 };
+export interface View { w: number; h: number; turned: boolean; dpr: number; canvasW: number; canvasH: number; scale: number; quality: number }
+export const view: View = { w: 0, h: 0, turned: false, dpr: 1, canvasW: 0, canvasH: 0, scale: 0, quality: 1 };
 
 export function randomHex(chars: number): string {
   const bytes = crypto.getRandomValues(new Uint8Array(Math.ceil(chars / 2)));
@@ -193,7 +193,7 @@ export function startTelemetry(opts: TelemetryStart): () => void {
 
 /** The canvas geometry app.ts computed; a history of changes goes on the session. */
 export function noteView(next: View): void {
-  const changed = next.w !== view.w || next.h !== view.h || next.dpr !== view.dpr || next.scale !== view.scale;
+  const changed = next.w !== view.w || next.h !== view.h || next.turned !== view.turned || next.dpr !== view.dpr || next.scale !== view.scale;
   Object.assign(view, next);
   if (changed && session) sessionList("views", { ...next, at: Date.now() - session.t0 }, 20);
   // a running match checks the view itself, every draw
