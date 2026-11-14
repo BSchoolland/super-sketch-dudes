@@ -65,6 +65,7 @@ node scripts/padcheck.mjs         # gamepad smoke test with a fake pad
 node scripts/perfbench.mjs --throttle 4 --dpr 1.25   # frame times on a pretend potato (needs the dev servers)
 node scripts/activitycheck.mjs   # the Discord Activity end to end, Discord stubbed (starts its own servers)
 node scripts/touchcheck.mjs      # the touch controls on emulated phones with real multi-touch: VS BOTS to a KO, quick match and the Activity against a keyboard (starts its own servers)
+node scripts/barscheck.mjs       # the browser's bars on phones, emulated: the iPhone's swipe-up card, Android fullscreen, a desktop untouched (builds, starts its own server)
 node scripts/frontdoorcheck.mjs  # guest play, signing in from a guest, the signup age question, /privacy and /terms (starts its own servers)
 node scripts/frontcheck.mjs      # the front page on the built server: the title's about tab, PLAY back up, no scrolling in matches or by touch, the old /play/ addresses (builds, starts its own server)
 node scripts/homeshots.mjs       # the about sections' screenshots, clip and share image into client/public/ (starts its own servers)

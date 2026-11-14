@@ -27,6 +27,11 @@ const base = `http://localhost:${VITE_PORT}/`;
 const children = [];
 const fail = (message) => { throw new Error(message); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** Turns a phone or tablet. The menus' taps put it in fullscreen (client/src/bars.ts), which emulation can't resize. */
+async function turn(page, viewport) {
+  await page.evaluate(() => document.fullscreenElement && document.exitFullscreen());
+  await page.setViewportSize(viewport);
+}
 
 function run(cmd, args, env) {
   const child = spawn(cmd, args, { env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"], detached: true });
@@ -274,12 +279,13 @@ try {
 
   // 2. turned upright mid-match
   console.log("2. the phone turned upright");
-  await phone.setViewportSize({ width: 390, height: 844 });
+  if (!(await phone.evaluate(() => !!document.fullscreenElement))) fail("the phone's menu taps didn't go fullscreen");
+  await turn(phone, { width: 390, height: 844 });
   await sleep(300);
   const upright = await phone.evaluate(() => ({ sideways: window.sketchbattle.screen.sideways, paused: window.sketchbattle.screen.match.paused, live: window.sketchbattle.touch.live }));
   await phone.screenshot({ path: path.join(shots, "phone-portrait-prompt.png") });
   if (!upright.sideways || !upright.paused || upright.live) fail(`upright: ${JSON.stringify(upright)}`);
-  await phone.setViewportSize(PHONE.viewport);
+  await turn(phone, PHONE.viewport);
   await sleep(300);
   await pf.tapView(960, 540 + 80 + 32);
   await sleep(200);
@@ -417,7 +423,7 @@ try {
   await tt.push(0.8, -0.3, 80); await tt.hold("attack", 2); await sleep(120);
   await tablet.screenshot({ path: path.join(shots, "tablet-landscape-match.png") });
   await tf.liftAll();
-  await tablet.setViewportSize({ width: 820, height: 1180 });
+  await turn(tablet, { width: 820, height: 1180 });
   await sleep(300);
   await tablet.screenshot({ path: path.join(shots, "tablet-portrait-prompt.png") });
   await phone.goto(`${base}?dev=Tess`);
