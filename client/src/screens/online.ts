@@ -504,10 +504,12 @@ export class OnlineScreen implements Screen {
 
   /** A local match against the room's bots; the room shows as busy until it ends, then it's back to the lobby. */
   private startLocal(room: RoomState, setup: MatchSetup): void {
-    if (!this.mine) throw new Error("local start without a fighter");
     const choices = this.botChoices();
     const me = room.members.find((m) => m.id === this.context.id);
     if (!me) throw new Error("local start without the host in the room");
+    // the room's pick, not this.mine: a lobby rebuilt after a match hasn't loaded its shelf yet
+    if (!me.fighter || !me.bundleUrl) throw new Error("local start without a fighter");
+    const mine = choices.find((c) => c.id === me.fighter) ?? { id: me.fighter, name: "", bundleUrl: me.bundleUrl, house: false, entry: null };
     const bots = (room.bots ?? []).map((b) => ({
       fighter: choices.find((c) => c.id === b.fighter) ?? { id: b.fighter, name: "", bundleUrl: b.bundleUrl, house: false, entry: null },
       source: b.level === 0 ? { device: (b.device ?? "kb2") as DeviceId, cpu: 0 } : { device: null, cpu: b.level },
@@ -516,7 +518,7 @@ export class OnlineScreen implements Screen {
     this.context.transport.sendLobby({ t: "local" });
     sfx.go();
     const context = this.context, onExit = this.onExit;
-    this.nextScreen = localMatch([{ fighter: this.mine, source: { device: this.device, cpu: 0 }, team: me.team }, ...bots], setup, () => {
+    this.nextScreen = localMatch([{ fighter: mine, source: { device: this.device, cpu: 0 }, team: me.team }, ...bots], setup, () => {
       context.transport.sendLobby({ t: "end" });
       return new OnlineScreen(onExit, null, null, context);
     }, room.teams);
