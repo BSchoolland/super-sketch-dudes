@@ -30,7 +30,7 @@ export function voiceOn(mix: Mix, t: number, pan: number, vary: number): Voice {
   const out = c.createStereoPanner(); out.pan.value = Math.max(-1, Math.min(1, pan));
   const send = c.createGain(); send.gain.value = 0.12;
   out.connect(mix.sfx); out.connect(send); send.connect(mix.room);
-  return { c, out, send, t, vary: 1 + (Math.random() * 2 - 1) * vary };
+  return { c, out, send, t, end: t, vary: 1 + (Math.random() * 2 - 1) * vary };
 }
 
 let ctx: AudioContext | null = null;
@@ -41,8 +41,7 @@ const MUSIC_TRIM = 0.4;
 
 export function live(): Mix & { c: AudioContext } {
   if (mix) return mix;
-  // Phones get a deeper buffer: on an iPhone the smallest one underruns whenever the page is busy, and the whole mix stutters.
-  ctx = new AudioContext({ latencyHint: matchMedia("(pointer: coarse)").matches ? "playback" : "interactive" });
+  ctx = new AudioContext({ latencyHint: "interactive" });
   mix = { ...buildMix(ctx, ctx.destination), c: ctx };
   mix.sfx.gain.value = volumes.sfx;
   mix.music.gain.value = volumes.music * MUSIC_TRIM;
@@ -67,5 +66,9 @@ export const panOf = (x: number | undefined): number => (x === undefined ? 0 : M
 export function play(sound: (v: Voice) => void, opts: { x?: number; pan?: number; delay?: number; vary?: number } = {}): void {
   const m = running();
   if (!m) return;
-  sound(voiceOn(m, m.c.currentTime + 0.005 + (opts.delay ?? 0), opts.pan ?? panOf(opts.x), opts.vary ?? 0.05));
+  const v = voiceOn(m, m.c.currentTime + 0.005 + (opts.delay ?? 0), opts.pan ?? panOf(opts.x), opts.vary ?? 0.05);
+  sound(v);
+  // A finished voice stays wired into the mix otherwise, and WebKit keeps rendering it, silent, forever: a minute of
+  // fighting buried an iPhone's audio thread.
+  setTimeout(() => { v.out.disconnect(); v.send.disconnect(); }, (v.end - m.c.currentTime) * 1000 + 250);
 }

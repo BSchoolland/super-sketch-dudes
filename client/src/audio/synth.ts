@@ -11,6 +11,8 @@ export interface Voice {
   t: number;
   /** Random pitch factor for this trigger, so repeats don't machine-gun. */
   vary: number;
+  /** When the last of this voice's sources has stopped; the sounds push it out as they schedule. */
+  end: number;
 }
 
 interface Buffers { noise: AudioBuffer; crackle: AudioBuffer; scribble: AudioBuffer; shapes: Map<number, Float32Array> }
@@ -76,15 +78,19 @@ function shaper(c: BaseAudioContext, drive: number): WaveShaperNode {
     for (let i = 0; i < curve.length; i++) { const x = (i / 511.5) - 1; curve[i] = Math.tanh(x * drive) / Math.tanh(drive); }
     b.shapes.set(drive, curve);
   }
-  const w = c.createWaveShaper(); w.curve = curve as Float32Array<ArrayBuffer>; w.oversample = "2x";
+  const w = c.createWaveShaper(); w.curve = curve as Float32Array<ArrayBuffer>; w.oversample = WEBKIT ? "none" : "2x";
   return w;
 }
+
+/** WebKit's oversampled WaveShaper costs ~7x Chromium's: a busy fight outran an iPhone's audio thread. */
+const WEBKIT = typeof navigator !== "undefined" && /AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium|Android/.test(navigator.userAgent);
 
 interface Env { dur: number; gain: number; attack?: number; delay?: number; drive?: number }
 
 /** Gain envelope: fast attack then exponential decay to silence over dur. Returns the node to feed. */
 function envelope(v: Voice, e: Env): { input: AudioNode; t: number; end: number } {
   const t = v.t + (e.delay ?? 0), a = e.attack ?? 0.002, end = t + e.dur;
+  v.end = Math.max(v.end, end + 0.05);
   const g = v.c.createGain();
   g.gain.setValueAtTime(0.0001, t);
   g.gain.exponentialRampToValueAtTime(Math.max(0.0002, e.gain), t + a);
