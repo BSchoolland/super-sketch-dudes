@@ -177,7 +177,9 @@ Specials that need state (charge, fuel, heat, counters) keep it in `fighter.spec
 is a fighter-specific plain object whose **every key must exist from `special()` onward** (the state
 hash walks its keys in insertion order, so a key that appears mid-match on one client and not the
 other is a desync), and `fighter.ts` hooks named in the fighter's `index.ts`
-(`onFrame`, `onHit`, `onHurt`, `onLand`) implement the mechanic.
+(`onFrame`, `onHit`, `onHurt`, `onLand`) implement the mechanic. `onProjectileEnd(ctx, p, why)` is called once when one of
+the fighter's projectiles ends (`why`: hit, landed, wall, expired, offstage, or removed by the fighter's own code); explosions and
+splashes belong there, so they also happen on a direct hit (the engine takes a projectile out the frame it hits someone).
 
 The training mode hitbox view and the pose sheet both read the same data, so what's
 documented is what ships.

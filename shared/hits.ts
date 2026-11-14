@@ -310,7 +310,7 @@ export function resolveHits(state: State): void {
         // projectiles don't freeze their owner, but hitlag the owner is already in (with a knockback
         // waiting on it) must run out on its own, or that knockback is never applied
         owner.hitlag = saveLag;
-        if (!p.hb.rehit) p.dead = true;
+        if (!p.hb.rehit) { p.dead = true; p.end = "hit"; }
         break;
       }
     }
@@ -319,7 +319,7 @@ export function resolveHits(state: State): void {
 
 export function spawnProjectile(state: State, owner: Fighter, kind: string, x: number, y: number, vx: number, vy: number, life: number, hb: Hitbox, data: Record<string, number> = {}): Projectile {
   // a projectile's hits carry its kind as the fx so the renderer can use the same look for the impact
-  const p: Projectile = { id: state.nextProjectile++, owner: owner.slot, from: owner.slot, kind, x, y, vx, vy, life, age: 0, hb: hb.fx === undefined ? { ...hb, fx: kind } : hb, hitLog: {}, facing: owner.moveFacing, data, reflected: 0, dead: false };
+  const p: Projectile = { id: state.nextProjectile++, owner: owner.slot, from: owner.slot, kind, x, y, vx, vy, life, age: 0, hb: hb.fx === undefined ? { ...hb, fx: kind } : hb, hitLog: {}, facing: owner.moveFacing, data, reflected: 0, dead: false, end: null };
   state.projectiles.push(p);
   owner.lastShot = state.frame;
   // decoration (a hitbox that is never active, like a slime patch) launches silently

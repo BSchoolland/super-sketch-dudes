@@ -210,7 +210,7 @@ export function stepProjectiles(state: State, stage: Stage): void {
         const t = platTop(state, stage, i);
         if (p.x >= t.x1 && p.x <= t.x2 && p.y >= t.y && p.y - p.vy < t.y && p.vy > 0) {
           p.y = t.y; p.vy = -p.vy * 0.55; p.vx *= 0.8; p.data.bounces = (p.data.bounces ?? 0) + 1;
-          if (p.data.bounces > p.data.bounce) p.dead = true;
+          if (p.data.bounces > p.data.bounce) { p.dead = true; p.end = "landed"; }
         }
       }
     } else {
@@ -218,12 +218,11 @@ export function stepProjectiles(state: State, stage: Stage): void {
         const t = platTop(state, stage, i);
         if (!t.p.solid) continue;
         const bottom = t.p.bottom! + platformOffset(state, i).dy;
-        if (p.x >= t.x1 && p.x <= t.x2 && p.y >= t.y && p.y <= bottom) p.dead = true;
+        if (p.x >= t.x1 && p.x <= t.x2 && p.y >= t.y && p.y <= bottom) { p.dead = true; p.end = "wall"; }
       }
     }
-    if (p.age >= p.life) p.dead = true;
+    if (!p.dead && p.age >= p.life) { p.dead = true; p.end = "expired"; }
     const b = stage.blast;
-    if (p.x < b.left || p.x > b.right || p.y < b.top || p.y > b.bottom) p.dead = true;
+    if (!p.dead && (p.x < b.left || p.x > b.right || p.y < b.top || p.y > b.bottom)) { p.dead = true; p.end = "offstage"; }
   }
-  state.projectiles = state.projectiles.filter((p) => !p.dead);
 }

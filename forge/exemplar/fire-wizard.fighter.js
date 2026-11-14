@@ -270,6 +270,15 @@ export default function make(api) {
         }
       },
     },
+    // a projectile that should blow up does it here, whatever ended it: a direct hit on someone, the floor, a wall, or
+    // running out of life. Watching for it in onFrame misses the hits: the engine takes a projectile out the moment it
+    // hits a fighter, before onFrame could see it.
+    onProjectileEnd: ({ f, state }, p, why) => {
+      if (p.kind !== "bigFireball" || why === "offstage") return;
+      spawnProjectile(state, f, "boom", p.x, p.y, 0, 0, 10,
+        { frames: [0, 999], x: 0, y: 0, r: 60, damage: 6, angle: 50, base: 40, growth: 60, radial: true });
+      fx(state, f, "ring", p.x, p.y, 3, YELLOW);
+    },
     onFrame: ({ f, state }) => {
       if (f.special.meteor && f.grounded) {
         f.special.meteor = 0;

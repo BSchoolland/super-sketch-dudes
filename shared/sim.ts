@@ -1,7 +1,7 @@
 import { settleBars, startBars } from "./bars";
 import { C } from "./config";
 import { hashNumbers } from "./fixed";
-import { stepFighter } from "./fighter";
+import { defOf, stepFighter } from "./fighter";
 import { roster } from "./fighters/index";
 import { resolveHits } from "./hits";
 import { B, EMPTY_INPUT, cloneInput, type InputFrame } from "./input";
@@ -135,12 +135,25 @@ export function step(state: State, inputs: InputFrame[]): State {
   for (const f of state.fighters) stepPhysics(state, f, input(f.slot), stage);
   stepProjectiles(state, stage);
   resolveHits(state);
+  endProjectiles(state, input);
   for (const f of state.fighters) settleBars(f);
   stepRules(state, stage);
   for (let i = 0; i < state.inputs.length; i++) state.inputs[i] = away(i) ? { ...EMPTY_INPUT, b: B.AWAY } : cloneInput(input(i));
   state.seen.unshift(state.fighters.map(glimpse));
   if (state.seen.length > SEEN_FRAMES) state.seen.pop();
   return state;
+}
+
+/** Takes out the projectiles that ended this frame, telling each one's fighter first (FighterDef.onProjectileEnd). */
+function endProjectiles(state: State, input: (slot: number) => InputFrame): void {
+  if (!state.projectiles.some((p) => p.dead)) return;
+  const ended = state.projectiles.filter((p) => p.dead);
+  state.projectiles = state.projectiles.filter((p) => !p.dead);
+  for (const p of ended) {
+    const f = state.fighters[p.from];
+    const hook = f && defOf(f).onProjectileEnd;
+    if (hook) hook({ state, f, input: input(f.slot), prev: state.inputs[f.slot] }, p, p.end ?? "removed");
+  }
 }
 
 /** Longest a CPU can lag behind what's happening. */

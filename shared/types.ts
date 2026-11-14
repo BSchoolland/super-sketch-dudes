@@ -248,6 +248,11 @@ export interface FighterDef {
   onHit?: (ctx: HookCtx, victim: Fighter, hb: Hitbox) => void;
   onHurt?: (ctx: HookCtx, attacker: Fighter | null, damage: number) => void;
   onFrame?: (ctx: HookCtx) => void;
+  /**
+   * Called once when one of this fighter's projectiles ends, whatever ended it (see ProjectileEnd). The place to spawn an
+   * explosion or splash, so it happens on a direct hit too. `p` is already dead; spawning new projectiles here is fine.
+   */
+  onProjectileEnd?: (ctx: HookCtx, p: Projectile, why: ProjectileEnd) => void;
   /** Numbers the fighter owns and the HUD draws: fighter.bars[key], clamped to [0, max] after every frame. See Bar. */
   bars?: Record<string, Bar>;
   /** Renderer-only per-frame look: overall scale, glow strength 0..1, and a shake in pixels. */
@@ -450,7 +455,12 @@ export interface Projectile {
   data: Record<string, number>;
   reflected: number;
   dead: boolean;
+  /** Why it ended, set where it died: the engine's own reasons; a fighter's code that kills it leaves this null ("removed"). */
+  end: ProjectileEnd | null;
 }
+
+/** hit: it hit a fighter (and wasn't a rehit hitbox); landed: out of bounces; wall: into solid ground; expired: out of life; offstage: past the blast zone; removed: the fighter's own code killed it. */
+export type ProjectileEnd = "hit" | "landed" | "wall" | "expired" | "offstage" | "removed";
 
 export interface Rules {
   stocks: number;
