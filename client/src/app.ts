@@ -16,6 +16,7 @@ import { WaitScreen } from "./screens/loading";
 import { menus, signInScreen } from "./screens/flow";
 import { loadSettings, settings, takeHandoff, type Screen } from "./screens/ui";
 import { music, setMusicVolume, setVolume } from "./audio/audio";
+import { watchAudio } from "./audio/health";
 import { classTime, watchClassTime } from "./classtime";
 import { ClassScreen, FeedbackScreen, SketchScreen } from "./screens/classtime";
 import { FeedbackDetailScreen, FeedbackListScreen } from "./screens/feedbacklist";
@@ -139,6 +140,7 @@ export async function mount(opts: MountOptions): Promise<AppController> {
   }
   screen.enter?.();
   noteScreen(screen.constructor.name);
+  const stopAudioWatch = watchAudio(() => screen.constructor.name);
 
   const onKey = (e: KeyboardEvent) => {
     if (e.code === "F2") { const v = screen as VersusScreen; if (v.renderer) v.renderer.showHitboxes = !v.renderer.showHitboxes; e.preventDefault(); }
@@ -255,6 +257,7 @@ export async function mount(opts: MountOptions): Promise<AppController> {
       detachPointer();
       detachTouch();
       stopTelemetry();
+      stopAudioWatch();
       stopClassTime();
     },
   };

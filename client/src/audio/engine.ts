@@ -41,7 +41,8 @@ const MUSIC_TRIM = 0.4;
 
 export function live(): Mix & { c: AudioContext } {
   if (mix) return mix;
-  ctx = new AudioContext({ latencyHint: "interactive" });
+  // Phones get a deeper buffer: on an iPhone the smallest one underruns whenever the page is busy, and the whole mix stutters.
+  ctx = new AudioContext({ latencyHint: matchMedia("(pointer: coarse)").matches ? "playback" : "interactive" });
   mix = { ...buildMix(ctx, ctx.destination), c: ctx };
   mix.sfx.gain.value = volumes.sfx;
   mix.music.gain.value = volumes.music * MUSIC_TRIM;
