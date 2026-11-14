@@ -1,5 +1,5 @@
 import type { FighterDef, Pose } from "../../../shared/types";
-import { drawSprite } from "../render/sprite";
+import { cellReady, drawSprite } from "../render/sprite";
 import { cellForAnim } from "../../../shared/gen/sprite";
 import { pointer } from "../input/pointer";
 import { hover } from "./ui";
@@ -80,7 +80,8 @@ export function drawFighterPortrait(ctx: CanvasRenderingContext2D, def: FighterD
   let cell: string = cellForAnim(def, "idle");
   if (p.act) {
     const k = (t - p.act.at) / p.act.len, arc = Math.sin(Math.PI * k);
-    cell = sp.cells[p.act.cell] ? p.act.cell : cell;
+    // a card may only have its standing pose so far: the others load when first asked for
+    cell = sp.cells[p.act.cell] && cellReady(def, p.act.cell) ? p.act.cell : cell;
     if (p.act.kind === "cheer") { pose.dy = -arc * h * 0.22; pose.sy = 1 + arc * 0.08; pose.sx = 1 - arc * 0.05; }
     if (p.act.kind === "hop") pose.dy = -arc * h * 0.12;
     if (p.act.kind === "swing") { pose.dx = arc * h * 0.08; pose.rot = arc * 8; }

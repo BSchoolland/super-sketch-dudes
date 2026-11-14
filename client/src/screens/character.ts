@@ -5,7 +5,7 @@ import { INK, title } from "./ui";
 import { drawImageIn } from "./images";
 import { wrapped } from "./text";
 import { drawFighterPortrait } from "./portrait";
-import { fighterLoad } from "../gen";
+import { portraitLoad } from "../gen";
 import { roster } from "../../../shared/fighters/index";
 import { etaWords, forgeProgress } from "./forge-progress";
 
@@ -24,12 +24,12 @@ export const PRELOAD_ROWS = 2;
 
 /** Starts loading a card's fighter without drawing it. */
 export function preloadArt(ch: ArtSource): void {
-  if (ch.status === "ready" && ch.bundleUrl) fighterLoad(ch.bundleUrl);
+  if (ch.status === "ready" && ch.bundleUrl) portraitLoad(ch.bundleUrl);
 }
 
 export function drawCharacterArt(ctx: CanvasRenderingContext2D, ch: ArtSource | null, x: number, y: number, size: number, t: number, picked = false): void {
   if (!ch) { drawImageIn(ctx, null, x, y, size, "—"); inkRect(ctx, x, y, size, size, PENCIL, 1.2); return; }
-  const load = ch.status === "ready" && ch.bundleUrl ? fighterLoad(ch.bundleUrl) : null;
+  const load = ch.status === "ready" && ch.bundleUrl ? portraitLoad(ch.bundleUrl) : null;
   const def = load?.state === "ready" ? roster[ch.id] : null;
   const loading = !!load && load.state === "loading";
   // while its fighter loads the card shows the drawing, faint, then the fighter fades in over it rather than popping

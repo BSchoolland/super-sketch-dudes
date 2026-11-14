@@ -191,12 +191,20 @@ export function releaseSprite(def: FighterDef): void {
 }
 
 /** Start loading every cell so the first frame of a match doesn't draw blanks. Resolves when all have loaded or failed. */
-export function preloadSprite(def: FighterDef): Promise<void> {
-  const urls = Object.values(def.sprite.cells);
+/** Waits for a fighter's cells to load: all of them, or just `only` (a portrait needs only the one it stands in). */
+export function preloadSprite(def: FighterDef, only?: string[]): Promise<void> {
+  const cells = def.sprite.cells as Record<string, string>;
+  const urls = only ? only.map((c) => cells[c]).filter(Boolean) : Object.values(cells);
   return new Promise((resolve) => {
     const check = () => { if (urls.every((u) => { const e = cellImages(u); return e.base || e.failed; })) resolve(); else setTimeout(check, 30); };
     check();
   });
+}
+
+/** Whether one of a fighter's cells has arrived (asking starts loading it). */
+export function cellReady(def: FighterDef, cell: string): boolean {
+  const url = (def.sprite.cells as Record<string, string>)[cell];
+  return !!url && !!cellImages(url).base;
 }
 
 /** Cells a fighter stands in: drawn on their own ink bottom, since generated cells don't all put the feet on the sheet's feet line. */
