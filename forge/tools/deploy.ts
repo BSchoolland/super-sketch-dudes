@@ -4,6 +4,7 @@
 // upload next to the cells as payload.json and the worker sends it; nothing else you changed leaves here.
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { runCheck, printReport } from "./gate";
 
 const args = process.argv.slice(2);
@@ -18,10 +19,12 @@ const { report, bundle, meta } = await runCheck(js, cells, anims);
 printReport(report);
 if (!report.ok) { console.error("\nnot uploaded: fix the failures above and run again"); process.exit(1); }
 const b64 = (f: string) => fs.readFileSync(f).toString("base64");
+// cells go up as 256-colour PNGs: players download every pose of every fighter they meet
+const squashed = (f: string) => execFileSync("python3", [new URL("../img/squash.py", import.meta.url).pathname, f], { maxBuffer: 16 << 20 }).toString("base64");
 const payload = {
   name, tagline, description, source: bundle.source, cpu: bundle.cpu,
   sprite: { px: meta.px, feetPx: meta.feetPx, heightPx: meta.heightPx, anims },
-  cells: Object.fromEntries(Object.keys(meta.cells).map((c) => [c, b64(path.join(cells, `${c}.png`))])),
+  cells: Object.fromEntries(Object.keys(meta.cells).map((c) => [c, squashed(path.join(cells, `${c}.png`))])),
   sheet: fs.existsSync(path.join(cells, "sheet.png")) ? b64(path.join(cells, "sheet.png")) : undefined,
   report: { checks: report, soft: report.soft },
 };
