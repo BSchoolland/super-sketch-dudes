@@ -84,6 +84,15 @@ try {
     const problem = (text) => { if (restarting) return; errors.push(`${who}: ${text}`); console.error(`page error, ${who}: ${text}`); };
     page.on("pageerror", (e) => problem(e.stack ?? String(e)));
     page.on("console", (m) => { if (m.type() === "error") problem(m.text()); });
+    // these players have toured already: the first-fighter tour's cards would take the keys this script presses
+    await page.addInitScript(() => {
+      const get = Storage.prototype.getItem;
+      Storage.prototype.getItem = function (key) {
+        if (key !== "sketchbattle.tour") return get.call(this, key);
+        const id = JSON.parse(get.call(this, "sketchbattle.account") ?? "null")?.player?.id;
+        return JSON.stringify(id ? { [id]: "done" } : {});
+      };
+    });
     return page;
   };
   // the canvas is 1920x1080 drawn at 1600x900
