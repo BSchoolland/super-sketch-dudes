@@ -17,8 +17,8 @@ main() {
   git fetch -q origin
   target=$(git rev-parse --verify "$build^{commit}")
   busy=$(ssh ssd-server 'cd ~/sketch-battle/server-data && python3 -c "
-  import json; j=json.load(open(\"forge-jobs.json\")); j=j if isinstance(j,list) else list(j.values())
-  print(sum(1 for x in j if x[\"status\"] in (\"running\",\"queued\")))"')
+import json; j=json.load(open(\"forge-jobs.json\")); j=j if isinstance(j,list) else list(j.values())
+print(sum(1 for x in j if x[\"status\"] in (\"running\",\"queued\")))"')
   if [ "$busy" != "0" ]; then echo "site is on $build, worker on $here, $busy forge job(s) in flight: next tick"; exit 0; fi
   lock_changed=$(git diff --name-only HEAD "$target" -- package-lock.json)
   git checkout -q --detach "$target"
