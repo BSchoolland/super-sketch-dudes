@@ -43,8 +43,7 @@ try {
     s.pick({ id, name: id.toUpperCase(), bundleUrl: `/house/${id}/bundle.json?v=${window.sketchbattle.build}`, house: true, entry: null });
   }, ["rocket", "wizard", "slugbert"][i]);
   await Promise.all(pages.map((p) => p.waitForFunction(() => window.sketchbattle.screen.lobbyDebug().members.every((m) => m.fighter))));
-  for (const p of pages) await screen(p, () => window.sketchbattle.screen.toggleReady());
-  await host.waitForFunction(() => window.sketchbattle.screen.canStart());
+  await host.waitForFunction(() => window.sketchbattle.screen.canFight());
   await screen(host, () => window.sketchbattle.screen.startMatch({ stage: "rooftops", stocks: 3, time: 0, map: null }));
   await Promise.all(pages.map((p) => p.waitForFunction(() => typeof window.sketchbattle.screen.netDebug === "function", null, { timeout: 20000 })));
   const trace = await screen(host, () => window.sketchbattle.screen.opts.telemetry.trace);

@@ -48,12 +48,17 @@ try {
     pageA.waitForFunction(() => window.sketchbattle.screen.lobbyDebug?.()?.members.length === 2),
     pageB.waitForFunction(() => window.sketchbattle.screen.lobbyDebug?.()?.members.length === 2),
   ]);
+  // Space on the roster puts each player's token on the highlighted box (RANDOM: some fighter)
   await press(pageA, "Space");
   await press(pageB, "Space");
   await Promise.all([
-    pageA.waitForFunction(() => window.sketchbattle.screen.lobbyDebug?.()?.members.every((member) => member.ready)),
-    pageB.waitForFunction(() => window.sketchbattle.screen.lobbyDebug?.()?.members.every((member) => member.ready)),
+    pageA.waitForFunction(() => window.sketchbattle.screen.canFight?.()),
+    pageB.waitForFunction(() => window.sketchbattle.screen.canFight?.()),
   ]);
+  // FIGHT!, from the guest: the host's stage screen opens; the host's Enter there starts the match
+  await pageB.waitForTimeout(400);
+  await press(pageB, "Enter");
+  await pageA.waitForFunction(() => !!window.sketchbattle.screen.picker);
   await press(pageA, "Enter");
 
   await Promise.all([

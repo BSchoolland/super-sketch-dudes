@@ -26,8 +26,7 @@ try {
     window.sketchbattle.screen.pick({ id, name: id.toUpperCase(), bundleUrl: `/house/${id}/bundle.json?v=${window.sketchbattle.build}`, house: true, entry: null });
   }, ["rocket", "wizard"][i]);
   await Promise.all(pages.map((p) => p.waitForFunction(() => window.sketchbattle.screen.lobbyDebug().members.every((m) => m.fighter))));
-  for (const p of pages) await p.evaluate(() => window.sketchbattle.screen.toggleReady());
-  await host.waitForFunction(() => window.sketchbattle.screen.canStart());
+  await host.waitForFunction(() => window.sketchbattle.screen.canFight());
   await host.evaluate(() => window.sketchbattle.screen.startMatch({ stage: "rooftops", stocks: 3, time: 0, map: null }));
   await Promise.all(pages.map((p) => p.waitForFunction(() => typeof window.sketchbattle.screen.netDebug === "function", null, { timeout: 20000 })));
   await host.waitForTimeout(4000);

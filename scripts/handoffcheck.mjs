@@ -28,7 +28,7 @@ async function restart() {
   await boot();
   log(`server restarted in ${Date.now() - t0} ms`);
 }
-const screenOf = (page) => page.evaluate(() => { const s = window.sketchbattle.screen; return { screen: s.constructor.name, phase: s.phase ?? null, error: s.error ?? null, room: s.context?.room ? { code: s.context.room.code, started: s.context.room.started, members: s.context.room.members.map((m) => [m.name, m.fighter, m.ready]) } : null }; });
+const screenOf = (page) => page.evaluate(() => { const s = window.sketchbattle.screen; return { screen: s.constructor.name, phase: s.phase ?? null, error: s.error ?? null, room: s.context?.room ? { code: s.context.room.code, started: s.context.room.started, members: s.context.room.members.map((m) => [m.name, m.fighter]) } : null }; });
 const waitScreen = (page, pred, what, ms = 20000) => page.waitForFunction(pred, null, { timeout: ms }).catch(async (e) => { throw new Error(`${what}: ${JSON.stringify(await screenOf(page))} (${e.message.split("\n")[0]})`); });
 function check(ok, what) { if (!ok) throw new Error(`FAILED: ${what}`); log(`ok: ${what}`); }
 
@@ -42,7 +42,8 @@ try {
   await waitScreen(bots, () => window.sketchbattle.screen.context?.room?.bots?.length === 1, "VS BOTS room with its bot");
   // a fresh data dir has no characters: play a house fighter
   await bots.evaluate(() => window.sketchbattle.screen.pick({ id: "slugbert", name: "SLUGBERT", bundleUrl: "/house/slugbert/bundle.json", house: true, entry: null }));
-  await waitScreen(bots, () => window.sketchbattle.screen.lobbyDebug()?.members.every((m) => m.fighter), "the pick in the room");
+  await bots.evaluate(() => window.sketchbattle.screen.pickBot(0, { id: "rocket", name: "ROCKET", bundleUrl: "/house/rocket/bundle.json", house: true, entry: null }));
+  await waitScreen(bots, () => window.sketchbattle.screen.canFight(), "the picks in the room");
   await bots.evaluate(() => window.sketchbattle.screen.startMatch({ stage: "proving", stocks: 3, time: 0, map: null }));
   await waitScreen(bots, () => window.sketchbattle.screen.constructor.name === "VersusScreen" && window.sketchbattle.screen.countdown <= 0, "the local match running");
   log("VS BOTS match running; restarting the server under it");
@@ -75,8 +76,8 @@ try {
     const s = await screenOf(page);
     check(s.phase === "lobby" && !s.error && s.room?.code === code, `${name} is still in lobby ${code} (${s.screen}/${s.phase})`);
   }
-  await b.evaluate(() => window.sketchbattle.screen.context.transport.sendLobby({ t: "pick", fighter: "slugbert", bundleUrl: "/house/slugbert/bundle.json", ready: true }));
-  await waitScreen(a, () => window.sketchbattle.screen.context.room?.members[1]?.ready === true, "Bea seeing Cal ready up after the restart");
+  await b.evaluate(() => window.sketchbattle.screen.context.transport.sendLobby({ t: "pick", fighter: "slugbert", bundleUrl: "/house/slugbert/bundle.json" }));
+  await waitScreen(a, () => window.sketchbattle.screen.context.room?.members[1]?.fighter === "slugbert", "Bea seeing Cal pick after the restart");
   check(true, "the lobby works after the restart");
 } finally {
   await browser.close();

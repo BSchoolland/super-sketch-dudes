@@ -148,12 +148,11 @@ await until(a, "bob in the room", () => window.sketchbattle.screen.lobbyDebug()?
 await a.waitForTimeout(1500);
 await shot(a, "12-online-room-host");
 await shot(b, "13-online-room-guest");
-await tap(b, 982 + 85, 120 + 85);
-await b.waitForTimeout(400);
-for (const page of [b, a]) { await page.keyboard.press("Enter"); await page.waitForTimeout(400); }
-await until(a, "everyone ready", () => window.sketchbattle.screen.lobbyDebug()?.members.every((m) => m.ready));
-await shot(a, "14-online-room-ready");
-// START takes the room to the stage screen: Ann picks, Bob watches her pick land
+// a tap on a fighter puts each one's token there
+for (const page of [b, a]) { const t = await page.evaluate(() => window.sketchbattle.screen.select.where().tiles[1]); await tap(page, t.x + t.w / 2, t.y + t.h / 2); await page.waitForTimeout(400); }
+await until(a, "everyone picked", () => window.sketchbattle.screen.canFight());
+await shot(a, "14-online-room-fight");
+// FIGHT! takes the room to the stage screen: Ann picks, Bob watches her pick land
 await a.keyboard.press("Enter");
 await until(b, "bob on the stage screen", () => !!window.sketchbattle.screen.context?.room?.picking);
 await a.keyboard.press("ArrowRight");

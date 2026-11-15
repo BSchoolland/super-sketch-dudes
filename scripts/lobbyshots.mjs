@@ -17,6 +17,7 @@ const code = await a.evaluate(() => window.sketchbattle.screen.roomCode);
 await press(b, "ArrowDown"); await press(b, "ArrowDown"); await press(b, "Space"); await b.waitForTimeout(200); await b.screenshot({ path: `${out}/2-join-entry.png` });
 await b.keyboard.type(code, { delay: 40 }); await press(b, "Enter"); await b.waitForTimeout(600);
 await a.screenshot({ path: `${out}/3-room-two.png` });
-await press(a, "Space"); await press(b, "Space"); await a.waitForTimeout(400); await a.screenshot({ path: `${out}/4-ready.png` });
-await press(a, "Enter"); await a.waitForTimeout(5000); await a.screenshot({ path: `${out}/5-match.png` });
+// Space puts each token on the highlighted box: FIGHT!
+await press(a, "Space"); await press(b, "Space"); await a.waitForTimeout(800); await a.screenshot({ path: `${out}/4-fight.png` });
+await press(a, "Enter"); await a.waitForTimeout(600); await press(a, "Enter"); await a.waitForTimeout(5000); await a.screenshot({ path: `${out}/5-match.png` });
 await browser.close();

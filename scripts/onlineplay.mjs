@@ -20,9 +20,9 @@ try {
   await openOnline(guest); await press(guest, "ArrowDown"); await press(guest, "ArrowDown"); await press(guest, "Enter");
   await guest.keyboard.type(code, { delay: 40 }); await press(guest, "Enter");
   await Promise.all(pages.map((p) => p.waitForFunction(() => window.sketchbattle.screen.lobbyDebug?.()?.members.length === 2)));
-  // ready both, then the host starts
-  for (const p of pages) { await p.waitForTimeout(200); await btnPress(p, "Mouse0"); }
-  await Promise.all(pages.map((p) => p.waitForFunction(() => window.sketchbattle.screen.lobbyDebug?.()?.members.every((m) => m.ready))));
+  // each puts their token on a fighter (that's ready), then the host starts
+  for (const p of pages) { await p.waitForTimeout(200); await p.evaluate(() => { const s = window.sketchbattle.screen; s.pick(s.select.grid.fighters[0]); }); }
+  await Promise.all(pages.map((p) => p.waitForFunction(() => window.sketchbattle.screen.lobbyDebug?.()?.members.every((m) => m.fighter))));
   await host.waitForTimeout(300);
   await host.evaluate(() => window.sketchbattle.screen.startMatch?.());
   await Promise.all(pages.map((p) => p.waitForFunction(() => typeof window.sketchbattle.screen.netDebug === "function")));

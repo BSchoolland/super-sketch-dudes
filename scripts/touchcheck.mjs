@@ -165,8 +165,9 @@ try {
       window.sketchbattle.screen.pick({ id, name: id.toUpperCase(), bundleUrl: `/house/${id}/bundle.json?v=${window.sketchbattle.build}`, house: true, entry: null });
     }, fighters[i]);
     await Promise.all(pages.map((p) => p.waitForFunction(() => window.sketchbattle.screen.lobbyDebug()?.members.every((m) => m.fighter))));
-    if (pages.length > 1) for (const p of pages) await p.evaluate(() => window.sketchbattle.screen.toggleReady());
-    await pages[0].waitForFunction(() => window.sketchbattle.screen.canStart(), null, { timeout: 10000 });
+    // VS BOTS: the host puts the bot's token on a fighter too
+    if (pages.length === 1) await pages[0].evaluate(() => { const s = window.sketchbattle.screen; s.pickBot(0, s.select.grid.fighters.find((f) => f.id === "wizard")); });
+    await pages[0].waitForFunction(() => window.sketchbattle.screen.canFight(), null, { timeout: 10000 });
     await pages[0].evaluate((setup) => window.sketchbattle.screen.startMatch(setup), setup);
   }
   async function hashesAgree(pages, label) {

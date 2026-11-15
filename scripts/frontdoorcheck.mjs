@@ -125,7 +125,10 @@ try {
   await battle(ann, 3);
   await inLobby(ann, 1);
   await pickHouse(ann, "rocket");
-  await ann.waitForFunction(() => window.sketchbattle.screen.canStart(), null, { timeout: 20000 });
+  // the bot's token too: picking is being ready
+  await ann.waitForFunction(() => window.sketchbattle.screen.context.room?.bots?.length > 0);
+  await ann.evaluate(() => { const s = window.sketchbattle.screen; s.pickBot(0, s.select.grid.fighters.find((f) => f.house)); });
+  await ann.waitForFunction(() => window.sketchbattle.screen.canFight(), null, { timeout: 20000 });
   await ann.evaluate(() => window.sketchbattle.screen.startMatch({ stage: "rooftops", stocks: 3, time: 0, map: null }));
   // everyone in the room on this computer: the match runs here
   await on(ann, "VersusScreen", 30000);
@@ -152,8 +155,7 @@ try {
   await shot(g1, "lobby-two-guests");
   await pickHouse(g1, "rocket"); await pickHouse(g2, "wizard");
   await Promise.all([g1, g2].map((p) => p.waitForFunction(() => window.sketchbattle.screen.lobbyDebug().members.every((m) => m.fighter))));
-  for (const p of [g1, g2]) await p.evaluate(() => window.sketchbattle.screen.toggleReady());
-  await g1.waitForFunction(() => window.sketchbattle.screen.canStart());
+  await g1.waitForFunction(() => window.sketchbattle.screen.canFight());
   await g1.evaluate(() => window.sketchbattle.screen.startMatch({ stage: "rooftops", stocks: 3, time: 0, map: null }));
   await played([g1, g2], `room ${code}, ${p1.name} vs ${p2.name}`);
   await g1.context().close(); await g2.context().close();

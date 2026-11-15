@@ -16,7 +16,7 @@ const open = async (name) => {
   await p.waitForTimeout(500);
   return p;
 };
-const pick = (p, fighter) => p.evaluate((f) => window.sketchbattle.screen.context.transport.sendLobby({ t: "pick", fighter: f, bundleUrl: `${location.pathname}house/${f}/bundle.json`, ready: true }), fighter);
+const pick = (p, fighter) => p.evaluate((f) => window.sketchbattle.screen.context.transport.sendLobby({ t: "pick", fighter: f, bundleUrl: `${location.pathname}house/${f}/bundle.json` }), fighter);
 const [host, potato] = [await open("Host"), await open("Potato")];
 await host.evaluate(() => window.sketchbattle.screen.create(false));
 await host.waitForFunction(() => window.sketchbattle.screen.roomCode);
@@ -24,7 +24,7 @@ const code = await host.evaluate(() => window.sketchbattle.screen.roomCode);
 await potato.evaluate((c) => window.sketchbattle.screen.join(c), code);
 await potato.waitForFunction(() => window.sketchbattle.screen.roomCode);
 await pick(host, "woodstove"); await pick(potato, "slugbert");
-await host.waitForFunction(() => window.sketchbattle.screen.lobbyDebug()?.members.length === 2 && window.sketchbattle.screen.lobbyDebug().members.every((m) => m.ready));
+await host.waitForFunction(() => window.sketchbattle.screen.lobbyDebug()?.members.length === 2 && window.sketchbattle.screen.lobbyDebug().members.every((m) => m.fighter));
 await host.evaluate(() => window.sketchbattle.screen.startMatch({ stage: "rooftops", stocks: 99, time: 0 }));
 await Promise.all([host, potato].map((p) => p.waitForFunction(() => !!window.sketchbattle.screen.session, null, { timeout: 30000 })));
 const cdp = await potato.context().newCDPSession(potato);

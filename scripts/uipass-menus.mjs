@@ -230,32 +230,36 @@ async function signedInPass(d) {
     await d.page.waitForFunction(() => window.sketchbattle.screen.phase === "lobby" && window.sketchbattle.screen.lobbyDebug(), null, { timeout: 15000 });
     if (want("lobby-bots")) await d.shot("lobby-bots", 2500);
     if (want("lobby-bots")) {
-      // the bot's card by tap: its fighter's ▶, its level's ▶, then a second bot's REMOVE
-      const geo = await d.page.evaluate(async () => {
-        const slots = await import("/src/screens/battle/slots.ts"), ui = await import("/src/screens/ui.ts"), s = slots.setup();
-        return { x: slots.slotX(1, 6), x2: slots.slotX(2, 6), w: slots.slotWidth(6), y: s.slotY, h: s.slotH, mid: slots.portraitMid(), line: s.lineY, small: ui.small() };
-      });
+      // the bot by tap: its token up, then a fighter; its level's ▶; a second bot's ×
+      const where = () => d.screen(() => window.sketchbattle.screen.select.where());
       const bots = () => d.screen(() => window.sketchbattle.screen.context.room.bots);
-      const was = (await bots())[0];
-      await d.tap(geo.x + geo.w - 22, geo.y + geo.mid + 4);
+      const cpu = (await where()).seats[1];
+      await d.tap(cpu.token.x, cpu.token.y);
+      const tile = (await where()).tiles.find((t) => t.id && t.shown);
+      await d.tapRect(tile);
+      if ((await bots())[0].fighter !== tile.id) problems.push(`${d.spec.name}: tapping the CPU's token, then ${tile.id}, left it on "${(await bots())[0].fighter}"`);
+      // its token back up, so the level can be stepped (with every slot picked, FIGHT! covers the cards)
+      const placed = (await where()).seats[1];
+      await d.tap(placed.token.x, placed.token.y);
+      const was = (await bots())[0].level;
+      const level = await d.screen(() => window.sketchbattle.screen.select.where().levelArrows(1));
+      await d.tap(level.right.x, level.right.y);
       await sleep(400);
-      const stepped = (await bots())[0];
-      if (stepped.fighter === was.fighter) problems.push(`${d.spec.name}: a tap on the bot's fighter ▶ didn't change it`);
-      await d.tap(geo.x + geo.w - 28, geo.y + geo.line - 10);
-      await sleep(400);
-      const leveled = (await bots())[0];
-      if (leveled.level !== Math.min(was.level + 1, 9) && leveled.level === was.level) problems.push(`${d.spec.name}: a tap on the bot's level ▶ left it at ${leveled.level}`);
+      if ((await bots())[0].level === was && was < 9) problems.push(`${d.spec.name}: a tap on the bot's level ▶ left it at ${was}`);
       await d.screen(() => window.sketchbattle.screen.addBot());
       await d.page.waitForFunction(() => window.sketchbattle.screen.context.room.bots.length === 2);
-      await d.tap(geo.x2 + geo.w / 2, geo.y + geo.h - (geo.small ? 47 : 32));
+      const card = (await where()).seats[2].card;
+      await d.tap(card.x + card.w - 26, card.y + 30);
       await sleep(500);
-      if ((await bots()).length !== 1) problems.push(`${d.spec.name}: a tap on REMOVE left ${(await bots()).length} bots`);
+      if ((await bots()).length !== 1) problems.push(`${d.spec.name}: a tap on the bot's × left ${(await bots()).length} bots`);
       await d.screen(() => window.sketchbattle.screen.addBot());
       await d.screen(() => window.sketchbattle.screen.toggleTeams());
       await d.shot("lobby-bots-teams", 2500);
       await d.screen(() => window.sketchbattle.screen.toggleTeams());
     }
     if (want("stage")) {
+      await d.screen(() => { const s = window.sketchbattle.screen, f = s.select.grid.fighters; s.pick(f[0]); s.context.room.bots.forEach((b, i) => s.pickBot(i, f[1])); });
+      await d.page.waitForFunction(() => window.sketchbattle.screen.canFight());
       await d.screen(() => window.sketchbattle.screen.openStagePick());
       await d.shot("stage", 2000);
       // STOCKS ▶ by tap
