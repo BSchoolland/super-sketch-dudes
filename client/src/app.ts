@@ -32,7 +32,7 @@ import { TitleScreen } from "./screens/title";
 import { closeAbout } from "./about";
 import { startBars } from "./bars";
 import { onStage, stageSize, turned } from "./turn";
-import { tourCardUp, tourDraw, tourSaw, tourTick, tourUpdate } from "./screens/tour";
+import { tourButtons, tourCardUp, tourDraw, tourSaw, tourTick, tourUpdate } from "./screens/tour";
 
 const NO_MENU: MenuInput = { up: false, down: false, left: false, right: false, confirm: false, back: false, start: false, any: false, from: null };
 
@@ -258,6 +258,7 @@ export async function mount(opts: MountOptions): Promise<AppController> {
   (window as any).sketchbattle = {
     get screen() { return screen; }, get preview() { return (screen as VersusScreen).preview ?? null; }, build: site.build, hash: swap.hash,
     get touch() { return { layout: pad.layout, live: touchLive(), shown: touchShown(), inUse: touchInUse() }; },
+    get tourCard() { return tourButtons(screen); },
   };
   return controller;
 }

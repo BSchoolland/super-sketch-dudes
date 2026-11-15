@@ -1,13 +1,16 @@
 // A stand-in forge for local testing: claims every job and completes it with the
 // LAMPJACK exemplar after a few seconds and a couple of progress posts.
 //   node scripts/fake-forge.mjs [server=http://localhost:3010] [token=devtoken]
+// Imported, it only exports `completeJob` (a script that claims jobs itself finishes them with it).
 // The 3x3 sheet is composed from the exemplar's cells with a tiny PNG codec (no image deps).
 import fs from "node:fs";
 import zlib from "node:zlib";
 import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
-const server = process.argv[2] ?? "http://localhost:3010";
-const token = process.argv[3] ?? "devtoken";
+const main = process.argv[1] === fileURLToPath(import.meta.url);
+const server = main ? process.argv[2] ?? "http://localhost:3010" : null;
+const token = main ? process.argv[3] ?? "devtoken" : null;
 const CELLS = ["idle", "walk", "jump", "atk-fwd", "atk-up", "atk-down", "hit", "launched", "block"];
 const NAMES = ["SWORD GUY", "STAB LAD", "BIG KNIFE", "POINTY", "EDGE CASE"];
 const root = new URL("..", import.meta.url);
@@ -74,12 +77,22 @@ function composeSheet() {
 }
 const sheet = composeSheet();
 
-const headers = { "x-forge-token": token, "content-type": "application/json" };
-const api = async (path, body) => {
-  const res = await fetch(`${server}/api${path}`, body === undefined ? { headers } : { method: "POST", headers, body: JSON.stringify(body) });
+const call = async (at, key, path, body) => {
+  const headers = { "x-forge-token": key, "content-type": "application/json" };
+  const res = await fetch(`${at}/api${path}`, body === undefined ? { headers } : { method: "POST", headers, body: JSON.stringify(body) });
   if (res.status >= 400) throw new Error(`${path}: HTTP ${res.status} ${await res.text()}`);
   return res;
 };
+const api = (path, body) => call(server, token, path, body);
+
+/** Completes a claimed job on `at` with the exemplar, named `name`. */
+export async function completeJob(at, key, job, name) {
+  await call(at, key, `/forge/jobs/${job.id}/complete`, {
+    name, tagline: `${job.playerName}'s desk lamp with a grudge and a very long cord`, description: "A floating desk lamp that whips its cord.",
+    card: ["ATTACK  cord whip, aim it", "SPECIAL  hold: bulb flash burst", "UP+SPECIAL  propeller lift", "GRAB  plug hook, toss"],
+    source, sprite: { px: 512, feetPx: 448, heightPx: 360, anims: {} }, cells, sheet, cpu,
+  });
+}
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function work(job, n) {
@@ -91,16 +104,12 @@ async function work(job, n) {
     await sleep(1200);
   }
   const name = NAMES[n % NAMES.length];
-  await api(`/forge/jobs/${job.id}/complete`, {
-    name, tagline: `${job.playerName}'s desk lamp with a grudge and a very long cord`, description: "A floating desk lamp that whips its cord.",
-    card: ["ATTACK  cord whip, aim it", "SPECIAL  hold: bulb flash burst", "UP+SPECIAL  propeller lift", "GRAB  plug hook, toss"],
-    source, sprite: { px: 512, feetPx: 448, heightPx: 360, anims: {} }, cells, sheet, cpu,
-  });
+  await completeJob(server, token, job, name);
   console.log(`  done: ${name}`);
 }
 
 let n = 0;
-for (;;) {
+while (main) {
   const res = await api("/forge/jobs/next");
   if (res.status === 204) { await sleep(700); continue; }
   const job = await res.json();
