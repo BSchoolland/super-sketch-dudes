@@ -113,7 +113,8 @@ function swipeGate(): void {
     // upright, the status bar stays, and so does a strip of the browser's
     const full = w > h ? Math.min(screen.width, screen.height) - 24 : Math.max(screen.width, screen.height) - 110;
     const tucked = h >= full || h >= low.h + 40;
-    const show = !tucked && !typing() && !aboutOpen() && !gaveUp;
+    // never over a match: one that came back mid-match (a turn of the phone) waits for the match to end
+    const show = !tucked && !typing() && !aboutOpen() && !gaveUp && !inMatch();
     // turned with the game, the finger's swipe up the screen runs to the game's left
     way.textContent = turned() ? "LEFT" : "UP";
     if (show && gate.hidden && performance.now() - tuckedAt < BOUNCE_MS && ++bounces >= BOUNCES) {
