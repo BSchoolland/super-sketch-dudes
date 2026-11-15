@@ -1,6 +1,7 @@
 // The forge worker: polls the site for forge jobs, runs the forge, posts the fighter back; and for names players
 // asked for, which its judges decide.
 // Usage: npx tsx forge/worker.ts   (SITE, FORGE_TOKEN, OPENAI_API_KEY from the env, forge/.env or ~/.config/sketch-forge/env)
+import { reach } from "./reach";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,8 +23,10 @@ const RUNS = path.join(path.dirname(fileURLToPath(import.meta.url)), "runs");
 const stamp = () => new Date().toISOString().slice(11, 19);
 const log = (tag: string, line: string) => console.log(`${stamp()} [${tag}] ${line}`);
 
-async function api(p: string, init?: RequestInit): Promise<Response> {
-  return fetch(`${SITE}/api/forge${p}`, { ...init, headers: { "x-forge-token": TOKEN, "content-type": "application/json", ...(init?.headers ?? {}) } });
+/** The site's forge API. Polls are tried once (their loop tries again anyway); the rest wait out a short outage (reach.ts): a 40 s one used to stop a job five minutes into its agent run. */
+async function api(p: string, init?: RequestInit, patient = true): Promise<Response> {
+  const go = () => fetch(`${SITE}/api/forge${p}`, { ...init, headers: { "x-forge-token": TOKEN, "content-type": "application/json", ...(init?.headers ?? {}) } });
+  return reach(go, `${init?.method ?? "GET"} ${p}`, (line) => log("site", line), patient ? undefined : []);
 }
 async function post(p: string, body: unknown): Promise<Response> {
   const res = await api(p, { method: "POST", body: JSON.stringify(body) });
@@ -124,7 +127,7 @@ async function pollNames(): Promise<void> {
     if (judging >= NAME_CONCURRENCY || Date.now() < namesDownUntil) { await sleep(500); continue; }
     let n: NameClaim | null = null;
     try {
-      const res = await api("/names/next");
+      const res = await api("/names/next", undefined, false);
       if (res.status === 200) n = await res.json();
       else if (res.status !== 204) log("names", `poll: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
     } catch (e) {
@@ -147,7 +150,7 @@ for (;;) {
   if (running >= CONCURRENCY) { await sleep(500); continue; }
   let job: Claimed | null = null;
   try {
-    const res = await api("/jobs/next");
+    const res = await api("/jobs/next", undefined, false);
     if (res.status === 200) job = await res.json();
     else if (res.status !== 204) log("forge", `poll: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
   } catch (e) {
