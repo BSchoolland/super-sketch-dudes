@@ -35,7 +35,8 @@ const ANDROID = devices["Pixel 7 landscape"];
 const DESKTOP = { viewport: { width: 1280, height: 720 } };
 /** The title's tab, in the 1920x1080 view (client/src/screens/title.ts). */
 const TAB = { x: 1920 - 430 + 84, y: 1080 - 22 };
-const SETTINGS = () => localStorage.setItem("sketchbattle.settings", JSON.stringify({ cpuTier: 1, volume: 0, music: 0 }));
+// the phone note (mobilenote.ts) already read, so it covers nothing
+const SETTINGS = () => { localStorage.setItem("sketchbattle.settings", JSON.stringify({ cpuTier: 1, volume: 0, music: 0 })); localStorage.setItem("sketchbattle.mobileNote", "1"); };
 
 function toCss(page, vx, vy) {
   const { width: w, height: h } = page.viewportSize();

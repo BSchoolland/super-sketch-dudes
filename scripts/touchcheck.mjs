@@ -54,7 +54,8 @@ const PHONE = { viewport: { width: 844, height: 390 }, deviceScaleFactor: 3, isM
 const TABLET = { viewport: { width: 1180, height: 820 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
 const DESKTOP = { viewport: { width: 1280, height: 720 } };
 // the weakest bots: a KO by touch shouldn't take all day
-const SETTINGS = () => { if (location.protocol.startsWith("http")) localStorage.setItem("sketchbattle.settings", JSON.stringify({ cpuTier: 1, volume: 0, music: 0 })); };
+// the phone note (mobilenote.ts) already read, so it covers nothing
+const SETTINGS = () => { if (location.protocol.startsWith("http")) { localStorage.setItem("sketchbattle.settings", JSON.stringify({ cpuTier: 1, volume: 0, music: 0 })); localStorage.setItem("sketchbattle.mobileNote", "1"); } };
 
 /** Fingers on a page's screen: every event lists every finger still down, so the touches are really simultaneous. */
 class Fingers {

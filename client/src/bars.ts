@@ -1,4 +1,5 @@
 import { aboutOpen } from "./about";
+import { mobileNote } from "./mobilenote";
 import { site } from "./base";
 import { inMatch } from "./input/touch";
 import { everywhere, sessionList } from "./telemetry/events";
@@ -37,6 +38,7 @@ export function startBars(canvas: HTMLCanvasElement): void {
   if (!matchMedia("(pointer: coarse)").matches) return;
   root.classList.add("handheld");
   turnUpright();
+  mobileNote();
   // only here: a desktop browser offered to install the site would be a change on the desktop
   const manifest = document.createElement("link");
   manifest.rel = "manifest";
