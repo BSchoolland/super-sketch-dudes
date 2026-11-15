@@ -14,6 +14,9 @@ import { cardParts, drawGhostBox, drawSlotCard, drawTeamTag, slotRow, type SlotF
 import { drawTether, drawToken, tokenR } from "./token";
 import { BAND_IN, drawFightBand } from "./fightband";
 
+/** Just under the FIGHT! band. */
+const CANCEL_Y = 752;
+
 /** One slot in the room as the character select shows it. */
 export interface Seat {
   /** Stable while the slot's holder stays: a member's id, a bot's place among the bots. */
@@ -124,6 +127,15 @@ export class CharacterSelect {
     if (seat.fighter) { this.act.pick(seat, null); sfx.menuBack(); }
   }
 
+  /** Out of FIGHT!: your token back in your hand, to choose again. */
+  private cancel(): void {
+    const me = this.mine;
+    if (!me) return;
+    this.lift(me);
+    this.focus = "grid";
+    this.keyHand = null;
+  }
+
   // --- keyboards and pads -------------------------------------------------------------------------------------------
 
   private items(room: SelectRoom): Focus[] {
@@ -154,7 +166,7 @@ export class CharacterSelect {
     if (this.keyHand && !this.seat(this.keyHand)?.ours) this.keyHand = null;
     if (this.ready(room)) {
       if (m.confirm || m.start) { this.act.fight(); return; }
-      if (m.back) { this.act.leave(); return; }
+      if (m.back) { this.cancel(); return; }
       if (!dir || !me) return;
       // choosing again: your token comes back to your hand
       this.lift(me);
@@ -220,6 +232,7 @@ export class CharacterSelect {
     if (room.loading || !device) return;
     const dir = m.up || m.down || m.left || m.right;
     let at = this.cursors.get(device) ?? Math.max(0, this.grid.indexOf(seat.fighter));
+    if (m.back && this.ready(room)) { this.lift(seat); return; }
     if (m.back) { this.act.removeBot(seat.bot!.index); this.cursors.delete(device); return; }
     if (this.ready(room)) {
       if (m.confirm || m.start) { this.act.fight(); return; }
@@ -403,7 +416,15 @@ export class CharacterSelect {
     if (ready || (room.loading && room.block === null)) {
       if (this.bandAt === null) { this.bandAt = t; sfx.menuConfirm(); }
       drawFightBand(ctx, t - this.bandAt, room.loading ? `loading ${".".repeat(1 + (Math.floor(t * 3) % 3))}` : "");
-      if (ready && !this.used && pointer.clicked && t - this.bandAt > BAND_IN / 2) this.act.fight();
+      if (ready && t - this.bandAt > BAND_IN && this.mine) {
+        const w = small() ? 340 : 260, h = small() ? 110 : 70;
+        if (button(ctx, VIEW_W / 2 - w / 2, CANCEL_Y, w, h, "CANCEL", { size: small() ? 40 : 30, key: "Esc" }) && !this.used) { this.cancel(); this.used = true; }
+      }
+      // on the band fights; anywhere else backs out of it
+      if (ready && !this.used && pointer.clicked && t - this.bandAt > BAND_IN / 2) {
+        if (this.underBand(pointer.tapY)) this.act.fight();
+        else this.cancel();
+      }
     } else this.bandAt = null;
   }
 
