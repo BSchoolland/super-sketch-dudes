@@ -1,5 +1,6 @@
 // Fakes a standard gamepad in the page and checks the fighter obeys it: stick right runs, X jumps, A attacks, right stick smashes.
-// Twice: P1 on the pad, and P1 on keyboard 1 (a fight started with the mouse), which answers any pad nobody else holds.
+// Twice: P1 on the pad, and P1 on keyboard 1 (a fight started with the mouse), which answers any pad nobody else holds;
+// then with buttons rebound in settings.
 import { chromium } from "playwright";
 const base = process.argv[2] ?? "http://localhost:5175/";
 const browser = await chromium.launch();
@@ -31,6 +32,22 @@ for (const p1 of ["pad0", "kb1"]) {
   const pass = results.run.action === "run" && !results.jump.grounded && results.attack.move === "jab1" && results.cstick.move === "fsmash" && !results.tapJump.grounded;
   console.log(p1, JSON.stringify(results), pass ? "ok" : "FAIL");
   ok &&= pass;
+}
+// rebound in settings: A jumps and X attacks in a match
+{
+  await page.evaluate(() => localStorage.setItem("sketchbattle.settings", JSON.stringify({ pad: { a: "jump", x: "attack" } })));
+  await page.goto(`${base}?quick=1&p1=pad0&p2=cpu&cpu=0&f=woodstove,rocket&stage=proving`);
+  await page.waitForFunction(() => window.sketchbattle?.screen, null, { timeout: 20000 });
+  await page.waitForTimeout(500);
+  const setPad = (buttons) => page.evaluate((b) => { window.__pad.buttons.forEach((x, i) => { x.pressed = b.includes(i); x.value = b.includes(i) ? 1 : 0; }); }, buttons);
+  const fighter = () => page.evaluate(() => { const f = window.sketchbattle.screen.match.state.fighters[0]; return { move: f.move, grounded: f.grounded }; });
+  await setPad([0]); await page.waitForTimeout(60); await setPad([]); await page.waitForTimeout(120); const jump = await fighter();
+  await page.waitForTimeout(1400);
+  await setPad([2]); await page.waitForTimeout(60); await setPad([]); await page.waitForTimeout(60); const attack = await fighter();
+  const pass = !jump.grounded && attack.move === "jab1";
+  console.log("rebound", JSON.stringify({ jump, attack }), pass ? "ok" : "FAIL");
+  ok &&= pass;
+  await page.evaluate(() => localStorage.removeItem("sketchbattle.settings"));
 }
 console.log(ok ? "PAD OK" : "PAD FAIL");
 if (errors.length) console.error(errors.join("\n"));

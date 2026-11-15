@@ -75,3 +75,27 @@ export function keyName(code: string): string {
   if (code.startsWith("Mouse")) return `MOUSE ${code.slice(5)}`;
   return code.toUpperCase();
 }
+
+/** What a pad's face and shoulder buttons can do; the sticks, d-pad, back and start are fixed. */
+export type PadAction = "jump" | "attack" | "special" | "shield";
+export const PAD_ACTIONS: readonly PadAction[] = ["jump", "attack", "special", "shield"];
+/** The rebindable buttons, named as gamepadmap draws them, and their standard-mapping indices. */
+export type PadButton = "a" | "b" | "x" | "y" | "lb" | "rb" | "lt" | "rt";
+export const PAD_INDEX: Readonly<Record<PadButton, number>> = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7 };
+export const PAD_BUTTONS = Object.keys(PAD_INDEX) as PadButton[];
+export type PadBindings = Record<PadButton, PadAction>;
+export const PAD_DEFAULT: Readonly<PadBindings> = { a: "attack", b: "special", x: "jump", y: "jump", lb: "shield", rb: "shield", lt: "shield", rt: "shield" };
+
+/** Every pad's buttons: the defaults with the player's overrides on top (actions that are gone fall back). */
+let padCurrent: PadBindings = { ...PAD_DEFAULT };
+export function padBindings(): Readonly<PadBindings> { return padCurrent; }
+export function setPadOverrides(overrides: Partial<PadBindings>): void {
+  padCurrent = { ...PAD_DEFAULT };
+  for (const b of PAD_BUTTONS) if (overrides[b] && PAD_ACTIONS.includes(overrides[b]!)) padCurrent[b] = overrides[b]!;
+}
+/** The buttons that differ from the defaults (what settings keep). */
+export function padOverridesOf(b: Readonly<PadBindings>): Partial<PadBindings> {
+  const out: Partial<PadBindings> = {};
+  for (const k of PAD_BUTTONS) if (b[k] !== PAD_DEFAULT[k]) out[k] = b[k];
+  return out;
+}

@@ -1,5 +1,5 @@
 import { B, EMPTY_INPUT, type InputFrame } from "../../../shared/input";
-import { bindingsOf } from "./bindings";
+import { PAD_BUTTONS, PAD_DEFAULT, PAD_INDEX, bindingsOf, padBindings, type PadAction } from "./bindings";
 import { endTouchTick, stopTouch, touchFrame, touchInUse } from "./touch";
 import { aboutOpen } from "../about";
 
@@ -39,6 +39,8 @@ window.addEventListener("blur", () => keys.clear());
 const lastX = new Map<DeviceId, 1 | -1>();
 
 // the menus read every pad each tick too, so they keep their own last frame and never eat a fighter's flick
+const PAD_BIT: Record<PadAction, number> = { jump: B.JUMP, attack: B.ATTACK, special: B.SPECIAL, shield: B.SHIELD };
+
 const padPrev = new Map<string, { ax: number; ay: number; cx: number; cy: number; jumpFlick: number; cFlick: number }>();
 
 function padState(index: number, menu: boolean) {
@@ -95,10 +97,9 @@ export function readDevice(dev: DeviceId, opts: { tapJump: boolean; menu?: boole
   const cx = dz(gp.axes[2] ?? 0, 0.3), cy = dz(gp.axes[3] ?? 0, 0.3);
   if (btn(14)) ax = -1; if (btn(15)) ax = 1; if (btn(12)) ay = -1; if (btn(13)) ay = 1;
   let bits = 0;
-  if (btn(0)) bits |= B.ATTACK;
-  if (btn(1)) bits |= B.SPECIAL;
-  if (btn(2) || btn(3)) bits |= B.JUMP;
-  if (btn(4) || btn(5) || btn(6) || btn(7)) bits |= B.SHIELD;
+  // the menus keep the standard buttons, so A confirms and B goes back whatever a player rebound
+  const bound = opts.menu ? PAD_DEFAULT : padBindings();
+  for (const b of PAD_BUTTONS) if (btn(PAD_INDEX[b])) bits |= PAD_BIT[bound[b]];
   if (btn(8)) bits |= B.PRACTICE;
   if (btn(9)) bits |= B.PAUSE;
   if (bits || ax || ay || cx || cy) stopTouch();
@@ -187,6 +188,16 @@ export function endInputFrame(): void {
   pressedThisFrame.clear();
   typedThisFrame.length = 0;
   anyPress = false;
+}
+
+/** The rebindable buttons down on any pad, as a bit per PAD_BUTTONS index. */
+export function padButtonsDown(): number {
+  let mask = 0;
+  for (const gp of navigator.getGamepads?.() ?? []) {
+    if (!gp) continue;
+    PAD_BUTTONS.forEach((b, i) => { const x = gp.buttons[PAD_INDEX[b]]; if (x?.pressed || (x?.value ?? 0) > 0.5) mask |= 1 << i; });
+  }
+  return mask;
 }
 
 export function connectedPads(): number[] {

@@ -1,7 +1,7 @@
 import { VIEW_H, VIEW_W } from "../render/camera";
 import { FONT, INK, PENCIL, inkLine } from "../render/paper";
-import { keyHeld, rumble, takeKeyPress, type DeviceId, type MenuInput } from "../input/devices";
-import { bindingsOf, keyName, overridesOf, rebind, release, type KeyAction, type Keyboard } from "../input/bindings";
+import { keyHeld, padButtonsDown, rumble, takeKeyPress, type DeviceId, type MenuInput } from "../input/devices";
+import { PAD_ACTIONS, PAD_BUTTONS, bindingsOf, keyName, overridesOf, padBindings, padOverridesOf, rebind, release, type KeyAction, type Keyboard, type PadAction, type PadButton } from "../input/bindings";
 import { pointer, viewBleed, type ViewPoint } from "../input/pointer";
 import { sfx } from "../audio/audio";
 import { ButtonMenu, inside, type Button } from "./buttons";
@@ -49,17 +49,25 @@ const capText = (code: string): string => WORDS[code] ?? (legendOf(code, keyName
 const capWidth = (code: string | null): number => (code === null ? 90 : Math.max(70, 34 + capText(code).length * 19));
 const ARROW_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
 
-const PAD_CALLOUTS: { name: string; note?: string; x: number; y: number; parts: (keyof typeof PAD_PARTS)[] }[] = [
-  { name: "SHIELD", x: 560, y: 250, parts: ["lt", "lb"] },
+/** The pad's fixed parts: the sticks, back and start. */
+const PAD_FIXED: { name: string; note?: string; x: number; y: number; parts: (keyof typeof PAD_PARTS)[] }[] = [
   { name: "PRACTICE KEY", note: "only in practice", x: 850, y: 250, parts: ["back"] },
   { name: "PAUSE", x: 1070, y: 250, parts: ["start"] },
-  { name: "SHIELD", x: 1360, y: 250, parts: ["rt", "rb"] },
   { name: "MOVE", note: "flick it with ATTACK: SMASH", x: 330, y: 500, parts: ["lstick", "dpad"] },
-  { name: "JUMP", note: "again in the air", x: 1600, y: 370, parts: ["y", "x"] },
-  { name: "SPECIAL", note: "up + special flies you back", x: 1600, y: 485, parts: ["b"] },
-  { name: "ATTACK", x: 1600, y: 600, parts: ["a"] },
   { name: "SMASH", note: "in the air: air attacks", x: 1600, y: 715, parts: ["rstick"] },
 ];
+/**
+ * Where each rebindable action is written, with lines to the buttons doing it now. SHIELD has a label on each side
+ * of the drawing, and each takes the buttons on its side.
+ */
+const PAD_SPOTS: Record<PadAction, { name: string; note?: string; spots: { x: number; y: number }[] }> = {
+  jump: { name: "JUMP", note: "again in the air", spots: [{ x: 1600, y: 370 }] },
+  special: { name: "SPECIAL", note: "up + special flies you back", spots: [{ x: 1600, y: 485 }] },
+  attack: { name: "ATTACK", spots: [{ x: 1600, y: 600 }] },
+  shield: { name: "SHIELD", spots: [{ x: 560, y: 250 }, { x: 1360, y: 250 }] },
+};
+/** A rebindable action's label as drawn: the buttons it points at, and the box that picks it. */
+interface PadCallout { action: PadAction; name: string; note?: string; x: number; y: number; buttons: PadButton[]; box: Rect }
 const checks = (): { y: number; h: number } => (small() ? { y: 826, h: 110 } : { y: 860, h: 80 });
 /** The touch view's drawing: a landscape screen with the controls on it as a match lays them out. */
 const SCREEN = { x: 470, y: 250, w: 980 };
@@ -113,6 +121,8 @@ export class ControlsPage {
   private player: Keyboard = "kb1";
   /** Keys still to press, in order (MOVE's label asks for all four); `old` is the key being replaced. */
   private waiting: { queue: { action: KeyAction; old: string | null }[]; armed: boolean } | null = null;
+  /** A pad action waiting for its new button; `down` is what was already held when it asked. */
+  private padWaiting: { action: PadAction; down: number } | null = null;
   /** A mouse button just bound: the click it makes is ignored until it lets go. */
   private eating: string | null = null;
   /** The labels as last drawn: clicking one rebinds what it points at. */
@@ -128,11 +138,12 @@ export class ControlsPage {
 
   /** Waiting for a key, or for the mouse button just bound to come up: Esc and clicks belong to the page. */
   get busy(): boolean {
-    return !!this.waiting || !!this.eating;
+    return !!this.waiting || !!this.eating || !!this.padWaiting;
   }
 
   get hint(): string {
     if (this.waiting) return "press the new key or mouse button · Esc: cancel";
+    if (this.padWaiting) return `press the button for ${PAD_SPOTS[this.padWaiting.action].name} · START: cancel`;
     if (this.view === "keys") return "click a key, or arrows + Enter, to change it · Esc: back";
     if (this.view === "touch") return "a light push and ATTACK: a tilt · stick down in the air: fall fast · SHIELD in the air: air dodge";
     return padStyleOf(this.padId()) === "playstation" ? "stick: pick · ✕: change · ○: back" : "stick: pick · A: change · B: back";
@@ -174,8 +185,10 @@ export class ControlsPage {
     }
     if (this.view === "pad") {
       return [
+        ...this.padCallouts().map((c, i) => ({ id: `pad:${i}`, ...c.box, text: "", custom: true })),
         { id: "tapJump", text: "STICK UP JUMPS", checked: settings.tapJump, x: VIEW_W / 2 - 440, y: CHECKS.y, w: 420, h: CHECKS.h, size: small() ? 38 : 32 },
         { id: "rumble", text: "RUMBLE", checked: settings.rumble, x: VIEW_W / 2 + 20, y: CHECKS.y, w: 300, h: CHECKS.h, size: small() ? 38 : 32 },
+        ...(Object.keys(settings.pad).length ? [{ id: "resetPad", x: VIEW_W - 340, y: VIEW_H - 100, w: 300, h: 64, text: "RESET BUTTONS", size: 26 }] : []),
         tab,
       ];
     }
@@ -191,6 +204,7 @@ export class ControlsPage {
   /** "tab" to switch tabs, "back" to leave settings. */
   update(m: MenuInput, taps: ViewPoint[], tab: Button): "tab" | "back" | null {
     if (this.waiting) { this.listen(m); return null; }
+    if (this.padWaiting) { this.listenPad(m); return null; }
     if (this.eating) {
       if (!keyHeld(this.eating)) this.eating = null;
       return null;
@@ -215,6 +229,11 @@ export class ControlsPage {
       this.wait([{ action: s.action, old: s.code }]);
     }
     if (pressed === "p:kb1" || pressed === "p:kb2") { this.player = pressed.slice(2) as Keyboard; sfx.menuMove(); }
+    if (pressed?.startsWith("pad:")) {
+      sfx.menuConfirm();
+      this.padWaiting = { action: this.padCallouts()[Number(pressed.slice(4))].action, down: padButtonsDown() };
+    }
+    if (pressed === "resetPad") { settings.pad = {}; saveSettings(); this.menu.focus = 0; }
     if (pressed === "reset") { settings[SETTINGS_KEY[this.player]] = {}; saveSettings(); this.menu.focus = 0; }
     if (pressed === "tapJump") { settings.tapJump = !settings.tapJump; saveSettings(); }
     if (pressed === "rumble") {
@@ -272,6 +291,39 @@ export class ControlsPage {
     if (i >= 0) this.menu.focus = i;
   }
 
+  /** Waiting for a pad button: the next one pressed on any pad does the action now. START or Esc cancels. */
+  private listenPad(m: MenuInput): void {
+    const w = this.padWaiting!;
+    // B on a pad is a button to bind, not a way out
+    if (m.start || (m.back && !m.from?.startsWith("pad"))) { this.padWaiting = null; sfx.menuBack(); return; }
+    const down = padButtonsDown(), fresh = down & ~w.down;
+    w.down = down;
+    if (!fresh) return;
+    const button = PAD_BUTTONS[Math.log2(fresh & -fresh)];
+    settings.pad = padOverridesOf({ ...padBindings(), [button]: w.action });
+    saveSettings();
+    sfx.menuMove();
+    this.padWaiting = null;
+  }
+
+  /** The rebindable actions' labels: one per spot that has buttons (SHIELD's per side), or the first spot of an action with none. */
+  private padCallouts(): PadCallout[] {
+    const bound = padBindings();
+    const out: PadCallout[] = [];
+    for (const action of PAD_ACTIONS) {
+      const { name, note, spots } = PAD_SPOTS[action];
+      const mine = PAD_BUTTONS.filter((b) => bound[b] === action);
+      const side = (b: PadButton): number => (spots.length > 1 && PAD_PARTS[b].x > VIEW_W / 2 ? 1 : 0);
+      spots.forEach((spot, i) => {
+        const buttons = mine.filter((b) => side(b) === i);
+        if (!buttons.length && !(i === 0 && !mine.length)) return;
+        const w = 180;
+        out.push({ action, name, note: mine.length ? note : "no button: pick it to set one", ...spot, buttons, box: { x: spot.x - w / 2 - 12, y: spot.y - 44, w: w + 24, h: 56 } });
+      });
+    }
+    return out;
+  }
+
   draw(ctx: CanvasRenderingContext2D, tab: Button): void {
     const buttons = this.buttons(tab);
     if (this.view === "keys") {
@@ -282,11 +334,11 @@ export class ControlsPage {
         if (on || focused) inkLine(ctx, b.x + 30, b.y + b.h - 6, b.x + b.w - 30, b.y + b.h - 9, INK, on ? 4 : 2.4);
       }
     }
-    else if (this.view === "pad") this.drawPad(ctx);
+    else if (this.view === "pad") this.drawPad(ctx, this.menu.focused(buttons));
     else this.drawTouch(ctx);
     this.menu.draw(ctx, buttons);
     const over = buttons.some((b) => inside(pointer, b)) || (this.view === "keys" && this.callouts.some((c) => inside(pointer, c.box)));
-    if (pointer.present && over && !this.waiting) document.body.style.cursor = "pointer";
+    if (pointer.present && over && !this.waiting && !this.padWaiting) document.body.style.cursor = "pointer";
   }
 
   private drawKeys(ctx: CanvasRenderingContext2D, focused: Button | null): void {
@@ -352,16 +404,23 @@ export class ControlsPage {
     return navigator.getGamepads?.()[Number(this.pad.slice(3))]?.id ?? "";
   }
 
-  private drawPad(ctx: CanvasRenderingContext2D): void {
+  private drawPad(ctx: CanvasRenderingContext2D, focused: Button | null): void {
     drawGamepad(ctx, padStyleOf(this.padId()));
-    for (const c of PAD_CALLOUTS) {
+    const line = (c: { name: string; note?: string; x: number; y: number }, parts: (keyof typeof PAD_PARTS)[], color: string, underline: boolean): void => {
       const w = calloutWidth(ctx, c);
-      const to = c.parts.map((part) => partPoint(part, c));
-      const mid = to.reduce((n, p) => ({ x: n.x + p.x / to.length, y: n.y + p.y / to.length }), { x: 0, y: 0 });
+      const to = parts.map((part) => partPoint(part, c));
+      const mid = to.length ? to.reduce((n, p) => ({ x: n.x + p.x / to.length, y: n.y + p.y / to.length }), { x: 0, y: 0 }) : c;
       // the line leaves the label from the side facing what it names
       const side = Math.abs(mid.x - c.x) > w / 2 + 20;
       const from = side ? { x: c.x + Math.sign(mid.x - c.x) * (w / 2 + 14), y: c.y - 12 } : { x: c.x, y: mid.y > c.y ? c.y + (c.note ? 46 : 14) : c.y - NAME };
-      drawCallout(ctx, { ...c, w }, from, to, INK, false);
-    }
+      drawCallout(ctx, { ...c, w }, from, to, color, underline);
+    };
+    for (const c of PAD_FIXED) line(c, c.parts, INK, false);
+    const callouts = this.padCallouts();
+    callouts.forEach((c, i) => {
+      const asking = this.padWaiting?.action === c.action;
+      const note = asking ? "press the new button" : c.note;
+      line({ ...c, note }, c.buttons, asking || !c.buttons.length ? RED : INK, asking || (!this.padWaiting && focused?.id === `pad:${i}`));
+    });
   }
 }

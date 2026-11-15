@@ -26,7 +26,8 @@ A direction with attack or special picks the move. On a keyboard, a tap of attac
 the tilt and holding it is the smash, charging while held; on a gamepad, tilt the stick for a tilt and
 flick it (or use the right stick) for a smash. Shield + a direction rolls; shield + down spot-dodges;
 shield in the air is an air dodge; shield just before a hit lands parries. Both keyboard players' keys
-can be changed in Settings, Controls (PLAYER 1 / PLAYER 2). Keyboard 2 plays as PLAYER 2 in VS BOTS.
+can be changed in Settings, Controls (PLAYER 1 / PLAYER 2), and so can a gamepad's face and shoulder buttons (pick
+JUMP, ATTACK, SPECIAL or SHIELD on its drawing, press the button; menus keep A and B). Keyboard 2 plays as PLAYER 2 in VS BOTS.
 
 On a phone or tablet, a match shows touch controls: a stick wherever the left thumb lands, and JUMP, ATTACK,
 SPECIAL and SHIELD on the right (plus pause, top left, where the match can pause). They play as keyboard 1: a light
