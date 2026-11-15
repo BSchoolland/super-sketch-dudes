@@ -1,15 +1,16 @@
 import fs from "node:fs";
 import path from "node:path";
 import type express from "express";
-import { COMMUNITY_PAGE, COMMUNITY_SORTS, DRAW_PNG_MAX_BYTES, HINT_DESCRIPTION_MAX, HINT_NAME_MAX, FEATURED, FEATURED_PER_CREATOR, type CommunityCharacter, type FeaturedCharacter } from "../shared/account";
+import { COMMUNITY_PAGE, COMMUNITY_SORTS, DRAW_PNG_MAX_BYTES, HINT_DESCRIPTION_MAX, HINT_NAME_MAX, FEATURED, FEATURED_PER_CREATOR, brawlWeight, type CommunityCharacter, type FeaturedCharacter } from "../shared/account";
 import { playerOf } from "./auth";
 import type { WideEvent } from "../shared/wide";
 import type { LibraryEntry } from "../shared/account";
 import { drawingUrlOf, enqueueJob, entryOf, jobOf, newFighterId, retryJob, reviseCharacter, standingOf, storeCharacter } from "./forge";
 import { admit, resetAllowance, staffIds } from "./budget";
 import { clientIp } from "./school";
-import { isListed, communityCharacters, rankedCommunity, bestIds, setBest, setLooks, dummyEntry, everyCharacter, findCharacter, libraryOf, removeCharacter, saveCharacter, savedOf, setDummy, setPublic, setStarters, starterEntries, starterIds, setHeld, takeDown, unsaveCharacter, upsertCharacter } from "./library";
+import { isListed, communityCharacters, rankedCommunity, bestIds, lookOf, saveCount, setBest, setLooks, dummyEntry, everyCharacter, findCharacter, libraryOf, removeCharacter, saveCharacter, savedOf, setDummy, setPublic, setStarters, starterEntries, starterIds, setHeld, takeDown, unsaveCharacter, upsertCharacter } from "./library";
 import { HOUSE_ROSTER } from "../shared/house";
+import { drawWeighted } from "./weighted";
 
 /** The character creator and the library, over HTTP, for signed-in players. */
 export function attachCharacters(api: express.Router, forgeToken = "", dataDir = ""): void {
@@ -239,16 +240,19 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
   }
 
   // a random handful of contenders for the title screen's brawl, none of `not`: the house four (no bundle
-  // URL; the client knows where those live) and everyone's finished characters
+  // URL; the client knows where those live) and everyone's finished characters, drawn by BEST standing:
+  // `brawlWeight` of saves and looks, and a BEST pick as often as the heaviest of the rest
   api.get("/characters/sample", (req, res) => {
     const n = Math.max(1, Math.min(24, Number(req.query.n) || 8));
     const not = new Set(String(req.query.not ?? "").split(",").filter(Boolean));
-    const all = [
-      ...HOUSE_ROSTER.map((h) => ({ id: h.id as string, name: h.name as string | null, bundleUrl: null as string | null })),
-      ...everyCharacter().filter(isListed).map((c) => ({ id: c.id, name: c.name, bundleUrl: c.bundleUrl })),
-    ].filter((c) => !not.has(c.id));
-    for (let i = 0; i < Math.min(n, all.length); i++) { const j = i + Math.floor(Math.random() * (all.length - i)); [all[i], all[j]] = [all[j], all[i]]; }
-    res.json({ characters: all.slice(0, n) });
+    const picks = new Set(bestIds());
+    const scored = [
+      ...HOUSE_ROSTER.map((h) => ({ item: { id: h.id as string, name: h.name as string | null, bundleUrl: null as string | null }, weight: brawlWeight(0, null) })),
+      ...everyCharacter().filter(isListed).map((c) => ({ item: { id: c.id, name: c.name, bundleUrl: c.bundleUrl }, weight: brawlWeight(saveCount(c.id), lookOf(c.id)) })),
+    ];
+    const top = Math.max(...scored.map((s) => s.weight));
+    const pool = scored.filter((s) => !not.has(s.item.id)).map((s) => (picks.has(s.item.id) ? { ...s, weight: top } : s));
+    res.json({ characters: drawWeighted(pool, n) });
   });
 
   // everyone's finished characters, for the tools: just enough to load and name them
