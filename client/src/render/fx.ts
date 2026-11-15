@@ -218,12 +218,13 @@ export class Fx {
   }
 
   /** Screen-space effects (call outside the camera transform). */
-  drawScreen(ctx: CanvasRenderingContext2D, w: number, h: number, cam: Camera): void {
+  drawScreen(ctx: CanvasRenderingContext2D, cam: Camera): void {
+    const seen = cam.seen();
     for (const f of this.flashes) {
       const t = f.age / f.life;
       ctx.globalAlpha = f.alpha * (1 - t);
       ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, w, h);
+      ctx.fillRect(seen.x1, seen.y1, seen.x2 - seen.x1, seen.y2 - seen.y1);
     }
     ctx.globalAlpha = 1;
     for (const l of this.lines) {

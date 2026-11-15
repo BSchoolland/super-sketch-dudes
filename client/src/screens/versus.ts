@@ -4,6 +4,7 @@ import type { MenuInput } from "../input/devices";
 import { rumble } from "../input/devices";
 import { armTouch, pad, touchLive, touchShown } from "../input/touch";
 import { drawTouchControls } from "../render/touchcontrols";
+import { viewBleed, viewScale } from "../input/pointer";
 import { noteTouchMatch } from "../telemetry/events";
 import { LocalMatch, type MatchDriver, type SlotSource } from "../match";
 import { Renderer } from "../render/render";
@@ -18,7 +19,13 @@ import { currentMove } from "../../../shared/fighter";
 import { knockback } from "../../../shared/hits";
 import { DEFAULT_TIER } from "../../../shared/cpu-skill";
 
+type Rect = { x: number; y: number; w: number; h: number };
+
 const STEP = 1000 / 60;
+/** On touch, the HUD's percent and names are drawn at least this many CSS pixels per view pixel's worth. */
+const HUD_CSS = 0.48;
+/** Seconds after the match ends before the touch REMATCH / MENU take a tap. */
+const END_TAPS_AFTER = 2;
 
 export class VersusScreen implements Screen {
   match: MatchDriver;
@@ -40,6 +47,8 @@ export class VersusScreen implements Screen {
   /** REMATCH / MENU on the result screen; a mode that moves on by itself turns them off. */
   endButtons = true;
   private touchNoted = false;
+  /** This match shows the touch controls (keyboard 1 plays in it and is on the touchscreen). */
+  protected touchView = false;
   constructor(cfg: MatchConfig, sources: SlotSource[], private onExit: () => Screen, private onRematch: () => Screen, training = false, driver?: MatchDriver) {
     this.match = driver ?? new LocalMatch(cfg, sources);
     this.training = training;
@@ -59,8 +68,10 @@ export class VersusScreen implements Screen {
 
   /** The touch controls for this tick, before update: up while the match runs, for keyboard 1 (whom they play as). */
   armControls(): void {
-    const shown = touchShown() && this.match.sources.some((s) => s.device === "kb1");
-    armTouch(shown && this.running(), this.match instanceof LocalMatch);
+    this.touchView = touchShown() && this.match.sources.some((s) => s.device === "kb1");
+    armTouch(this.touchView && this.running(), this.match instanceof LocalMatch);
+    // the controls sit at the screen's edges, so the fight fills it too
+    this.renderer.cam.bleed = this.touchView ? viewBleed() : { x: 0, y: 0 };
   }
 
   update(dt: number, m: MenuInput): Screen | null {
@@ -81,8 +92,9 @@ export class VersusScreen implements Screen {
       if (this.endedFor > 1.2 && m.back) { return this.onExit(); }
     }
     if (this.match.paused) {
-      if (m.up || m.down) { this.pauseSel = 1 - this.pauseSel; sfx.menuMove(); }
-      if (m.confirm) { if (this.pauseSel === 0) { this.match.paused = false; } else { return this.onExit(); } }
+      const items = this.pauseItems();
+      if (m.up || m.down) { this.pauseSel = (this.pauseSel + (m.up ? items.length - 1 : 1)) % items.length; sfx.menuMove(); }
+      if (m.confirm) { const next = items[this.pauseSel].act(); if (next) return next; }
       if (m.back) this.match.paused = false;
     }
     const slow = st.slowmo > 0 ? 0.25 : 1;
@@ -116,7 +128,7 @@ export class VersusScreen implements Screen {
         if (inp.y <= -60) d.percent = Math.min(999, d.percent + 1);
         if (inp.y >= 60) d.percent = Math.max(0, d.percent - 1);
       }
-      if (d && (inp.b & B.PRACTICE) && (inp.b & B.SPECIAL) && !this.dummyToggled) { const on = !this.match.sources[1].cpu; this.match.sources[1].cpu = on ? DEFAULT_TIER : 0; d.cpu = on ? DEFAULT_TIER : 0; this.renderer.names[1] = on ? "CPU" : "DUMMY"; this.dummyToggled = true; }
+      if (d && (inp.b & B.PRACTICE) && (inp.b & B.SPECIAL) && !this.dummyToggled) { this.toggleDummy(); this.dummyToggled = true; }
       if (!((inp.b & B.PRACTICE) && (inp.b & B.SPECIAL))) this.dummyToggled = false;
     }
     const events = this.match.takeEvents();
@@ -142,6 +154,28 @@ export class VersusScreen implements Screen {
     }
     music.muffle(this.match.paused || st.ended);
     return null;
+  }
+  /**
+   * The pause menu. On touch, practice's helpers live here: there is no practice key on a touchscreen.
+   * An item's act returns the screen to go to, if it leaves.
+   */
+  private pauseItems(): { text: string; act: () => Screen | null }[] {
+    const resume = { text: "RESUME", act: () => { this.match.paused = false; return null; } };
+    const quit = { text: "QUIT TO MENU", act: () => this.onExit() };
+    if (!(this.training && this.touchView)) return [resume, quit];
+    const dummy = this.match.sources[1];
+    return [
+      resume,
+      { text: "RESET POSITIONS", act: () => { this.resetTraining(); this.match.paused = false; return null; } },
+      { text: dummy.cpu ? "DUMMY: FIGHTS BACK" : "DUMMY: STANDS STILL", act: () => { this.toggleDummy(); return null; } },
+      quit,
+    ];
+  }
+  private toggleDummy(): void {
+    const on = !this.match.sources[1].cpu, d = this.match.state.fighters[1];
+    this.match.sources[1].cpu = on ? DEFAULT_TIER : 0;
+    d.cpu = on ? DEFAULT_TIER : 0;
+    this.renderer.names[1] = on ? "CPU" : "DUMMY";
   }
   resetTraining(): void {
     const st = this.match.state;
@@ -179,7 +213,9 @@ export class VersusScreen implements Screen {
     const st = this.match.state;
     const alpha = this.match.paused || this.countdown > 0 ? 1 : Math.min(1, this.acc / STEP);
     const touch = touchLive();
-    this.renderer.hudBand = touch ? pad.layout.free : null;
+    // on touch the HUD keeps between the controls, paused too, and is drawn up to a readable size on a small screen
+    this.renderer.hudBand = this.touchView ? pad.layout.free : null;
+    this.renderer.hudScale = this.touchView ? Math.max(1, HUD_CSS / viewScale()) : 1;
     this.renderer.draw(ctx, st, alpha, dt);
     if (touch) drawTouchControls(ctx, { layout: pad.layout, stick: pad.stickView(), held: (b) => pad.held(b), pause: pad.pauseable ? pad.pauseHeld : null });
     if (this.countdown > 0) {
@@ -192,11 +228,11 @@ export class VersusScreen implements Screen {
       ctx.scale(s, s);
       title(ctx, text, 0, 40, 140, INK);
       ctx.restore();
-      if (this.training) label(ctx, "PRACTICE: T+shield resets · T+up/down sets dummy % · T+special toggles dummy CPU · F2 hitboxes + frame data", VIEW_W / 2, VIEW_H / 2 + 80, 22, INK);
+      if (this.training) label(ctx, this.touchView ? "PRACTICE: pause to reset or wake the dummy" : "PRACTICE: T+shield resets · T+up/down sets dummy % · T+special toggles dummy CPU · F2 hitboxes + frame data", VIEW_W / 2, VIEW_H / 2 + 80, this.touchView ? 40 : 22, INK);
     } else if (this.training && this.renderer.showHitboxes) {
       this.drawTrainingOverlay(ctx);
     }
-    if (this.training && !this.match.paused && !st.ended && button(ctx, 40, VIEW_H - 100, 200, 64, "BACK", { size: 26 })) { sfx.menuBack(); goTo(this.onExit()); }
+    if (this.training && !this.touchView && !this.match.paused && !st.ended && button(ctx, 40, VIEW_H - 100, 200, 64, "BACK", { size: 26 })) { sfx.menuBack(); goTo(this.onExit()); }
     if (this.suddenT > 0 && !st.ended) drawBanner(ctx, "SUDDEN DEATH", "300% · one stock · first hit wins", "#ff3b3b", Math.min(1, (2.5 - this.suddenT) * 2 + 0.2));
     if (this.hookErr && !st.ended) drawBanner(ctx, this.hookErr.text, this.hookErr.detail, "#ff4d2e", Math.min(1, this.hookErr.t * 2 + 0.2));
     if (st.ended) {
@@ -207,25 +243,65 @@ export class VersusScreen implements Screen {
       const who = teams ? `${TEAM_NAMES[w]} TEAM` : this.renderer.names[w];
       drawBanner(ctx, w >= 0 ? "GAME!" : "DRAW", w >= 0 ? `${who} wins` : "", w >= 0 ? (teams ? TEAM_COLORS[w] : colors[w]) : INK, this.bannerT);
       if (this.endedFor > 1.2) {
-        // results
-        const y = VIEW_H / 2 + 90;
+        // results; on touch bigger, as wide as six cards allow
+        const y = VIEW_H / 2 + 90, n = st.fighters.length;
+        const k = this.touchView ? Math.min(1.35, (VIEW_W - 80) / (n * 220)) : 1, cw = 200 * k, step = 220 * k;
         st.fighters.forEach((f, i) => {
-          const x = VIEW_W / 2 - (st.fighters.length * 220) / 2 + i * 220;
-          card(ctx, x, y, 200, 130, colors[i], won(f));
-          label(ctx, this.renderer.names[i], x + 100, y + 32, 22, INK, "center", 900);
-          label(ctx, roster[f.id].name, x + 100, y + 56, 16, INK, "center", 700, 184);
-          label(ctx, `KOs ${f.kos}   falls ${f.falls}`, x + 100, y + 86, 18, INK);
-          label(ctx, `dealt ${Math.round(f.dealt)}%`, x + 100, y + 112, 18, INK);
+          const x = VIEW_W / 2 - (n * step) / 2 + i * step + (this.touchView ? (step - cw) / 2 : 0);
+          card(ctx, x, y, cw, 130 * k, colors[i], won(f));
+          label(ctx, this.renderer.names[i], x + cw / 2, y + 32 * k, 22 * k, INK, "center", 900, cw - 16);
+          label(ctx, roster[f.id].name, x + cw / 2, y + 56 * k, 16 * k, INK, "center", 700, cw - 16);
+          label(ctx, `KOs ${f.kos}   falls ${f.falls}`, x + cw / 2, y + 86 * k, 18 * k, INK);
+          label(ctx, `dealt ${Math.round(f.dealt)}%`, x + cw / 2, y + 112 * k, 18 * k, INK);
         });
-        if (this.endButtons && button(ctx, VIEW_W / 2 - 330, y + 160, 300, 70, "REMATCH", { key: "Enter", size: 28 })) { goTo(this.onRematch()); }
-        if (this.endButtons && button(ctx, VIEW_W / 2 + 30, y + 160, 300, 70, "MENU", { key: "Esc", size: 28 })) { goTo(this.onExit()); }
+        if (this.endButtons) this.drawEndButtons(ctx);
       }
     } else if (this.match.paused) {
+      const items = this.pauseItems();
       drawBanner(ctx, "PAUSED", "", INK, 1);
-      const y = VIEW_H / 2 + 80;
-      ["RESUME", "QUIT TO MENU"].forEach((t, i) => {
-        if (button(ctx, VIEW_W / 2 - 200, y + i * 80, 400, 64, t, { focused: this.pauseSel === i, size: 26, key: i === 0 ? "Esc" : undefined })) { if (i === 0) this.match.paused = false; else { goTo(this.onExit()); } }
-      });
+      if (this.touchView) {
+        // finger-sized, two to a row past two
+        const cols = items.length > 2 ? 2 : 1, h = 112, gap = 18, w = cols > 1 ? 600 : 640, top = VIEW_H / 2 + 80;
+        items.forEach((item, i) => {
+          const x = VIEW_W / 2 - (cols * w + (cols - 1) * gap) / 2 + (i % cols) * (w + gap), y = top + Math.floor(i / cols) * (h + gap);
+          if (button(ctx, x, y, w, h, item.text, { focused: this.pauseSel === i, size: 40 })) { const next = item.act(); if (next) goTo(next); }
+        });
+      } else {
+        const y = VIEW_H / 2 + 80;
+        items.forEach((item, i) => {
+          if (button(ctx, VIEW_W / 2 - 200, y + i * 80, 400, 64, item.text, { focused: this.pauseSel === i, size: 26, key: i === 0 ? "Esc" : undefined })) { const next = item.act(); if (next) goTo(next); }
+        });
+      }
     }
+  }
+
+  /**
+   * REMATCH and MENU. On touch they're where the thumbs already are, MENU under the stick and REMATCH under ATTACK,
+   * finger-sized, with no keys written on them, and they take a tap only once the result has been up a moment: a
+   * thumb still mashing ATTACK as the last stock goes is no vote for a rematch.
+   */
+  private drawEndButtons(ctx: CanvasRenderingContext2D): void {
+    const { rematch, menu } = this.endButtonRects();
+    if (!this.touchView) {
+      if (button(ctx, rematch.x, rematch.y, rematch.w, rematch.h, "REMATCH", { key: "Enter", size: 28 })) goTo(this.onRematch());
+      if (button(ctx, menu.x, menu.y, menu.w, menu.h, "MENU", { key: "Esc", size: 28 })) goTo(this.onExit());
+      return;
+    }
+    const disabled = this.endedFor < END_TAPS_AFTER;
+    if (button(ctx, rematch.x, rematch.y, rematch.w, rematch.h, "REMATCH", { size: 52, disabled })) goTo(this.onRematch());
+    if (button(ctx, menu.x, menu.y, menu.w, menu.h, "MENU", { size: 52, disabled })) goTo(this.onExit());
+  }
+
+  /** Where REMATCH and MENU are on the result screen, in view pixels. */
+  endButtonRects(): { rematch: Rect; menu: Rect } {
+    if (!this.touchView) {
+      const y = VIEW_H / 2 + 90 + 160;
+      return { rematch: { x: VIEW_W / 2 - 330, y, w: 300, h: 70 }, menu: { x: VIEW_W / 2 + 30, y, w: 300, h: 70 } };
+    }
+    const l = pad.layout, w = 440, h = 150, y = l.buttons.attack.y - h / 2;
+    return {
+      menu: { x: Math.max(l.stick.x - l.stick.r, l.stick.x - w / 2), y, w, h },
+      rematch: { x: Math.min(l.buttons.attack.x + l.buttons.attack.r, l.buttons.attack.x + w / 2) - w, y, w, h },
+    };
   }
 }

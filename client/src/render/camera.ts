@@ -12,7 +12,14 @@ export class Camera {
   fixed = false;
   /** Hold this spot and zoom whatever the fighters do (a move preview's close-up). */
   pinned: { x: number; y: number; zoom: number } | null = null;
+  /** View pixels drawn past each edge of the view (a match filling a phone's wider screen); the frame is still solved for the view. */
+  bleed = { x: 0, y: 0 };
   private seed = 1;
+
+  /** The drawn area in view pixels: the view and its bleed. */
+  seen(): { x1: number; y1: number; x2: number; y2: number } {
+    return { x1: -this.bleed.x, y1: -this.bleed.y, x2: VIEW_W + this.bleed.x, y2: VIEW_H + this.bleed.y };
+  }
 
   solve(state: State, stage: Stage, interp: { x: number; y: number }[]): void {
     if (this.fixed) { this.x = this.tx = VIEW_W / 2; this.y = this.ty = VIEW_H / 2; this.zoom = this.tz = 1; return; }

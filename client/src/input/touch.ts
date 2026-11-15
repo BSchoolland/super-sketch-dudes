@@ -1,6 +1,7 @@
 import { EMPTY_INPUT, type InputFrame } from "../../../shared/input";
 import { VIEW_H, VIEW_W } from "../render/camera";
-import { claimPress, toView, viewScale } from "./pointer";
+import { claimPress, toView, viewBleed, viewScale } from "./pointer";
+import { stageInsets } from "../turn";
 import { TouchPad, touchLayout } from "./touchpad";
 
 /**
@@ -40,9 +41,13 @@ export function touchShown(): boolean {
   return config.setting === "always" || touchInUse();
 }
 
-/** The controls' layout on this screen at the player's size. */
+/** The controls' layout on this screen at the player's size, out at the screen's edges. */
 export function currentLayout() {
-  return touchLayout(VIEW_W, VIEW_H, viewScale(), config.size);
+  const scale = viewScale(), bleed = viewBleed(), inset = stageInsets();
+  return touchLayout(VIEW_W, VIEW_H, scale, config.size, {
+    left: -bleed.x + inset.left / scale, top: -bleed.y + inset.top / scale,
+    right: VIEW_W + bleed.x - inset.right / scale, bottom: VIEW_H + bleed.y - inset.bottom / scale,
+  });
 }
 
 /** A match screen, every tick it is up: `live` while fingers play (not paused or over). */

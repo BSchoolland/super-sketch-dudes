@@ -149,9 +149,10 @@ function layerView(cam: Camera, ref: StageArt["ref"], layer: ArtLayer): { cx: nu
   const sx = cam.shakeX * cam.zoom, sy = cam.shakeY * cam.zoom;
   if (layer.cover) {
     const [x1, y1, x2, y2] = layer.rect;
-    z = Math.max(z, (VIEW_W + 2 * Math.abs(sx)) / (x2 - x1), (VIEW_H + 2 * Math.abs(sy)) / (y2 - y1));
-    cx = Math.min(Math.max(cx, x1 + (VIEW_W / 2 + sx) / z), x2 - (VIEW_W / 2 - sx) / z);
-    cy = Math.min(Math.max(cy, y1 + (VIEW_H / 2 + sy) / z), y2 - (VIEW_H / 2 - sy) / z);
+    const hw = VIEW_W / 2 + cam.bleed.x, hh = VIEW_H / 2 + cam.bleed.y;
+    z = Math.max(z, (2 * hw + 2 * Math.abs(sx)) / (x2 - x1), (2 * hh + 2 * Math.abs(sy)) / (y2 - y1));
+    cx = Math.min(Math.max(cx, x1 + (hw + sx) / z), x2 - (hw - sx) / z);
+    cy = Math.min(Math.max(cy, y1 + (hh + sy) / z), y2 - (hh - sy) / z);
   }
   return { cx, cy, z, sx, sy };
 }
@@ -177,19 +178,20 @@ function drawLayerImage(ctx: CanvasRenderingContext2D, layer: ArtLayer, vx1: num
 /** The backdrop, mid layers and platform art, then the thin platforms, onto a context in screen space. `chrome` off skips the layers behind the stage plane. */
 export function drawStageArt(ctx: CanvasRenderingContext2D, art: StageArt, state: State, stage: Stage, cam: Camera, chrome: boolean): void {
   const deviceScale = Math.hypot(ctx.getTransform().a, ctx.getTransform().b);
+  const hw = VIEW_W / 2 + cam.bleed.x, hh = VIEW_H / 2 + cam.bleed.y;
   for (const layer of art.layers) {
     if (!chrome && layer.depth < 1) continue;
     ctx.save();
     if (layer.depth === 1) {
       cam.apply(ctx);
       const sx = cam.shakeX, sy = cam.shakeY;
-      drawLayerImage(ctx, layer, cam.x - sx - VIEW_W / 2 / cam.zoom, cam.y - sy - VIEW_H / 2 / cam.zoom, cam.x - sx + VIEW_W / 2 / cam.zoom, cam.y - sy + VIEW_H / 2 / cam.zoom, cam.zoom * deviceScale);
+      drawLayerImage(ctx, layer, cam.x - sx - hw / cam.zoom, cam.y - sy - hh / cam.zoom, cam.x - sx + hw / cam.zoom, cam.y - sy + hh / cam.zoom, cam.zoom * deviceScale);
     } else {
       const v = layerView(cam, art.ref, layer);
       ctx.translate(VIEW_W / 2 + v.sx, VIEW_H / 2 + v.sy);
       ctx.scale(v.z, v.z);
       ctx.translate(-v.cx, -v.cy);
-      drawLayerImage(ctx, layer, v.cx - (VIEW_W / 2 + v.sx) / v.z, v.cy - (VIEW_H / 2 + v.sy) / v.z, v.cx + (VIEW_W / 2 - v.sx) / v.z, v.cy + (VIEW_H / 2 - v.sy) / v.z, v.z * deviceScale);
+      drawLayerImage(ctx, layer, v.cx - (hw + v.sx) / v.z, v.cy - (hh + v.sy) / v.z, v.cx + (hw - v.sx) / v.z, v.cy + (hh - v.sy) / v.z, v.z * deviceScale);
     }
     ctx.restore();
   }

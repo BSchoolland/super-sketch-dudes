@@ -16,7 +16,8 @@ function disc(ctx: CanvasRenderingContext2D, c: Circle, down: boolean, seed: num
   ctx.beginPath(); ctx.arc(c.x + 4, c.y + 5, c.r, 0, Math.PI * 2); ctx.fill();
   ctx.save();
   ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
-  ctx.globalAlpha = 0.8;
+  // thin enough paper that a fighter behind a button still shows
+  ctx.globalAlpha = 0.5;
   ctx.fillStyle = PAPER; ctx.fill();
   if (down) { ctx.clip(); ctx.globalAlpha = 1; hatch(ctx, c.x - c.r, c.y - c.r, c.r * 2, c.r * 2, PENCIL); }
   ctx.restore();
