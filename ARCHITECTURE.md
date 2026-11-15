@@ -71,7 +71,7 @@ refuses obvious ones on the spot. The rest wait, one per player and five a day, 
 judge with both judges (`moderateName` in forge/moderate.ts). `POST /forge/names/:id/verdict` applies the drawings'
 decision rule and reputation (moderation.ts, logged to moderation.jsonl with `name` instead of `fighterId`): passed,
 `applyName` (auth.ts) puts it everywhere; blocked, the player is told why for a day. Judges that can't run release it
-to wait; nothing is approved without them. `/forge/names/take-down {player}` gives a player a made-up name. The relay
+to wait; nothing is approved without them. `/forge/names/take-down {player}` gives a player a made-up name; `/forge/names/set {player, name}` gives them that one, unjudged. The relay
 shows a room member by their session's name (`{ t: "name", session }`), never one the page claims.
 `node scripts/namecheck.mjs` walks it in real pages against `scripts/fake-name-judge.mjs`.
 ## The front page

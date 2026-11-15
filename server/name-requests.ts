@@ -8,7 +8,7 @@ import type { WideEvent } from "../shared/wide";
 import { decide } from "./moderation";
 import { badWordIn } from "./name-filter";
 import { nameOf } from "./library";
-import { randomName } from "./names";
+import { randomName, typedName } from "./names";
 
 /**
  * A name a player types is a request: they keep the name they have until the auto moderator's two judges, run by
@@ -139,5 +139,16 @@ export function attachNameJudging(api: express.Router, opts: NameJudgingOptions)
     const player = String(req.body?.player ?? "");
     if (!nameOf(player)) return res.status(404).json({ error: "no such player" });
     res.json({ player: opts.rename(player, randomName()) });
+  });
+
+  // Ben naming a player himself: no filter, no judges, and whatever they had waiting or refused is cleared
+  api.post("/forge/names/set", (req, res) => {
+    if (!worker(req, res)) return;
+    const player = String(req.body?.player ?? ""), name = typedName(req.body?.name);
+    if (!nameOf(player)) return res.status(404).json({ error: "no such player" });
+    if (!name) return res.status(400).json({ error: "name required" });
+    const r = records.get(player);
+    if (r) { r.pending = null; r.refused = null; persist(); }
+    res.json({ player: opts.rename(player, name) });
   });
 }

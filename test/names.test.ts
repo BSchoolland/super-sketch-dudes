@@ -198,4 +198,15 @@ describe("player names", () => {
     expect(((await r.json()) as { player: Player }).player.name).toMatch(TWO_WORDS);
     expect((await me(session)).player.name).toMatch(TWO_WORDS);
   });
+
+  it("lets Ben set a name the judges refused, and clears the refusal", async () => {
+    const { session, player } = await google("g9");
+    expect((await post("/me/name", { name: "Ben (Developer)" }, session)).status).toBe(200);
+    const c = (await claim())!;
+    expect((await (await verdict(c.id, judged("other", "other"))).json()).blocked).toBe(true);
+    expect((await api("/forge/names/set", { method: "POST", body: JSON.stringify({ player: player.id, name: "Ben (Developer)" }) })).status).toBe(401);
+    const r = await api("/forge/names/set", { method: "POST", headers: worker, body: JSON.stringify({ player: player.id, name: "Ben (Developer)" }) });
+    expect(((await r.json()) as { player: Player }).player.name).toBe("Ben (Developer)");
+    expect(await me(session)).toMatchObject({ player: { name: "Ben (Developer)" }, request: null });
+  });
 });
