@@ -12,6 +12,8 @@ export type TouchSetting = "auto" | "always" | "off";
 const config: { setting: TouchSetting; size: number } = { setting: "auto", size: 1 };
 /** The last thing the player pressed was the screen. */
 let touching = false;
+/** Something other than the screen (a key, a mouse button, a gamepad) has been pressed. */
+let pressedOff = false;
 export const pad = new TouchPad(touchLayout(VIEW_W, VIEW_H, 1, 1));
 
 /** What a match screen said on its latest tick (`at`): whether the controls take fingers and have a pause button. */
@@ -28,6 +30,12 @@ export function setTouchSettings(setting: TouchSetting, size: number): void {
 /** A key, a mouse button or a gamepad was used. */
 export function stopTouch(): void {
   touching = false;
+  pressedOff = true;
+}
+
+/** The player is on the touchscreen: it was pressed last, or nothing else has been pressed yet on a touch-first device. */
+export function onTouchscreen(): boolean {
+  return touching || (!pressedOff && matchMedia("(pointer: coarse)").matches);
 }
 
 /** Keyboard 1 is the touchscreen right now. */
