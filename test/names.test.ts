@@ -91,28 +91,28 @@ describe("player names", () => {
     const mapId = "map-0123456789";
     expect((await post("/maps", newMapDoc(mapId, player.id, player.name, "ARENA", 1), session)).status).toBe(200);
 
-    const r = await post("/me/name", { name: "  Dr. <b>Sketch</b>  " }, session);
+    const r = await post("/me/name", { name: "  Dr.\u200B <Sketch>\u202E  " }, session);
     expect(r.status).toBe(200);
-    expect((await r.json()) as NameStanding).toMatchObject({ player: { name: player.name }, request: { name: "Dr. bSketchb", status: "waiting" } });
+    expect((await r.json()) as NameStanding).toMatchObject({ player: { name: player.name }, request: { name: "Dr. <Sketch>", status: "waiting" } });
     // nobody sees it yet
     expect(((await (await api("/me", { headers: { "x-session": session } })).json()) as { player: Player }).player.name).toBe(player.name);
-    expect((await me(session)).request).toEqual({ name: "Dr. bSketchb", status: "waiting" });
+    expect((await me(session)).request).toEqual({ name: "Dr. <Sketch>", status: "waiting" });
 
     const c = (await claim())!;
-    expect(c).toMatchObject({ name: "Dr. bSketchb", player: player.id, playerName: player.name });
+    expect(c).toMatchObject({ name: "Dr. <Sketch>", player: player.id, playerName: player.name });
     expect(await claim()).toBeNull();
     const d = await verdict(c.id, judged("pass", "pass"));
     expect(await d.json()).toMatchObject({ blocked: false, before: 90, after: 92 });
     expect((await verdict(c.id, judged("pass", "pass"))).status).toBe(409);
 
-    expect(await me(session)).toMatchObject({ player: { name: "Dr. bSketchb" }, request: null });
-    expect(((await (await api("/me", { headers: { "x-session": session } })).json()) as { player: Player }).player.name).toBe("Dr. bSketchb");
-    expect((await google("g3")).player.name).toBe("Dr. bSketchb");
+    expect(await me(session)).toMatchObject({ player: { name: "Dr. <Sketch>" }, request: null });
+    expect(((await (await api("/me", { headers: { "x-session": session } })).json()) as { player: Player }).player.name).toBe("Dr. <Sketch>");
+    expect((await google("g3")).player.name).toBe("Dr. <Sketch>");
     const community = ((await (await api("/characters/community?sort=new")).json()) as { characters: CommunityCharacter[] }).characters;
-    expect(community.find((c) => c.id === "robo")?.creator.name).toBe("Dr. bSketchb");
-    expect(JSON.parse(fs.readFileSync(path.join(dataDir, "maps", `${mapId}.json`), "utf8")).ownerName).toBe("Dr. bSketchb");
+    expect(community.find((c) => c.id === "robo")?.creator.name).toBe("Dr. <Sketch>");
+    expect(JSON.parse(fs.readFileSync(path.join(dataDir, "maps", `${mapId}.json`), "utf8")).ownerName).toBe("Dr. <Sketch>");
     const log = fs.readFileSync(path.join(dataDir, "moderation.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
-    expect(log.at(-1)).toMatchObject({ player: player.id, name: "Dr. bSketchb", blocked: false, before: 90, after: 92 });
+    expect(log.at(-1)).toMatchObject({ player: player.id, name: "Dr. <Sketch>", blocked: false, before: 90, after: 92 });
   });
 
   it("keeps the old name when the judges refuse, says why, and takes another", async () => {
@@ -186,7 +186,7 @@ describe("player names", () => {
     const guest = await signedIn(await post("/auth/guest", {}));
     expect((await post("/me/name", { name: "Sneaky" }, guest.session)).status).toBe(403);
     const { session } = await google("g4");
-    expect((await post("/me/name", { name: " <> " }, session)).status).toBe(400);
+    expect((await post("/me/name", { name: " \u200B\u202E\u0007 " }, session)).status).toBe(400);
     expect((await post("/me/name", { name: "x" })).status).toBe(401);
     expect((await api("/forge/names/next")).status).toBe(401);
   });

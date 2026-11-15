@@ -14,5 +14,20 @@ const pick = (words: string[]): string => words[crypto.randomInt(words.length)];
 
 export const randomName = (): string => `${pick(ADJECTIVES)} ${pick(ANIMALS)}`;
 
-/** What's kept of a typed name: letters, digits, spaces and - . ! ?, up to NAME_MAX. Empty when nothing was. */
-export const typedName = (s: unknown): string => String(s ?? "").replace(/[^\w \-.!?]/g, "").trim().slice(0, NAME_MAX).trim();
+/**
+ * What's kept of a typed name, up to NAME_MAX characters; empty when nothing was. Any script's letters, digits,
+ * punctuation, symbols and emoji stay. NFKC folds fullwidth and styled letters (𝐁𝐞𝐧, Ｂｅｎ) to plain ones; control,
+ * invisible and direction-override characters go; runs of combining marks are cut to two, so a name can't spill
+ * up and down the screen.
+ */
+export const typedName = (s: unknown): string => {
+  const kept = String(s ?? "")
+    .normalize("NFKC")
+    .replace(/\s/g, " ")
+    .replace(/[^\p{L}\p{M}\p{N}\p{P}\p{S}\p{Zs}]/gu, "")
+    .replace(/^\p{M}+/u, "")
+    .replace(/(\p{M}{2})\p{M}+/gu, "$1")
+    .replace(/ {2,}/g, " ")
+    .trim();
+  return [...kept].slice(0, NAME_MAX).join("").trim();
+};

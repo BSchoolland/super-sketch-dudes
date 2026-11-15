@@ -22,6 +22,14 @@ const WHOLE = new Set([
   "testicle", "testicles", "scrotum", "clit", "twat", "twats", "wank", "wanker", "wankers", "wanking",
 ]);
 
+/** Letters from other alphabets that pass for Latin ones (Cyrillic, Greek), lowercased. */
+const LOOKALIKE: Record<string, string> = {
+  "а": "a", "в": "b", "с": "c", "ԁ": "d", "е": "e", "ё": "e", "һ": "h", "і": "i", "ї": "i", "ј": "j", "к": "k", "ӏ": "l",
+  "м": "m", "н": "h", "о": "o", "р": "p", "ԛ": "q", "ѕ": "s", "т": "t", "у": "y", "ц": "u", "х": "x", "ш": "w", "ԝ": "w",
+  "α": "a", "β": "b", "ε": "e", "η": "n", "ι": "i", "κ": "k", "ν": "v", "ο": "o", "ρ": "p", "τ": "t", "υ": "u", "χ": "x",
+  "ω": "w", "ı": "i", "ɡ": "g", "$": "s", "@": "a", "€": "e", "£": "l", "¢": "c",
+};
+
 /** Leetspeak, with 1 read both ways (i and l). */
 const LEET: Record<string, string> = { "0": "o", "3": "e", "4": "a", "5": "s", "7": "t", "8": "b", "9": "g", "!": "i" };
 
@@ -34,8 +42,10 @@ export function nameWords(name: string): string[] {
   const words = new Set<string>();
   for (const one of ["i", "l"]) {
     const pieces = name
-      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      .replace(/(\p{Ll})(\p{Lu})/gu, "$1 $2")
       .toLowerCase()
+      .normalize("NFD").replace(/\p{M}/gu, "")
+      .replace(/./gu, (c) => LOOKALIKE[c] ?? c)
       .replace(/[0-9!]/g, (c) => (c === "1" ? one : LEET[c] ?? c))
       .split(/[^a-z]+/).filter(Boolean);
     const joined: string[] = [];

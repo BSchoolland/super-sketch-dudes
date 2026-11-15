@@ -58,7 +58,7 @@ const namePrompt = (stance: keyof typeof NAME_STANCE, name: string): string => `
 
 Name: "${name}"
 
-Block it if it's any of these (sneaky versions included: misspellings, letters swapped for numbers, words run together or split up):
+Block it if it's any of these (sneaky versions included: misspellings, letters swapped for numbers, symbols or lookalike letters from other alphabets, words run together or split up):
 
 Inappropriate: sexual, drugs, hateful, or a slur.
 Foul language.

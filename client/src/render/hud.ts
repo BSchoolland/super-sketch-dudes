@@ -34,7 +34,7 @@ function playerCard(hud: HudState, i: number, key: string, s: number, name: stri
   g.textAlign = "left";
   g.fillStyle = color;
   g.font = `700 20px ${FONT}`;
-  g.fillText(name, 20, 34);
+  g.fillText(name, 20, 34, CARD_W - 40);
   g.fillStyle = INK;
   g.font = `600 14px ${FONT}`;
   g.fillText(fighter, 20, 54, CARD_W - 40);

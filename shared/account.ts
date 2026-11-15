@@ -20,8 +20,8 @@ export interface Player {
   avatar: string | null;
 }
 
-/** The longest a player's name can be. */
-export const NAME_MAX = 14;
+/** The longest a player's name can be, in characters (code points). */
+export const NAME_MAX = 24;
 
 /** A name an account asked to go by: waiting for the moderator's judges, or refused by them (`reason` is for the player). */
 export type NameRequest = { name: string; status: "waiting" } | { name: string; status: "refused"; reason: string };
