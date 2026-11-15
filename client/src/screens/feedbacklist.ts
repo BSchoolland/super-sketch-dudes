@@ -5,7 +5,7 @@ import { consumeTaps } from "../input/pointer";
 import { sfx } from "../audio/audio";
 import { feedbackApi, feedbackSketchBlob, markSeen } from "../feedback";
 import { RESPONSE_MAX, type FeedbackItem } from "../../../shared/feedback";
-import { bg, card, label, title, type Screen, INK } from "./ui";
+import { backRect, bg, card, grow, label, small, tapWord, title, type Screen, INK } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
 import { RED } from "./character";
 import { TextField } from "./textfield";
@@ -21,6 +21,7 @@ const ROW_H = 118, ROW_GAP = 16, X = 200, W = VIEW_W - 2 * X - 120, TOP = 150, B
 /** Row `i`'s top in the scroll's content. */
 const rowY = (i: number): number => ROW_GAP + i * (ROW_H + ROW_GAP);
 const BACK = { id: "back", x: 40, y: VIEW_H - 130, w: 240, h: 90, text: "BACK", size: 40 };
+const back = (): Button => (small() ? { ...BACK, ...backRect() } : BACK);
 
 /**
  * Feedback as rows, newest first: a player's own (PAST FEEDBACK), or for Ben everyone's (INBOX), where
@@ -46,7 +47,7 @@ export class FeedbackListScreen implements Screen {
     const shown = this.shown;
     const b: Button[] = shown.map((_, i) => this.scroll.button(`f${i}`, { x: X, y: rowY(i), w: W, h: ROW_H }));
     if (this.admin) b.push({ id: "filter", x: VIEW_W - 560, y: VIEW_H - 130, w: 520, h: 90, text: this.unanswered ? "UNANSWERED" : "ALL", size: 34, step: () => { this.unanswered = !this.unanswered; this.scroll = new ScrollView(this.scroll.view); } });
-    b.push(BACK);
+    b.push(back());
     return b;
   }
 
@@ -79,10 +80,10 @@ export class FeedbackListScreen implements Screen {
       let tx = b.x + 24;
       if (item.sketch) { drawSketch(ctx, item.sketch, b.x + 18, b.y + 15, ROW_H - 30); tx += ROW_H; }
       const who = this.admin ? `${item.player?.name ?? "signed out"} · ${day(item.id)}` : day(item.id);
-      label(ctx, who, tx, b.y + 40, 24, PENCIL, "left", 700);
-      label(ctx, item.text.replace(/\s+/g, " ") || "(just a sketch)", tx, b.y + 86, 30, INK, "left", 500, b.x + b.w - tx - 230);
+      label(ctx, who, tx, b.y + 40, grow(24, 11), PENCIL, "left", 700);
+      label(ctx, item.text.replace(/\s+/g, " ") || "(just a sketch)", tx, b.y + 86, grow(30, 12), INK, "left", 500, b.x + b.w - tx - 230);
       const tag = !item.response ? (this.admin && item.player ? "needs a response" : "") : !this.admin && !item.response.seenAt ? "NEW RESPONSE" : "responded";
-      label(ctx, tag, b.x + b.w - 24, b.y + 70, 26, tag === "NEW RESPONSE" ? RED : PENCIL, "right", 800);
+      label(ctx, tag, b.x + b.w - 24, b.y + 70, grow(26, 11), tag === "NEW RESPONSE" ? RED : PENCIL, "right", 800, 210);
     }));
     this.menu.draw(ctx, buttons);
   }
@@ -133,7 +134,7 @@ export class FeedbackDetailScreen implements Screen {
 
   private buttons(): Button[] {
     const y = VIEW_H - 130;
-    const b: Button[] = [{ ...BACK, disabled: this.sending }];
+    const b: Button[] = [{ ...back(), disabled: this.sending }];
     if (this.field && this.pad) {
       const empty = !this.field.value.trim() && this.pad.blank;
       const unchanged = this.field.value.trim() === (this.item.response?.text ?? "") && this.pad.revision === this.sentRevision;
@@ -171,7 +172,7 @@ export class FeedbackDetailScreen implements Screen {
       else if (this.pad.blank) label(ctx, "+ DRAW / IMAGE", t.x + t.w / 2, t.y + t.h / 2 + 10, 26, INK, "center", 900);
       else this.pad.draw(ctx, t);
       label(ctx, `${this.field.value.length} / ${RESPONSE_MAX}`, reply.x + reply.w, reply.y + reply.h + 30, 20, PENCIL, "right", 600);
-      if (!this.loadingImage && !this.pad.blank) label(ctx, "click to change it", t.x + t.w, t.y + t.h + 30, 20, PENCIL, "right", 600);
+      if (!this.loadingImage && !this.pad.blank) label(ctx, `${tapWord()} to change it`, t.x + t.w, t.y + t.h + 30, 20, PENCIL, "right", 600);
       if (it.response) label(ctx, it.response.seenAt ? `${it.player!.name} saw this ${day(it.response.seenAt)}` : `Sent. ${it.player!.name} hasn't seen it yet.`, reply.x, reply.y + reply.h + 30, 22, PENCIL, "left", 600);
     } else if (this.admin) label(ctx, "Sent signed out: there's no account to respond to.", BODY.x, reply.y + 40, 28, PENCIL, "left", 600);
     this.menu.draw(ctx, this.buttons());

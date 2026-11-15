@@ -7,7 +7,7 @@ import { activitySignIn, emailSignIn, emailSignUp, oauthSignInUrl } from "../acc
 import { activity, discordCode } from "../activity";
 import { ACCOUNT_AGE, ageStep, dayProblem, refuseSignup, signupRefused, yearProblem, type BirthAnswer } from "../age";
 import { sessionList } from "../telemetry/events";
-import { bg, card, label, title, type Screen, INK } from "./ui";
+import { backRect, bg, card, grow, label, small, title, type Screen, INK } from "./ui";
 import { RED } from "./character";
 import { ButtonMenu, type Button } from "./buttons";
 import { TextField } from "./textfield";
@@ -55,7 +55,8 @@ export class SignInScreen implements Screen {
   }
 
   private buttons(): Button[] {
-    if (this.mode === "door") return activity ? ACTIVITY_DOOR : WEB_DOOR;
+    // a small screen's EMAIL and BACK are as tall as a finger needs, BACK clear of the privacy and terms links
+    if (this.mode === "door") return (activity ? ACTIVITY_DOOR : WEB_DOOR).map((b) => (!small() ? b : b.id === "email" ? { ...b, h: 100, size: 34 } : b.id === "back" ? { ...b, ...backRect(), y: 800 } : b));
     if (this.mode === "under") return [activity ? { ...BACK, x: VIEW_W / 2 - 120 } : { id: "play", x: VIEW_W / 2 - 250, y: 720, w: 500, h: 110, text: "KEEP PLAYING", size: 44 }];
     if (this.mode === "age") {
       const months = this.birth!.ask === "month";
@@ -71,7 +72,7 @@ export class SignInScreen implements Screen {
     return [
       { id: "submit", x: FIELD_X, y, w: 400, h: 100, text: this.sending ? "…" : signup ? "CREATE ACCOUNT" : "SIGN IN", size: 34, disabled: this.sending },
       { id: "back", x: FIELD_X + 440, y, w: 400, h: 100, text: "BACK", size: 34, disabled: this.sending },
-      { id: "switch", x: FIELD_X, y: y + 130, w: FIELD_W, h: 70, text: signup ? "HAVE AN ACCOUNT? SIGN IN" : "NEW HERE? CREATE AN ACCOUNT", size: 26, disabled: this.sending },
+      { id: "switch", x: FIELD_X, y: y + 130, w: FIELD_W, h: small() ? 96 : 70, text: signup ? "HAVE AN ACCOUNT? SIGN IN" : "NEW HERE? CREATE AN ACCOUNT", size: small() ? 34 : 26, disabled: this.sending },
     ];
   }
 
@@ -109,7 +110,7 @@ export class SignInScreen implements Screen {
     if (this.mode === "door") {
       drawLogo(ctx, 300);
       this.menu.draw(ctx, this.buttons());
-      if (this.error) label(ctx, this.error, VIEW_W / 2, 940, 28, RED);
+      if (this.error) label(ctx, this.error, VIEW_W / 2, 940, grow(28, 12), RED, "center", 700, small() ? VIEW_W - 700 : undefined);
       if (!activity) drawLegalLinks(ctx, !this.sending);
       return;
     }
@@ -136,7 +137,7 @@ export class SignInScreen implements Screen {
         b.day.place(DAY_FIELD.x + 20, DAY_FIELD.y + 14, DAY_FIELD.w - 40, DAY_FIELD.h - 28, 44);
       } else if (b.ask === "month") title(ctx, "AND WHICH MONTH?", VIEW_W / 2, MONTH_TOP - 40, 40, INK);
       this.menu.draw(ctx, buttons);
-      if (this.error) label(ctx, this.error, VIEW_W / 2, 960, 28, RED);
+      if (this.error) label(ctx, this.error, VIEW_W / 2, 960, grow(28, 12), RED);
       return;
     }
     drawLogo(ctx, 140);
@@ -145,13 +146,13 @@ export class SignInScreen implements Screen {
     if (f.name) rows.push(["NAME", f.name]);
     rows.forEach(([text, field], i) => {
       const y = FIELD_TOP + i * FIELD_GAP;
-      label(ctx, text, FIELD_X, y - 16, 24, PENCIL, "left", 800);
+      label(ctx, text, FIELD_X, y - 16, grow(24, 11), PENCIL, "left", 800);
       card(ctx, FIELD_X, y, FIELD_W, FIELD_H, INK, document.activeElement === field.el);
       field.place(FIELD_X + 20, y + 12, FIELD_W - 40, FIELD_H - 24, 36);
     });
     const buttons = this.buttons();
     this.menu.draw(ctx, buttons);
-    if (this.error) label(ctx, this.error, VIEW_W / 2, buttons[2].y + buttons[2].h + 60, 28, RED);
+    if (this.error) label(ctx, this.error, VIEW_W / 2, buttons[2].y + buttons[2].h + 60, grow(28, 12), RED);
   }
 
   /** Creating an email account starts with the birth date, unless this browser already got a no. */

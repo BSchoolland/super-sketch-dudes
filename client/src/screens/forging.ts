@@ -5,7 +5,7 @@ import { sfx } from "../audio/audio";
 import { library } from "../account";
 import { libraryChoices, myLibrary, refreshLibrary } from "../fighters";
 import type { LibraryEntry } from "../../../shared/account";
-import { bg, hover, label, type Screen } from "./ui";
+import { bg, grow, hover, label, type Screen } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
 import { characterStatus, drawCharacterArt, forgeOpens, RED } from "./character";
 import { etaWords, forgeProgress } from "./forge-progress";
@@ -80,7 +80,7 @@ export class ForgeScreen implements Screen {
         if (status) wrapped(ctx, status.text, VIEW_W / 2, y + ART + 60, 1200, 38, status.color, 2);
       } else this.drawProgress(ctx, e, y + ART + 50, dt);
     }
-    if (this.pollError) label(ctx, this.pollError, VIEW_W / 2, VIEW_H - 190, 24, RED);
+    if (this.pollError) label(ctx, this.pollError, VIEW_W / 2, VIEW_H - 190, grow(24, 11), RED);
     this.menu.draw(ctx, this.buttons());
   }
 
@@ -103,7 +103,7 @@ export class ForgeScreen implements Screen {
     const resting = e.status === "queued" ? myLibrary.forge?.resting : null;
     label(ctx, `${resting ? "Waiting in line" : p.label}${dots}`, VIEW_W / 2, y + h + 50, 34, e.status === "queued" ? PENCIL : INK);
     const below = resting ? (resting.until ? `back ${forgeOpens(resting.until)}` : resting.reason!) : p.etaS !== null ? etaWords(p.etaS) : "";
-    if (below) label(ctx, below, VIEW_W / 2, y + h + 92, 26, PENCIL);
+    if (below) label(ctx, below, VIEW_W / 2, y + h + 92, grow(26, 12), PENCIL, "center", 700, VIEW_W - 120);
   }
 
   private retry(): void {

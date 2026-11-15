@@ -6,7 +6,7 @@ import { sfx } from "../audio/audio";
 import { mapsApi, myMaps, refreshMaps } from "../maps";
 import { stageFromMap, type MapDoc } from "../../../shared/maps";
 import { drawStageThumb } from "./stage";
-import { bg, card, label, title, type Screen, INK } from "./ui";
+import { backRect, bg, card, grow, label, small, title, type Screen, INK } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
 import { RED } from "./character";
 import type { Nav } from "./nav";
@@ -46,7 +46,7 @@ export class MapsScreen implements Screen {
     const armed = this.t - this.deleteArmed < 3;
     if (myMaps.canCreate) b.push({ id: "new", x: VIEW_W / 2 - 250, y: VIEW_H - 150, w: 500, h: 110, text: "NEW MAP", size: 44 });
     if (docs.length && this.menu.focus < docs.length) b.push({ id: "delete", x: VIEW_W - 320, y: VIEW_H - 130, w: 280, h: 90, text: armed ? "SURE?" : "DELETE", size: 34 });
-    b.push({ id: "back", x: 40, y: VIEW_H - 130, w: 240, h: 90, text: "BACK", size: 40 });
+    b.push(small() ? { id: "back", ...backRect(), text: "BACK", size: 40 } : { id: "back", x: 40, y: VIEW_H - 130, w: 240, h: 90, text: "BACK", size: 40 });
     return b;
   }
 
@@ -95,10 +95,10 @@ export class MapsScreen implements Screen {
       const y = this.scroll.at(c.y);
       card(ctx, c.x, y, W, H, INK, i === focus);
       drawStageThumb(ctx, stageFromMap(doc), c.x + 12, y + 12, W - 24, H - 70);
-      title(ctx, doc.name, c.x + W / 2, y + H - 18, 30, INK, "center", W - 30);
+      title(ctx, doc.name, c.x + W / 2, y + H - 18, grow(30, 12), INK, "center", W - 30);
     }));
     this.menu.draw(ctx, buttons);
     const error = this.problem || myMaps.error;
-    if (error) label(ctx, error, VIEW_W / 2, VIEW_H - 170, 24, RED);
+    if (error) label(ctx, error, VIEW_W / 2, VIEW_H - 170, grow(24, 11), RED);
   }
 }
