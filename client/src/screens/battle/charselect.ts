@@ -455,9 +455,8 @@ export class CharacterSelect {
     const carried = (this.hand?.key === s.key && (this.hand.drag || (pointer.present && keysInHand()))) || (this.keyed && this.focus === "grid" && this.keyHand === s.key)
       || (!!s.bot?.device && this.cursors.has(s.bot.device) && keysInHand());
     if (at && !at.onGrid && !carried) drawToken(ctx, at.x, at.y, s.tag, s.color, { lifted: this.hand?.key === s.key, seed: i });
-    // the rest of an own card takes its token, like the token itself; under FIGHT! too, where the card shows below the band
-    const reachable = live || (this.ready(room) && !room.loading && !this.underBand(pointer.tapY));
-    if (!this.used && reachable && s.ours && clicked(x, y, w, h) && !this.press) {
+    // the rest of an own card takes its token, like the token itself
+    if (!this.used && live && s.ours && clicked(x, y, w, h) && !this.press) {
       this.tapToken(s);
       this.used = true;
     }
