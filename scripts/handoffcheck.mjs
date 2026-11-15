@@ -8,7 +8,7 @@ import path from "node:path";
 import { chromium } from "playwright";
 import { openOnline } from "./menu-nav.mjs";
 
-const PORT = 3091;
+const PORT = Number(process.env.PORT ?? 3091);
 const url = `http://localhost:${PORT}/`;
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "sb-handoffcheck-"));
 const log = (...a) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...a);

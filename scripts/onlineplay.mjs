@@ -15,6 +15,8 @@ const openOnline = (p) => signInOnline(p, base, `Player${++players}`);
 try {
   const [host, guest] = pages;
   await openOnline(host); await press(host, "ArrowDown"); await press(host, "Enter");
+  // CREATE ROOM asks PUBLIC or PRIVATE first
+  await host.waitForFunction(() => window.sketchbattle.screen.phase === "create"); await press(host, "Enter");
   await host.waitForFunction(() => window.sketchbattle.screen.roomCode !== null);
   const code = await host.evaluate(() => window.sketchbattle.screen.roomCode);
   await openOnline(guest); await press(guest, "ArrowDown"); await press(guest, "ArrowDown"); await press(guest, "Enter");
@@ -24,7 +26,7 @@ try {
   for (const p of pages) { await p.waitForTimeout(200); await p.evaluate(() => { const s = window.sketchbattle.screen; s.pick(s.select.grid.fighters[0]); }); }
   await Promise.all(pages.map((p) => p.waitForFunction(() => window.sketchbattle.screen.lobbyDebug?.()?.members.every((m) => m.fighter))));
   await host.waitForTimeout(300);
-  await host.evaluate(() => window.sketchbattle.screen.startMatch?.());
+  await host.evaluate(() => window.sketchbattle.screen.startMatch({ stage: "rooftops", stocks: 3, time: 0, map: null }));
   await Promise.all(pages.map((p) => p.waitForFunction(() => typeof window.sketchbattle.screen.netDebug === "function")));
   // throttle the guest hard so its frame rate drops
   const cdp = await guest.context().newCDPSession(guest);

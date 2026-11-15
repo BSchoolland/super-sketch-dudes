@@ -11,7 +11,10 @@ const b2 = await browser.newContext({ viewport: { width: 1600, height: 900 } });
 const [a, b] = [await a2.newPage(), await b2.newPage()];
 await openOnline(a, base, "Ann"); await openOnline(b, base, "Bob");
 await a.screenshot({ path: `${out}/0-online-menu.png` });
-await press(a, "ArrowDown"); await press(a, "Space"); await a.waitForFunction(() => window.sketchbattle.screen.roomCode !== null);
+await press(a, "ArrowDown"); await press(a, "Space");
+// CREATE ROOM asks PUBLIC or PRIVATE first
+await a.waitForFunction(() => window.sketchbattle.screen.phase === "create"); await press(a, "Space");
+await a.waitForFunction(() => window.sketchbattle.screen.roomCode !== null);
 await a.waitForTimeout(300); await a.screenshot({ path: `${out}/1-room-created.png` });
 const code = await a.evaluate(() => window.sketchbattle.screen.roomCode);
 await press(b, "ArrowDown"); await press(b, "ArrowDown"); await press(b, "Space"); await b.waitForTimeout(200); await b.screenshot({ path: `${out}/2-join-entry.png` });

@@ -33,6 +33,9 @@ try {
   await signInOnline(pageA, base, "Host");
   await press(pageA, "ArrowDown");
   await press(pageA, "Space");
+  // CREATE ROOM asks PUBLIC or PRIVATE first
+  await pageA.waitForFunction(() => window.sketchbattle.screen.phase === "create");
+  await press(pageA, "Space");
   await pageA.waitForFunction(() => window.sketchbattle.screen.roomCode !== null);
   const code = await pageA.evaluate(() => window.sketchbattle.screen.roomCode);
   if (!/^[A-Z2-9]{4}$/.test(code)) fail(`invalid room code ${code}`);
