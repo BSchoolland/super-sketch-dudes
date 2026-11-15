@@ -1,9 +1,6 @@
 import type { PointerStroke } from "../input/pointer";
 import { INK } from "../render/paper";
 
-/** Saturation never drops below this: a pale pick would be keyed out as paper when the sheet is cut. */
-const SAT_MIN = 0.2;
-const VAL_MIN = 0.15;
 /** Ring and disc radii as fractions of the outer radius. */
 const RING_IN = 0.8, DISC = 0.68;
 
@@ -64,8 +61,8 @@ export class ColorWheel {
       const h = max === r ? (g - b) / d : max === g ? 2 + (b - r) / d : 4 + (r - g) / d;
       this.hue = ((h / 6) % 1 + 1) % 1;
     }
-    this.sat = Math.max(SAT_MIN, max ? d / max : 0);
-    this.val = Math.max(VAL_MIN, max / 255);
+    this.sat = max ? d / max : 0;
+    this.val = max / 255;
   }
 
   /** Feeds a pointer stroke; true when it changed the colour. */
@@ -83,8 +80,8 @@ export class ColorWheel {
     } else {
       const rd = this.r * DISC, d = Math.max(1, Math.hypot(dx, dy) / rd);
       const [x, y] = discToSquare(dx / rd / d, dy / rd / d);
-      this.sat = SAT_MIN + (1 - SAT_MIN) * (x + 1) / 2;
-      this.val = VAL_MIN + (1 - VAL_MIN) * (1 - y) / 2;
+      this.sat = (x + 1) / 2;
+      this.val = (1 - y) / 2;
     }
     if (e.phase === "up") this.drag = null;
     return true;
@@ -100,7 +97,7 @@ export class ColorWheel {
     for (const k of [1, RING_IN, DISC]) { ctx.beginPath(); ctx.arc(cx, cy, r * k, 0, Math.PI * 2); ctx.stroke(); }
     const a = this.hue * Math.PI * 2, mid = r * (1 + RING_IN) / 2;
     this.marker(ctx, cx + Math.cos(a) * mid, cy + Math.sin(a) * mid, hex(hsvRgb(this.hue, 1, 1)));
-    const [u, v] = squareToDisc((this.sat - SAT_MIN) / (1 - SAT_MIN) * 2 - 1, 1 - (this.val - VAL_MIN) / (1 - VAL_MIN) * 2);
+    const [u, v] = squareToDisc(this.sat * 2 - 1, 1 - this.val * 2);
     this.marker(ctx, cx + u * r * DISC, cy + v * r * DISC, this.color);
     ctx.restore();
   }
@@ -136,7 +133,7 @@ export class ColorWheel {
     const rd = this.disc.width / 2;
     this.paint(this.disc, 0, rd, (dx, dy) => {
       const [x, y] = discToSquare(dx / rd, dy / rd);
-      return hsvRgb(this.hue, SAT_MIN + (1 - SAT_MIN) * (x + 1) / 2, VAL_MIN + (1 - VAL_MIN) * (1 - y) / 2);
+      return hsvRgb(this.hue, (x + 1) / 2, (1 - y) / 2);
     });
     this.discHue = this.hue;
   }
