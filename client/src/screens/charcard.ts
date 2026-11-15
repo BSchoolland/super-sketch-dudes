@@ -7,7 +7,8 @@ import { card, label, title, INK } from "./ui";
 import { drawImageIn } from "./images";
 import { inkRect } from "../render/paper";
 import { wrapped } from "./text";
-import { MoveDemo, demoMoves, type DemoMove } from "./movedemo";
+import { MoveDemo } from "./movedemo";
+import { demoMoves, type DemoMove } from "./demorun";
 import { roster } from "../../../shared/fighters/index";
 
 const DEMO = { x: 90, y: 100, w: 1060 };
@@ -89,6 +90,9 @@ export class CharacterDetail {
       const on = r === active;
       card(ctx, r.x, r.y, r.w, r.h, INK, on);
       title(ctx, r.head, r.x + 20, r.y + r.h / 2 + 9, 24, INK, "left");
+      // the bars that make this move something else when full
+      const bars = demo?.barsFor(r.move);
+      if (bars?.length) label(ctx, `+ ${bars.join(" + ")}`, r.x + r.w - 20, r.y + r.h / 2 + 8, 22, PENCIL, "right", 800);
     }
     if (!practiceDummy.choice) label(ctx, "no practice dummy yet", DEMO.x + DEMO.w / 2, DEMO.y + h + 34, 22, PENCIL);
   }
