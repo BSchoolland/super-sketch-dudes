@@ -33,7 +33,7 @@ class Peer {
 }
 const peers = async (...names: string[]) => { const ps = names.map((n) => new Peer(n)); await Promise.all(ps.map((p) => p.ready())); return ps; };
 const key = (c: string) => c.repeat(32);
-const ready = (p: Peer) => p.send({ t: "pick", fighter: "slugbert", bundleUrl: "/house/slugbert/bundle.json", ready: true });
+const ready = (p: Peer) => p.send({ t: "pick", fighter: "slugbert", bundleUrl: "/house/slugbert/bundle.json" });
 
 beforeAll(async () => {
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "sb-call-"));

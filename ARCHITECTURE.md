@@ -337,8 +337,12 @@ latency, so half their difference is the real clock lead: equal clocks over any 
 that is genuinely ahead gives up ticks, in proportion (gain 1/12, dead zone 1.5 frames, at most every other tick).
 The slower client never skips.
 
-Server: `/ws` upgrade. Messages: `hello`, `queue` (quick match), `room create/join <code>`, `start` (host sets
-rules; the server picks the seed and slot order), `loaded` (a client's match screen is up) and `go` (everyone's is:
+Server: `/ws` upgrade. Messages: `hello`, `queue` (quick match), `room create/join <code>`, `pick` (a member's
+token onto a fighter, or `fighter: ""` back in hand: having a fighter is being ready; the host's `bots` carry the
+bots' picks the same way), `fight` (anyone's FIGHT!: once every slot, bots included, has a fighter and nobody is on the
+stage screen yet, the relay asks the host, who answers with `picking`; anything else is dropped, so two presses at
+once or a token lifted on the way do nothing; the rule is `shared/lobby.ts`), `picking` (the host on the stage
+screen), `start` (host sets rules; the server picks the seed and slot order), `loaded` (a client's match screen is up) and `go` (everyone's is:
 the countdowns start together), `inputs` (frame, run of inputs, `ahead`, `acks`), `fill` and `final` (the relay's
 decisions, and how far it has each player's own inputs), `hash`, `rtc` (signaling, between members of one room),
 `ice` (STUN/TURN servers, with TURN credentials minted per connection: server/ice.ts), `peers` (each client's link

@@ -10,6 +10,7 @@ import { finish, newTrace, openEvent } from "./events";
 import { recordPlays } from "./library";
 import { iceServers } from "./ice";
 import { CLOSE_CANNOT_RESUME, CLOSE_SUPERSEDED, RESUME_GRACE_MS } from "../shared/resume";
+import { fightBlock } from "../shared/lobby";
 
 /**
  * Lobby and input relay. The server never simulates: it pairs clients into rooms,
@@ -26,10 +27,9 @@ export interface Client {
   lastPing: number;
   /** Smoothed round trip to the relay in ms, from WebSocket pings; null until the first pong. */
   rtt: number | null;
-  /** Fighter id and the bundle every client loads it from; "" until the first pick. */
+  /** Fighter id and the bundle every client loads it from; "" until they put their token on one (that's being ready). */
   fighter: string;
   bundleUrl: string;
-  ready: boolean;
   /** Their side when the room plays teams. */
   team: number;
   /** This connection's wide event, traced by the page session that opened it. */
@@ -44,7 +44,7 @@ export interface Client {
 export interface Room {
   code: string; trace: string; members: Client[]; started: boolean; host: Client; seed: number; config: unknown;
   /** Listed in JOIN ROOM and joinable by QUICK MATCH; private rooms need the code. */ public: boolean;
-  /** Set while the host is on the stage screen after START: what they have picked so far, for everyone to watch. */ picking: StagePick | null;
+  /** Set while the host is on the stage screen after FIGHT!: what they have picked so far, for everyone to watch. */ picking: StagePick | null;
   /** Game bundle hash the room plays on; null = whatever the page loaded. */ game: string | null;
   /** CPU players the host added: they take the slots after the members'. */ bots: RoomBot[];
   /** Team battle: members and bots fight on their `team`'s side. */ teams: boolean;
@@ -53,7 +53,7 @@ export interface Room {
   event: WideEvent;
   match: RelayMatch | null;
 }
-/** A CPU at `level`, or (level 0) a friend playing on the host's computer with `device` (keyboard 2, a pad). */
+/** A CPU at `level`, or (level 0) a friend playing on the host's computer with `device` (keyboard 2, a pad); `fighter` "" until the host puts its token on one. */
 export interface RoomBot { fighter: string; bundleUrl: string; level: number; team: number; device?: string }
 
 /** What the relay sees of one match: per slot, how inputs and hashes flowed. */
@@ -317,7 +317,8 @@ function roomInfo(room: Room): unknown {
     public: room.public,
     picking: room.picking,
     game: room.game,
-    members: room.members.map((m) => ({ id: m.id, name: m.name, slot: m.slot, fighter: m.fighter, bundleUrl: m.bundleUrl, ready: m.ready, team: m.team })),
+    // `ready` is for bundles from before picking was readying, still open until they swap
+    members: room.members.map((m) => ({ id: m.id, name: m.name, slot: m.slot, fighter: m.fighter, bundleUrl: m.bundleUrl, ready: m.fighter !== "", team: m.team })),
     bots: room.bots,
     teams: room.teams,
     call: room.instance !== null,
@@ -331,7 +332,6 @@ export function leaveRoom(c: Client): void {
   const slot = c.slot;
   const duringMatch = room.started;
   c.room = null;
-  c.ready = false;
   room.members = room.members.filter((m) => m !== c);
   pushCapped(room.event.business, "leaves", { id: c.id, name: c.name, at: since(room.event), duringMatch });
   // the last input frame the relay has from the leaver: everyone has every input up to it, delivered before this message
@@ -369,7 +369,9 @@ export function joinRoom(c: Client, room: Room): void {
   leaveRoom(c);
   c.room = room;
   c.slot = room.members.length;
-  c.ready = false;
+  // everyone arrives with their token in hand
+  c.fighter = "";
+  c.bundleUrl = "";
   c.team = smallestTeam([...room.members.map((m) => m.team), ...room.bots.map((b) => b.team)]);
   room.members.push(c);
   // a person takes the last bot's place when the room is full
@@ -468,15 +470,15 @@ export function attachLobby(wss: WebSocketServer, playerOf: (session: unknown) =
     const msgs: Record<string, number> = {};
     event.set("connection", { id, ua: String(req.headers["user-agent"] ?? "").slice(0, 200) }).set("msgs", msgs);
     // `c` becomes another client if this socket resumes one mid-match
-    let c: Client = { ws, id, name: `guest${id}`, room: null, slot: 0, lastPing: Date.now(), rtt: null, fighter: "", bundleUrl: "", ready: false, team: 0, event, peerRtt: new Map(), token: crypto.randomBytes(12).toString("base64url"), grace: null };
+    let c: Client = { ws, id, name: `guest${id}`, room: null, slot: 0, lastPing: Date.now(), rtt: null, fighter: "", bundleUrl: "", team: 0, event, peerRtt: new Map(), token: crypto.randomBytes(12).toString("base64url"), grace: null };
     clients.set(id, c);
     let pingAt = 0;
     ws.on("pong", () => {
       const sample = Date.now() - pingAt;
       c.rtt = c.rtt === null ? sample : c.rtt + (sample - c.rtt) * 0.25;
     });
-    // the first ping goes out with the hello: joining and readying take round trips of their own, so a member
-    // always has a measurement by the time the host can press START
+    // the first ping goes out with the hello: joining and picking take round trips of their own, so a member
+    // always has a measurement by the time the room can fight
     const ping = () => { pingAt = Date.now(); ws.ping(); };
     ping();
     const pinger = setInterval(ping, RTT_PING_MS);
@@ -559,15 +561,15 @@ export function attachLobby(wss: WebSocketServer, playerOf: (session: unknown) =
           break;
         }
         case "leave": leaveRoom(c); break;
+        // a member's token onto a fighter, or (fighter "") back in their hand; `ready` from older bundles means nothing now
         case "pick": {
           if (!c.room || c.room.started) break;
           const fighter = String(msg.fighter ?? "");
           const bundleUrl = typeof msg.bundleUrl === "string" ? msg.bundleUrl : "";
-          if (!isBundlePath(bundleUrl, fighter)) { send(c, { t: "error", error: "unknown fighter" }); break; }
+          if (fighter !== "" && !isBundlePath(bundleUrl, fighter)) { send(c, { t: "error", error: "unknown fighter" }); break; }
           c.fighter = fighter;
-          c.bundleUrl = bundleUrl;
-          c.ready = !!msg.ready;
-          if (!c.ready) c.room.picking = null;
+          c.bundleUrl = fighter ? bundleUrl : "";
+          if (!fighter) c.room.picking = null;
           broadcast(c.room, roomInfo(c.room));
           break;
         }
@@ -609,18 +611,30 @@ export function attachLobby(wss: WebSocketServer, playerOf: (session: unknown) =
         // the host, alone with bots, plays the match on their own computer: the room is busy until their "end"
         case "local": {
           const room = c.room;
-          if (!room || room.host !== c || room.started || room.members.length !== 1 || !room.bots.length) break;
+          if (!room || room.host !== c || room.started || room.members.length !== 1 || fightBlock(room)) break;
           room.started = true;
           room.picking = null;
           pushCapped(room.event.business, "matches", { local: true, bots: room.bots.length, at: since(room.event) });
           broadcast(room, roomInfo(room));
           break;
         }
+        // anyone's FIGHT!: the host is asked to open the stage screen. Only once every slot has a fighter, and only while
+        // nobody is on it yet, so two people pressing it at once (or one pressing as another lifts a token) does nothing more
+        case "fight": {
+          const room = c.room;
+          if (!room || room.started || room.picking) break;
+          const block = fightBlock(room);
+          if (block) { pushCapped(room.event.business, "fightRefused", { id: c.id, block, at: since(room.event) }); break; }
+          send(room.host, { t: "fight", from: c.id });
+          break;
+        }
         // the host moving between the lobby and the stage screen, and every change they make there
         case "picking": {
           const room = c.room;
           if (!room || room.host !== c || room.started) break;
-          if (msg.pick !== null && !room.members.every((m) => m.ready)) { send(c, { t: "error", error: "not everyone is ready" }); break; }
+          // a token lifted while the host's FIGHT! was on its way: they stay in the lobby with everyone else
+          const block = msg.pick === null ? null : fightBlock(room);
+          if (block) { pushCapped(room.event.business, "fightRefused", { id: c.id, block, at: since(room.event) }); break; }
           room.picking = msg.pick === null ? null : stagePick(msg.pick);
           broadcast(room, roomInfo(room));
           break;
@@ -629,7 +643,7 @@ export function attachLobby(wss: WebSocketServer, playerOf: (session: unknown) =
           const room = c.room;
           // a host alone with bots plays them locally (see "local"); the relay only runs matches with two people in them
           if (!room || room.host !== c || room.members.length < 2 || room.started) break;
-          if (!room.members.every((m) => m.ready)) { send(c, { t: "error", error: "not everyone is ready" }); break; }
+          if (fightBlock(room) === "picking") { send(c, { t: "error", error: "not everyone has a fighter" }); break; }
           if (room.bots.some((b) => b.level === 0)) { send(c, { t: "error", error: "friends on the host's computer can only play local games" }); break; }
           if (room.teams && new Set([...room.members.map((m) => m.team), ...room.bots.map((b) => b.team)]).size < 2) { send(c, { t: "error", error: "everyone is on one team" }); break; }
           if (!msg.config || typeof msg.config !== "object" || Array.isArray(msg.config)) { send(c, { t: "error", error: "invalid match config" }); break; }
@@ -726,7 +740,7 @@ export function attachLobby(wss: WebSocketServer, playerOf: (session: unknown) =
           }
           broadcast(c.room, { t: "gameAt", hash: msg.hash, frame: msg.frame | 0 });
           break;
-        case "end": if (c.room && c.room.host === c) { endRelayMatch(c.room, "host ended"); c.room.started = false; c.room.members.forEach((m, i) => { m.ready = false; m.slot = i; }); broadcast(c.room, roomInfo(c.room)); if (c.room.waiting.length) admitWaiting(c.room); } break;
+        case "end": if (c.room && c.room.host === c) { endRelayMatch(c.room, "host ended"); c.room.started = false; c.room.members.forEach((m, i) => (m.slot = i)); broadcast(c.room, roomInfo(c.room)); if (c.room.waiting.length) admitWaiting(c.room); } break;
       }
     });
     ws.on("close", (code, reason) => {
@@ -745,7 +759,7 @@ export function attachLobby(wss: WebSocketServer, playerOf: (session: unknown) =
   });
 }
 
-/** A host's bot list, checked: at most `room` of them, each a known bundle at a CPU level. A string is why it's refused. */
+/** A host's bot list, checked: at most `room` of them, each a known bundle (or none yet) at a CPU level. A string is why it's refused. */
 function roomBots(value: unknown, room: number): RoomBot[] | string {
   if (!Array.isArray(value)) return "bots must be a list";
   if (value.length > room) return "too many bots for the room";
@@ -753,14 +767,14 @@ function roomBots(value: unknown, room: number): RoomBot[] | string {
   for (const raw of value) {
     const b = (raw ?? {}) as Record<string, unknown>;
     const fighter = String(b.fighter ?? ""), bundleUrl = typeof b.bundleUrl === "string" ? b.bundleUrl : "", level = Number(b.level), team = Number(b.team ?? 0);
-    if (!isBundlePath(bundleUrl, fighter)) return "unknown bot fighter";
+    if (fighter !== "" && !isBundlePath(bundleUrl, fighter)) return "unknown bot fighter";
     if (!Number.isInteger(level) || level < 0 || level > CPU_TIERS.length) return "bad bot level";
     if (!Number.isInteger(team) || team < 0 || team >= TEAMS) return "bad bot team";
     if (level === 0) {
       const device = String(b.device ?? "");
       if (!/^(kb2|pad\d)$/.test(device)) return "bad device for a friend";
-      out.push({ fighter, bundleUrl, level, team, device });
-    } else out.push({ fighter, bundleUrl, level, team });
+      out.push({ fighter, bundleUrl: fighter ? bundleUrl : "", level, team, device });
+    } else out.push({ fighter, bundleUrl: fighter ? bundleUrl : "", level, team });
   }
   return out;
 }

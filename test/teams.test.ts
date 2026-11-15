@@ -33,7 +33,7 @@ class Peer {
   }
 }
 const bot = (fighter: string, team: number) => ({ fighter, bundleUrl: `/house/${fighter}/bundle.json`, level: 3, team });
-const pick = (p: Peer) => p.send({ t: "pick", fighter: "slugbert", bundleUrl: "/house/slugbert/bundle.json", ready: true });
+const pick = (p: Peer) => p.send({ t: "pick", fighter: "slugbert", bundleUrl: "/house/slugbert/bundle.json" });
 
 beforeAll(async () => {
   await loadAllHouse();

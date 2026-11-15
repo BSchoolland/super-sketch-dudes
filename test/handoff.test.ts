@@ -56,8 +56,8 @@ describe("deploy handoff", () => {
     const room = await a.expect("room");
     b.send({ t: "join", code: room.code });
     await a.expect("room", (m) => m.members.length === 2);
-    a.send({ t: "pick", fighter: "slugbert", bundleUrl: "/house/slugbert/bundle.json", ready: true });
-    b.send({ t: "pick", fighter: "woodstove", bundleUrl: "/house/woodstove/bundle.json", ready: true });
+    a.send({ t: "pick", fighter: "slugbert", bundleUrl: "/house/slugbert/bundle.json" });
+    b.send({ t: "pick", fighter: "woodstove", bundleUrl: "/house/woodstove/bundle.json" });
     await a.expect("room", (m) => m.members.every((x: any) => x.ready));
     a.send({ t: "start", config: { stage: "proving", rules: { stocks: 3, time: 0 } } });
     const start = await b.expect("start");
@@ -110,7 +110,7 @@ describe("deploy handoff", () => {
     a.send({ t: "create", public: true });
     const room = await a.expect("room");
     b.send({ t: "join", code: room.code });
-    a.send({ t: "pick", fighter: "slugbert", bundleUrl: "/house/slugbert/bundle.json", ready: true });
+    a.send({ t: "pick", fighter: "slugbert", bundleUrl: "/house/slugbert/bundle.json" });
     await b.expect("room", (m) => m.members.length === 2 && m.members[0].ready);
     await stop(first);
     await boot(dataDir, port, "new");
@@ -128,7 +128,7 @@ describe("deploy handoff", () => {
     expect(info.code).toBe(room.code);
     expect(info.members.map((m: any) => [m.id, m.fighter, m.ready])).toEqual([[a.id, "slugbert", true], [b.id, "", false]]);
     // and it's a working room: b picks, a sees it
-    b.send({ t: "pick", fighter: "woodstove", bundleUrl: "/house/woodstove/bundle.json", ready: true });
+    b.send({ t: "pick", fighter: "woodstove", bundleUrl: "/house/woodstove/bundle.json" });
     await a.expect("room", (m) => m.members[1].ready);
     // a fresh client after the restart doesn't take a handed-over client's id
     const fresh = new Peer(port);

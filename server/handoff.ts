@@ -18,7 +18,7 @@ export const HANDOFF_FILE = "handoff.json";
 export const HANDOFF_VERSION = 1;
 
 type SavedSlot = Omit<SlotRelay, "history"> & { history: [number, unknown][] };
-interface SavedClient { id: number; name: string; slot: number; rtt: number | null; fighter: string; bundleUrl: string; ready: boolean; team?: number; peerRtt: [number, number][]; token: string; event: WideEventRecord }
+interface SavedClient { id: number; name: string; slot: number; rtt: number | null; fighter: string; bundleUrl: string; team?: number; peerRtt: [number, number][]; token: string; event: WideEventRecord }
 interface SavedMatch { event: WideEventRecord; slots: SavedSlot[]; hashes: [number, { hash: number; slot: number }][]; loaded: number[]; goAt: number; fillers: number[]; fills: boolean; left: [number, { id: number; frame: number }][] }
 interface SavedRoom { code: string; public: boolean; started: boolean; seed: number; config: unknown; picking: Room["picking"]; game: string | null; bots: Room["bots"]; teams?: boolean; instance?: string | null; waiting?: number[]; host: number; members: number[]; event: WideEventRecord; match: SavedMatch | null }
 interface Handoff { version: number; at: number; nextId: number; clients: SavedClient[]; rooms: SavedRoom[] }
@@ -37,7 +37,7 @@ export function saveHandoff(dataDir: string): void {
   });
   const handoff: Handoff = {
     version: HANDOFF_VERSION, at: Date.now(), nextId: nextClientId(),
-    clients: [...clients.values()].map((c) => ({ id: c.id, name: c.name, slot: c.slot, rtt: c.rtt, fighter: c.fighter, bundleUrl: c.bundleUrl, ready: c.ready, team: c.team, peerRtt: [...c.peerRtt], token: c.token, event: handOver(c.event) })),
+    clients: [...clients.values()].map((c) => ({ id: c.id, name: c.name, slot: c.slot, rtt: c.rtt, fighter: c.fighter, bundleUrl: c.bundleUrl, team: c.team, peerRtt: [...c.peerRtt], token: c.token, event: handOver(c.event) })),
     rooms: [...rooms.values()].map((r) => ({
       code: r.code, public: r.public, started: r.started, seed: r.seed, config: r.config, picking: r.picking, game: r.game, bots: r.bots, teams: r.teams, instance: r.instance, waiting: ids(r.waiting), host: r.host.id,
       members: ids(r.members), event: handOver(r.event), match: r.match ? saveMatch(r.match) : null,
@@ -69,7 +69,7 @@ export function restoreHandoff(dataDir: string, processEvent: WideEvent): void {
   const restored = new Map<number, Client>(handoff.clients.map((c) => [c.id, {
     ws: HANDED_OVER, id: c.id, name: c.name, room: null, slot: c.slot, lastPing: Date.now(), rtt: c.rtt, fighter: c.fighter, bundleUrl: c.bundleUrl,
     // handed over by a process from before teams: nobody had one
-    ready: c.ready, team: c.team ?? 0, event: resumeEvent(c.event), peerRtt: new Map(c.peerRtt), token: c.token, grace: null,
+    team: c.team ?? 0, event: resumeEvent(c.event), peerRtt: new Map(c.peerRtt), token: c.token, grace: null,
   }]));
   const byId = (id: number): Client => {
     const c = restored.get(id);
