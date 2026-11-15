@@ -63,6 +63,7 @@ npx tsx scripts/killpercents.ts   # kill percent per move, centre and ledge
 node scripts/posesheets.mjs       # pose contact sheets into shots/sheets/
 node scripts/menushots.mjs        # walk the menus and screenshot them
 node scripts/padcheck.mjs         # gamepad smoke test with a fake pad
+python3 scripts/vpad.py              # a virtual Xbox pad (uinput) for testing in a real Chrome; usage in its header
 node scripts/perfbench.mjs --throttle 4 --dpr 1.25   # frame times on a pretend potato (needs the dev servers)
 node scripts/activitycheck.mjs   # the Discord Activity end to end, Discord stubbed (starts its own servers)
 node scripts/touchcheck.mjs      # the touch controls on emulated phones with real multi-touch: VS BOTS to a KO, quick match and the Activity against a keyboard (starts its own servers)
