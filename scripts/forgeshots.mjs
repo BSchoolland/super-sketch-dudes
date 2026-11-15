@@ -52,9 +52,12 @@ try {
   await page.keyboard.press("Enter");
   await until("CreateScreen");
   await page.waitForTimeout(500);
-  await page.mouse.move(700 * k, 300 * k); await page.mouse.down();
-  for (const [x, y] of [[900, 500], [700, 700], [1100, 600], [800, 350]]) await page.mouse.move(x * k, y * k, { steps: 8 });
-  await page.mouse.up();
+  // three lines: fewer and DONE DRAWING asks first (create.ts)
+  for (const dy of [0, 120, 200]) {
+    await page.mouse.move(700 * k, (300 + dy) * k); await page.mouse.down();
+    for (const [x, y] of [[900, 500], [700, 700], [1100, 600], [800, 350]]) await page.mouse.move(x * k, (y + dy / 2) * k, { steps: 8 });
+    await page.mouse.up();
+  }
   await click(1660, 765);
   await until("DescribeScreen");
   await click(1160, 855);
