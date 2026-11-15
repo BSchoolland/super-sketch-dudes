@@ -22,6 +22,7 @@ export interface CellImages {
   card: { paper: HTMLCanvasElement; pad: number; onCard: HTMLCanvasElement | null; size: number } | null;
 }
 const cache = new Map<string, CellImages>();
+const CELL_REV = "2";
 
 /** Canvas pixels per world unit at the camera's closest zoom; the app sets it on every resize. */
 let pixelsPerUnit = 1.25;
@@ -73,7 +74,10 @@ export function cellImages(url: string): CellImages {
   img.onload = () => { e!.bounds = inkBounds(img); e!.src = img; ensureSize(e!, Math.min(img.naturalWidth, 256)); };
   img.onerror = () => { e!.failed = true; drawHealth.failedCells.add(url); console.error(`sprite cell failed to load: ${url}`); };
   // house cells are paths relative to the site, wherever this page sits (the Discord Activity's is /)
-  img.src = new URL(url, new URL(site.base, location.href)).href;
+  const src = new URL(url, new URL(site.base, location.href));
+  // gen cells are served immutable: bump when cells are rewritten in place
+  src.searchParams.set("r", CELL_REV);
+  img.src = src.href;
   return e;
 }
 
