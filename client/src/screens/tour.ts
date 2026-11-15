@@ -2,6 +2,7 @@ import { VIEW_H, VIEW_W } from "../render/camera";
 import { INK } from "../render/paper";
 import type { MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
+import { fingers } from "../input/fingers";
 import { account } from "../account";
 import { libraryChoices, myLibrary, refreshLibrary } from "../fighters";
 import { sessionList } from "../telemetry/events";
@@ -127,22 +128,26 @@ function choiceOf(id: string | null) {
   return c;
 }
 
-const CARD = { w: 980, h: 560 };
-const CX = (VIEW_W - CARD.w) / 2, CY = (VIEW_H - CARD.h) / 2;
+/** The card's size, words and buttons: a mouse's, and a finger's (read on a phone). */
+const DESK = { w: 980, h: 560, heading: 58, body: 32, lines: 6, art: 290, button: { w: 400, h: 110, size: 38, small: 34, single: 44 } };
+const TOUCH = { w: 1440, h: 860, heading: 80, body: 48, lines: 6, art: 440, button: { w: 600, h: 160, size: 52, small: 48, single: 58 } };
+const look = () => (fingers() ? TOUCH : DESK);
+const corner = () => { const L = look(); return { L, CX: (VIEW_W - L.w) / 2, CY: (VIEW_H - L.h) / 2 }; };
 
 function buttons(card: Card): Button[] {
-  const y = CY + CARD.h - 150, w = 400;
+  const { L, CY } = corner(), { w, h, size, small, single } = L.button, y = CY + L.h - h - 40;
   const pair = (a: [string, string], b: [string, string]): Button[] => [
-    { id: a[0], x: VIEW_W / 2 - w - 20, y, w, h: 110, text: a[1], size: 38 },
-    { id: b[0], x: VIEW_W / 2 + 20, y, w, h: 110, text: b[1], size: 34 },
+    { id: a[0], x: VIEW_W / 2 - w - 20, y, w, h, text: a[1], size },
+    { id: b[0], x: VIEW_W / 2 + 20, y, w, h, text: b[1], size: small },
   ];
+  const one = (id: string, text: string): Button[] => [{ id, x: VIEW_W / 2 - w / 2, y, w, h, text, size: single }];
   switch (card) {
     case "intro": return pair(["go", "LET'S BATTLE"], ["skip", "I'LL LOOK AROUND"]);
     case "afterBattle": return pair(["go", "TO COMMUNITY"], ["skip", "SKIP"]);
     case "afterSave": return pair(["go", "BATTLE WITH IT"], ["skip", "SKIP"]);
-    case "almost": return [{ id: "ok", x: VIEW_W / 2 - 200, y, w: 400, h: 110, text: "OK", size: 44 }];
+    case "almost": return one("ok", "OK");
     case "ready": return pair(["go", "FIGHT WITH IT"], ["skip", "LATER"]);
-    case "failed": return fighterEntry()?.retryable ? pair(["go", "TRY AGAIN"], ["skip", "LATER"]) : [{ id: "skip", x: VIEW_W / 2 - 200, y, w: 400, h: 110, text: "OK", size: 44 }];
+    case "failed": return fighterEntry()?.retryable ? pair(["go", "TRY AGAIN"], ["skip", "LATER"]) : one("skip", "OK");
   }
 }
 
@@ -185,6 +190,11 @@ const eta = (): string => {
   return p.etaS === null ? "waiting in line" : etaWords(p.etaS);
 };
 
+/** The buttons of the card up over `screen`, if one is. */
+export function tourButtons(screen: Screen): Button[] | null {
+  return tourCardUp(screen) ? buttons(tour!.card!) : null;
+}
+
 export function tourDraw(ctx: CanvasRenderingContext2D, screen: Screen): void {
   if (current()?.card && !busy(screen)) drawCard(ctx, tour!.card!);
 }
@@ -194,12 +204,13 @@ function drawCard(ctx: CanvasRenderingContext2D, which: Card): void {
   ctx.fillStyle = "rgba(244,239,228,0.72)";
   ctx.fillRect(0, 0, VIEW_W, VIEW_H);
   ctx.restore();
-  card(ctx, CX, CY, CARD.w, CARD.h, INK, false);
+  const { L, CX, CY } = corner();
+  card(ctx, CX, CY, L.w, L.h, INK, false);
   const e = fighterEntry();
   const name = e?.name ?? "your fighter";
   const text = (heading: string, body: string, color = INK) => {
-    title(ctx, heading, VIEW_W / 2, CY + 100, 58, color, "center", CARD.w - 80);
-    wrapped(ctx, body, VIEW_W / 2, CY + 180, CARD.w - 140, 32, INK, 6);
+    title(ctx, heading, VIEW_W / 2, CY + L.heading * 1.72, L.heading, color, "center", L.w - 80);
+    wrapped(ctx, body, VIEW_W / 2, CY + L.heading * 1.72 + L.body * 2.5, L.w - 140, L.body, INK, L.lines);
   };
   switch (which) {
     case "intro":
@@ -215,9 +226,9 @@ function drawCard(ctx: CanvasRenderingContext2D, which: Card): void {
       text("ALMOST THERE", `Your fighter: ${eta()}. Keep battling or look around; this pops up when it's ready.`);
       break;
     case "ready":
-      if (e) drawCharacterArt(ctx, e, CX + 60, CY + 60, 290, t);
-      title(ctx, `${name.toUpperCase()} IS READY`, CX + 390, CY + 140, 56, INK, "left", CARD.w - 430);
-      wrapped(ctx, "Your drawing is a fighter now. Take it into a battle.", CX + 390, CY + 210, CARD.w - 440, 32, INK, 4, "left");
+      if (e) drawCharacterArt(ctx, e, CX + 60, CY + 60, L.art, t);
+      title(ctx, `${name.toUpperCase()} IS READY`, CX + L.art + 100, CY + 60 + L.heading * 1.4, L.heading * 0.97, INK, "left", L.w - L.art - 140);
+      wrapped(ctx, "Your drawing is a fighter now. Take it into a battle.", CX + L.art + 100, CY + 60 + L.heading * 1.4 + L.body * 2.2, L.w - L.art - 150, L.body, INK, 4, "left");
       break;
     case "failed":
       text("CREATION FAILED", e?.error ?? "Something went wrong making it.", RED);
