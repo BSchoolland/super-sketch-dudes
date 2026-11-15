@@ -63,7 +63,6 @@ Block it if it's any of these (sneaky versions included: misspellings, letters s
 Inappropriate: sexual, drugs, hateful, or a slur.
 Foul language.
 Personal: a real person's full name (a classmate's or a teacher's as much as a celebrity's), or personal info like a phone number, address, or school.
-Impersonation: pretending to be staff, a moderator, an admin or the game itself.
 Bullying: aimed at another player or a group.
 Other: something I didn't cover but should really be moderated.
 
@@ -74,7 +73,6 @@ Record your answer by running exactly one of these (./verdict is the only comman
 ./verdict inappropriate "<reasoning>"
 ./verdict language "<reasoning>"
 ./verdict personal "<reasoning>"
-./verdict impersonation "<reasoning>"
 ./verdict bullying "<reasoning>"
 ./verdict other "<reasoning>"`;
 

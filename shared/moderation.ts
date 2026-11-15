@@ -4,7 +4,7 @@ export type Verdict = (typeof VERDICTS)[number];
 export type Flag = Exclude<Verdict, "pass">;
 
 /** What a judge can say about a name a player asked to go by. */
-export const NAME_VERDICTS = ["pass", "inappropriate", "language", "personal", "impersonation", "bullying", "other"] as const;
+export const NAME_VERDICTS = ["pass", "inappropriate", "language", "personal", "bullying", "other"] as const;
 export type NameVerdict = (typeof NAME_VERDICTS)[number];
 export type NameFlag = Exclude<NameVerdict, "pass">;
 
@@ -24,7 +24,6 @@ export const NAME_FLAG_LABELS: Record<NameFlag, string> = {
   inappropriate: "it isn't appropriate",
   language: "it has bad language in it",
   personal: "it looks like a real person's name or personal info",
-  impersonation: "it pretends to be someone it isn't",
   bullying: "it picks on someone",
   other: "it isn't okay for the game",
 };
