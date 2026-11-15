@@ -280,4 +280,15 @@ describe("touch layout", () => {
       expect(l.free.left).toBeGreaterThan(l.stick.x + l.stick.r);
     }
   });
+  it("sits at the screen's edges, past the view on a wide phone and inside its notch", () => {
+    // an iPhone 15 sideways: 852x393 CSS pixels, the view 16:9 in the middle, a 59px notch on the left
+    const scale = 393 / 1080, bleed = (852 / scale - 1920) / 2, notch = 59 / scale;
+    const edges = { left: -bleed + notch, top: 0, right: 1920 + bleed, bottom: 1080 };
+    const wide = touchLayout(1920, 1080, scale, 1, edges), plain = touchLayout(1920, 1080, scale, 1);
+    expect(wide.buttons.attack.x - plain.buttons.attack.x).toBeCloseTo(bleed);
+    expect(wide.stick.x - plain.stick.x).toBeCloseTo(notch - bleed);
+    expect(wide.pause.x - wide.pause.r).toBeGreaterThan(edges.left);
+    expect(wide.buttons.attack.x + wide.buttons.attack.r).toBeLessThanOrEqual(edges.right);
+    expect(wide.free.right - wide.free.left).toBeGreaterThan(plain.free.right - plain.free.left);
+  });
 });

@@ -227,7 +227,9 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     if (offY > 0) { ctx.fillRect(0, 0, canvas.width, Math.ceil(offY)); ctx.fillRect(0, canvas.height - Math.ceil(offY), canvas.width, Math.ceil(offY)); }
     ctx.setTransform(scale, 0, 0, scale, offX, offY);
     ctx.save();
-    ctx.beginPath(); ctx.rect(0, 0, VIEW_W, VIEW_H); ctx.clip();
+    // a match on touch draws to the screen's edges, where its controls are
+    const seen = screen instanceof VersusScreen ? screen.renderer.cam.seen() : { x1: 0, y1: 0, x2: VIEW_W, y2: VIEW_H };
+    ctx.beginPath(); ctx.rect(seen.x1, seen.y1, seen.x2 - seen.x1, seen.y2 - seen.y1); ctx.clip();
     // under a tour card the screen sees no pointer: its own buttons can't be hovered or clicked through the card
     const carded = tourCardUp(screen), present = pointer.present, clicked = pointer.clicked;
     if (carded) { pointer.present = false; pointer.clicked = false; }

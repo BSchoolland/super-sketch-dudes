@@ -26,6 +26,27 @@ export function stageSize(): { w: number; h: number } {
   return size;
 }
 
+/** env(safe-area-inset-*), read off an element that pads by them. */
+let probe: HTMLElement | null = null;
+let insets: { left: number; top: number; right: number; bottom: number } | null = null;
+
+/**
+ * The screen's safe-area insets (the notch, the rounded corners, the home bar) as the stage's own sides, in CSS
+ * pixels: turned, the screen's top is the stage's left.
+ */
+export function stageInsets(): { left: number; top: number; right: number; bottom: number } {
+  if (insets) return insets;
+  if (!probe) {
+    probe = document.createElement("div");
+    probe.style.cssText = "position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)";
+    document.body.append(probe);
+  }
+  const s = getComputedStyle(probe), px = (v: string) => parseFloat(v);
+  const screen = { top: px(s.paddingTop), right: px(s.paddingRight), bottom: px(s.paddingBottom), left: px(s.paddingLeft) };
+  insets = turned() ? { left: screen.top, top: screen.right, right: screen.bottom, bottom: screen.left } : screen;
+  return insets;
+}
+
 /** Client coordinates (a pointer event's) to the stage's CSS pixels. */
 export function toStage(x: number, y: number): { x: number; y: number } {
   return turned() ? { x: y, y: size.h - x } : { x, y };
@@ -39,6 +60,7 @@ export function onStage(fn: () => void): () => void {
 
 /** On every resize, as the window's own resize listeners did; otherwise only when the stage turned. */
 function layout(e?: Event): void {
+  insets = null;
   const w = innerWidth, h = innerHeight;
   const turn = handheld && h > w && !aboutOpen();
   if (!e && turn === turned()) return;

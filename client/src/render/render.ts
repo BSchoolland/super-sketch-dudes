@@ -4,7 +4,7 @@ import { defOf, currentMove } from "../../../shared/fighter";
 import { B } from "../../../shared/input";
 import { hitboxWorld, hurtbox, shieldCircle } from "../../../shared/hits";
 import { stageOf } from "../../../shared/sim";
-import { Camera, VIEW_H, VIEW_W } from "./camera";
+import { Camera } from "./camera";
 import { Fx } from "./fx";
 import { animFor, poseAt } from "./rig";
 import { drawSprite, FLOOR_ANIMS, prepareCards, restOnFloor, stillSprites } from "./sprite";
@@ -37,6 +37,8 @@ export class Renderer {
   showHitboxes = false;
   /** The span of the bottom edge the HUD keeps to (the touch controls have the corners); null: all of it. */
   hudBand: { left: number; right: number } | null = null;
+  /** The HUD drawn bigger than the view's own size (a phone's small screen), as the band allows. */
+  hudScale = 1;
   /** Backdrop, HUD and the slot markers over heads; the title screen's brawl draws fighters only. */
   chrome = true;
   names: string[];
@@ -177,8 +179,8 @@ export class Renderer {
     if (this.showHitboxes) this.drawBoxes(ctx, state);
     ctx.restore();
     this.afterWorld?.(ctx);
-    this.fx.drawScreen(ctx, VIEW_W, VIEW_H, this.cam);
-    if (this.chrome) drawHud(ctx, state, this.hud, dt, this.names, this.hudBand);
+    this.fx.drawScreen(ctx, this.cam);
+    if (this.chrome) drawHud(ctx, state, this.hud, dt, this.names, this.hudBand, this.hudScale);
     ctx.restore();
   }
 

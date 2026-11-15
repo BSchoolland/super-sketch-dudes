@@ -49,8 +49,8 @@ function playerCard(hud: HudState, i: number, key: string, s: number, name: stri
   return canvas;
 }
 
-/** `band`: the span of the bottom edge the cards keep to, all of it by default. */
-export function drawHud(ctx: CanvasRenderingContext2D, state: State, hud: HudState, dt: number, names: string[], band: { left: number; right: number } | null = null): void {
+/** `band`: the span of the bottom edge the cards keep to, all of it by default. `scale`: how big the cards and timer are drawn, as room allows. */
+export function drawHud(ctx: CanvasRenderingContext2D, state: State, hud: HudState, dt: number, names: string[], band: { left: number; right: number } | null = null, scale = 1): void {
   const n = state.fighters.length;
   const colors = fighterColors(state);
   const cardW = CARD_W, gap = 40;
@@ -59,9 +59,9 @@ export function drawHud(ctx: CanvasRenderingContext2D, state: State, hud: HudSta
   const x0 = mid - total / 2;
   const y = VIEW_H - 150;
   // cards that don't fit the band at full size (five or six, or beside touch controls): the row shrinks about its bottom middle
-  const k = Math.min(1, (right - left) / total);
+  const k = Math.min(scale, (right - left) / total);
   ctx.save();
-  if (k < 1) { ctx.translate(mid, VIEW_H - 20); ctx.scale(k, k); ctx.translate(-mid, -(VIEW_H - 20)); }
+  if (k !== 1) { ctx.translate(mid, VIEW_H - 20); ctx.scale(k, k); ctx.translate(-mid, -(VIEW_H - 20)); }
   const s = Math.min(2, Math.max(0.5, Math.round(ctx.getTransform().a * 4) / 4));
   ctx.textAlign = "left";
   state.fighters.forEach((f, i) => {
@@ -107,9 +107,9 @@ export function drawHud(ctx: CanvasRenderingContext2D, state: State, hud: HudSta
     const secs = Math.max(0, Math.ceil(state.timer / 60));
     const m = Math.floor(secs / 60), sec = secs % 60;
     ctx.textAlign = "center";
-    ctx.font = `900 44px ${FONT}`;
+    ctx.font = `900 ${Math.round(44 * scale)}px ${FONT}`;
     ctx.fillStyle = INK;
-    ctx.fillText(`${m}:${sec.toString().padStart(2, "0")}`, VIEW_W / 2, 64);
+    ctx.fillText(`${m}:${sec.toString().padStart(2, "0")}`, VIEW_W / 2, 20 + 44 * scale);
   }
 }
 

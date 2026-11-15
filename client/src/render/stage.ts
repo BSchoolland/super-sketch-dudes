@@ -38,14 +38,18 @@ function building(i: number, depth: number, scale: number) {
 }
 
 export function drawBackdrop(ctx: CanvasRenderingContext2D, stage: Stage, cam: Camera): void {
-  drawPaper(ctx, VIEW_W, VIEW_H);
+  const seen = cam.seen();
+  ctx.save();
+  ctx.translate(seen.x1, seen.y1);
+  drawPaper(ctx, seen.x2 - seen.x1, seen.y2 - seen.y1);
+  ctx.restore();
   const m = ctx.getTransform(), scale = m.a;
   for (const depth of DEPTHS) {
     const ox = VIEW_W / 2 - cam.x * depth * cam.zoom, oy = VIEW_H / 2 - cam.y * depth * cam.zoom * 0.5;
     if (stage.theme === "rooftops") {
       for (let i = -6; i <= 6; i++) {
         const b = building(i, depth, scale);
-        if (ox + b.x > VIEW_W || ox + b.x + b.w < 0 || oy + b.y > VIEW_H || oy + b.y + b.h < 0) continue;
+        if (ox + b.x > seen.x2 || ox + b.x + b.w < seen.x1 || oy + b.y > seen.y2 || oy + b.y + b.h < seen.y1) continue;
         // at whole device pixels and 1:1, so the draw is a plain copy with no filtering
         ctx.save();
         ctx.setTransform(1, 0, 0, 1, 0, 0);

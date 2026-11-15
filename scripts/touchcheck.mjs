@@ -123,6 +123,11 @@ const RECORD = () => {
 const seen = (p) => p.evaluate(() => ({ actions: [...window.__seen.actions], moves: [...window.__seen.moves] }));
 const resetSeen = (p) => p.evaluate(() => { window.__seen.actions.clear(); window.__seen.moves.clear(); window.__seen.inputs.length = 0; });
 const me = (p) => p.evaluate(() => { const s = window.sketchbattle.screen; const st = s.match.state; const slot = s.session ? s.session.localSlot : 0; const f = st.fighters[slot], o = st.fighters.find((x) => x.slot !== slot); return { x: f.x, y: f.y, vy: f.vy, action: f.action, move: f.move, grounded: f.grounded, facing: f.facing, jumps: f.jumpsLeft, stocks: f.stocks, ox: o.x, oy: o.y, ostocks: o.stocks, opct: o.percent, ended: st.ended, winner: st.winner, frame: st.frame }; });
+/** Taps REMATCH or MENU on the result screen, where the screen says it drew them (on touch: under the thumbs). */
+async function tapEnd(p, fingers, which) {
+  const r = await p.evaluate((w) => window.sketchbattle.screen.endButtonRects()[w], which);
+  await fingers.tapView(r.x + r.w / 2, r.y + r.h / 2);
+}
 const inMatch = (p) => p.waitForFunction(() => window.sketchbattle?.screen?.match && window.sketchbattle.screen.countdown <= 0 && window.sketchbattle.touch.live, null, { timeout: 30000 });
 
 let browser;
@@ -336,8 +341,8 @@ try {
     if (state.winner === 0 || Date.now() >= deadline || matches >= 4) break;
     // lost: REMATCH, by tap
     console.log(`  match ${matches} went to the bot; REMATCH`);
-    await sleep(1500);
-    await pf.tapView(780, 825);
+    await sleep(2200);
+    await tapEnd(phone, pf, "rematch");
     await phone.waitForFunction(() => window.sketchbattle.screen.match && !window.sketchbattle.screen.match.state.ended && window.sketchbattle.touch.live && window.sketchbattle.screen.countdown <= 0, null, { timeout: 30000 });
     await t.layout();
     matches++;
@@ -349,8 +354,8 @@ try {
   const inputs = await phone.evaluate(() => window.__seen.inputs.filter((i) => i.b & 16).length);
   if (!inputs) fail("none of the match's inputs came from the touch controls");
   // back to the menu by tapping MENU on the results
-  await sleep(1500);
-  await pf.tapView(960 + 30 + 150, 540 + 90 + 160 + 35);
+  await sleep(2200);
+  await tapEnd(phone, pf, "menu");
   await phone.waitForFunction(() => window.sketchbattle.screen.constructor.name !== "VersusScreen", null, { timeout: 10000 });
   console.log(`  MENU tapped: back on ${await screenName(phone)}`);
 

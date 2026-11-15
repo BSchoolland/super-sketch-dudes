@@ -30,6 +30,11 @@ export function viewScale(): number {
   return cssScale;
 }
 
+/** How far the stage reaches past the view on each side, in view pixels: the letterbox a 16:9 view leaves. */
+export function viewBleed(): { x: number; y: number } {
+  return { x: cssOffX / cssScale, y: cssOffY / cssScale };
+}
+
 export function toView(clientX: number, clientY: number): ViewPoint {
   const p = toStage(clientX, clientY);
   return { x: (p.x - cssOffX) / cssScale, y: (p.y - cssOffY) / cssScale };

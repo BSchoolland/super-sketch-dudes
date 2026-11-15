@@ -26,6 +26,10 @@ export interface TouchLayout {
 
 /** A button's radius on a phone held sideways at SIZE 100%, in CSS pixels. */
 const BUTTON_CSS = 38;
+/** The pause button's smallest radius in CSS pixels, at any SIZE: a 44 px target. */
+const PAUSE_MIN_CSS = 22;
+/** The largest a button's unit gets, in view pixels, whatever the SIZE: past it the right thumb's buttons would bury the fight. */
+const MAX_UNIT = 140;
 /** Ticks a stick move may take from rest to a full push and still be a flick (a real stick's is about one). */
 const FLICK_TICKS = 5;
 /** Ticks after a flick that ATTACK still smashes. */
@@ -37,24 +41,29 @@ const SHORT_HOP_TICKS = 3;
 /** A finger counts as on a button this far past its edge. */
 const SLOP = 1.3;
 
+/** The part of the screen the controls may use, in view pixels: the view, or wider where the screen is. */
+export interface Edges { left: number; top: number; right: number; bottom: number }
+
 /**
  * The controls for a view `viewW` x `viewH` shown at `cssScale` CSS pixels per view pixel, `size` the player's
  * setting (1 = 100%). Sized in CSS pixels so a thumb finds them on any screen, capped so a small screen keeps the fight.
+ * `edges`: the screen's usable edges in view pixels (past the view on a screen wider than 16:9, inside the notch and
+ * the home bar), where the thumbs rest.
  */
-export function touchLayout(viewW: number, viewH: number, cssScale: number, size: number): TouchLayout {
-  const u = Math.min(130, BUTTON_CSS / cssScale) * size;
-  const ax = viewW - 1.75 * u, ay = viewH - 1.75 * u;
+export function touchLayout(viewW: number, viewH: number, cssScale: number, size: number, edges: Edges = { left: 0, top: 0, right: viewW, bottom: viewH }): TouchLayout {
+  const u = Math.min(MAX_UNIT, (BUTTON_CSS / cssScale) * size);
+  const ax = edges.right - 1.75 * u, ay = edges.bottom - 1.75 * u;
   const buttons: Record<TouchButton, Circle> = {
     attack: { x: ax, y: ay, r: 1.2 * u },
     special: { x: ax - 2.45 * u, y: ay + 0.25 * u, r: u },
     jump: { x: ax + 0.2 * u, y: ay - 2.45 * u, r: u },
     shield: { x: ax - 2.2 * u, y: ay - 2.2 * u, r: 0.85 * u },
   };
-  const stick = { x: 2.2 * u, y: viewH - 2.2 * u, r: 1.25 * u };
+  const stick = { x: edges.left + 2.2 * u, y: edges.bottom - 2.2 * u, r: 1.25 * u };
   return {
     stick,
     buttons,
-    pause: { x: 0.95 * u, y: 0.95 * u, r: 0.55 * u },
+    pause: { x: edges.left + 0.95 * u, y: edges.top + 0.95 * u, r: Math.max(0.6 * u, PAUSE_MIN_CSS / cssScale) },
     split: viewW * 0.45,
     free: { left: stick.x + stick.r + 0.9 * u, right: buttons.special.x - buttons.special.r - 0.3 * u },
   };

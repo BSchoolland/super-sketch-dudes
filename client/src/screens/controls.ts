@@ -2,7 +2,7 @@ import { VIEW_H, VIEW_W } from "../render/camera";
 import { FONT, INK, PENCIL, inkLine } from "../render/paper";
 import { keyHeld, rumble, takeKeyPress, type DeviceId, type MenuInput } from "../input/devices";
 import { bindingsOf, keyName, overridesOf, rebind, release, type KeyAction, type Keyboard } from "../input/bindings";
-import { pointer, type ViewPoint } from "../input/pointer";
+import { pointer, viewBleed, type ViewPoint } from "../input/pointer";
 import { sfx } from "../audio/audio";
 import { ButtonMenu, inside, type Button } from "./buttons";
 import { label, title, settings, saveSettings } from "./ui";
@@ -309,19 +309,23 @@ export class ControlsPage {
 
   /** The controls as a match on this screen lays them out, at the chosen size, on a drawing of the screen. */
   private drawTouch(ctx: CanvasRenderingContext2D): void {
-    const k = SCREEN.w / VIEW_W, h = VIEW_H * k;
+    // the whole screen, as wide as it is: a match draws past the view to its edges, and the controls sit there
+    const bleed = viewBleed(), fullW = VIEW_W + 2 * bleed.x, fullH = VIEW_H + 2 * bleed.y;
+    const k = Math.min(SCREEN.w / fullW, (CHECKS.y - 20 - SCREEN.y) / fullH), w = fullW * k, h = fullH * k;
+    const sx = SCREEN.x + (SCREEN.w - w) / 2;
+    const ox = sx + bleed.x * k, oy = SCREEN.y + bleed.y * k;
     const layout = currentLayout();
-    paperCard(ctx, SCREEN.x, SCREEN.y, SCREEN.w, h);
+    paperCard(ctx, sx, SCREEN.y, w, h);
     ctx.save();
-    ctx.beginPath(); ctx.rect(SCREEN.x, SCREEN.y, SCREEN.w, h); ctx.clip();
-    ctx.translate(SCREEN.x, SCREEN.y);
+    ctx.beginPath(); ctx.rect(sx, SCREEN.y, w, h); ctx.clip();
+    ctx.translate(ox, oy);
     ctx.scale(k, k);
     const s = layout.stick;
     drawTouchControls(ctx, { layout, stick: { ox: s.x, oy: s.y, x: s.x, y: s.y, active: false }, held: () => false, pause: false });
     ctx.restore();
     for (const c of TOUCH_CALLOUTS) {
       const at = c.part === "stick" ? layout.stick : c.part === "pause" ? layout.pause : layout.buttons[c.part];
-      const mid = { x: SCREEN.x + at.x * k, y: SCREEN.y + at.y * k };
+      const mid = { x: ox + at.x * k, y: oy + at.y * k };
       const w = Math.max(c.name ? textWidth(ctx, c.name, NAME, 900) : 0, c.note ? textWidth(ctx, c.note, NOTE, 600) : 0);
       // a label right above what it names hangs its line from under the note
       const above = Math.abs(mid.x - c.x) < w / 2;

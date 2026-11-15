@@ -228,8 +228,19 @@ middle of a stick over several frames, so a fast push is sent as one frame at re
 as a flick (dash from a walk, roll, spot dodge, platform drop); ATTACK within 8 frames of a flick adds a 2-frame
 right-stick pulse, the keyboard SMASH key's, for the smash. JUMP with ATTACK within 3 frames drops JUMP before the jump
 squat ends: a short hop. A match screen arms the controls every tick (`VersusScreen.armControls`, from app.ts) and
-they are live only while it runs; the HUD keeps to the space between them (`Renderer.hudBand`). A match played on them
-counts on the session's `touch.matches`, which the funnel's "on touch" column reads.
+they are live only while it runs; the HUD keeps to the space between them (`Renderer.hudBand`), drawn up to a
+readable size on a small screen (`Renderer.hudScale`). A match played on them counts on the session's
+`touch.matches`, which the funnel's "on touch" column reads.
+
+A match that shows the controls draws to the screen's edges, not just the 16:9 view: `Camera.bleed` is the letterbox a
+wider (or taller) screen leaves (`viewBleed`, input/pointer.ts), app.ts clips to it, and the backdrop, stage art and
+flashes fill it; the camera still frames the fight for the view, so a wider phone just sees more stage around it. The
+controls sit at the screen's real edges (`touchLayout`'s `edges`), inside the safe-area insets (`stageInsets`, turn.ts,
+turned with the stage), so the thumbs rest where they naturally do and the right thumb's buttons cover less of the
+fight. On touch the pause menu and the result screen are finger-sized with no keys written on them; REMATCH and MENU
+sit under ATTACK and the stick and take a tap only 2 s after the result is up, so a thumb still mashing ATTACK as the
+last stock goes doesn't rematch. Practice has no practice key on touch: its reset and dummy toggle are in the pause
+menu.
 
 ### Held upright
 
@@ -259,7 +270,8 @@ even the manifest link. Opened from the home screen (`manifest.webmanifest`, dis
   After 6 s it offers "tap to play anyway", for the rest of the page's life. Once the bars are tucked nothing may
   scroll the page or they come back: the canvas is `touch-action: none`, and a document listener cancels every
   touchmove and pinch except on the card, in the open about sections, or in a text box with more to show. The card
-  stays down while the sections are open or a text field has the keyboard.
+  stays down while the sections are open or a text field has the keyboard, and never comes up over a match: bars that
+  came back mid-match (a turn of the phone) get the card once the match screen is gone.
 
 What happened is on the session's `bars` list (mode, the card shown and why it went, with the viewport and screen).
 `node scripts/barscheck.mjs` checks it in emulation (WebKit iPhone, Chromium Android, a desktop, an iframe): the bars
