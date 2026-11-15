@@ -104,7 +104,7 @@ export interface Settings {
 export const MAYHEM: { name: string; seconds: number }[] = [
   { name: "CALM", seconds: 20 }, { name: "LIVELY", seconds: 10 }, { name: "ROWDY", seconds: 6 }, { name: "MAYHEM", seconds: 3 },
 ];
-export const settings: Settings = { volume: 0.8, music: 0.5, mayhem: 3, tapJump: true, rumble: true, stocks: 3, time: 0, cpuTier: DEFAULT_TIER, advanced: false, extraStages: false, keys: {}, keys2: {}, pad: {}, touch: "auto", touchSize: 1 };
+export const settings: Settings = { volume: 0.8, music: 0.5, mayhem: 1, tapJump: true, rumble: true, stocks: 3, time: 0, cpuTier: DEFAULT_TIER, advanced: false, extraStages: false, keys: {}, keys2: {}, pad: {}, touch: "auto", touchSize: 1 };
 export function loadSettings(): void {
   try { Object.assign(settings, JSON.parse(localStorage.getItem("sketchbattle.settings") ?? "{}")); } catch { /* ignore */ }
   applyKeys();
