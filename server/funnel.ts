@@ -4,7 +4,7 @@ import type { StoredEvent } from "./eventlog";
 import { sourceOf, visitors } from "./visitors";
 
 /** How far visitors (see visitors.ts) got, per source, from the wide event store. */
-export const STEPS = ["arrived", "guest", "drew", "forged", "forgeDone", "played", "bots", "online", "phoneCard", "signedIn", "cameBack"] as const;
+export const STEPS = ["arrived", "guest", "drew", "forged", "forgeDone", "played", "bots", "online", "touch", "signedIn", "cameBack"] as const;
 export type Step = (typeof STEPS)[number];
 export type Counts = Record<Step, number>;
 export interface FunnelRow { source: string; counts: Counts }
@@ -13,7 +13,7 @@ export interface Funnel {
   total: Counts;
   sessions: number;
   excluded: { sessions: number; visitors: number; why: Record<string, number> };
-  /** Sessions whose only snapshot is the opening one: no screen ever reached the server (the phone card's aside). */
+  /** Sessions whose only snapshot is the opening one: no screen ever reached the server. */
   screenless: number;
   /** Players who sent a forge job in the window without a page session in it. */
   orphanForges: number;
@@ -72,7 +72,7 @@ export function funnel(events: StoredEvent[], since: number, timeZone: string, s
       played: bots || net,
       bots,
       online: net,
-      phoneCard: list.some((s) => !!s.business.phoneCard),
+      touch: list.some((s) => ((s.business.touch as { matches: number } | undefined)?.matches ?? 0) > 0),
       signedIn: players.some((id) => !isGuest(id)),
       cameBack: days.size > 1 || list.some((s) => { const first = sourceOf(s)?.first; return !!first && day.format(first.at) < firstDay; }),
     };
@@ -82,7 +82,7 @@ export function funnel(events: StoredEvent[], since: number, timeZone: string, s
     for (const k of STEPS) if (reached[k]) { counts[k]++; total[k]++; }
   }
 
-  const screenless = sessions.filter((s) => s.seq === 1 && !s.business.screens && !s.business.phoneCard).length;
+  const screenless = sessions.filter((s) => s.seq === 1 && !s.business.screens).length;
   const rows = [...bySource].map(([source, counts]) => ({ source, counts })).sort((a, b) => b.counts.arrived - a.counts.arrived || a.source.localeCompare(b.source));
   const orphanForges = [...forged].filter((owner) => !all.has(owner)).length;
   return { rows, total, sessions: new Set(sessions.map((s) => s.trace)).size, excluded, screenless, orphanForges };

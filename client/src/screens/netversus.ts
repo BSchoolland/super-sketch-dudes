@@ -179,6 +179,10 @@ export class NetVersusScreen extends VersusScreen {
     cleanup = this.cleanupMatch;
   }
 
+  protected override running(): boolean {
+    return super.running() && this.go && !this.failure && !this.swapAt && !this.handedOff;
+  }
+
   override update(dt: number, menu: MenuInput): Screen | null {
     if (this.handedOff) return null;
     this.opts.transport.watch?.();

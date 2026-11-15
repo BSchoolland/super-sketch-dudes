@@ -5,13 +5,16 @@
 //   2. The title's tab opens the sections: the page scrolls to them, the keys scroll the page and not the menu, the
 //      pictures load; PLAY scrolls back up to the game, which takes the keys again; so does scrolling back up.
 //   3. A match: no tab, no scrolling.
-//   4. The addresses: /play/... redirects, /play/gen/ and /gen/ both serve fighters, robots.txt and sitemap.xml.
+//   4. A phone, sideways and upright (the game turned, client/src/turn.ts): the tab by touch, the sections upright, PLAY
+//      by touch; a touch match never scrolls the page.
+//   5. The addresses: /play/... redirects, /play/gen/ and /gen/ both serve fighters, robots.txt and sitemap.xml.
 // Usage: node scripts/frontcheck.mjs [--shots <dir>]   (screenshots default to /tmp/ssd-front-shots; SERVER_PORT 3731)
 import { chromium } from "playwright";
 import { spawn, execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { viewToCss } from "./lib/view.mjs";
 
 const SERVER_PORT = Number(process.env.SERVER_PORT ?? 3731);
 const shotsAt = process.argv.indexOf("--shots");
@@ -22,6 +25,8 @@ const site = `http://localhost:${SERVER_PORT}`;
 const fail = (message) => { throw new Error(message); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+const PHONE = { viewport: { width: 844, height: 390 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, userAgent: "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36" };
+const UPRIGHT = { ...PHONE, viewport: { width: 390, height: 844 } };
 const DESKTOP = { viewport: { width: 1280, height: 720 } };
 /** The title's tab, in the 1920x1080 view (client/src/screens/title.ts). */
 const TAB = { x: 1920 - 430 + 84, y: 1080 - 22 };
@@ -44,25 +49,49 @@ function seed() {
   });
 }
 
-/** A view point in CSS pixels on a page of this size. */
+/** Fingers on a page's screen (CDP touch events, so they are real touches with real gestures). */
+class Fingers {
+  constructor(page, cdp) { this.page = page; this.cdp = cdp; }
+  static async on(page) { return new Fingers(page, await page.context().newCDPSession(page)); }
+  touch(type, x, y) { return this.cdp.send("Input.dispatchTouchEvent", { type, touchPoints: type === "touchEnd" ? [] : [{ id: 1, x, y, radiusX: 8, radiusY: 8, force: 1 }] }); }
+  async tap(x, y) { await this.touch("touchStart", x, y); await sleep(60); await this.touch("touchEnd"); }
+  /** Two fingers spread apart around (x, y), as a zoom would be. */
+  async pinch(x, y) {
+    const at = (d) => [{ id: 1, x: x - d, y, radiusX: 8, radiusY: 8, force: 1 }, { id: 2, x: x + d, y, radiusX: 8, radiusY: 8, force: 1 }];
+    await this.cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: at(20) });
+    for (let d = 30; d <= 160; d += 10) { await this.cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: at(d) }); await sleep(16); }
+    await this.cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  }
+  /** A finger dragged from (x, y) by dy, as a scroll would be. */
+  async drag(x, y, dy) {
+    await this.touch("touchStart", x, y);
+    for (let i = 1; i <= 10; i++) { await this.touch("touchMove", x, y + (dy * i) / 10); await sleep(16); }
+    await this.touch("touchEnd");
+  }
+}
+
+/** A view point in CSS pixels on a page of this size. The only upright page is a phone's, which turns the game. */
 function toCss(page, vx, vy) {
-  const { width: w, height: h } = page.viewportSize();
-  const s = Math.min(w / 1920, h / 1080);
-  return [(w - 1920 * s) / 2 + vx * s, (h - 1080 * s) / 2 + vy * s];
+  const v = page.viewportSize();
+  return viewToCss(v, v.height > v.width, vx, vy);
 }
 
 const scrollState = (p) => p.evaluate(() => ({
   y: window.scrollY, open: document.documentElement.classList.contains("about"),
   scrollable: document.documentElement.scrollHeight > window.innerHeight, scrollbar: window.innerWidth - document.documentElement.clientWidth,
   canvas: [document.getElementById("game").clientWidth, document.getElementById("game").clientHeight, window.innerWidth, window.innerHeight],
-  about: document.getElementById("about").offsetTop,
+  about: document.getElementById("about").offsetTop, turned: document.documentElement.classList.contains("turned"),
 }));
 async function locked(p, label) {
   const s = await scrollState(p);
   const zoom = await p.evaluate(() => window.visualViewport.scale);
   if (zoom !== 1) fail(`${label}: the page is zoomed to ${zoom}`);
   if (s.y !== 0 || s.open || s.scrollable || s.scrollbar) fail(`${label}: the page can scroll: ${JSON.stringify(s)}`);
-  if (s.canvas[0] !== s.canvas[2] || s.canvas[1] !== s.canvas[3]) fail(`${label}: the canvas isn't the viewport: ${s.canvas}`);
+  // a phone held upright turns the game: the canvas is the viewport on its side
+  const [w, h] = s.turned ? [s.canvas[3], s.canvas[2]] : [s.canvas[2], s.canvas[3]];
+  if (s.canvas[0] !== w || s.canvas[1] !== h) fail(`${label}: the canvas isn't the viewport: ${s.canvas}`);
+  const v = p.viewportSize(), handheld = await p.evaluate(() => document.documentElement.classList.contains("handheld"));
+  if (s.turned !== (handheld && v.height > v.width)) fail(`${label}: turned is ${s.turned} at ${v.width}x${v.height}`);
 }
 /** Waits for a smooth scroll to stop. */
 async function settled(p) {
@@ -164,7 +193,66 @@ try {
   await desk.screenshot({ path: path.join(shots, "desktop-5-match.png") });
   console.log(`  ${await screenName(desk)}: no tab, no scrolling`);
 
-  console.log("4. the addresses");
+  console.log("4. a phone");
+  for (const [name, device] of [["phone", PHONE], ["upright", UPRIGHT]]) {
+    const p = await page(name, device);
+    const f = await Fingers.on(p);
+    await p.goto(site);
+    await toTitle(p);
+    await sleep(1500);
+    await locked(p, `${name} title`);
+    await f.drag(...toCss(p, 960, 700), -300);
+    await f.pinch(...toCss(p, 960, 540));
+    await sleep(400);
+    await locked(p, `${name} title after a swipe and a pinch`);
+    await p.screenshot({ path: path.join(shots, `${name}-1-title.png`) });
+    await f.tap(...toCss(p, TAB.x, TAB.y));
+    await p.waitForFunction(() => document.documentElement.classList.contains("about"));
+    await settled(p);
+    if (await p.evaluate(() => document.documentElement.classList.contains("turned"))) fail(`${name}: the about sections are turned`);
+    await p.screenshot({ path: path.join(shots, `${name}-2-about.png`) });
+    await p.evaluate(() => window.scrollBy(0, window.innerHeight * 2));
+    await settled(p);
+    await p.screenshot({ path: path.join(shots, `${name}-3-about-more.png`) });
+    if (name === "phone") {
+      const [x, y] = await p.evaluate(() => { const r = document.querySelector("#about .facts").getBoundingClientRect(); return [r.left + r.width / 2, Math.max(40, r.top + 20)]; });
+      await f.pinch(x, Math.min(y, 300));
+      await sleep(400);
+      const zoom = await p.evaluate(() => window.visualViewport.scale);
+      console.log(`  a pinch on the about text zooms it to ${zoom.toFixed(2)}`);
+      if (zoom <= 1) fail("the about sections can't be zoomed");
+      await p.evaluate(() => document.querySelector("#about .hero a.up").click());
+      await p.waitForFunction(() => window.scrollY === 0, null, { timeout: 10000 });
+      // zoom back out, as a reader would, before the title is checked
+      const cdp = await p.context().newCDPSession(p);
+      await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: 1 });
+      await sleep(300);
+      await f.tap(...toCss(p, TAB.x, TAB.y));
+      await settled(p);
+    }
+    await p.locator("#about .hero a.up").scrollIntoViewIfNeeded();
+    await settled(p);
+    await p.locator("#about .hero a.up").tap();
+    await p.waitForFunction(() => window.scrollY === 0 && !document.documentElement.classList.contains("about"), null, { timeout: 10000 });
+    await locked(p, `${name} back at the title`);
+    if ((await screenName(p)) !== "TitleScreen") fail(`${name}: PLAY left ${await screenName(p)}`);
+    await p.screenshot({ path: path.join(shots, `${name}-4-back.png`) });
+    console.log(`  ${name}: the tab and PLAY by touch`);
+  }
+  const phone = await page("phone match", PHONE);
+  const pf = await Fingers.on(phone);
+  await phone.goto(`${site}/?quick=1&p2=cpu&cpu=1&seed=3`);
+  await phone.waitForFunction(() => window.sketchbattle?.screen?.match && window.sketchbattle.screen.countdown <= 0, null, { timeout: 30000 });
+  await pf.tap(...toCss(phone, 1500, 900));
+  await phone.waitForFunction(() => window.sketchbattle.touch.shown, null, { timeout: 5000 });
+  for (const dy of [-250, 250, -250]) await pf.drag(...toCss(phone, 960, 540), dy);
+  await pf.pinch(...toCss(phone, 960, 540));
+  await sleep(400);
+  await locked(phone, "touch match");
+  await phone.screenshot({ path: path.join(shots, "phone-5-touch-match.png") });
+  console.log("  a touch match: the controls show, swipes and pinches never scroll or zoom the page");
+
+  console.log("5. the addresses");
   const head = (u) => fetch(`${site}${u}`, { redirect: "manual" });
   for (const [from, to] of [["/play", "/"], ["/play/", "/"], ["/play/?ref=x", "/?ref=x"], ["/play/privacy", "/privacy"], ["/play/house/rocket/bundle.json", "/house/rocket/bundle.json"]]) {
     const r = await head(from);

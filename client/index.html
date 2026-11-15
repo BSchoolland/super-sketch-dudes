@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <!--front-head--><title>SUPER SKETCH DUDES</title><!--/front-head-->
   <meta name="theme-color" content="#f4efe4" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Sketch Dudes" />
   <link rel="icon" href="%BASE_URL%favicon.ico" sizes="32x32" />
   <link rel="icon" href="%BASE_URL%icon.png" type="image/png" />
   <link rel="apple-touch-icon" href="%BASE_URL%apple-touch-icon.png" />
@@ -12,8 +15,7 @@
   <link rel="stylesheet" href="./src/style.css" />
 </head>
 <body>
-  <canvas id="game"></canvas>
-  <div id="overlay"></div>
+  <div id="stage"><canvas id="game"></canvas><div id="overlay"></div></div>
   <!--front-body--><!--/front-body-->
   <script type="module" src="./src/main.ts"></script>
 </body>

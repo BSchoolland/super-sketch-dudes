@@ -1,7 +1,6 @@
 // ===== EVERY WORD ON supersketchdudes.com BESIDES THE GAME'S OWN =====
-// The about sections under the game, the title screen's tab that opens them, and the card phones get instead of the
-// game. Visitors and search engines read all of this, the alt text and the meta tags too. Plain text: the page escapes
-// it. Never say "forge" here.
+// The about sections under the game, and the title screen's tab that opens them. Visitors and search engines read all
+// of this, the alt text and the meta tags too. Plain text: the page escapes it. Never say "forge" here.
 
 export const HOME_COPY = {
   title: "Super Sketch Dudes: draw any character and battle with it",
@@ -9,14 +8,6 @@ export const HOME_COPY = {
   ogImageAlt: "Super Sketch Dudes: hand-drawn fighters battling on a sketchbook page",
 
   tab: "about",
-
-  // client/src/phone.ts: a device with no mouse, trackpad or pen and no controller
-  phoneCard: {
-    text: "Super Sketch Dudes is played with a keyboard or controller. Open it on a computer.",
-    share: "SHARE THE LINK",
-    copied: "link copied",
-    copyFailed: "Couldn't copy it. The address is supersketchdudes.com",
-  },
 
   name: "Super Sketch Dudes",
   pitch: "A platform fighter where you draw any character and battle with it.",
@@ -38,7 +29,7 @@ export const HOME_COPY = {
   facts: [
     "Sketch super awesome dudes, grab community favorites to do battle with, or figure out how to game the system and make stupidly OP characters to ruin friendships.",
     "It's free. New characters are made by AI, which costs me money, so there's a daily limit on how many you can make. Playing has no limit.",
-    "Play with a keyboard and mouse or a controller, on a computer.",
+    "Keyboard, controller or touch all work.",
   ],
 
   whereTitle: "Where to play",

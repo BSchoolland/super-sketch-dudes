@@ -28,8 +28,11 @@ flick it (or use the right stick) for a smash. Shield + a direction rolls; shiel
 shield in the air is an air dodge; shield just before a hit lands parries. Both keyboard players' keys
 can be changed in Settings, Controls (PLAYER 1 / PLAYER 2). Keyboard 2 plays as PLAYER 2 in VS BOTS.
 
-Phones and tablets with no mouse, trackpad or controller get a card that says to open the game on a computer, with
-the about sections under it; a controller connecting starts the game. A touchscreen laptop plays like any computer.
+On a phone or tablet, a match shows touch controls: a stick wherever the left thumb lands, and JUMP, ATTACK,
+SPECIAL and SHIELD on the right (plus pause, top left, where the match can pause). They play as keyboard 1: a light
+push and a tap of ATTACK is a tilt, ATTACK held is the smash, and a flick of the stick with ATTACK smashes at once;
+JUMP with ATTACK is a short hop; SHIELD with a flick rolls or dodges. A key, mouse button or gamepad puts them away
+until the next touch. Settings, Controls (opened by a tap) shows them and sets when they show and their size.
 
 ## Fighters
 
@@ -61,8 +64,10 @@ node scripts/menushots.mjs        # walk the menus and screenshot them
 node scripts/padcheck.mjs         # gamepad smoke test with a fake pad
 node scripts/perfbench.mjs --throttle 4 --dpr 1.25   # frame times on a pretend potato (needs the dev servers)
 node scripts/activitycheck.mjs   # the Discord Activity end to end, Discord stubbed (starts its own servers)
+node scripts/touchcheck.mjs      # the touch controls on emulated phones with real multi-touch: VS BOTS to a KO, quick match and the Activity against a keyboard (starts its own servers)
+node scripts/barscheck.mjs       # the browser's bars on phones, emulated: the iPhone's swipe-up card, Android fullscreen, a desktop untouched (builds, starts its own server)
 node scripts/frontdoorcheck.mjs  # guest play, signing in from a guest, the signup age question, /privacy and /terms (starts its own servers)
-node scripts/frontcheck.mjs      # the front page on the built server: the title's about tab, PLAY back up, no scrolling in matches, the old /play/ addresses (builds, starts its own server)
+node scripts/frontcheck.mjs      # the front page on the built server: the title's about tab, PLAY back up, no scrolling in matches or by touch, the old /play/ addresses (builds, starts its own server)
 node scripts/homeshots.mjs       # the about sections' screenshots, clip and share image into client/public/ (starts its own servers)
 scripts/deploy.sh    # build, ship to personal-server, restart pm2 "sketch-battle" (CI runs this on every push to master)
 ```

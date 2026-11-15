@@ -5,6 +5,7 @@ import { VIEW_H, VIEW_W } from "./render/camera";
 import { PAPER } from "./render/paper";
 import { connectedPads, endInputFrame, readMenu, type DeviceId, type MenuInput } from "./input/devices";
 import { attachPointer, endPointerFrame, endPointerTick, pointer, setPointerTransform } from "./input/pointer";
+import { attachTouch, pad, touchInUse, touchLive, touchShown } from "./input/touch";
 import { OnlineScreen } from "./screens/online";
 import { NetVersusScreen } from "./screens/netversus";
 import { VersusScreen } from "./screens/versus";
@@ -29,6 +30,8 @@ import { site, setSiteBase } from "./base";
 import { swap, type Handoff } from "./handoff";
 import { TitleScreen } from "./screens/title";
 import { closeAbout } from "./about";
+import { startBars } from "./bars";
+import { onStage, stageSize, turned } from "./turn";
 import { tourCardUp, tourDraw, tourSaw, tourTick, tourUpdate } from "./screens/tour";
 
 const NO_MENU: MenuInput = { up: false, down: false, left: false, right: false, confirm: false, back: false, start: false, any: false, from: null };
@@ -44,8 +47,6 @@ export interface MountOptions {
   swap?: (hash: string, handoff: Handoff) => void;
   /** Continue where another bundle left off. */
   resume?: Handoff;
-  /** The stop of a page session main.ts already started (the phone card was up); otherwise mount starts one. */
-  telemetry?: () => void;
 }
 export interface AppController {
   stop(): void;
@@ -63,7 +64,9 @@ export async function mount(opts: MountOptions): Promise<AppController> {
   if (shellSwap) swap.request = (hash, handoff) => shellSwap(hash, { ...handoff, session: sessionTrace() });
   const canvas = opts.canvas;
   const launch = activityLaunch(opts.params, location.host, import.meta.env.DEV);
-  const stopTelemetry = opts.telemetry ?? startTelemetry({ canvas, bundle: swap.hash, continues: opts.resume?.session, ...(launch ? { launch: "discord-activity" } : {}) });
+  const stopTelemetry = startTelemetry({ canvas, bundle: swap.hash, continues: opts.resume?.session, ...(launch ? { launch: "discord-activity" } : {}) });
+  // the website's own page: not the Activity, not the swappable shell (it would start them again at every swap)
+  if (!launch && !shellSwap) startBars(canvas);
   const stopClassTime = watchClassTime();
   loadSettings();
   setVolume(settings.volume);
@@ -74,17 +77,19 @@ export async function mount(opts: MountOptions): Promise<AppController> {
   const pacer = new FramePacer(() => resize());
   function resize(): void {
     const dpr = Math.min(2, window.devicePixelRatio || 1) * pacer.quality;
-    const w = window.innerWidth, h = window.innerHeight;
+    const { w, h } = stageSize();
     canvas.width = Math.floor(w * dpr); canvas.height = Math.floor(h * dpr);
     scale = Math.min(w / VIEW_W, h / VIEW_H) * dpr;
     offX = (canvas.width - VIEW_W * scale) / 2;
     offY = (canvas.height - VIEW_H * scale) / 2;
     setPointerTransform(scale / dpr, offX / dpr, offY / dpr);
     setSpriteScale(scale);
-    noteView({ w, h, dpr, canvasW: canvas.width, canvasH: canvas.height, scale, quality: pacer.quality });
+    noteView({ w, h, turned: turned(), dpr, canvasW: canvas.width, canvasH: canvas.height, scale, quality: pacer.quality });
   }
   const detachPointer = attachPointer(canvas);
-  window.addEventListener("resize", resize);
+  // after the pointer's listeners: a finger the controls take is claimed from the taps
+  const detachTouch = attachTouch(canvas);
+  const stopStage = onStage(resize);
   resize();
 
   function allDevices(): DeviceId[] {
@@ -158,6 +163,7 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     const dt = Math.min(0.25, (now - last) / 1000);
     last = now;
     const menu = readMenu(allDevices());
+    if (screen instanceof VersusScreen) screen.armControls();
     // a tour card takes the input; the screen under it keeps ticking (a lobby stays connected)
     const carded = tourCardUp(screen);
     let next = (carded ? tourUpdate(menu, nav) : null) ?? screen.update(dt, carded ? NO_MENU : menu) ?? takeHandoff();
@@ -239,15 +245,19 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     stop() {
       running = false;
       ticker.terminate();
-      window.removeEventListener("resize", resize);
+      stopStage();
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pageshow", onPageShow);
       detachPointer();
+      detachTouch();
       stopTelemetry();
       stopAudioWatch();
       stopClassTime();
     },
   };
-  (window as any).sketchbattle = { get screen() { return screen; }, get preview() { return (screen as VersusScreen).preview ?? null; }, build: site.build, hash: swap.hash };
+  (window as any).sketchbattle = {
+    get screen() { return screen; }, get preview() { return (screen as VersusScreen).preview ?? null; }, build: site.build, hash: swap.hash,
+    get touch() { return { layout: pad.layout, live: touchLive(), shown: touchShown(), inUse: touchInUse() }; },
+  };
   return controller;
 }

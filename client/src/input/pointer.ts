@@ -1,3 +1,5 @@
+import { toStage } from "../turn";
+
 /**
  * Mouse / touch / pen on the game canvas, in view coordinates (VIEW_W x VIEW_H). Taps are for
  * buttons; `onPointer` hands raw strokes to whoever draws (the draw pad).
@@ -18,16 +20,22 @@ const downs = new Map<number, ViewPoint>();
 const claimed = new Set<number>();
 const listeners = new Set<StrokeListener>();
 
-/** `scale`/`offX`/`offY` in CSS pixels: view (x, y) sits at client (offX + x * scale, offY + y * scale). */
+/** `scale`/`offX`/`offY` in CSS pixels: view (x, y) sits at (offX + x * scale, offY + y * scale) on the stage (turn.ts). */
 export function setPointerTransform(scale: number, offX: number, offY: number): void {
   cssScale = scale; cssOffX = offX; cssOffY = offY;
 }
 
-export function toView(clientX: number, clientY: number): ViewPoint {
-  return { x: (clientX - cssOffX) / cssScale, y: (clientY - cssOffY) / cssScale };
+/** CSS pixels per view pixel. */
+export function viewScale(): number {
+  return cssScale;
 }
 
-/** A view rect in CSS pixels, for DOM laid over the canvas. */
+export function toView(clientX: number, clientY: number): ViewPoint {
+  const p = toStage(clientX, clientY);
+  return { x: (p.x - cssOffX) / cssScale, y: (p.y - cssOffY) / cssScale };
+}
+
+/** A view rect in the stage's CSS pixels (for DOM laid over the canvas, inside the stage). */
 export function viewRectToCss(x: number, y: number, w: number, h: number): { left: number; top: number; width: number; height: number; scale: number } {
   return { left: cssOffX + x * cssScale, top: cssOffY + y * cssScale, width: w * cssScale, height: h * cssScale, scale: cssScale };
 }

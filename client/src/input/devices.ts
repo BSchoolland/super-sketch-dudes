@@ -1,5 +1,6 @@
 import { B, EMPTY_INPUT, type InputFrame } from "../../../shared/input";
 import { bindingsOf } from "./bindings";
+import { endTouchTick, stopTouch, touchFrame, touchInUse } from "./touch";
 import { aboutOpen } from "../about";
 
 export type DeviceId = "kb1" | "kb2" | `pad${number}`;
@@ -15,6 +16,7 @@ window.addEventListener("keydown", (e) => {
   if (e.repeat) return;
   // text fields own their keystrokes; the page does while the about sections are open
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || aboutOpen()) return;
+  stopTouch();
   keys.add(e.code);
   pressedThisFrame.add(e.code);
   pressedAt.set(e.code, inputFrame);
@@ -27,7 +29,7 @@ window.addEventListener("keydown", (e) => {
 window.addEventListener("keyup", (e) => keys.delete(e.code));
 // mouse buttons are keys named Mouse<button>; menus and join prompts leave them alone (`menu: true`)
 const isMouse = (code: string) => code.startsWith("Mouse");
-window.addEventListener("pointerdown", (e) => { if (e.pointerType !== "mouse") return; keys.add(`Mouse${e.button}`); pressedThisFrame.add(`Mouse${e.button}`); });
+window.addEventListener("pointerdown", (e) => { if (e.pointerType !== "mouse") return; stopTouch(); keys.add(`Mouse${e.button}`); pressedThisFrame.add(`Mouse${e.button}`); });
 window.addEventListener("pointerup", (e) => { if (e.pointerType === "mouse") keys.delete(`Mouse${e.button}`); });
 window.addEventListener("pointercancel", (e) => { if (e.pointerType === "mouse") keys.delete(`Mouse${e.button}`); });
 window.addEventListener("contextmenu", (e) => { if (!(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) e.preventDefault(); });
@@ -55,9 +57,11 @@ function dz(v: number, dead = 0.18): number {
 const q = (v: number): number => Math.round(v * 100);
 
 /**
- * Reads a device into a sim input frame. Call once per sim frame. `menu`: for menu navigation, so no mouse buttons.
+ * Reads a device into a sim input frame. Call once per sim frame. `menu`: for menu navigation, so no mouse buttons
+ * and no touch controls. Keyboard 1 is the touch controls while the player is on the touchscreen.
  */
 export function readDevice(dev: DeviceId, opts: { tapJump: boolean; menu?: boolean } = { tapJump: true }): InputFrame {
+  if (dev === "kb1" && !opts.menu && touchInUse()) return touchFrame();
   if (dev === "kb1" || dev === "kb2") {
     const b = bindingsOf(dev);
     // a tap that started and ended between two frames still counts for one frame
@@ -95,6 +99,7 @@ export function readDevice(dev: DeviceId, opts: { tapJump: boolean; menu?: boole
   if (btn(4) || btn(5) || btn(6) || btn(7)) bits |= B.SHIELD;
   if (btn(8)) bits |= B.PRACTICE;
   if (btn(9)) bits |= B.PAUSE;
+  if (bits || ax || ay || cx || cy) stopTouch();
   // tap jump: a stick flick up counts as a jump press for 2 frames and holds while the stick stays up
   if (opts.tapJump) {
     if (ay < -0.7 && prev.ay >= -0.4) prev.jumpFlick = 2;
@@ -157,6 +162,7 @@ export function takeKeyPress(): string | null {
 }
 
 export function endInputFrame(): void {
+  endTouchTick();
   inputFrame++;
   pressedThisFrame.clear();
   typedThisFrame.length = 0;

@@ -2,12 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>SUPER SKETCH DUDES</title>
   <link rel="icon" href="%BASE_URL%icon.png" />
   <style>@font-face { font-family: "Patrick Hand"; src: url("%BASE_URL%fonts/PatrickHand-Regular.ttf") format("truetype"); font-style: normal; font-weight: 100 900; font-display: swap; }</style>
   <style>
-    html, body { margin: 0; height: 100%; background: #f4efe4; overflow: hidden; }
+    html, body { margin: 0; height: 100%; background: #f4efe4; overflow: hidden; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+    input, textarea { -webkit-user-select: text; user-select: text; }
     #game { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; touch-action: none; }
     #overlay { position: fixed; inset: 0; pointer-events: none; }
     #status { position: fixed; left: 12px; bottom: 10px; font: 14px "Patrick Hand", "Comic Sans MS", cursive; color: #29272299; }
