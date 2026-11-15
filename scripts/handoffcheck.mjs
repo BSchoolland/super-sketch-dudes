@@ -41,7 +41,8 @@ try {
   await bots.keyboard.press("Enter");
   await waitScreen(bots, () => window.sketchbattle.screen.context?.room?.bots?.length === 1, "VS BOTS room with its bot");
   // a fresh data dir has no characters: play a house fighter
-  await bots.evaluate(() => { const s = window.sketchbattle.screen; s.mine = { id: "slugbert", name: "SLUGBERT", bundleUrl: "/house/slugbert/bundle.json", house: true, entry: null }; });
+  await bots.evaluate(() => window.sketchbattle.screen.pick({ id: "slugbert", name: "SLUGBERT", bundleUrl: "/house/slugbert/bundle.json", house: true, entry: null }));
+  await waitScreen(bots, () => window.sketchbattle.screen.lobbyDebug()?.members.every((m) => m.fighter), "the pick in the room");
   await bots.evaluate(() => window.sketchbattle.screen.startMatch({ stage: "proving", stocks: 3, time: 0, map: null }));
   await waitScreen(bots, () => window.sketchbattle.screen.constructor.name === "VersusScreen" && window.sketchbattle.screen.countdown <= 0, "the local match running");
   log("VS BOTS match running; restarting the server under it");
