@@ -60,15 +60,14 @@ export interface RoomMember {
   id: number;
   name: string;
   slot: number;
-  /** "" until the member first picks. */
+  /** "" while their token is in their hand: a member with a fighter is ready. */
   fighter: string;
   bundleUrl: string;
-  ready: boolean;
   /** Their side when the room plays teams. */
   team: number;
 }
 
-/** A CPU player the host added to the room; bots take the slots after the members'. */
+/** A CPU player the host added to the room (`fighter` "" until it's put on one); bots take the slots after the members'. */
 export interface RoomBot { fighter: string; bundleUrl: string; level: number; team: number; device?: string }
 
 export interface PublicRoom { code: string; host: string; members: string[] }
@@ -83,6 +82,8 @@ export type RelayMessage =
   /** The call's room holds no more. */
   | { t: "full" }
   | { t: "start"; seed: number; config: unknown; members: Pick<RoomMember, "id" | "name" | "slot">[] }
+  /** To the host: someone pressed FIGHT! with every slot picked; the host opens the stage screen. */
+  | { t: "fight"; from: number }
   /** `frame`: the leaver's last input frame at the relay; every client has every input up to it, and drops the slot after it. */
   | { t: "left"; id: number; slot: number; duringMatch: boolean; frame: number }
   /** Every member's match screen is up: the countdown starts. */

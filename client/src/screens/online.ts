@@ -5,18 +5,19 @@ import { isBundlePath } from "../../../shared/account";
 import { account } from "../account";
 import { fighterLoad } from "../gen";
 import type { FighterChoice } from "../fighters";
-import { CharacterShelf } from "./shelf";
 import { StagePicker, type MatchSetup, type PickerAction } from "./stage";
-import { drawEmptySlot, drawSlotCard, drawTeamTag, portraitMid, setup, slotWidth, slotX, type SlotFighter } from "./battle/slots";
-import { TEAM_COLORS } from "../render/hud";
-import { PENCIL } from "../render/paper";
+import { CharacterSelect, type Seat, type SelectRoom } from "./battle/charselect";
+import type { SlotFighter } from "./battle/slots";
+import { SLOT_COLORS, TEAM_COLORS } from "../render/hud";
+import { FONT, PENCIL } from "../render/paper";
+import { fightBlock } from "../../../shared/lobby";
 import { VIEW_H, VIEW_W } from "../render/camera";
 import { consumeTypedChars, type DeviceId, type MenuInput } from "../input/devices";
 import { touchInUse } from "../input/touch";
 import { sfx } from "../audio/audio";
 import { WebSocketTransport, type PublicRoom, type RelayMessage, type RoomBot, type RoomMember, type Unsubscribe } from "../net/transport";
 import { allChoices } from "../fighters";
-import { CPU_TIERS, DEFAULT_TIER, tierName } from "../../../shared/cpu-skill";
+import { CPU_TIERS, DEFAULT_TIER } from "../../../shared/cpu-skill";
 import { localMatch } from "./localmatch";
 import { bindingsOf, keyName, type Keyboard } from "../input/bindings";
 import { NetVersusScreen, startConfig } from "./netversus";
@@ -24,7 +25,7 @@ import { MatchTelemetry } from "../telemetry/match";
 import { swap, type Handoff } from "../handoff";
 import { MESH_VERSION, roomMesh, type PeerMesh } from "../net/mesh";
 import { activity } from "../activity";
-import { bg, card, hint, keyHint, keysInHand, label, title, hover, clicked, button, backButton, backRect, goTo, arrows, grow, small, tapWord, settings, saveSettings, type Screen, INK } from "./ui";
+import { bg, card, hint, keyHint, keysInHand, label, title, hover, clicked, button, backButton, goTo, grow, small, tapWord, settings, saveSettings, type Screen, INK } from "./ui";
 import { TextField } from "./textfield";
 
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -60,8 +61,9 @@ function adoptMesh(h: Handoff, context: OnlineContext): PeerMesh | null {
   return roomMesh(context.transport, () => context.id);
 }
 
-type Focus = "fighter" | "team" | "ready" | `botFighter:${number}` | `botTeam:${number}` | `botLevel:${number}` | "addBot" | "teams" | "start" | "leave";
 const SLOTS = 6;
+/** The lobby's title: its baseline, and how big. */
+const TITLE_Y = 97, TITLE_SIZE = 64;
 
 export class OnlineScreen implements Screen {
   t = 0;
@@ -72,22 +74,21 @@ export class OnlineScreen implements Screen {
   private polled = -Infinity;
   code = ["A", "A", "A", "A"];
   codePos = 0;
-  /** The stage screen after the host's START: theirs to edit, everyone else's to watch. */
+  /** The stage screen after FIGHT!: the host's to edit, everyone else's to watch. */
   private picker: StagePicker | null = null;
   error = "";
   /** What "waiting" is waiting on. */
   private waitingFor = "CONNECTING…";
   /** Why this VS BOTS room isn't the call's (it was full). */
   private notice = "";
-  /** Keyboard focus in the lobby: your fighter, team and READY, a bot's fighter, team or level, + ADD BOT, TEAMS and START (host), LEAVE. */
-  focus: Focus = "ready";
   nextScreen: Screen | null = null;
   private context: OnlineContext;
   private device: DeviceId = "kb1";
   private unsubscribers: Unsubscribe[] = [];
-  /** What this player can pick in a room: their ready characters. */
-  private shelf: CharacterShelf;
-  private mine: FighterChoice | null;
+  /** The roster, the slots' cards and their tokens. */
+  readonly select: CharacterSelect;
+  /** The fighter picked on the way in, put on for you once you're in the room. */
+  private bring: FighterChoice | null;
   /** JOIN ROOM's code on a touchscreen: an <input> laid unseen over the code boxes, so a tap raises the phone's keyboard. */
   private codeField: TextField | null = null;
 
@@ -137,9 +138,17 @@ export class OnlineScreen implements Screen {
 
   /** `fighter` is the one to bring into the room; a room that's resumed keeps whatever was picked there. */
   constructor(private onExit: () => Screen, entry: OnlineEntry | null, fighter: FighterChoice | null, context?: OnlineContext) {
-    this.shelf = new CharacterShelf(setup().shelfY);
-    this.mine = this.shelf.choices.find((c) => c.id === fighter?.id) ?? null;
-    if (this.mine) this.shelf.show(this.mine.id);
+    this.bring = fighter;
+    this.select = new CharacterSelect(() => this.selectRoom(), {
+      pick: (seat, choice) => (seat.bot ? this.pickBot(seat.bot.index, choice) : this.pick(choice)),
+      fight: () => this.fight(),
+      addBot: () => this.addBot(),
+      removeBot: (i) => this.removeBot(i),
+      stepLevel: (i, d) => this.stepBotLevel(i, d),
+      stepTeam: (seat, d) => (seat.bot ? this.stepBotTeam(seat.bot.index, d) : this.stepTeam(d)),
+      toggleTeams: () => this.toggleTeams(),
+      leave: () => this.leave(),
+    });
     if (context) this.context = context;
     else {
       this.context = { transport: new WebSocketTransport(), mesh: null, id: 0, room: null };
@@ -202,9 +211,9 @@ export class OnlineScreen implements Screen {
     return this.context.room?.code ?? null;
   }
 
-  lobbyDebug(): { code: string; members: { ready: boolean; fighter: string }[] } | null {
+  lobbyDebug(): { code: string; members: { fighter: string }[]; bots: { fighter: string }[] } | null {
     const room = this.context.room;
-    return room ? { code: room.code, members: room.members.map((member) => ({ ready: member.ready, fighter: member.fighter })) } : null;
+    return room ? { code: room.code, members: room.members.map((member) => ({ fighter: member.fighter })), bots: (room.bots ?? []).map((b) => ({ fighter: b.fighter })) } : null;
   }
 
   private updateCreate(m: MenuInput): Screen | null {
@@ -284,60 +293,65 @@ export class OnlineScreen implements Screen {
   private updateLobby(m: MenuInput): Screen | null {
     const room = this.context.room;
     if (!room) throw new Error("lobby phase without room state");
-    const member = room.members.find((candidate) => candidate.id === this.context.id);
-    if (!member) throw new Error("local member missing from room");
+    if (!room.members.some((candidate) => candidate.id === this.context.id)) throw new Error("local member missing from room");
     if (this.picker) { this.onPicker(this.picker.update(m)); return null; }
     if (this.friendInput(m)) return null;
     this.bringFighter();
-    const canStart = this.canStart();
-    const isHost = room.host === this.context.id;
-    const bots = room.bots ?? [];
-    const items: Focus[] = ["fighter", ...(room.teams ? ["team" as const] : []), ...(this.alone() ? [] : ["ready" as const])];
-    if (isHost) {
-      bots.forEach((b, i) => { items.push(`botFighter:${i}`); if (room.teams) items.push(`botTeam:${i}`); if (b.level > 0) items.push(`botLevel:${i}`); });
-      if (room.members.length + bots.length < SLOTS) items.push("addBot");
-      items.push("teams");
-      if (canStart) items.push("start");
-    }
-    items.push("leave");
-    if (!items.includes(this.focus)) this.focus = items.includes("start") ? "start" : items[items.length > 1 ? 1 : 0];
-    if (m.up || m.down) {
-      const i = Math.max(0, items.indexOf(this.focus));
-      this.focus = items[(i + (m.down ? 1 : items.length - 1)) % items.length];
-      sfx.menuMove();
-    }
-    if (m.left || m.right) {
-      const d = m.right ? 1 : -1;
-      const [kind, n] = this.focus.split(":");
-      if (kind === "botFighter") this.stepBotFighter(Number(n), d);
-      else if (kind === "botTeam") this.stepBotTeam(Number(n), d);
-      else if (kind === "botLevel") this.stepBotLevel(Number(n), d);
-      else if (kind === "team") this.stepTeam(d);
-      else if (kind === "teams") this.toggleTeams();
-      else if (!member.ready) this.pickFighter(d);
-    }
-    if (isHost && canStart && this.focus === "ready" && member.ready) this.focus = "start";
-    if (m.confirm) {
-      if (this.focus === "leave") this.leave();
-      else if (this.focus === "start" && isHost && canStart) this.openStagePick();
-      else if (this.focus === "addBot") this.addBot();
-      else if (this.focus === "teams") this.toggleTeams();
-      else if (this.focus === "team") this.stepTeam(1);
-      else if (this.focus.startsWith("botTeam:")) this.stepBotTeam(Number(this.focus.split(":")[1]), 1);
-      else if (this.alone()) { if (canStart) this.openStagePick(); }
-      else if (this.focus === "fighter" || this.focus === "ready") this.toggleReady();
-    }
-    if (m.back) this.leave();
+    this.select.update(m);
     return null;
   }
 
-  /** Two fighters at least, bots and friends counting, on two teams at least in a team battle, and every person ready; friends here can't go online yet. */
-  canStart(): boolean {
+  /** The room as the character select draws it: its members in slot order, then its bots. */
+  private selectRoom(): SelectRoom {
     const room = this.context.room;
-    if (!room) return false;
-    if (!this.alone() && (room.bots ?? []).some((b) => b.level === 0)) return false;
-    if (room.teams && this.oneTeam()) return false;
-    return room.members.length + (room.bots?.length ?? 0) >= 2 && (this.alone() || room.members.every((candidate) => candidate.ready));
+    if (!room) throw new Error("character select without a room");
+    const hosting = room.host === this.context.id && this.phase === "lobby";
+    const bots = room.bots ?? [];
+    const color = (slot: number, team: number) => (room.teams ? TEAM_COLORS[team] : SLOT_COLORS[slot]);
+    const seats: Seat[] = [...room.members].sort((a, b) => a.slot - b.slot).map((member, slot) => ({
+      key: `m${member.id}`,
+      who: `${member.name}${member.id === room.host && room.members.length > 1 ? " · HOST" : ""}`,
+      tag: `P${slot + 1}`,
+      color: color(slot, member.team),
+      team: member.team,
+      fighter: member.fighter,
+      card: cardFighter(member.fighter, member.bundleUrl),
+      ours: member.id === this.context.id,
+      mine: member.id === this.context.id,
+    }));
+    const cpus = bots.filter((b) => b.level > 0).length;
+    let cpu = 0;
+    bots.forEach((b, index) => {
+      const slot = seats.length, friend = b.level === 0;
+      if (!friend) cpu++;
+      seats.push({
+        key: `b${index}`,
+        who: friend ? `PLAYER ${slot + 1}` : `CPU ${cpu}`,
+        tag: friend ? `P${slot + 1}` : cpus > 1 ? `CPU${cpu}` : "CPU",
+        color: color(slot, b.team),
+        team: b.team,
+        fighter: b.fighter,
+        card: cardFighter(b.fighter, b.bundleUrl),
+        ours: hosting,
+        mine: false,
+        bot: { index, level: b.level, ...(friend ? { device: (b.device ?? "kb2") as DeviceId } : {}) },
+      });
+    });
+    return {
+      seats,
+      teams: room.teams,
+      host: hosting,
+      canAdd: hosting && seats.length < SLOTS,
+      block: fightBlock({ members: room.members, bots, teams: room.teams }),
+      loading: this.phase !== "lobby",
+      back: this.context.hidden ? "BACK" : room.call ? "MENU" : "LEAVE",
+    };
+  }
+
+  /** Every slot has a fighter, on two teams at least in a team battle; friends here can't go online yet. */
+  canFight(): boolean {
+    const room = this.context.room;
+    return !!room && fightBlock({ members: room.members, bots: room.bots ?? [], teams: room.teams }) === null;
   }
 
   /** The friend on this computer playing with `device`, if any. */
@@ -347,30 +361,21 @@ export class OnlineScreen implements Screen {
 
   /**
    * Keyboard 2 and the pads belong to friends on this computer: attack or jump on one nobody has drops a friend in;
-   * a friend's left/right picks their fighter, and a pad's B takes them out. True when the input was a friend's.
+   * a friend moves their own highlight over the roster. True when the input was a friend's.
    */
   private friendInput(m: MenuInput): boolean {
     const room = this.context.room;
     const from = m.from;
     if (!room || room.host !== this.context.id || !from || from === this.device) return false;
     if (from !== "kb2" && !from.startsWith("pad")) return false;
-    const bots = room.bots ?? [];
-    const i = bots.findIndex((b) => b.level === 0 && b.device === from);
-    if (i < 0) {
+    const seat = this.selectRoom().seats.find((s) => s.bot?.device === from);
+    if (!seat) {
       if (!m.confirm) return false;
       this.addFriend(from);
       return true;
     }
-    if (m.left || m.right) this.stepBotFighter(i, m.right ? 1 : -1);
-    if (m.back) this.removeBot(i);
-    return m.left || m.right || m.back || m.up || m.down || m.confirm;
-  }
-
-  /** A team battle with everyone on the same side. */
-  private oneTeam(): boolean {
-    const room = this.context.room;
-    if (!room) return false;
-    return new Set([...room.members.map((m) => m.team), ...(room.bots ?? []).map((b) => b.team)]).size < 2;
+    this.select.updateFriend(seat, m);
+    return m.left || m.right || m.back || m.up || m.down || m.confirm || m.start;
   }
 
   /** The side for a bot or friend arriving in a team battle (see smallestTeam); red outside one. */
@@ -404,23 +409,14 @@ export class OnlineScreen implements Screen {
     sfx.menuMove();
   }
 
-  /** A friend on this computer playing with `device`, on whoever's in the room least. */
+  /** A friend on this computer playing with `device`, their token in hand. */
   private addFriend(device: DeviceId): void {
     const room = this.context.room;
     if (!room || room.host !== this.context.id) return;
     const bots = room.bots ?? [];
     if (room.members.length + bots.length >= SLOTS) return;
-    const used = [...room.members.map((x) => x.fighter), ...bots.map((b) => b.fighter)];
-    const choices = this.botChoices();
-    const pick = choices.find((c) => !used.includes(c.id)) ?? choices[0];
-    if (!pick) return;
-    this.sendBots([...bots, { fighter: pick.id, bundleUrl: pick.bundleUrl, level: 0, team: this.arrivingTeam(), device }]);
+    this.sendBots([...bots, { fighter: "", bundleUrl: "", level: 0, team: this.arrivingTeam(), device }]);
     sfx.menuConfirm();
-  }
-
-  /** Nobody else in the room: READY means nothing, START is enough. */
-  private alone(): boolean {
-    return this.context.room?.members.length === 1;
   }
 
   /** What a host can give a bot: the house fighters, then their own. */
@@ -429,21 +425,19 @@ export class OnlineScreen implements Screen {
     return [...house, ...mine];
   }
 
+  /** The room's new bot list, here at once (the relay's copy follows). */
   private sendBots(bots: RoomBot[]): void {
+    if (this.context.room) this.context.room.bots = bots;
     this.context.transport.sendLobby({ t: "bots", bots });
   }
 
-  /** A new bot plays whoever's in the room least, at the level last used. */
+  /** A new bot, its token in hand, at the level last used. */
   addBot(): void {
     const room = this.context.room;
     if (!room || room.host !== this.context.id) return;
     const bots = room.bots ?? [];
     if (room.members.length + bots.length >= SLOTS) return;
-    const used = [...room.members.map((m) => m.fighter), ...bots.map((b) => b.fighter)];
-    const choices = this.botChoices();
-    const fresh = choices.find((c) => !used.includes(c.id)) ?? choices[0];
-    if (!fresh) return;
-    this.sendBots([...bots, { fighter: fresh.id, bundleUrl: fresh.bundleUrl, level: settings.cpuTier || DEFAULT_TIER, team: this.arrivingTeam() }]);
+    this.sendBots([...bots, { fighter: "", bundleUrl: "", level: settings.cpuTier || DEFAULT_TIER, team: this.arrivingTeam() }]);
     sfx.menuConfirm();
   }
 
@@ -454,15 +448,13 @@ export class OnlineScreen implements Screen {
     sfx.menuBack();
   }
 
-  private stepBotFighter(i: number, d: number): void {
-    const bots = [...(this.context.room?.bots ?? [])];
-    const choices = this.botChoices();
-    if (!bots[i] || !choices.length) return;
-    const at = choices.findIndex((c) => c.id === bots[i].fighter);
-    const next = choices[(at + d + choices.length) % choices.length];
-    bots[i] = { ...bots[i], fighter: next.id, bundleUrl: next.bundleUrl };
+  /** The host puts bot `i`'s token on `choice`, or (null) takes it back. */
+  pickBot(i: number, choice: FighterChoice | null): void {
+    const room = this.context.room;
+    const bots = [...(room?.bots ?? [])];
+    if (!room || room.host !== this.context.id || !bots[i]) return;
+    bots[i] = { ...bots[i], fighter: choice?.id ?? "", bundleUrl: choice?.bundleUrl ?? "" };
     this.sendBots(bots);
-    sfx.menuMove();
   }
 
   /** The level sticks as the default for the next bot. */
@@ -477,45 +469,34 @@ export class OnlineScreen implements Screen {
     sfx.menuMove();
   }
 
-  toggleReady(): void {
-    const room = this.context.room;
-    const member = room?.members.find((candidate) => candidate.id === this.context.id);
-    if (!room || !member) return;
-    if (!member.fighter) return;
-    this.context.transport.sendLobby({ t: "pick", fighter: member.fighter, bundleUrl: member.bundleUrl, ready: !member.ready });
-    member.ready ? sfx.menuBack() : sfx.menuConfirm();
-  }
-
-  pickFighter(dir: number): void {
-    const room = this.context.room;
-    const member = room?.members.find((candidate) => candidate.id === this.context.id);
-    if (!room || !member || member.ready) return;
-    const choices = this.shelf.choices;
-    if (!choices.length) return;
-    const index = choices.findIndex((c) => c.id === member.fighter);
-    this.pick(choices[(index + dir + choices.length) % choices.length]);
-    this.shelf.show(this.mine!.id);
-    sfx.menuMove();
-  }
-
-  /** Arriving in a room (or the library arriving after you): bring the fighter picked on the way in, or your first. */
+  /** Arriving in a room: the fighter picked on the way in goes on for you, once. */
   private bringFighter(): void {
     const me = this.context.room?.members.find((member) => member.id === this.context.id);
-    const choice = this.mine ?? this.shelf.choices[0];
-    if (me && !me.fighter && choice) this.pick(choice);
+    if (!me || !this.bring) return;
+    if (!me.fighter) this.pick(this.bring);
+    this.bring = null;
   }
 
-  private pick(choice: FighterChoice): void {
-    this.mine = choice;
-    this.context.transport.sendLobby({ t: "pick", fighter: choice.id, bundleUrl: choice.bundleUrl, ready: false });
+  /** Your token on `choice`, or (null) back in your hand; the room shows it at once, the relay's copy follows. */
+  pick(choice: FighterChoice | null): void {
+    const me = this.context.room?.members.find((member) => member.id === this.context.id);
+    if (me) { me.fighter = choice?.id ?? ""; me.bundleUrl = choice?.bundleUrl ?? ""; }
+    this.context.transport.sendLobby({ t: "pick", fighter: choice?.id ?? "", bundleUrl: choice?.bundleUrl ?? "" });
   }
 
-  /** The host's START: everyone moves to the stage screen, the host picking. */
+  /** FIGHT!, from anyone in the room: the host opens the stage screen, a guest asks the host's to. */
+  fight(): void {
+    const room = this.context.room;
+    if (!room || this.phase !== "lobby" || this.picker || !this.canFight()) return;
+    if (room.host === this.context.id) { this.openStagePick(); return; }
+    this.context.transport.sendLobby({ t: "fight" });
+    sfx.menuConfirm();
+  }
+
+  /** The host's FIGHT! (or a guest's, passed on by the relay): everyone moves to the stage screen, the host picking. */
   openStagePick(): void {
     const room = this.context.room;
-    if (!room || room.host !== this.context.id || !this.canStart()) return;
-    const me = room.members.find((m) => m.id === this.context.id);
-    if (me && !me.ready) this.context.transport.sendLobby({ t: "pick", fighter: me.fighter, bundleUrl: me.bundleUrl, ready: true });
+    if (!room || room.host !== this.context.id || room.picking || this.picker || !this.canFight()) return;
     this.context.transport.sendLobby({ t: "picking", pick: new StagePicker(false).setup });
     sfx.menuConfirm();
   }
@@ -590,6 +571,8 @@ export class OnlineScreen implements Screen {
       this.followPicking(message);
       this.bringFighter();
     }
+    // someone else's FIGHT!, sent to the host
+    if (message.t === "fight") this.openStagePick();
     if (message.t === "rooms") this.rooms = message.rooms;
     if (message.t === "waiting") this.waitingFor = "MATCH IN PROGRESS";
     // more people opened the game than a room holds: this one plays bots on their own
@@ -698,123 +681,25 @@ export class OnlineScreen implements Screen {
       this.onPicker(this.picker.draw(ctx, this.t, `${host?.name ?? "the host"} is picking the stage`));
       return;
     }
-    const SETUP = setup(), aside = grow(24, 11);
-    if (this.context.hidden) {
-      title(ctx, this.context.hidden === "local" ? "SAME KEYBOARD" : "VS BOTS", VIEW_W / 2, SETUP.titleY, 52);
-      if (this.notice) label(ctx, this.notice, VIEW_W / 2 + 160, SETUP.titleY - 4, aside, PENCIL, "left");
-    } else if (room.call) {
-      title(ctx, "THIS CALL", VIEW_W / 2, SETUP.titleY, 52);
-      label(ctx, `room ${room.code}`, VIEW_W / 2 + 200, SETUP.titleY - 4, aside, PENCIL, "left");
-    } else {
-      title(ctx, `ROOM ${room.code}`, VIEW_W / 2, SETUP.titleY, 52);
-      label(ctx, room.public ? "public" : "private", VIEW_W / 2 + 190, SETUP.titleY - 4, aside, PENCIL, "left");
+    const [head, aside] = this.context.hidden
+      ? [this.context.hidden === "local" ? "SAME KEYBOARD" : "VS BOTS", this.notice]
+      : room.call ? ["THIS CALL", `room ${room.code}`] : [`ROOM ${room.code}`, room.public ? "public" : "private"];
+    title(ctx, head, VIEW_W / 2, TITLE_Y, TITLE_SIZE);
+    if (aside) {
+      ctx.font = `900 ${TITLE_SIZE}px ${FONT}`;
+      label(ctx, aside, VIEW_W / 2 + ctx.measureText(head).width / 2 + 40, TITLE_Y - 6, grow(24, 11), PENCIL, "left");
     }
-    const me = room.members.find((candidate) => candidate.id === this.context.id);
-    const picked = this.shelf.draw(ctx, this.t, me?.fighter ?? null, !me || me.ready || this.phase !== "lobby");
-    if (picked) { this.pick(picked); this.focus = "fighter"; sfx.menuMove(); }
-    const { slotY, slotH } = SETUP, slotW = slotWidth(SLOTS);
+    this.select.draw(ctx, this.t);
+    if (this.phase !== "lobby") return;
     const bots = room.bots ?? [];
-    const hosting = room.host === this.context.id && this.phase === "lobby";
-    for (let slot = 0; slot < SLOTS; slot++) {
-      const member = room.members.find((candidate) => candidate.slot === slot);
-      const bot = slot >= room.members.length ? bots[slot - room.members.length] : undefined;
-      if (bot) { this.drawBot(ctx, slot, slot - room.members.length, bot, hosting); continue; }
-      if (!member) {
-        // the first free slot is where the host adds a bot; people joining take bots' places
-        if (hosting && slot === room.members.length + bots.length) {
-          if (button(ctx, slotX(slot, SLOTS), slotY, slotW, slotH, "+ ADD BOT", { size: grow(30, 13), focused: this.focus === "addBot" })) this.addBot();
-        } else drawEmptySlot(ctx, slot, this.context.hidden ? "" : "WAITING", SLOTS);
-        continue;
-      }
-      const who = `${member.name}${member.id === room.host && room.members.length > 1 ? " · HOST" : ""}`;
-      const mine = member.id === this.context.id && this.phase === "lobby";
-      const x = drawSlotCard(ctx, slot, room.teams ? "" : who, this.slotFighter(member), { ready: member.ready, focused: member.id === this.context.id && this.focus === "fighter", count: SLOTS, ...this.teamLook(member.team) });
-      if (room.teams && drawTeamTag(ctx, slot, member.team, who, { count: SLOTS, canSwitch: mine, focused: mine && this.focus === "team" })) { this.focus = "team"; this.stepTeam(1); }
-      if (mine && !this.alone()) {
-        const r = small() ? { x: x + 16, y: slotY + slotH - 100, w: slotW - 32, h: 88, size: 34 } : { x: x + 40, y: slotY + slotH - 84, w: slotW - 80, h: 64, size: 26 };
-        if (button(ctx, r.x, r.y, r.w, r.h, member.ready ? "UNREADY" : "READY", { key: "Enter", size: r.size, focused: this.focus === "ready" })) this.toggleReady();
-      } else if (!mine) label(ctx, member.ready ? "READY" : "CHOOSING", x + slotW / 2, slotY + slotH - 42, grow(24, 11));
-    }
-    if (this.phase === "loading") {
-      label(ctx, `loading ${".".repeat(1 + (Math.floor(this.t * 3) % 3))}`, VIEW_W / 2, SETUP.actionY + 46, 36, PENCIL);
-      return;
-    }
-    const canStart = this.canStart();
-    const isHost = room.host === this.context.id;
-    const by = SETUP.actionY;
-    if (isHost) {
-      const start = small() ? { h: 110, size: 44 } : { h: 84, size: 36 };
-      if (button(ctx, VIEW_W / 2 - 170, by, 340, start.h, "START", { key: "Enter", size: start.size, focused: this.focus === "start", disabled: !canStart })) this.openStagePick();
-      const teams = small() ? { y: by, w: 300, h: 110, size: 34 } : { y: by + 10, w: 260, h: 64, size: 26 };
-      if (button(ctx, VIEW_W / 2 + 200, teams.y, teams.w, teams.h, room.teams ? "TEAMS: ON" : "TEAMS: OFF", { size: teams.size, focused: this.focus === "teams" })) { this.focus = "teams"; this.toggleTeams(); }
-    } else label(ctx, canStart ? "waiting for the host to press START" : "everyone readies up, then the host starts", VIEW_W / 2, by + 52, grow(24, 12), INK);
-    const back = backRect();
-    if (button(ctx, back.x, back.y, back.w, back.h, this.context.hidden ? "BACK" : room.call ? "MENU" : "LEAVE", { key: "Esc", size: small() ? 40 : 26, focused: this.focus === "leave" })) this.leave();
-    const fighters = room.members.length + bots.length;
-    const friends = bots.some((b) => b.level === 0);
-    const kb2 = bots.some((b) => b.level === 0 && b.device === "kb2");
-    // with a friend on keyboard 2, both players' keys under START: who uses which side
-    if (kb2 && this.alone()) {
-      if (!keysInHand()) return;
+    const block = fightBlock({ members: room.members, bots, teams: room.teams });
+    if (block === "friends online") hint(ctx, "friends on this computer can only play local games for now: remove them to play online");
+    else if (block === "one team") hint(ctx, `everyone's on one team: ${tapWord()} a team to switch sides`);
+    // a friend on keyboard 2: both players' keys, between BACK and TEAMS
+    else if (room.members.length === 1 && bots.some((b) => b.level === 0 && b.device === "kb2") && keysInHand()) {
       label(ctx, keysOf("kb1"), VIEW_W / 2, VIEW_H - 40, 20, "rgba(41,39,34,0.8)");
       label(ctx, keysOf("kb2"), VIEW_W / 2, VIEW_H - 14, 20, "rgba(41,39,34,0.8)");
-      return;
     }
-    const keys = keysInHand();
-    if (friends && !this.alone()) hint(ctx, "friends on this computer can only play local games for now: remove them to play online");
-    else if (kb2) keyHint(ctx, keysOf("kb2"));
-    else if (room.teams && fighters >= 2 && this.oneTeam()) hint(ctx, `everyone's on one team: ${tapWord()} a team to switch sides`);
-    else if (isHost && !canStart) hint(ctx, fighters >= 2 ? "START unlocks when everyone is ready" : keys ? "add a bot, or a friend: press . (keyboard 2) or A on another controller" : "add a bot to start");
-    else if (isHost && room.members.length + bots.length < SLOTS) keyHint(ctx, "a friend here can join: press . (keyboard 2) or A on another controller");
-    else hint(ctx, keys ? "click a character, or left/right, to pick" : "tap a character to pick it");
-  }
-
-  /** A bot's card: the host steps its fighter and level and can remove it; everyone else just sees it. */
-  private drawBot(ctx: CanvasRenderingContext2D, slot: number, i: number, bot: RoomBot, isHost: boolean): void {
-    const SETUP = setup(), { slotY, slotH } = SETUP, slotW = slotWidth(SLOTS);
-    const friend = bot.level === 0;
-    const who = friend ? `PLAYER ${slot + 1}` : `CPU ${(this.context.room?.bots ?? []).slice(0, i + 1).filter((b) => b.level > 0).length}`;
-    const teams = !!this.context.room?.teams;
-    const x = drawSlotCard(ctx, slot, teams ? "" : who, this.botFighter(bot), { focused: isHost && this.focus === `botFighter:${i}`, count: SLOTS, ...this.teamLook(bot.team) });
-    if (teams && drawTeamTag(ctx, slot, bot.team, who, { count: SLOTS, canSwitch: isHost, focused: isHost && this.focus === `botTeam:${i}` })) { this.focus = `botTeam:${i}`; this.stepBotTeam(i, 1); }
-    const ly = slotY + SETUP.lineY, cx = x + slotW / 2, py = slotY + portraitMid() + 14;
-    // on a small screen each arrow's target is its half of the portrait (or of the level's line), and REMOVE is card-wide
-    const big = small();
-    const fighterArrows = (): number => (big ? arrows(ctx, cx, py, slotW / 2 - 44, 52, { w: slotW / 2 - 6, h: SETUP.portraitH }) : arrows(ctx, cx, py, slotW / 2 - 34, 40));
-    const remove = (): boolean => (big ? button(ctx, x + 16, slotY + slotH - 82, slotW - 32, 70, "REMOVE", { size: 30 }) : button(ctx, cx - 80, slotY + slotH - 52, 160, 40, "REMOVE", { size: 20 }));
-    if (friend) {
-      label(ctx, bot.device === "kb2" ? "keyboard 2" : `pad ${Number(bot.device?.slice(3) ?? 0) + 1}`, cx, ly, grow(24, 11), PENCIL, "center", 800);
-      if (isHost) {
-        const d = fighterArrows();
-        if (d) this.stepBotFighter(i, d);
-        if (remove()) this.removeBot(i);
-      }
-      return;
-    }
-    label(ctx, tierName(bot.level), cx, ly, grow(26, 12), isHost && this.focus === `botLevel:${i}` ? INK : PENCIL, "center", 900, big && isHost ? slotW - 120 : undefined);
-    if (!isHost) return;
-    const d = fighterArrows();
-    if (d) { this.focus = `botFighter:${i}`; this.stepBotFighter(i, d); }
-    const l = big ? arrows(ctx, cx, ly, slotW / 2 - 44, 40, { w: slotW / 2 - 6, h: 76 }) : arrows(ctx, cx, ly, slotW / 2 - 40, 30);
-    if (l) { this.focus = `botLevel:${i}`; this.stepBotLevel(i, l); }
-    if (remove()) this.removeBot(i);
-  }
-
-  /** A card's colour in a team battle: its team's, washed over the card. */
-  private teamLook(team: number): { color?: string; team?: boolean } {
-    return this.context.room?.teams ? { color: TEAM_COLORS[team], team: true } : {};
-  }
-
-  private botFighter(bot: RoomBot): SlotFighter {
-    const load = isBundlePath(bot.bundleUrl, bot.fighter) ? fighterLoad(bot.bundleUrl) : null;
-    const def = load?.state === "ready" ? roster[bot.fighter] : null;
-    return { def, name: def?.name ?? "", pending: load?.state === "failed" ? "didn't load" : "loading …" };
-  }
-
-  private slotFighter(member: RoomMember): SlotFighter {
-    const load = isBundlePath(member.bundleUrl, member.fighter) ? fighterLoad(member.bundleUrl) : null;
-    const def = load?.state === "ready" ? roster[member.fighter] : null;
-    return { def, name: def?.name ?? "", pending: load?.state === "failed" ? "didn't load" : member.fighter ? "loading …" : "choosing" };
   }
 
   private drawError(ctx: CanvasRenderingContext2D): void {
@@ -841,6 +726,14 @@ export class OnlineScreen implements Screen {
     for (const unsubscribe of this.unsubscribers) unsubscribe();
     this.unsubscribers.length = 0;
   }
+}
+
+/** A slot card's fighter: null while the token is in hand; `def` null while it loads. */
+function cardFighter(fighter: string, bundleUrl: string): SlotFighter | null {
+  if (!fighter) return null;
+  const load = isBundlePath(bundleUrl, fighter) ? fighterLoad(bundleUrl) : null;
+  const def = load?.state === "ready" ? roster[fighter] : null;
+  return { def, name: (def?.name ?? "").toUpperCase(), pending: load?.state === "failed" ? "didn't load" : "loading …" };
 }
 
 /** A keyboard player's keys as bound now (they can change them in SETTINGS > CONTROLS). */

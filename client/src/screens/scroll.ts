@@ -22,6 +22,8 @@ export class ScrollView {
   private drag: { mode: "content" | "bar"; from: number; y: number; t: number; velocity: number } | null = null;
   /** The press under way started on the view (or its bar) and hasn't been resolved into a drag or a tap. */
   private pressed = false;
+  /** The press under way is someone else's (a token being carried over the view): it doesn't scroll. */
+  private passed = false;
   private t = 0;
 
   constructor(public view: Rect) {}
@@ -50,8 +52,10 @@ export class ScrollView {
       if (this.drag?.mode === "content") this.target = this.offset - this.drag.velocity * 0.3;
       this.drag = null;
       this.pressed = false;
+      this.passed = false;
       return;
     }
+    if (this.passed) return;
     if (!this.drag && !this.pressed) {
       this.pressed = true;
       if (bar && Math.abs(pointer.downX - (bar.x + bar.w / 2)) < BAR_GRAB / 2 && pointer.downY >= v.y && pointer.downY <= v.y + v.h) {
@@ -98,6 +102,17 @@ export class ScrollView {
   private fromBar(y: number): number {
     const v = this.view, h = this.thumbH;
     return Math.max(0, Math.min(this.max, ((y - v.y) / (v.h - h)) * this.max));
+  }
+
+  /** The press under way isn't for scrolling: call before `tick` on the frame it starts. */
+  passPress(): void {
+    this.passed = true;
+    this.drag = null;
+  }
+
+  /** Scrolls by `px` (content pixels; down is positive), within the content. */
+  nudge(px: number): void {
+    this.target = Math.max(0, Math.min(this.max, this.target + px));
   }
 
   /** Scrolls just enough that content from `top` to `bottom` is on screen, `margin` clear of the edges. */
