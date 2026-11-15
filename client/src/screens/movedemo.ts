@@ -85,7 +85,7 @@ export class MoveDemo {
     this.renderer.cam.pinned = { x: (setup.youX + setup.dummyX) / 2, y: (top + 80) / 2, zoom };
   }
 
-  /** The spring pad under the dummy: wound down until it throws the dummy, then bouncing out and settling. */
+  /** The spring pad under the dummy, leaning the way it throws: wound down until it does, then bouncing out and settling. */
   private drawSpring(ctx: CanvasRenderingContext2D): void {
     const { dummyX, launch } = this.run.setup;
     const t = this.run.frame - launch!.frame;
@@ -93,13 +93,15 @@ export class MoveDemo {
     const w = 70, coils = 5;
     ctx.save();
     this.renderer.cam.apply(ctx);
+    ctx.translate(dummyX, 0);
+    ctx.rotate(Math.atan2(launch!.dx / launch!.frames, launch!.vy) * 0.6);
     ctx.strokeStyle = INK; ctx.lineWidth = 4; ctx.lineJoin = "round"; ctx.lineCap = "round";
     ctx.beginPath();
-    for (let i = 0; i <= coils * 2; i++) ctx.lineTo(dummyX + (i % 2 ? w / 2 - 8 : -w / 2 + 8) * (i === 0 || i === coils * 2 ? 0 : 1), -(i / (coils * 2)) * h);
+    for (let i = 0; i <= coils * 2; i++) ctx.lineTo(i === 0 || i === coils * 2 ? 0 : i % 2 ? w / 2 - 8 : -w / 2 + 8, -(i / (coils * 2)) * h);
     ctx.stroke();
     ctx.fillStyle = PAPER;
-    ctx.fillRect(dummyX - w / 2, -h - 8, w, 8);
-    ctx.strokeRect(dummyX - w / 2, -h - 8, w, 8);
+    ctx.fillRect(-w / 2, -h - 8, w, 8);
+    ctx.strokeRect(-w / 2, -h - 8, w, 8);
     ctx.restore();
   }
 

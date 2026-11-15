@@ -30,8 +30,12 @@ const AWAY_X = 480;
 const STANDING_REACH = 40;
 /** The highest the spring throws the dummy. */
 const MAX_RISE = 600;
-/** The highest a dropped dummy is held (feet), out of sight at any zoom the demo uses and short of the blast zone. */
-const DROP_TOP = -1100;
+/** How far beyond the strike, away from the fighter, the spring pad sits. */
+const PAD_OUT = 260;
+/** The lowest top of a throw: one that comes down onto a strike near the floor still arcs. */
+const MIN_ARC = 160;
+/** The floor's edges (Proving Ground), less a margin for the pad. */
+const FLOOR_EDGE = 520;
 const STICK: Record<Dir, [number, number]> = { n: [0, 0], f: [100, 0], u: [0, -100], d: [0, 100] };
 /**
  * How a rep gets the fighter going: from the ground; a short hop (nair, fair); a full hop (uair, up
@@ -44,16 +48,14 @@ type Approach = "ground" | "shortHop" | "fullHop" | "overhead";
  */
 interface Strike { frame: number; x: number; y: number; shot: boolean; youX: number }
 /**
- * Where the dummy is to be hit. It stands at `dummyX`; for a strike up in the air, either a spring
- * under it throws it up on `launch.frame`, timed to peak where and when the strike comes, or (where
- * the fighter starts, where it can't stand) it falls from `drop.y`, let go on `drop.frame`, to pass
- * through the strike as it comes.
+ * Where the dummy is to be hit. It stands at `dummyX`; for a strike up in the air, or where the
+ * fighter is, a spring pad under it there throws it on `launch.frame` in an arc (`rise` at its top)
+ * that carries it `dx` across in `frames`, meeting the strike where and when it comes.
  */
 export interface Setup {
   youX: number;
   dummyX: number;
-  launch: { frame: number; vy: number; rise: number } | null;
-  drop: { frame: number; y: number } | null;
+  launch: { frame: number; frames: number; dx: number; vy: number; rise: number } | null;
 }
 
 const MOVE_ID: Record<Kind, Partial<Record<Dir, string>>> = {
@@ -148,6 +150,8 @@ export class DemoRun {
   private pressed = false;
   /** Frames left to keep holding the button: a special that charges or keeps firing while held, a smash. */
   private hold = 0;
+  /** The dummy is in its throw, carried across until it's hit. */
+  private flying = false;
   /** Unseen, the dummy out of the way: the first strike, once there's been one. */
   private strike: Strike | null = null;
 
@@ -158,7 +162,7 @@ export class DemoRun {
     you.x = YOU_X; you.facing = 1;
     if (rep?.bar) you.bars[rep.bar] = roster[fighter].bars![rep.bar].max;
     this.inputs = this.state.fighters.map(() => cloneInput(EMPTY_INPUT));
-    this.setup = unseen ? { youX: YOU_X, dummyX: AWAY_X, launch: null, drop: null } : this.place();
+    this.setup = unseen ? { youX: YOU_X, dummyX: AWAY_X, launch: null } : this.place();
     if (them) { them.x = this.setup.dummyX; them.facing = -1; them.percent = 40; }
   }
 
@@ -202,8 +206,9 @@ export class DemoRun {
 
   /**
    * Where the dummy goes: where the move first strikes when played with the dummy away, or a step
-   * away if it never does; a hitbox lands on its near side, a shot on its middle. Standing there or
-   * sprung up to it, if that's clear of where the fighter starts; otherwise dropped onto it.
+   * away if it never does; a hitbox lands on its near side, a shot on its middle. Standing there if
+   * that's on the floor and clear of where the fighter starts; otherwise thrown in an arc off a
+   * spring further out, to meet the strike.
    */
   private place(): Setup {
     const ghost = new DemoRun(this.fighter, this.dummy, this.move, this.rep, true);
@@ -211,22 +216,19 @@ export class DemoRun {
     const s = ghost.strike;
     const you = roster[this.fighter].stats, them = roster[this.dummy ?? this.fighter].stats;
     const clear = (you.width + them.width) / 2;
-    if (!s || !this.dummy) return { youX: YOU_X, dummyX: YOU_X + clear + 60, launch: null, drop: null };
-    const x = s.shot ? s.x : s.x + (Math.sign(s.x - s.youX) || 1) * them.width * 0.3;
+    if (!s || !this.dummy) return { youX: YOU_X, dummyX: YOU_X + clear + 60, launch: null };
+    const side = Math.sign(s.x - s.youX) || 1;
+    const x = s.shot ? s.x : s.x + side * them.width * 0.3;
     const rise = Math.min(MAX_RISE, Math.max(0, -(s.y + them.height / 2)));
-    if (Math.abs(x - YOU_X) >= clear) {
-      if (rise < STANDING_REACH) return { youX: YOU_X, dummyX: x, launch: null, drop: null };
-      const flight = springFlight(this.dummy, rise);
-      return { youX: YOU_X, dummyX: x, launch: { frame: Math.max(0, s.frame - flight.frames), vy: flight.vy, rise: flight.rise }, drop: null };
-    }
-    const falls = fallFrom(this.dummy);
-    // falling from the start, or held out of sight until it has just the drop left to fall
-    const tooHigh = falls.findIndex((d) => -rise - d < DROP_TOP);
-    const n = tooHigh >= 0 ? Math.min(s.frame, tooHigh - 1) : s.frame;
-    return { youX: YOU_X, dummyX: x, launch: null, drop: { frame: s.frame - n, y: -rise - falls[n] } };
+    if (rise < STANDING_REACH && Math.abs(x - YOU_X) >= clear) return { youX: YOU_X, dummyX: x, launch: null };
+    // the pad out past the strike, away from the fighter (and on the floor, and clear of the fighter)
+    let padX = Math.max(-FLOOR_EDGE, Math.min(FLOOR_EDGE, x + side * PAD_OUT));
+    if (Math.abs(padX - YOU_X) < clear + PAD_OUT / 2) padX = YOU_X - side * (clear + PAD_OUT);
+    const arc = springArc(this.dummy, rise);
+    return { youX: YOU_X, dummyX: padX, launch: { frame: Math.max(0, s.frame - arc.frames), frames: arc.frames, dx: x - padX, vy: arc.vy, rise: arc.top } };
   }
 
-  /** Notes the move's first strike: an active hitbox of its, or a live shot of its, that hurts or grabs. */
+  /** Notes the move's first strike, once it's pressed (a jump that goes off isn't the aerial): an active hitbox of its, or a live shot of its, that hurts or grabs. */
   private noteStrike(): void {
     const you = this.state.fighters[0];
     let best: { damage: number; x: number; y: number; shot: boolean } | null = null;
@@ -277,57 +279,52 @@ export class DemoRun {
         if (this._frame > jumpAt + 3 && !you.grounded && you.vy >= 0) press();
       }
     }
-    const { launch, drop } = this.setup;
-    if (them && launch && this._frame === launch.frame) { them.grounded = false; them.platform = -1; setAction(them, "air"); them.vy = -launch.vy; }
-    // held up out of sight until it's let go
-    if (them && drop && this._frame <= drop.frame) { them.grounded = false; them.platform = -1; setAction(them, "air"); them.y = drop.y; them.vy = 0; }
+    const launch = this.setup.launch;
+    if (them && launch) {
+      const t = this._frame - launch.frame;
+      if (t === 0) { them.grounded = false; them.platform = -1; setAction(them, "air"); them.vy = -launch.vy; this.flying = true; }
+      // carried across at an even pace (the sim would drag it to a stop) until it meets the strike or is hit
+      if (this.flying && t >= 0 && t <= launch.frames) { them.x = this.setup.dummyX + (launch.dx * t) / launch.frames; them.vx = 0; }
+    }
     this.inputs[0] = input;
     this.state.events.length = 0;
     step(this.state, this.inputs);
+    if (this.state.events.some((e) => e.t === "hit" && e.victim === 1)) this.flying = false;
     this.state.ended = false;
     this._frame++;
-    if (this.unseen && !this.strike) this.noteStrike();
+    if (this.unseen && this.pressed && !this.strike) this.noteStrike();
     return this.state.events;
   }
 }
 
-const falls = new Map<string, number[]>();
-
-/** How far the dummy has fallen, let go from rest in the air, after each frame (index 0: none). */
-function fallFrom(dummy: string): number[] {
-  const known = falls.get(dummy);
-  if (known) return known;
+/** How high a throw straight up off the floor has the dummy after each frame (index 0: on the floor). */
+function flight(dummy: string, vy: number): number[] {
   const s = createMatch({ stage: "proving", players: [{ fighter: dummy, cpu: 0 }], rules: { stocks: 99, time: 0 }, seed: 1 });
   const f = s.fighters[0], none = [cloneInput(EMPTY_INPUT)];
-  f.grounded = false; f.platform = -1; setAction(f, "air"); f.y = -1000; f.vy = 0;
+  f.grounded = false; f.platform = -1; setAction(f, "air"); f.vy = -vy;
   const out = [0];
-  for (let i = 1; i <= MAX_FRAMES; i++) { step(s, none); out.push(f.y + 1000); }
-  falls.set(dummy, out);
+  for (let i = 1; i < 240 && !f.grounded; i++) { step(s, none); out.push(-f.y); }
   return out;
 }
 
-const flights = new Map<string, { vy: number; frames: number; rise: number }>();
+const arcs = new Map<string, { vy: number; frames: number; top: number }>();
 
-/** The throw that peaks `rise` above the floor: its speed up, and how many frames it takes to peak. */
-function springFlight(dummy: string, rise: number): { vy: number; frames: number; rise: number } {
+/**
+ * The throw that meets a strike `rise` up: at the top of its arc, or for a strike lower than
+ * MIN_ARC, on the way down from that high. Its speed up, the frames it takes, and how high it goes.
+ */
+function springArc(dummy: string, rise: number): { vy: number; frames: number; top: number } {
   const key = `${dummy}:${Math.round(rise)}`;
-  const known = flights.get(key);
+  const known = arcs.get(key);
   if (known) return known;
-  const fly = (vy: number) => {
-    const s = createMatch({ stage: "proving", players: [{ fighter: dummy, cpu: 0 }], rules: { stocks: 99, time: 0 }, seed: 1 });
-    const f = s.fighters[0], none = [cloneInput(EMPTY_INPUT)];
-    f.grounded = false; f.platform = -1; setAction(f, "air"); f.vy = -vy;
-    let top = 0, frames = 0;
-    for (let i = 1; i < 200; i++) {
-      step(s, none);
-      if (f.y < top) { top = f.y; frames = i; }
-      if (f.vy >= 0) break;
-    }
-    return { rise: -top, frames };
-  };
+  const top = Math.max(rise, MIN_ARC);
+  const peak = (path: number[]) => path.reduce((b, r, i) => (r > path[b] ? i : b), 0);
   let lo = 0, hi = 60;
-  for (let i = 0; i < 18; i++) { const mid = (lo + hi) / 2; if (fly(mid).rise < rise) lo = mid; else hi = mid; }
-  const out = { vy: hi, ...fly(hi) };
-  flights.set(key, out);
+  for (let i = 0; i < 18; i++) { const mid = (lo + hi) / 2; const p = flight(dummy, mid); if (p[peak(p)] < top) lo = mid; else hi = mid; }
+  const path = flight(dummy, hi), t = peak(path);
+  const down = path.findIndex((r, i) => i > t && r <= rise);
+  const frames = rise >= top - 1 ? t : down < 0 ? path.length - 1 : down;
+  const out = { vy: hi, frames, top: path[t] };
+  arcs.set(key, out);
   return out;
 }
