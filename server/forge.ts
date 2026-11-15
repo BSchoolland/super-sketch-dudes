@@ -180,16 +180,17 @@ export function standingOf(player: Player, ip: string, now = Date.now()): ForgeS
  * Sends a failed character back to the forge, once, without using up one of the player's forges. Its claims
  * still count toward the week. A string is why it can't be.
  */
-export function retryJob(player: Player, fighterId: string, parent: string | null): ForgeJob | string {
-  const job = [...jobs.values()].find((j) => j.fighterId === fighterId && j.owner === player.id);
-  if (!job) return "not one of yours";
+export function retryJob(player: Player | null, fighterId: string, parent: string | null): ForgeJob | string {
+  // null: the forge token's holder, sending it back for its owner (a failure that was the site's fault)
+  const job = [...jobs.values()].find((j) => j.fighterId === fighterId && (player === null || j.owner === player.id));
+  if (!job) return player ? "not one of yours" : "no such character";
   if (!retryable(job)) return job.blocked ? "the moderator blocked this one: it can't be retried" : job.status !== "failed" ? "it hasn't failed" : "it was already retried";
   job.retries++;
   job.attempts = 0;
   job.status = "queued"; job.stage = "waiting in line"; job.stageAt = Date.now(); job.error = null;
   queue.push(job.id);
   openJobEvent(job, parent).set("retry", job.retries);
-  changed(job, player);
+  changed(job, player ?? undefined);
   return job;
 }
 

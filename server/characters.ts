@@ -186,6 +186,16 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
     res.json({ character: entryOf(job), forge: standingOf(player, clientIp(req)) });
   });
 
+  // the forge token's holder sends a player's failed character back, as the player's own free retry would
+  api.post("/characters/:id/requeue", (req, res) => {
+    if (!forgeToken || req.get("x-forge-token") !== forgeToken) return res.status(401).json({ error: "bad token" });
+    const event = res.locals.event as WideEvent | undefined;
+    const job = retryJob(null, req.params.id, event?.trace ?? null);
+    if (typeof job === "string") return res.status(409).json({ error: job });
+    event?.set("forge", `f-${job.id}`);
+    res.json({ character: entryOf(job) });
+  });
+
   // a finished character made elsewhere (a CLI forge run), dropped straight into a player's library
   api.post("/characters/import", async (req, res) => {
     if (!forgeToken || req.get("x-forge-token") !== forgeToken) return res.status(401).json({ error: "bad token" });

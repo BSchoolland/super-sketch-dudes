@@ -140,6 +140,28 @@ describe("the forge budget, over HTTP", () => {
     expect((await api(`/characters/${second.id}/retry`, { method: "POST", as: await signIn("Eve") })).status).toBe(409);
   });
 
+  it("lets the forge token send a player's failed character back for them, once, and only with the token", async () => {
+    vi.setSystemTime(A + 9 * WEEK_MS);
+    await claimAll();
+    await failRunning();
+    const fay = await signIn("Fay");
+    const c = (await (await draw(fay)).json()).character;
+    const job = (await claim())!;
+    await fail(job.id);
+    const noToken = await fetch(`http://127.0.0.1:${port}/api/characters/${c.id}/requeue`, { method: "POST" });
+    expect(noToken.status).toBe(401);
+    const before = await standing(fay);
+    const sent = await (await api(`/characters/${c.id}/requeue`, { method: "POST" })).json();
+    expect(sent.character).toMatchObject({ status: "queued" });
+    expect((await standing(fay)).left).toBe(before.left);
+    expect((await (await api(`/characters/${c.id}`, { as: fay })).json()).character.status).toBe("queued");
+    const again = (await claim())!;
+    expect(again.id).toBe(job.id);
+    await fail(again.id);
+    expect((await api(`/characters/${c.id}/requeue`, { method: "POST" })).status).toBe(409);
+    expect((await api(`/characters/nope/requeue`, { method: "POST" })).status).toBe(409);
+  });
+
   it("gives a guest one forge and a network two a day, by the address Apache saw", async () => {
     vi.setSystemTime(A + 3 * WEEK_MS + 60_000);
     expect(await standing("g-one", "198.51.100.7")).toMatchObject({ kind: "guest", left: 1, allowance: 1, perPlayerPerDay: 2 });
