@@ -61,7 +61,6 @@ node scripts/menushots.mjs        # walk the menus and screenshot them
 node scripts/padcheck.mjs         # gamepad smoke test with a fake pad
 node scripts/perfbench.mjs --throttle 4 --dpr 1.25   # frame times on a pretend potato (needs the dev servers)
 node scripts/activitycheck.mjs   # the Discord Activity end to end, Discord stubbed (starts its own servers)
-node scripts/phonecheck.mjs      # the phone card, emulated: WebKit iPhone and Chromium Android upright and sideways, sharing, the about sections under it, a gamepad through it, a desktop and a touchscreen laptop get the game (builds, starts its own server)
 node scripts/frontdoorcheck.mjs  # guest play, signing in from a guest, the signup age question, /privacy and /terms (starts its own servers)
 node scripts/frontcheck.mjs      # the front page on the built server: the title's about tab, PLAY back up, no scrolling in matches, the old /play/ addresses (builds, starts its own server)
 node scripts/homeshots.mjs       # the about sections' screenshots, clip and share image into client/public/ (starts its own servers)
