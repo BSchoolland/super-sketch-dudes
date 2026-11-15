@@ -3,7 +3,7 @@ import { profileOf } from "../../../shared/cpu-profile";
 import { VIEW_H, VIEW_W } from "../render/camera";
 import { PAPER, inkRect, INK } from "../render/paper";
 import { Renderer } from "../render/render";
-import { label } from "./ui";
+import { grow, keysInHand, label } from "./ui";
 import { drawKeyIcons, type KeyIcon } from "./keyicons";
 import { bindingsOf, keyName } from "../input/bindings";
 import { DemoRun, demoMoves, holds, showings, type DemoMove, type Dir, type Rep } from "./demorun";
@@ -153,21 +153,28 @@ export class MoveDemo {
     inkRect(ctx, x, y, w, h, INK, 1.6);
     const m = this.move, cur = this.run.rep;
     if (!m || !cur) return;
-    // what keyboard player 1 presses for it (facing right, so forward is D)
+    // what keyboard player 1 presses for it (facing right, so forward is D), or on the touchscreen the controls' buttons
     const icons: KeyIcon[] = [];
-    const b = bindingsOf("kb1");
-    const icon = (keys: string[]): KeyIcon => keys[0] === "Space" ? { space: true } : keys[0] === "Mouse0" ? { mouse: "left" } : keys[0] === "Mouse2" ? { mouse: "right" } : { key: keyName(keys[0] ?? "") };
-    if (this.run.jumps) icons.push(icon(b.jump));
-    if (cur.dir !== "n") icons.push(icon(b[({ f: "right", u: "up", d: "down" } as const)[cur.dir]]));
-    icons.push(icon(m.kind === "special" ? b.special : b.attack));
+    if (keysInHand()) {
+      const b = bindingsOf("kb1");
+      const icon = (keys: string[]): KeyIcon => keys[0] === "Space" ? { space: true } : keys[0] === "Mouse0" ? { mouse: "left" } : keys[0] === "Mouse2" ? { mouse: "right" } : { key: keyName(keys[0] ?? "") };
+      if (this.run.jumps) icons.push(icon(b.jump));
+      if (cur.dir !== "n") icons.push(icon(b[({ f: "right", u: "up", d: "down" } as const)[cur.dir]]));
+      icons.push(icon(m.kind === "special" ? b.special : b.attack));
+    } else {
+      if (this.run.jumps) icons.push({ button: "JUMP" });
+      if (cur.dir !== "n") icons.push({ stick: ({ f: "▶", u: "▲", d: "▼" } as const)[cur.dir] });
+      icons.push({ button: m.kind === "special" ? "SPECIAL" : "ATTACK" });
+    }
     const end = drawKeyIcons(ctx, icons, x + 20, y + 16, 48);
     // "hold" for a smash, and for a special when its tap is shown too
     const held = m.kind === "smash" || (holds(this.fighter, m, cur.dir) && this.reps.some((r) => r.dir === cur.dir && r.tap));
-    if (cur.tap || held) label(ctx, cur.tap ? "tap" : "hold", end + 8, y + 50, 28, INK, "left", 800);
+    if (cur.tap || held) label(ctx, cur.tap ? "tap" : "hold", end + 8, y + 50, grow(28, 12), INK, "left", 800);
     let below = y + 96;
     if (m.dirs.length > 1) {
-      m.dirs.forEach((d, i) => label(ctx, ARROW[d], x + 34 + i * 34, below, 22, d === cur.dir ? INK : "rgba(41,39,34,0.3)", "center", 900));
-      below += 24;
+      const size = grow(22, 11);
+      m.dirs.forEach((d, i) => label(ctx, ARROW[d], x + 34 + i * Math.max(34, size * 1.5), below, size, d === cur.dir ? INK : "rgba(41,39,34,0.3)", "center", 900));
+      below += size + 2;
     }
     if (cur.bar) this.drawBar(ctx, cur.bar, x + 20, below);
   }

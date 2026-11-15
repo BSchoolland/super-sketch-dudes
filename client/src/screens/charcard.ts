@@ -3,7 +3,7 @@ import { PENCIL } from "../render/paper";
 import type { LibraryEntry, Player } from "../../../shared/account";
 import { practiceDummy } from "../fighters";
 import { fighterLoad } from "../gen";
-import { card, label, title, INK } from "./ui";
+import { card, grow, label, small, title, INK } from "./ui";
 import { drawImageIn } from "./images";
 import { inkRect } from "../render/paper";
 import { wrapped } from "./text";
@@ -17,10 +17,14 @@ export const COL_X = 1210, COL_W = 620, ROW_H = 56, ROW_GAP = 10;
 /** One of the fighter's moves as a button in the right-hand column. */
 export interface MoveRow { i: number; head: string; move: DemoMove; x: number; y: number; w: number; h: number }
 
-/** The fighter's moves (none until its bundle has loaded). */
+/** The fighter's moves (none until its bundle has loaded): one column, or on a small screen two of taller rows. */
 export function moveRows(e: Pick<LibraryEntry, "id">, top: number): MoveRow[] {
   const def = roster[e.id];
   if (!def) return [];
+  if (small()) {
+    const gap = 12, w = (COL_W - gap) / 2, h = 84;
+    return demoMoves(def).map((move, i) => ({ i, head: move.name, move, x: COL_X + (i % 2) * (w + gap), y: top + Math.floor(i / 2) * (h + gap), w, h }));
+  }
   return demoMoves(def).map((move, i) => ({ i, head: move.name, move, x: COL_X, y: top + i * (ROW_H + ROW_GAP), w: COL_W, h: ROW_H }));
 }
 
@@ -80,20 +84,22 @@ export class CharacterDetail {
     let ty = DEMO.y + 130;
     if (this.credit) {
       const cy = ty - 10, plays = this.credit.plays;
-      label(ctx, `by ${this.credit.creator.name}`, COL_X, cy + 10, 28, INK, "left", 800, COL_W - 260);
-      label(ctx, `${plays} online ${plays === 1 ? "game" : "games"}`, COL_X + COL_W, cy + 10, 28, PENCIL, "right", 800);
+      const size = grow(28, 12);
+      label(ctx, `by ${this.credit.creator.name}`, COL_X, cy + 10, size, INK, "left", 800, COL_W - 260);
+      label(ctx, `${plays} online ${plays === 1 ? "game" : "games"}`, COL_X + COL_W, cy + 10, size, PENCIL, "right", 800, 250);
       ty += 64;
     }
-    if (e.tagline) ty += wrapped(ctx, e.tagline, COL_X, ty, COL_W, 30, INK, 3, "left") + 24;
+    if (e.tagline) ty += wrapped(ctx, e.tagline, COL_X, ty, COL_W, grow(30, 12), INK, 3, "left") + 24;
     this.movesTop = ty;
+    const head = grow(24, 12), note = grow(22, 10);
     for (const r of rows) {
       const on = r === active;
       card(ctx, r.x, r.y, r.w, r.h, INK, on);
-      title(ctx, r.head, r.x + 20, r.y + r.h / 2 + 9, 24, INK, "left");
+      title(ctx, r.head, r.x + 20, r.y + r.h / 2 + 9 + (head - 24) * 0.36, head, INK, "left", small() ? r.w - 40 : undefined);
       // the bars that make this move something else when full
       const bars = demo?.barsFor(r.move);
-      if (bars?.length) label(ctx, `+ ${bars.join(" + ")}`, r.x + r.w - 20, r.y + r.h / 2 + 8, 22, PENCIL, "right", 800);
+      if (bars?.length) label(ctx, `+ ${bars.join(" + ")}`, r.x + r.w - 20, r.y + r.h / 2 + 8 + (note - 22) * 0.36, note, PENCIL, "right", 800);
     }
-    if (!practiceDummy.choice) label(ctx, "no practice dummy yet", DEMO.x + DEMO.w / 2, DEMO.y + h + 34, 22, PENCIL);
+    if (!practiceDummy.choice) label(ctx, "no practice dummy yet", DEMO.x + DEMO.w / 2, DEMO.y + h + 34, grow(22, 11), PENCIL);
   }
 }

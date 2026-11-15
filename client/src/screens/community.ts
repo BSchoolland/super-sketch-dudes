@@ -6,7 +6,7 @@ import { sfx } from "../audio/audio";
 import { library, seeNews } from "../account";
 import { practiceDummy, refreshDummy, refreshLibrary } from "../fighters";
 import { COMMUNITY_SORTS, type CommunityCharacter, type CommunitySort } from "../../../shared/account";
-import { bg, card, hover, label, title, type Screen, INK } from "./ui";
+import { backRect, bg, card, grow, hover, label, small, title, type Screen, INK } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
 import { drawCharacterCell, preloadArt, PRELOAD_ROWS, RED } from "./character";
 import { CharacterDetail, moveRows, type MoveRow } from "./charcard";
@@ -20,8 +20,8 @@ const COLS = 6, ART = 250, GAP = 50, ROW_H = 350, TOP = 250, BOTTOM = VIEW_H - 1
 const PAD_TOP = 30;
 const X0 = (VIEW_W - (COLS * ART + (COLS - 1) * GAP)) / 2;
 /** The search box, under the tabs on the left; the sorts are words on the right of the same row. */
-const SEARCH = { x: X0, y: 150, w: 720, h: 76 };
-const SORT_W = 220, SORT_Y = SEARCH.y;
+const searchBox = (): { x: number; y: number; w: number; h: number } => (small() ? { x: X0, y: 140, w: 720, h: 100 } : { x: X0, y: 150, w: 720, h: 76 });
+const SORT_W = 220;
 const SORT_NAME: Record<CommunitySort, string> = { best: "BEST", new: "NEWEST" };
 
 /** CHARACTERS, COMMUNITY tab: everyone's public characters, the best or the newest first; one big with SAVE. An admin's has the button that picks it for BEST. */
@@ -122,10 +122,11 @@ export class CommunityScreen implements Screen {
 
   private gridButtons(): Button[] {
     const b: Button[] = this.entries.map((_, i) => this.scroll.button(`c${i}`, this.cell(i)));
+    const SEARCH = searchBox();
     b.push({ id: "search", ...SEARCH, text: "", custom: true });
     const right = X0 + COLS * ART + (COLS - 1) * GAP;
-    COMMUNITY_SORTS.forEach((s, i) => b.push({ id: s, x: right - (COMMUNITY_SORTS.length - i) * SORT_W, y: SORT_Y, w: SORT_W, h: SEARCH.h, text: SORT_NAME[s], custom: true }));
-    b.push({ id: "back", x: 40, y: VIEW_H - 130, w: 240, h: 90, text: "BACK", size: 40 });
+    COMMUNITY_SORTS.forEach((s, i) => b.push({ id: s, x: right - (COMMUNITY_SORTS.length - i) * SORT_W, y: SEARCH.y, w: SORT_W, h: SEARCH.h, text: SORT_NAME[s], custom: true }));
+    b.push(small() ? { id: "back", ...backRect(), text: "BACK", size: 40 } : { id: "back", x: 40, y: VIEW_H - 130, w: 240, h: 90, text: "BACK", size: 40 });
     b.push(otherCharTab("community"));
     return b;
   }
@@ -244,7 +245,7 @@ export class CommunityScreen implements Screen {
     bg(ctx, this.t);
     if (this.selected) this.drawDetail(ctx, this.selected, dt);
     else this.drawGrid(ctx);
-    if (this.problem) label(ctx, this.problem, VIEW_W / 2, VIEW_H - 170, 24, RED);
+    if (this.problem) label(ctx, this.problem, VIEW_W / 2, VIEW_H - 170, grow(24, 11), RED);
   }
 
   private drawGrid(ctx: CanvasRenderingContext2D): void {
@@ -267,13 +268,15 @@ export class CommunityScreen implements Screen {
       if (b.id === "search") this.drawSearch(ctx, focused);
       if (!COMMUNITY_SORTS.some((s) => s === b.id)) continue;
       const on = b.id === this.sort;
-      title(ctx, b.text, b.x + b.w / 2, b.y + b.h / 2 + 12, on ? 36 : 32, on || focused ? INK : PENCIL);
+      const size = grow(on ? 36 : 32, 13);
+      title(ctx, b.text, b.x + b.w / 2, b.y + b.h / 2 + 12 + (size - (on ? 36 : 32)) * 0.36, size, on || focused ? INK : PENCIL);
       if (on || focused) inkLine(ctx, b.x + 40, b.y + b.h - 8, b.x + b.w - 40, b.y + b.h - 11, INK, on ? 4 : 2.4);
     }
     this.menu.draw(ctx, buttons);
   }
 
   private drawSearch(ctx: CanvasRenderingContext2D, focused: boolean): void {
+    const SEARCH = searchBox();
     const typing = document.activeElement === this.search?.el;
     card(ctx, SEARCH.x, SEARCH.y, SEARCH.w, SEARCH.h, INK, focused || typing);
     // a pencilled magnifying glass
@@ -282,7 +285,8 @@ export class CommunityScreen implements Screen {
     ctx.beginPath(); ctx.arc(gx, gy, 13, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
     inkLine(ctx, gx + 9, gy + 9, gx + 20, gy + 20, PENCIL, 4);
-    if (!this.search?.value && !typing) label(ctx, "search by name", SEARCH.x + 80, SEARCH.y + SEARCH.h / 2 + 10, 30, PENCIL, "left", 600);
+    const hintSize = grow(30, 12);
+    if (!this.search?.value && !typing) label(ctx, "search by name", SEARCH.x + 80, SEARCH.y + SEARCH.h / 2 + 10 + (hintSize - 30) * 0.36, hintSize, PENCIL, "left", 600);
     this.search?.place(SEARCH.x + 76, SEARCH.y + 12, SEARCH.w - 100, SEARCH.h - 24, 34);
     if (this.search) this.search.el.style.textAlign = "left";
   }
