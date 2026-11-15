@@ -1,3 +1,4 @@
+import { onTouchscreen } from "../../input/touch";
 import { VIEW_W } from "../../render/camera";
 import { inkRect, PENCIL } from "../../render/paper";
 import { claimPress, pointer } from "../../input/pointer";
@@ -12,7 +13,7 @@ import { RosterGrid, type Tile } from "./roster";
 import type { Rect } from "../scroll";
 import { cardParts, drawGhostBox, drawSlotCard, drawTeamTag, slotRow, type SlotFighter, type SlotRow } from "./slots";
 import { drawTether, drawToken, tokenR } from "./token";
-import { BAND_IN, drawFightBand } from "./fightband";
+import { BAND, BAND_IN, drawFightBand } from "./fightband";
 
 /** Just under the FIGHT! band. */
 const CANCEL_Y = 752;
@@ -272,7 +273,7 @@ export class CharacterSelect {
 
   /** The band covers these rows: what's under it can't be reached. */
   private underBand(y: number): boolean {
-    return y > 330 && y < 730;
+    return y > BAND.top && y < BAND.bottom;
   }
 
   private tokenAt(room: SelectRoom, spots: ReturnType<CharacterSelect["tokenSpots"]>, x: number, y: number): Seat | undefined {
@@ -415,7 +416,9 @@ export class CharacterSelect {
 
     if (ready || (room.loading && room.block === null)) {
       if (this.bandAt === null) { this.bandAt = t; sfx.menuConfirm(); }
-      drawFightBand(ctx, t - this.bandAt, room.loading ? `loading ${".".repeat(1 + (Math.floor(t * 3) % 3))}` : "");
+      const hot = ready && pointer.present && !onTouchscreen() && this.underBand(pointer.y);
+      if (hot) document.body.style.cursor = "pointer";
+      drawFightBand(ctx, t - this.bandAt, room.loading ? `loading ${".".repeat(1 + (Math.floor(t * 3) % 3))}` : "", hot);
       if (ready && t - this.bandAt > BAND_IN && this.mine) {
         const w = small() ? 340 : 260, h = small() ? 110 : 70;
         if (button(ctx, VIEW_W / 2 - w / 2, CANCEL_Y, w, h, "CANCEL", { size: small() ? 40 : 30, key: "Esc" }) && !this.used) { this.cancel(); this.used = true; }
