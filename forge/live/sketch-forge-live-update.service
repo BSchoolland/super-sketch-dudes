@@ -1,0 +1,7 @@
+[Unit]
+Description=Move the forge worker to the live site's build when it's idle
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/share/mise/installs/node/26/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/Projects/sketch-battle-forge-live/forge/live/update.sh

@@ -1,0 +1,9 @@
+[Unit]
+Description=Check every 5 minutes whether the forge worker should move to the live build
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+
+[Install]
+WantedBy=timers.target

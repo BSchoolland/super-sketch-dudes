@@ -2,6 +2,10 @@
 
 Pushing master is deploying: .github/workflows/deploy.yml runs `scripts/deploy.sh` (check, build, ship) on every push. Don't run deploy.sh by hand for the live game; a push that fails the check doesn't ship, and the run's log is on the repo's Actions tab (`gh run watch`).
 
+Never switch branches in ~/Projects/sketch-battle: branch work goes in a worktree (`git worktree add ../sketch-battle-wt-<name> -b <branch> master`). Sessions share that checkout, and a branch switch there changes the files under everyone else.
+
+The live forge worker doesn't run from it: it runs from ~/Projects/sketch-battle-forge-live, a detached worktree that forge/live/update.sh keeps on the live site's build (it moves and restarts the worker only when no forge job is in flight, checked every 5 minutes by sketch-forge-live-update.timer). Don't edit or check out anything there.
+
 Only push master. Old branches and backup/* contain personal data (the school and players' real names); .git/hooks/pre-push refuses anything else.
 
 ## Settled decisions
