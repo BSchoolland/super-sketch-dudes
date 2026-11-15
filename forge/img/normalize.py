@@ -129,7 +129,11 @@ def cut_cells(im, thresh=40):
         if not len(xs): cells.append(None); continue
         y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
         a = rgba[y0:y1, x0:x1].copy()
-        a[..., 3] = np.where(near[y0:y1, x0:x1] == c, a[..., 3], 0)
+        mine = near[y0:y1, x0:x1] == c
+        a[..., 3] = np.where(mine, a[..., 3], 0)
+        # paper is only what reaches the outside: anything the ink encloses (a white shirt, eyes) is drawing
+        hard = mine & (a[..., 3] > thresh)
+        a[..., 3] = np.where(ndimage.binary_fill_holes(hard) & ~hard, 255, a[..., 3])
         cells.append(Image.fromarray(a, "RGBA"))
     return cells
 
