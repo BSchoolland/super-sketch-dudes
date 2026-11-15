@@ -125,7 +125,8 @@ try {
 
   // menus by tap: SETTINGS, then CHANGE NAME
   const row = await ip.evaluate(() => window.sketchbattle.screen.items.findIndex((i) => i.id === "settings"));
-  await ip.touchscreen.tap(...at(ip, 720, 350 + row * 96 + 44));
+  const settingsRect = await ip.evaluate((i) => window.sketchbattle.screen.rowRect(i), row);
+  await ip.touchscreen.tap(...at(ip, settingsRect.x + 20, settingsRect.y + settingsRect.h / 2));
   await toScreen(ip, "SettingsScreen");
   await sleep(300);
   await ip.screenshot({ path: path.join(shots, "iphone-up-3-settings.png") });
@@ -233,7 +234,8 @@ try {
   await expectTurned(an, "android title");
   await an.screenshot({ path: path.join(shots, "android-up-1-title.png") });
   const createRow = await an.evaluate(() => window.sketchbattle.screen.items.findIndex((i) => i.id === "create"));
-  await af.tap(...at(an, 720, 350 + createRow * 96 + 44));
+  const createRect = await an.evaluate((i) => window.sketchbattle.screen.rowRect(i), createRow);
+  await af.tap(...at(an, createRect.x + 20, createRect.y + createRect.h / 2));
   await toScreen(an, "CreateScreen");
   // the menu's tap went fullscreen (bars.ts); emulation can't resize a fullscreen page, so leave it before any turn
   await an.waitForFunction(() => !!document.fullscreenElement, null, { timeout: 3000 }).catch(() => fail("the menu tap didn't go fullscreen"));

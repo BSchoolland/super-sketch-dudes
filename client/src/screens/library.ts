@@ -6,7 +6,7 @@ import { sfx } from "../audio/audio";
 import { library, playingAsGuest } from "../account";
 import { libraryChoices, myLibrary, practiceDummy, refreshDummy, refreshLibrary } from "../fighters";
 import type { LibraryEntry } from "../../../shared/account";
-import { bg, hover, label, title, type Screen } from "./ui";
+import { backRect, bg, grow, hover, label, small, title, type Screen } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
 import { drawCharacterArt, drawCharacterCell, forgeWords, preloadArt, PRELOAD_ROWS, RED } from "./character";
 import { wrapped } from "./text";
@@ -59,7 +59,7 @@ export class LibraryScreen implements Screen {
   private gridButtons(): Button[] {
     const b: Button[] = this.entries.map((_, i) => this.scroll.button(`c${i}`, this.cell(i)));
     b.push({ id: "new", x: VIEW_W / 2 - 250, y: VIEW_H - 150, w: 500, h: 110, text: "NEW CHARACTER", size: 44 });
-    b.push({ id: "back", x: 40, y: VIEW_H - 130, w: 240, h: 90, text: "BACK", size: 40 });
+    b.push(small() ? { id: "back", ...backRect(), text: "BACK", size: 40 } : { id: "back", x: 40, y: VIEW_H - 130, w: 240, h: 90, text: "BACK", size: 40 });
     b.push(otherCharTab("mine"));
     return b;
   }
@@ -77,7 +77,7 @@ export class LibraryScreen implements Screen {
     b.forEach((btn, i) => { btn.x = x0 + i * (w + gap); });
     // your own character's sharing sits under its moves, in the right column
     const rows = this.rows(e), last = rows[rows.length - 1];
-    if (!e.starter && !e.saved && e.status === "ready" && last && !playingAsGuest()) b.push({ id: "public", x: COL_X, y: last.y + last.h + 36, w: COL_W, h: 80, text: "SHARE WITH EVERYONE", size: 32, checked: !!e.public });
+    if (!e.starter && !e.saved && e.status === "ready" && last && !playingAsGuest()) b.push({ id: "public", x: COL_X, y: last.y + last.h + 36, w: COL_W, h: small() ? 100 : 80, text: "SHARE WITH EVERYONE", size: small() ? 36 : 32, checked: !!e.public });
     // the moves come after the row, so focus starts on it and the preview starts out standing still
     for (const r of this.rows(e)) b.push({ id: `m${r.i}`, x: r.x, y: r.y, w: r.w, h: r.h, text: "", custom: true });
     return b;
@@ -193,14 +193,14 @@ export class LibraryScreen implements Screen {
     if (this.selected) this.drawDetail(ctx, this.selected, dt);
     else this.drawGrid(ctx);
     const error = this.problem || myLibrary.error;
-    if (error) label(ctx, error, VIEW_W / 2, VIEW_H - 170, 24, RED);
+    if (error) label(ctx, error, VIEW_W / 2, VIEW_H - 170, grow(24, 11), RED);
   }
 
   private drawGrid(ctx: CanvasRenderingContext2D): void {
     const buttons = this.gridButtons();
     drawCharTabs(ctx, "mine", buttons[this.menu.focus]?.id === "tab");
     const forge = myLibrary.forge && forgeWords(myLibrary.forge).short;
-    if (forge) label(ctx, forge, VIEW_W / 2 + 280, VIEW_H - 84, 26, PENCIL, "left", 700, VIEW_W / 2 - 320);
+    if (forge) label(ctx, forge, VIEW_W / 2 + 280, VIEW_H - 84, grow(26, 12), PENCIL, "left", 700, VIEW_W / 2 - 320);
     if (!myLibrary.entries) label(ctx, "…", VIEW_W / 2, 500, 60, PENCIL);
     else if (!this.entries.length) label(ctx, "nothing here yet: draw your first fighter", VIEW_W / 2, 480, 40, PENCIL);
     const focus = this.menu.focus;
@@ -219,12 +219,12 @@ export class LibraryScreen implements Screen {
       const active = rows.find((r) => hover(r.x, r.y, r.w, r.h)) ?? rows.find((r) => focused?.id === `m${r.i}`) ?? null;
       this.detail.draw(ctx, rows, active, dt);
       const last = rows[rows.length - 1];
-      if (!e.starter && !e.saved && e.status === "ready" && last && playingAsGuest()) label(ctx, "sign in to share it with everyone", COL_X, last.y + last.h + 70, 28, PENCIL, "left", 700);
+      if (!e.starter && !e.saved && e.status === "ready" && last && playingAsGuest()) label(ctx, "sign in to share it with everyone", COL_X, last.y + last.h + 70, grow(28, 12), PENCIL, "left", 700, COL_W);
     } else {
       drawCharacterArt(ctx, e, 160, 110, 640, this.t);
       title(ctx, "FAILED", 870, 200, 96, RED, "left");
-      const h = wrapped(ctx, e.error ?? "couldn't be made", 870, 280, 860, 32, RED, 8, "left");
-      if (e.retryable) label(ctx, "TRY AGAIN is free: it doesn't count against today's characters", 870, 280 + h + 30, 26, PENCIL, "left");
+      const h = wrapped(ctx, e.error ?? "couldn't be made", 870, 280, 860, grow(32, 13), RED, 8, "left");
+      if (e.retryable) wrapped(ctx, "TRY AGAIN is free: it doesn't count against today's characters", 870, 280 + h + 30, 860, grow(26, 12), PENCIL, 3, "left");
     }
     this.detailMenu.draw(ctx, this.detailButtons(e));
   }

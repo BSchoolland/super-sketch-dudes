@@ -6,7 +6,7 @@ import { sfx } from "../audio/audio";
 import { library } from "../account";
 import { libraryChoices, myLibrary, refreshLibrary } from "../fighters";
 import type { LibraryEntry } from "../../../shared/account";
-import { bg, hover, label, type Screen } from "./ui";
+import { bg, grow, hover, label, type Screen } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
 import { characterStatus, drawCharacterArt, forgeOpens, RED } from "./character";
 import { etaWords, forgeProgress } from "./forge-progress";

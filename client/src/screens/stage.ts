@@ -6,7 +6,7 @@ import { sfx } from "../audio/audio";
 import { account } from "../account";
 import { stageChoices, type StageChoice } from "../maps";
 import type { MapDoc } from "../../../shared/maps";
-import { bg, card, hint, label, title, hover, clicked, arrows, button, backButton, goTo, type Screen, INK, settings, saveSettings } from "./ui";
+import { bg, card, grow, keyHint, label, small, title, hover, clicked, arrows, button, backButton, goTo, type Screen, INK, settings, saveSettings } from "./ui";
 import { drawStageArtThumb, stageArt, stageArtThumb } from "../render/stageart";
 import { ScrollView } from "./scroll";
 import { drawStageDecor } from "../render/stagedecor";
@@ -201,29 +201,38 @@ export class StagePicker {
       const nameInk = picked ? PICKED : INK;
       if (!c) {
         title(ctx, "?", x + CARD_W / 2, y + (h - 70) / 2 + 48, Math.min(150, h - 90), INK);
-        title(ctx, "RANDOM", x + CARD_W / 2, y + h - 18, 30, nameInk, "center", CARD_W - 30);
+        title(ctx, "RANDOM", x + CARD_W / 2, y + h - 18, grow(30, 12), nameInk, "center", CARD_W - 30);
         return;
       }
       drawStageThumb(ctx, c.stage, x + 12, y + 12, CARD_W - 24, h - 70);
-      title(ctx, c.stage.name, x + CARD_W / 2, y + h - 18, 30, nameInk, "center", CARD_W - 30);
-      if (c.map) label(ctx, c.map.owner === account.player?.id ? "your map" : `${c.map.ownerName}'s map`, x + CARD_W - 14, y + 30, 18, PENCIL, "right");
+      title(ctx, c.stage.name, x + CARD_W / 2, y + h - 18, grow(30, 12), nameInk, "center", CARD_W - 30);
+      if (c.map) label(ctx, c.map.owner === account.player?.id ? "your map" : `${c.map.ownerName}'s map`, x + CARD_W - 14, y + 30, grow(18, 10), PENCIL, "right");
     }));
     const rowY = TOP + rowsShown * (h + GAP) + 20;
-    const rowCard = (r: number, y: number, text: string, value: string) => {
-      const sel = edit && this.row === r;
-      if (edit && hover(VIEW_W / 2 - 300, y, 600, 80)) this.row = r;
-      card(ctx, VIEW_W / 2 - 300, y, 600, 80, INK, sel);
-      if (edit) { const d = arrows(ctx, VIEW_W / 2 + 190, y + 52, 70, 26); if (d) this.step(r, d); }
-      label(ctx, text, VIEW_W / 2 - 270, y + 52, 30, INK, "left", 900);
-      label(ctx, value, VIEW_W / 2 + 190, y + 52, 30, INK, "center", 900);
+    // a small screen sets the two side by side, taller, each arrow's target its half of the value
+    const big = small();
+    const rowCard = (r: number, x: number, y: number, w: number, rh: number, text: string, value: string) => {
+      const sel = edit && this.row === r, size = grow(30, 13), vx = x + w - (big ? 170 : 110), base = y + rh / 2 + 12 + (size - 30) * 0.36;
+      if (edit && hover(x, y, w, rh)) this.row = r;
+      card(ctx, x, y, w, rh, INK, sel);
+      if (edit) { const d = big ? arrows(ctx, vx, base, 90, 40, { w: 170, h: rh }) : arrows(ctx, vx, base, 70, 26); if (d) this.step(r, d); }
+      label(ctx, text, x + 30, base, size, INK, "left", 900);
+      label(ctx, value, vx, base, size, INK, "center", 900);
     };
-    rowCard(1, rowY, "STOCKS", `${this.stocks}`);
-    rowCard(2, rowY + 100, "TIME", this.minutes ? `${this.minutes}:00` : "none");
+    const stocks = `${this.stocks}`, time = this.minutes ? `${this.minutes}:00` : "none";
+    if (big) {
+      rowCard(1, VIEW_W / 2 - 660, rowY, 640, 120, "STOCKS", stocks);
+      rowCard(2, VIEW_W / 2 + 20, rowY, 640, 120, "TIME", time);
+    } else {
+      rowCard(1, VIEW_W / 2 - 300, rowY, 600, 80, "STOCKS", stocks);
+      rowCard(2, VIEW_W / 2 - 300, rowY + 100, 600, 80, "TIME", time);
+    }
     let out: PickerAction = null;
-    if (edit) { if (button(ctx, VIEW_W / 2 - 160, VIEW_H - 180, 320, 84, "FIGHT", { key: "Enter", size: 36 })) { sfx.go(); out = "fight"; } }
-    else label(ctx, note, VIEW_W / 2, VIEW_H - 130, 32, PENCIL);
+    const fight = big ? { y: rowY + 140, h: 120, size: 48 } : { y: VIEW_H - 180, h: 84, size: 36 };
+    if (edit) { if (button(ctx, VIEW_W / 2 - 160, fight.y, 320, fight.h, "FIGHT", { key: "Enter", size: fight.size })) { sfx.go(); out = "fight"; } }
+    else label(ctx, note, VIEW_W / 2, fight.y + 50, grow(32, 13), PENCIL);
     if (backButton(ctx, edit ? "BACK" : "LEAVE")) { sfx.menuBack(); out = "back"; }
-    hint(ctx, edit ? "click a stage, then FIGHT · keyboard: up/down, left/right, Enter · Esc: back" : "");
+    keyHint(ctx, edit ? "click a stage, then FIGHT · keyboard: up/down, left/right, Enter · Esc: back" : "");
     return out;
   }
 }

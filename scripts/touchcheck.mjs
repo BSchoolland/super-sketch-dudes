@@ -447,7 +447,8 @@ try {
   await phone.evaluate(() => { const s = window.sketchbattle.screen; s.sel = s.items.findIndex((i) => i.id === "settings"); });
   // the settings card, by tap
   const settingsRow = await phone.evaluate(() => window.sketchbattle.screen.items.findIndex((i) => i.id === "settings"));
-  await pf.tapView(720, 350 + settingsRow * 96 + 44);
+  const settingsRect = await phone.evaluate((i) => window.sketchbattle.screen.rowRect(i), settingsRow);
+  await pf.tapView(settingsRect.x + 20, settingsRect.y + settingsRect.h / 2);
   await phone.waitForFunction(() => window.sketchbattle.screen.constructor.name === "SettingsScreen", null, { timeout: 5000 });
   const tabButton = await phone.evaluate(() => { const s = window.sketchbattle.screen; const b = s.buttons().find((x) => x.id === "tab"); return b; });
   await pf.tapView(tabButton.x + tabButton.w / 2, tabButton.y + tabButton.h / 2);

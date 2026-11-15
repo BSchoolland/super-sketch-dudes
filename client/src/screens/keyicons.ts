@@ -1,7 +1,10 @@
 import { FONT } from "../render/paper";
 
-/** Keyboard player 1's controls as little inked SVG pictures: keycaps and a mouse with one button pressed. */
-export type KeyIcon = { key: string } | { space: true } | { mouse: "left" | "right" };
+/**
+ * Keyboard player 1's controls as little inked SVG pictures: keycaps and a mouse with one button pressed; or the touch
+ * controls': a round button with its word, the stick pushed one way.
+ */
+export type KeyIcon = { key: string } | { space: true } | { mouse: "left" | "right" } | { button: string } | { stick: "▶" | "▲" | "▼" };
 
 const INK = "#292722", PAPER = "#f4efe4";
 const cache = new Map<string, HTMLImageElement>();
@@ -16,6 +19,11 @@ function svgFor(icon: KeyIcon): { svg: string; w: number; h: number } {
         `<path d="${lit}" fill="${INK}"/><path d="M5 28 H35 M20 5 V28" fill="none" ${stroke}/>`,
     };
   }
+  if ("button" in icon) {
+    const w = Math.max(48, 30 + icon.button.length * 15);
+    return { w, h: 48, svg: `<rect x="3" y="3" width="${w - 6}" height="42" rx="21" fill="${PAPER}" ${stroke}/>` };
+  }
+  if ("stick" in icon) return { w: 48, h: 48, svg: `<circle cx="24" cy="24" r="20" fill="none" stroke="${INK}" stroke-width="2" opacity="0.6"/><circle cx="24" cy="24" r="12" fill="${PAPER}" ${stroke}/>` };
   const w = "space" in icon ? 120 : Math.max(48, 20 + icon.key.length * 15);
   const face = "space" in icon
     ? `<path d="M34 30 V36 H86 V30" fill="none" ${stroke}/>`
@@ -50,10 +58,11 @@ export function drawKeyIcons(ctx: CanvasRenderingContext2D, icons: KeyIcon[], x:
     const k = height / 48;
     if (img.complete) ctx.drawImage(img, cx, y + (height - h * k) / 2, w * k, h * k);
     // the letter goes on with the game's font, which an SVG drawn as an image can't reach
-    if ("key" in icon) {
+    const text = "key" in icon ? icon.key : "button" in icon ? icon.button : "stick" in icon ? icon.stick : null;
+    if (text) {
       ctx.save();
-      ctx.fillStyle = INK; ctx.font = `900 ${Math.round(height * 0.5)}px ${FONT}`; ctx.textBaseline = "middle"; ctx.textAlign = "center";
-      ctx.fillText(icon.key, cx + (w * k) / 2, y + height * 0.46);
+      ctx.fillStyle = INK; ctx.font = `900 ${Math.round(height * ("button" in icon ? 0.4 : "stick" in icon ? 0.36 : 0.5))}px ${FONT}`; ctx.textBaseline = "middle"; ctx.textAlign = "center";
+      ctx.fillText(text, cx + (w * k) / 2, y + height * ("stick" in icon ? 0.5 : 0.46));
       ctx.restore();
     }
     cx += w * k + 4;

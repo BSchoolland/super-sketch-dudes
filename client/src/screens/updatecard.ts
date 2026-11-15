@@ -11,14 +11,20 @@ import type { Release } from "../../../shared/releases";
 import { drawImageIn } from "./images";
 import { drawFighterHop } from "./portrait";
 import { wrapped } from "./text";
-import { card, hover, label, title, INK } from "./ui";
+import { card, grow, hover, label, small, title, INK } from "./ui";
 
-const W = 1200, H = 880, X = (VIEW_W - W) / 2, Y = (VIEW_H - H) / 2;
-/** Each fighter gets a SLOT of the line; its sprite cell is drawn ART big, overlapping its neighbours' empty margins. */
-const SLOT = (W - 80) / FEATURED, ART = 210, FLOOR = Y + 340;
+/**
+ * The card, wider and taller on a small screen (its words bigger). Each fighter gets a `slot` of the line; its sprite cell
+ * is drawn ART big, overlapping its neighbours' empty margins.
+ */
+function cardLayout(): { W: number; H: number; X: number; Y: number; SLOT: number; FLOOR: number; GO: { w: number; h: number; x: number; y: number } } {
+  const W = small() ? 1600 : 1200, H = small() ? 1020 : 880, X = (VIEW_W - W) / 2, Y = (VIEW_H - H) / 2;
+  const go = small() ? { w: 400, h: 120 } : { w: 340, h: 96 };
+  return { W, H, X, Y, SLOT: (W - 80) / FEATURED, FLOOR: Y + 340, GO: { ...go, x: VIEW_W / 2 - go.w / 2, y: Y + H - go.h - 34 } };
+}
+const ART = 210;
 /** Seconds per jump, and how far behind its left neighbour each fighter jumps: the lineup jumps in a wave. */
 const HOP_S = 1.4, WAVE_S = 0.11;
-const GO = { w: 340, h: 96, x: VIEW_W / 2 - 170, y: Y + H - 130 };
 
 /** What came out since a returning player last played: one card per release, oldest first, over the title screen. */
 export class UpdateCard {
@@ -37,6 +43,7 @@ export class UpdateCard {
   /** True once the last card is closed. */
   update(dt: number, m: MenuInput): boolean {
     this.t += dt;
+    const { GO } = cardLayout();
     const tapped = consumeTaps().some((t) => t.x >= GO.x && t.x <= GO.x + GO.w && t.y >= GO.y && t.y <= GO.y + GO.h);
     if (!(m.confirm || m.start || m.back || tapped)) return false;
     sfx.menuConfirm();
@@ -48,6 +55,7 @@ export class UpdateCard {
   draw(ctx: CanvasRenderingContext2D, _dt: number): void {
     const r = this.releases[0];
     if (!r) return;
+    const { W, H, X, Y, SLOT, FLOOR, GO } = cardLayout();
     ctx.fillStyle = "rgba(41,39,34,0.45)";
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
     inkPath(ctx, [[X, Y], [X + W, Y], [X + W, Y + H], [X, Y + H]], true, 31);
@@ -60,7 +68,7 @@ export class UpdateCard {
     title(ctx, r.title, 0, 0, 70, INK, "center", W - 120);
     inkLine(ctx, -500, 22, 500, 12, INK, 5);
     ctx.restore();
-    label(ctx, `v${r.version}`, X + W - 30, Y + 44, 24, PENCIL, "right", 700);
+    label(ctx, `v${r.version}`, X + W - 30, Y + 44, grow(24, 10), PENCIL, "right", 700);
 
     const n = this.lineup.length;
     inkLine(ctx, X + 30, FLOOR, X + W - 30, FLOOR + 3, INK, 2.4);
@@ -75,11 +83,12 @@ export class UpdateCard {
     }
 
     let y = Y + 410;
-    for (const p of r.note) y += wrapped(ctx, p.replace("{made}", this.made === null ? "…" : String(this.made)), VIEW_W / 2, y, W - 200, 28, INK, 4, "center", 600) + 12;
+    for (const p of r.note) y += wrapped(ctx, p.replace("{made}", this.made === null ? "…" : String(this.made)), VIEW_W / 2, y, W - 200, grow(28, 11), INK, 4, "center", 600) + 12;
 
     const over = hover(GO.x, GO.y, GO.w, GO.h);
     if (over) document.body.style.cursor = "pointer";
     card(ctx, GO.x, GO.y, GO.w, GO.h, INK, true);
-    title(ctx, "LET'S GO!", VIEW_W / 2, GO.y + GO.h / 2 + 16, 46, INK);
+    const go = grow(46, 17);
+    title(ctx, "LET'S GO!", VIEW_W / 2, GO.y + GO.h / 2 + 16 + (go - 46) * 0.36, go, INK);
   }
 }

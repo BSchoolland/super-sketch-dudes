@@ -7,7 +7,7 @@ import { api, signedIn } from "../account";
 import { feedbackApi } from "../feedback";
 import { FEEDBACK_MAX, type FeedbackItem } from "../../../shared/feedback";
 import { classTime, tryClassPass } from "../classtime";
-import { bg, card, label, title, type Screen, INK } from "./ui";
+import { bg, card, grow, label, small, tapWord, title, type Screen, INK } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
 import { RED } from "./character";
 import { TextField } from "./textfield";
@@ -16,7 +16,11 @@ import { DrawPad } from "./pad";
 import { PadTools, padPng, picturePixels } from "./padtools";
 import { FeedbackListScreen } from "./feedbacklist";
 
-const NOTE_W = 1240, NOTE_X = (VIEW_W - NOTE_W) / 2, SIZE = 27, LINE = SIZE * 1.3, GAP = 18;
+/** Ben's note: wider and bigger on a small screen. */
+const noteLayout = (): { w: number; x: number; size: number; line: number; gap: number } => {
+  const w = small() ? 1640 : 1240, size = grow(27, 11);
+  return { w, x: (VIEW_W - w) / 2, size, line: size * 1.3, gap: small() ? 12 : 18 };
+};
 
 function note(characters: number | null): string[] {
   return [
@@ -40,6 +44,11 @@ export class ClassScreen implements Screen {
   private wrong = false;
   constructor(private onDone: () => Screen) {}
 
+  /** The passcode box's and its buttons' height. */
+  private get boxH(): number {
+    return small() ? 100 : 84;
+  }
+
   abandon(): void {
     this.field?.remove();
   }
@@ -47,8 +56,8 @@ export class ClassScreen implements Screen {
   private buttons(): Button[] {
     const y = this.bottomY;
     return [
-      { id: "unlock", x: VIEW_W / 2 + 10, y, w: 300, h: 84, text: this.trying ? "…" : "UNLOCK", size: 34, disabled: this.trying },
-      { id: "feedback", x: VIEW_W / 2 + 330, y, w: 420, h: 84, text: "SEND FEEDBACK", size: 34 },
+      { id: "unlock", x: VIEW_W / 2 + 10, y, w: 300, h: this.boxH, text: this.trying ? "…" : "UNLOCK", size: 34, disabled: this.trying },
+      { id: "feedback", x: VIEW_W / 2 + 330, y, w: 420, h: this.boxH, text: "SEND FEEDBACK", size: 34 },
     ];
   }
 
@@ -77,17 +86,18 @@ export class ClassScreen implements Screen {
     bg(ctx, this.t);
     title(ctx, "To keep this site from getting banned…", VIEW_W / 2, 100, 56);
     let y = 170;
+    const n = noteLayout();
     for (const para of note(classTime.characters)) {
-      const lines = wrapLines(ctx, para, NOTE_W, SIZE, 6, 600);
-      lines.forEach((l, i) => label(ctx, l, NOTE_X, y + i * LINE, SIZE, INK, "left", 600));
-      y += lines.length * LINE + GAP;
+      const lines = wrapLines(ctx, para, n.w, n.size, 6, 600);
+      lines.forEach((l, i) => label(ctx, l, n.x, y + i * n.line, n.size, INK, "left", 600));
+      y += lines.length * n.line + n.gap;
     }
-    this.bottomY = Math.min(y + 4, VIEW_H - 110);
-    const box = { x: VIEW_W / 2 - 430, y: this.bottomY, w: 420, h: 84 };
+    this.bottomY = Math.min(y + 4, VIEW_H - this.boxH - 26);
+    const box = { x: VIEW_W / 2 - 430, y: this.bottomY, w: 420, h: this.boxH };
     card(ctx, box.x, box.y, box.w, box.h, INK, document.activeElement === this.field?.el);
-    if (!this.field?.value) label(ctx, "passcode", box.x + box.w / 2, box.y + box.h / 2 + 10, 28, PENCIL);
+    if (!this.field?.value) label(ctx, "passcode", box.x + box.w / 2, box.y + box.h / 2 + 10, grow(28, 12), PENCIL);
     this.field?.place(box.x + 16, box.y + 8, box.w - 32, box.h - 16, 32);
-    if (this.wrong) label(ctx, "That's not it.", VIEW_W / 2, this.bottomY + 120, 28, RED);
+    if (this.wrong) label(ctx, "That's not it.", VIEW_W / 2, this.bottomY + 120, grow(28, 12), RED);
     this.menu.draw(ctx, this.buttons());
   }
 }
@@ -165,20 +175,20 @@ export class FeedbackScreen implements Screen {
     if (this.sent) {
       label(ctx, "Thanks! Ben will read it.", VIEW_W / 2, BOX.y + BOX.h / 2, 40, INK, "center", 800);
     } else {
-      label(ctx, "Anything about the game: ideas, bugs, what you want changed or added.", BOX.x, BOX.y - 30, 28, PENCIL, "left", 700);
+      label(ctx, "Anything about the game: ideas, bugs, what you want changed or added.", BOX.x, BOX.y - 30, grow(28, 12), PENCIL, "left", 700, BOX.w);
       card(ctx, BOX.x, BOX.y, BOX.w, BOX.h, INK, document.activeElement === this.field.el);
-      this.field.place(BOX.x + 24, BOX.y + 20, BOX.w - 48, BOX.h - 40, 30);
-      label(ctx, `${this.field.value.length} / ${FEEDBACK_MAX}`, BOX.x + BOX.w, BOX.y + BOX.h + 32, 20, PENCIL, "right", 600);
-      label(ctx, "Draw what you mean (optional)", THUMB.x, THUMB.y - 30, 28, PENCIL, "left", 700);
+      this.field.place(BOX.x + 24, BOX.y + 20, BOX.w - 48, BOX.h - 40, grow(30, 14));
+      label(ctx, `${this.field.value.length} / ${FEEDBACK_MAX}`, BOX.x + BOX.w, BOX.y + BOX.h + 32, grow(20, 10), PENCIL, "right", 600);
+      label(ctx, "Draw what you mean (optional)", THUMB.x, THUMB.y - 30, grow(28, 12), PENCIL, "left", 700, THUMB.w);
       card(ctx, THUMB.x, THUMB.y, THUMB.w, THUMB.h, INK, this.menu.focused(buttons)?.id === "sketch");
       if (this.pad.blank) label(ctx, "+ ADD A SKETCH", THUMB.x + THUMB.w / 2, THUMB.y + THUMB.h / 2 + 12, 34, INK, "center", 900);
       else {
         this.pad.draw(ctx, THUMB);
-        label(ctx, "click to change it", THUMB.x + THUMB.w, THUMB.y + THUMB.h + 32, 20, PENCIL, "right", 600);
+        label(ctx, `${tapWord()} to change it`, THUMB.x + THUMB.w, THUMB.y + THUMB.h + 32, grow(20, 10), PENCIL, "right", 600);
       }
     }
     this.menu.draw(ctx, buttons);
-    if (this.problem) label(ctx, this.problem, VIEW_W / 2, VIEW_H - 40, 28, RED);
+    if (this.problem) label(ctx, this.problem, VIEW_W / 2, VIEW_H - 40, grow(28, 12), RED);
   }
 
   private send(): void {

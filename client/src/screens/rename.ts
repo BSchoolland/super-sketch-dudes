@@ -5,7 +5,7 @@ import { consumeTaps } from "../input/pointer";
 import { sfx } from "../audio/audio";
 import { account, nameStanding, requestName } from "../account";
 import { NAME_MAX, type NameStanding } from "../../../shared/account";
-import { bg, card, hint, label, title, type Screen, INK } from "./ui";
+import { bg, card, grow, keyHint, label, title, type Screen, INK } from "./ui";
 import { RED } from "./character";
 import { ButtonMenu, type Button } from "./buttons";
 import { TextField } from "./textfield";
@@ -65,18 +65,18 @@ export class RenameScreen implements Screen {
     const request = this.standing?.request;
     if (request?.status === "waiting") {
       title(ctx, request.name, VIEW_W / 2, 450, 64, INK);
-      label(ctx, this.standing!.checkerUp ? "Being checked: that usually takes under a minute." : "Waiting to be checked: the checker is away, so it may be a while.", VIEW_W / 2, 330, 30, INK);
-      label(ctx, `Everyone sees ${account.player?.name ?? ""} until it's approved. You can leave this screen.`, VIEW_W / 2, 520, 26, PENCIL, "center", 600);
+      label(ctx, this.standing!.checkerUp ? "Being checked: that usually takes under a minute." : "Waiting to be checked: the checker is away, so it may be a while.", VIEW_W / 2, 330, grow(30, 12), INK, "center", 700, VIEW_W - 120);
+      label(ctx, `Everyone sees ${account.player?.name ?? ""} until it's approved. You can leave this screen.`, VIEW_W / 2, 520, grow(26, 12), PENCIL, "center", 600, VIEW_W - 120);
     } else if (this.standing) {
-      label(ctx, "Other players see it on your characters, your maps and in rooms.", VIEW_W / 2, 330, 30, INK);
+      label(ctx, "Other players see it on your characters, your maps and in rooms.", VIEW_W / 2, 330, grow(30, 12), INK, "center", 700, VIEW_W - 120);
       card(ctx, FIELD.x, FIELD.y, FIELD.w, FIELD.h, INK, document.activeElement === this.field?.el);
       this.field?.place(FIELD.x + 20, FIELD.y + 14, FIELD.w - 40, FIELD.h - 28, 44);
       const said = this.error || (request?.status === "refused" ? `"${request.name}" wasn't allowed: ${request.reason}. Try another.` : "");
-      if (said) label(ctx, said, VIEW_W / 2, 760, 28, RED);
-      else if (this.approved) label(ctx, `Approved! Everyone sees you as ${this.approved} now.`, VIEW_W / 2, 760, 28, INK);
+      if (said) label(ctx, said, VIEW_W / 2, 760, grow(28, 12), RED, "center", 700, VIEW_W - 120);
+      else if (this.approved) label(ctx, `Approved! Everyone sees you as ${this.approved} now.`, VIEW_W / 2, 760, grow(28, 12), INK, "center", 700, VIEW_W - 120);
     }
     this.menu.draw(ctx, this.buttons());
-    hint(ctx, this.waiting || !this.standing ? "Esc: back" : "Enter: save · Esc: back");
+    keyHint(ctx, this.waiting || !this.standing ? "Esc: back" : "Enter: save · Esc: back");
   }
 
   private show(standing: NameStanding): void {

@@ -3,7 +3,7 @@ import { PENCIL } from "../render/paper";
 import type { MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
 import { setMusicVolume, setVolume, sfx } from "../audio/audio";
-import { bg, card, hint, label, backButton, goTo, type Screen, INK, MAYHEM, settings, saveSettings } from "./ui";
+import { bg, card, grow, hint, keyHint, label, small, backButton, goTo, type Screen, INK, MAYHEM, settings, saveSettings } from "./ui";
 import { account, nameStanding, playingAsGuest } from "../account";
 import type { NameRequest } from "../../../shared/account";
 import { RED } from "./character";
@@ -17,11 +17,13 @@ const TABS: Tabs<SettingsTab> = { left: { id: "general", text: "GENERAL" }, righ
 
 /** `about`: a line under the rows saying what the focused one does. */
 interface Row { id: string; name: string; get: () => string; step: (d: -1 | 1) => void; about?: () => string }
-const ROW = { x: VIEW_W / 2 - 400, w: 800, h: 80, top: 220, gap: 100 };
+const WIDE = { x: VIEW_W / 2 - 400, w: 800, h: 80, top: 220, gap: 100 };
+/** On a small screen the rows are taller (a finger steps them by tapping either side of the value). */
+const rowLayout = (): typeof WIDE => (small() ? { ...WIDE, h: 104, top: 190, gap: 120 } : WIDE);
 /** The centre of a row's ◀ value ▶. */
-const VALUE_X = ROW.x + ROW.w - 150;
+const VALUE_X = WIDE.x + WIDE.w - 150;
 /** CHANGE NAME and SIGN OUT, side by side under who is signed in. */
-const ACCOUNT = { w: 340, h: 80, y: 760, gap: 40 };
+const accountLayout = (): { w: number; h: number; y: number; gap: number; size: number } => (small() ? { w: 340, h: 110, y: 790, gap: 40, size: 38 } : { w: 340, h: 80, y: 760, gap: 40, size: 32 });
 
 const clamp01 = (v: number): number => Math.max(0, Math.min(1, Math.round(v * 10) / 10));
 
@@ -50,14 +52,15 @@ export class SettingsScreen implements Screen {
   }
 
   private buttons(): Button[] {
+    const ROW = rowLayout(), ACCOUNT = accountLayout();
     const b: Button[] = this.rows.map((r, i) => ({
       id: r.id, x: ROW.x, y: ROW.top + i * ROW.gap, w: ROW.w, h: ROW.h, text: r.name, custom: true, stepAt: VALUE_X,
       step: (d) => { r.step(d); saveSettings(); },
     }));
     // a guest signing out would lose everything they made
     if (!playingAsGuest()) b.push(
-      { id: "name", x: VIEW_W / 2 - ACCOUNT.w - ACCOUNT.gap / 2, y: ACCOUNT.y, w: ACCOUNT.w, h: ACCOUNT.h, text: "CHANGE NAME", size: 32 },
-      { id: "signout", x: VIEW_W / 2 + ACCOUNT.gap / 2, y: ACCOUNT.y, w: ACCOUNT.w, h: ACCOUNT.h, text: "SIGN OUT", size: 32 },
+      { id: "name", x: VIEW_W / 2 - ACCOUNT.w - ACCOUNT.gap / 2, y: ACCOUNT.y, w: ACCOUNT.w, h: ACCOUNT.h, text: "CHANGE NAME", size: ACCOUNT.size },
+      { id: "signout", x: VIEW_W / 2 + ACCOUNT.gap / 2, y: ACCOUNT.y, w: ACCOUNT.w, h: ACCOUNT.h, text: "SIGN OUT", size: ACCOUNT.size },
     );
     b.push(otherTabButton(TABS, this.tab));
     return b;
@@ -90,22 +93,24 @@ export class SettingsScreen implements Screen {
       const buttons = this.buttons();
       const focused = this.menu.focused(buttons);
       drawTabs(ctx, TABS, this.tab, focused?.id === "tab");
+      const ROW = rowLayout(), ACCOUNT = accountLayout(), size = grow(30, 13);
       this.rows.forEach((r, i) => {
-        const y = ROW.top + i * ROW.gap;
+        const y = ROW.top + i * ROW.gap, base = y + ROW.h / 2 + 12 + (size - 30) * 0.36;
         card(ctx, ROW.x, y, ROW.w, ROW.h, INK, focused?.id === r.id);
-        label(ctx, r.name, ROW.x + 30, y + 52, 30, INK, "left", 900);
-        label(ctx, `◀   ${r.get()}   ▶`, VALUE_X, y + 52, 30, INK, "center", 900);
+        label(ctx, r.name, ROW.x + 30, base, size, INK, "left", 900);
+        label(ctx, `◀   ${r.get()}   ▶`, VALUE_X, base, size, INK, "center", 900);
       });
       const about = this.rows.find((r) => r.id === focused?.id)?.about?.();
-      if (about) label(ctx, about, VIEW_W / 2, ROW.top + this.rows.length * ROW.gap + 26, 26, INK, "center");
+      if (about) label(ctx, about, VIEW_W / 2, ROW.top + this.rows.length * ROW.gap + 26, grow(26, 12), INK, "center", 700, small() ? VIEW_W - 200 : undefined);
       if (account.player && !playingAsGuest()) {
         const asked = this.nameRequest, refused = asked?.status === "refused";
         const line = `signed in as ${account.player.name}${asked ? (refused ? ` · "${asked.name}" wasn't allowed` : ` · "${asked.name}" being checked`) : ""}`;
-        label(ctx, line, VIEW_W / 2, ACCOUNT.y - 24, 26, refused ? RED : PENCIL, "center", 600);
+        label(ctx, line, VIEW_W / 2, ACCOUNT.y - 24, grow(26, 12), refused ? RED : PENCIL, "center", 600);
       }
       this.menu.draw(ctx, buttons);
     }
     if (backButton(ctx) && !this.controls.busy) { sfx.menuBack(); goTo(this.onBack()); }
-    hint(ctx, this.tab === "controls" ? this.controls.hint : "click, or arrows: up/down to pick, left/right to change · Esc: back");
+    if (this.tab === "controls") hint(ctx, this.controls.hint);
+    else keyHint(ctx, "click, or arrows: up/down to pick, left/right to change · Esc: back");
   }
 }

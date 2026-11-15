@@ -5,7 +5,8 @@ import { bindingsOf, keyName, overridesOf, rebind, release, type KeyAction, type
 import { pointer, viewBleed, type ViewPoint } from "../input/pointer";
 import { sfx } from "../audio/audio";
 import { ButtonMenu, inside, type Button } from "./buttons";
-import { label, title, settings, saveSettings } from "./ui";
+import { grow, label, small, title, settings, saveSettings } from "./ui";
+import { wrapped } from "./text";
 import { MOUSE_BUTTONS, RED, drawKey, legendOf, type KeyLook, type Rect } from "./keyboardmap";
 import { PAD_PARTS, drawGamepad, padStyleOf, partPoint } from "./gamepadmap";
 import { currentLayout, touchInUse, type TouchSetting } from "../input/touch";
@@ -32,6 +33,14 @@ interface Slot { action: KeyAction; code: string | null; group: number; rect: Re
 interface Callout { name: string; note?: string; x: number; y: number; w: number; above: boolean; slots: Slot[]; to: Pt[]; box: Rect }
 
 const NAME = 40, NOTE = 25;
+/** A callout's note: bigger on a small screen, where it wraps to stay on the screen. */
+const noteSize = (): number => grow(NOTE, 11);
+const noteRoom = (x: number): number => 2 * Math.min(x, VIEW_W - x) - 40;
+/** How wide a callout's words are drawn. */
+function calloutWidth(ctx: CanvasRenderingContext2D, c: { name: string; note?: string; x: number }): number {
+  const note = c.note ? Math.min(textWidth(ctx, c.note, noteSize(), 600), small() ? noteRoom(c.x) : Infinity) : 0;
+  return Math.max(c.name ? textWidth(ctx, c.name, NAME, 900) : 0, note);
+}
 /** The list: one row per action, its keys as caps after the name, the note after the caps. */
 const LIST = { top: 250, rowH: 82, nameX: 620, capsX: 660, capH: 66, gap: 14, orGap: 64, noteGap: 36 };
 /** What a cap says: punctuation by name (a lone "." is hard to see), the spacebar as SPACE. */
@@ -51,7 +60,7 @@ const PAD_CALLOUTS: { name: string; note?: string; x: number; y: number; parts: 
   { name: "ATTACK", x: 1600, y: 600, parts: ["a"] },
   { name: "SMASH", note: "in the air: air attacks", x: 1600, y: 715, parts: ["rstick"] },
 ];
-const CHECKS = { y: 860, h: 80 };
+const checks = (): { y: number; h: number } => (small() ? { y: 826, h: 110 } : { y: 860, h: 80 });
 /** The touch view's drawing: a landscape screen with the controls on it as a match lays them out. */
 const SCREEN = { x: 470, y: 250, w: 980 };
 const TOUCH_CALLOUTS: { name: string; note?: string; x: number; y: number; part: "stick" | "pause" | "jump" | "attack" | "special" | "shield" }[] = [
@@ -87,7 +96,8 @@ function drawCallout(ctx: CanvasRenderingContext2D, c: { name: string; note?: st
   }
   title(ctx, c.name, c.x, c.y, NAME, color);
   if (underline) inkLine(ctx, c.x - c.w / 2, c.y + 8, c.x + c.w / 2, c.y + 5, color, 3);
-  if (c.note) label(ctx, c.note, c.x, c.y + 32, NOTE, color === INK ? PENCIL : color, "center", 600);
+  if (c.note && small()) wrapped(ctx, c.note, c.x, c.y + 26 + noteSize() * 0.75, noteRoom(c.x), noteSize(), color === INK ? PENCIL : color, 2, "center", 600);
+  else if (c.note) label(ctx, c.note, c.x, c.y + 32, NOTE, color === INK ? PENCIL : color, "center", 600);
 }
 
 /**
@@ -153,18 +163,19 @@ export class ControlsPage {
   }
 
   private buttons(tab: Button): Button[] {
+    const CHECKS = checks();
     if (this.view === "touch") {
       const step = <T,>(list: T[], now: T, d: -1 | 1): T => list[Math.max(0, Math.min(list.length - 1, list.indexOf(now) + d))];
       return [
-        { id: "touch", text: `SHOW THEM: ${TOUCH_WORD[settings.touch]}`, x: VIEW_W / 2 - 520, y: CHECKS.y, w: 600, h: CHECKS.h, size: 32, step: (d) => { settings.touch = step(TOUCH_STEPS, settings.touch, d); saveSettings(); } },
-        { id: "touchSize", text: `SIZE: ${Math.round(settings.touchSize * 100)}%`, x: VIEW_W / 2 + 120, y: CHECKS.y, w: 400, h: CHECKS.h, size: 32, step: (d) => { settings.touchSize = step(SIZES, settings.touchSize, d); saveSettings(); } },
+        { id: "touch", text: `SHOW THEM: ${TOUCH_WORD[settings.touch]}`, x: VIEW_W / 2 - 520, y: CHECKS.y, w: 600, h: CHECKS.h, size: small() ? 38 : 32, step: (d) => { settings.touch = step(TOUCH_STEPS, settings.touch, d); saveSettings(); } },
+        { id: "touchSize", text: `SIZE: ${Math.round(settings.touchSize * 100)}%`, x: VIEW_W / 2 + 120, y: CHECKS.y, w: 400, h: CHECKS.h, size: small() ? 38 : 32, step: (d) => { settings.touchSize = step(SIZES, settings.touchSize, d); saveSettings(); } },
         tab,
       ];
     }
     if (this.view === "pad") {
       return [
-        { id: "tapJump", text: "STICK UP JUMPS", checked: settings.tapJump, x: VIEW_W / 2 - 440, y: CHECKS.y, w: 420, h: CHECKS.h, size: 32 },
-        { id: "rumble", text: "RUMBLE", checked: settings.rumble, x: VIEW_W / 2 + 20, y: CHECKS.y, w: 300, h: CHECKS.h, size: 32 },
+        { id: "tapJump", text: "STICK UP JUMPS", checked: settings.tapJump, x: VIEW_W / 2 - 440, y: CHECKS.y, w: 420, h: CHECKS.h, size: small() ? 38 : 32 },
+        { id: "rumble", text: "RUMBLE", checked: settings.rumble, x: VIEW_W / 2 + 20, y: CHECKS.y, w: 300, h: CHECKS.h, size: small() ? 38 : 32 },
         tab,
       ];
     }
@@ -311,7 +322,7 @@ export class ControlsPage {
   private drawTouch(ctx: CanvasRenderingContext2D): void {
     // the whole screen, as wide as it is: a match draws past the view to its edges, and the controls sit there
     const bleed = viewBleed(), fullW = VIEW_W + 2 * bleed.x, fullH = VIEW_H + 2 * bleed.y;
-    const k = Math.min(SCREEN.w / fullW, (CHECKS.y - 20 - SCREEN.y) / fullH), w = fullW * k, h = fullH * k;
+    const k = Math.min(SCREEN.w / fullW, (checks().y - 20 - SCREEN.y) / fullH), w = fullW * k, h = fullH * k;
     const sx = SCREEN.x + (SCREEN.w - w) / 2;
     const ox = sx + bleed.x * k, oy = SCREEN.y + bleed.y * k;
     const layout = currentLayout();
@@ -326,7 +337,7 @@ export class ControlsPage {
     for (const c of TOUCH_CALLOUTS) {
       const at = c.part === "stick" ? layout.stick : c.part === "pause" ? layout.pause : layout.buttons[c.part];
       const mid = { x: ox + at.x * k, y: oy + at.y * k };
-      const w = Math.max(c.name ? textWidth(ctx, c.name, NAME, 900) : 0, c.note ? textWidth(ctx, c.note, NOTE, 600) : 0);
+      const w = calloutWidth(ctx, c);
       // a label right above what it names hangs its line from under the note
       const above = Math.abs(mid.x - c.x) < w / 2;
       const from = above ? { x: c.x, y: c.y + 46 } : { x: c.x + Math.sign(mid.x - c.x) * (w / 2 + 14), y: c.name ? c.y - 12 : c.y + 24 };
@@ -344,7 +355,7 @@ export class ControlsPage {
   private drawPad(ctx: CanvasRenderingContext2D): void {
     drawGamepad(ctx, padStyleOf(this.padId()));
     for (const c of PAD_CALLOUTS) {
-      const w = Math.max(textWidth(ctx, c.name, NAME, 900), c.note ? textWidth(ctx, c.note, NOTE, 600) : 0);
+      const w = calloutWidth(ctx, c);
       const to = c.parts.map((part) => partPoint(part, c));
       const mid = to.reduce((n, p) => ({ x: n.x + p.x / to.length, y: n.y + p.y / to.length }), { x: 0, y: 0 });
       // the line leaves the label from the side facing what it names

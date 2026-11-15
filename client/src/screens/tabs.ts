@@ -1,7 +1,7 @@
 import { VIEW_W } from "../render/camera";
 import { inkLine, PENCIL } from "../render/paper";
 import type { Button } from "./buttons";
-import { title, INK } from "./ui";
+import { small, title, INK } from "./ui";
 
 /** A screen's pair of tabs across the top, left then right. */
 export interface Tabs<T extends string> { left: { id: T; text: string }; right: { id: T; text: string } }
@@ -21,7 +21,8 @@ export function tabAt<T extends string>(tabs: Tabs<T>, id: T, on: T): { x: numbe
 /** The tab you're not on, as a button (id "tab") that goes to it. */
 export function otherTabButton<T extends string>(tabs: Tabs<T>, on: T): Button {
   const other = sides(tabs).find((t) => t.id !== on)!;
-  return { id: "tab", x: other.x - W / 2, y: Y, w: W, h: H, text: "", custom: true };
+  // on a small screen the target reaches above and below the word
+  return small() ? { id: "tab", x: other.x - W / 2, y: Y - 16, w: W, h: H + 40, text: "", custom: true } : { id: "tab", x: other.x - W / 2, y: Y, w: W, h: H, text: "", custom: true };
 }
 
 /** The tab you're on big and underlined, the other smaller in pencil (bold when focused). */

@@ -5,8 +5,8 @@ import { VIEW_H, VIEW_W } from "../render/camera";
 import type { MenuInput } from "../input/devices";
 import { bindingsOf, overridesOf, setOverrides, type KeyBindings } from "../input/bindings";
 import { noteControls } from "../telemetry/events";
-import { pointer } from "../input/pointer";
-import { setTouchSettings, type TouchSetting } from "../input/touch";
+import { pointer, viewScale } from "../input/pointer";
+import { onTouchscreen, setTouchSettings, type TouchSetting } from "../input/touch";
 
 export interface Screen {
   update(dt: number, menu: MenuInput): Screen | null;
@@ -58,8 +58,27 @@ export function card(ctx: CanvasRenderingContext2D, x: number, y: number, w: num
   ctx.restore();
 }
 
+/** Key and gamepad words (Esc, Enter, arrows) mean something: the player isn't on the touchscreen. */
+export const keysInHand = (): boolean => !onTouchscreen();
+
+/** What a pointer press is called to this player. */
+export const tapWord = (): string => (onTouchscreen() ? "tap" : "click");
+
+/** The view is drawn under half size (a phone, a small window): text and tap targets grow to stay readable and tappable. */
+export const small = (): boolean => viewScale() < 0.5;
+
+/** `size` in view pixels, grown on a small screen to show at least `css` CSS pixels. */
+export function grow(size: number, css: number): number {
+  return small() ? Math.max(size, css / viewScale()) : size;
+}
+
 export function hint(ctx: CanvasRenderingContext2D, text: string): void {
-  label(ctx, text, VIEW_W / 2, VIEW_H - 36, 22, "rgba(41,39,34,0.8)");
+  label(ctx, text, VIEW_W / 2, VIEW_H - 36, grow(22, 12), "rgba(41,39,34,0.8)", "center", 700, small() ? VIEW_W - 640 : undefined);
+}
+
+/** A hint about keys or a gamepad: only for a player using them. */
+export function keyHint(ctx: CanvasRenderingContext2D, text: string): void {
+  if (keysInHand()) hint(ctx, text);
 }
 
 export interface Settings {
@@ -120,25 +139,35 @@ export function button(ctx: CanvasRenderingContext2D, x: number, y: number, w: n
   card(ctx, x, y, w, h, "", !!opts.focused || over, opts.disabled ? 0.45 : 1);
   const size = opts.size ?? Math.min(30, h * 0.46);
   label(ctx, text, x + w / 2, y + h / 2 + size * 0.36, size, INK, "center", 900);
-  if (opts.key) label(ctx, opts.key, x + w - 10, y + h - 8, Math.max(11, size * 0.42), "rgba(41,39,34,0.65)", "right", 700);
+  if (opts.key && keysInHand()) label(ctx, opts.key, x + w - 10, y + h - 8, Math.max(11, size * 0.42), "rgba(41,39,34,0.65)", "right", 700);
   if (over) document.body.style.cursor = "pointer";
   return !opts.disabled && clicked(x, y, w, h);
 }
 
-/** ◀ / ▶ arrow hit targets around a value; returns -1, 0 or 1 for the frame's click. */
-export function arrows(ctx: CanvasRenderingContext2D, cx: number, cy: number, halfSpan: number, size = 30): number {
+/**
+ * ◀ / ▶ arrow hit targets around a value; returns -1, 0 or 1 for the frame's click. `hit`: each arrow's target is
+ * instead the `hit.w` beside the middle on its side, `hit.h` tall (a bigger target for a finger).
+ */
+export function arrows(ctx: CanvasRenderingContext2D, cx: number, cy: number, halfSpan: number, size = 30, hit?: { w: number; h: number }): number {
   const boxes: [number, number][] = [[cx - halfSpan - size * 0.9, -1], [cx + halfSpan - size * 0.1, 1]];
   let out = 0;
   for (const [bx, dir] of boxes) {
-    const over = hover(bx, cy - size * 0.9, size, size * 1.2);
+    const r = hit ? { x: dir < 0 ? cx - hit.w : cx, y: cy - size * 0.3 - hit.h / 2, w: hit.w, h: hit.h } : { x: bx, y: cy - size * 0.9, w: size, h: size * 1.2 };
+    const over = hover(r.x, r.y, r.w, r.h);
     label(ctx, dir < 0 ? "◀" : "▶", bx + size / 2, cy, size * (over ? 1.15 : 1), over ? "#c8402c" : INK);
     if (over) document.body.style.cursor = "pointer";
-    if (clicked(bx, cy - size * 0.9, size, size * 1.2)) out = dir;
+    if (clicked(r.x, r.y, r.w, r.h)) out = dir;
   }
   return out;
 }
 
+/** Where the common BACK button sits: bottom left, bigger on a small screen. */
+export function backRect(): { x: number; y: number; w: number; h: number } {
+  return small() ? { x: 30, y: VIEW_H - 140, w: 260, h: 120 } : { x: 40, y: VIEW_H - 100, w: 200, h: 64 };
+}
+
 /** Common bottom-left BACK button; returns true when pressed by click. */
 export function backButton(ctx: CanvasRenderingContext2D, text = "BACK"): boolean {
-  return button(ctx, 40, VIEW_H - 100, 200, 64, text, { key: "Esc", size: 26 });
+  const r = backRect();
+  return button(ctx, r.x, r.y, r.w, r.h, text, { key: "Esc", size: small() ? 40 : 26 });
 }

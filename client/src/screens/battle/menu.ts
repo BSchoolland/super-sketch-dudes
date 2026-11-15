@@ -1,7 +1,7 @@
 import { VIEW_W } from "../../render/camera";
 import type { MenuInput } from "../../input/devices";
 import { sfx } from "../../audio/audio";
-import { bg, card, hint, label, title, hover, clicked, backButton, goTo, type Screen, INK } from "../ui";
+import { bg, card, grow, keyHint, keysInHand, label, title, hover, clicked, backButton, goTo, type Screen, INK } from "../ui";
 import { activity } from "../../activity";
 
 export type BattleEntry = "call" | "quick" | "create" | "join" | "bots" | "local";
@@ -21,14 +21,17 @@ const X = VIEW_W / 2 - 360, W = 720, H = 130, Y0 = 220, STEP = 150;
 export class BattleMenuScreen implements Screen {
   t = 0;
   sel = 0;
-  /** Inside Discord the call's room comes first; outside it, a friend on the same keyboard comes last. */
-  private items = activity ? [CALL, ...ONLINE] : [...ONLINE, LOCAL];
+  /** Inside Discord the call's room comes first; outside it, a friend on the same keyboard comes last, unless there's no keyboard in play. */
+  private get items(): { id: BattleEntry; name: string; desc: string }[] {
+    return activity ? [CALL, ...ONLINE] : keysInHand() ? [...ONLINE, LOCAL] : ONLINE;
+  }
 
   constructor(private onPick: (entry: BattleEntry) => Screen, private onBack: () => Screen) {}
 
   update(dt: number, m: MenuInput): Screen | null {
     this.t += dt;
     const n = this.items.length;
+    if (this.sel >= n) this.sel = 0;
     if (m.up) { this.sel = (this.sel + n - 1) % n; sfx.menuMove(); }
     if (m.down) { this.sel = (this.sel + 1) % n; sfx.menuMove(); }
     if (m.confirm || m.start) { sfx.menuConfirm(); return this.onPick(this.items[this.sel].id); }
@@ -46,9 +49,9 @@ export class BattleMenuScreen implements Screen {
       const selected = i === this.sel;
       card(ctx, X, y, W, H, INK, selected);
       title(ctx, it.name, VIEW_W / 2, y + 62, 42, INK);
-      label(ctx, it.desc, VIEW_W / 2, y + 103, 21, selected ? INK : "rgba(41,39,34,0.8)");
+      label(ctx, it.desc, VIEW_W / 2, y + 103, grow(21, 11), selected ? INK : "rgba(41,39,34,0.8)", "center", 700, W - 40);
     });
     if (backButton(ctx)) goTo(this.onBack());
-    hint(ctx, "click, or up/down + Enter · Esc: back");
+    keyHint(ctx, "click, or up/down + Enter · Esc: back");
   }
 }

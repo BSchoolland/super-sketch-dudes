@@ -3,7 +3,7 @@ import { PENCIL } from "../render/paper";
 import type { MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
 import { fighterLoad } from "../gen";
-import { bg, label, title, type Screen } from "./ui";
+import { bg, grow, label, title, type Screen } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
 import { RED } from "./character";
 
@@ -34,7 +34,7 @@ export class LoadingScreen implements Screen {
     const failed = this.bundles.map((u) => fighterLoad(u)).find((l) => l.state === "failed");
     if (failed) {
       title(ctx, "A FIGHTER DIDN'T LOAD", VIEW_W / 2, VIEW_H / 2 - 40, 72, RED);
-      label(ctx, failed.error, VIEW_W / 2, VIEW_H / 2 + 30, 26, RED);
+      label(ctx, failed.error, VIEW_W / 2, VIEW_H / 2 + 30, grow(26, 12), RED, "center", 700, VIEW_W - 120);
       this.menu.draw(ctx, [BACK]);
       return;
     }
