@@ -21,6 +21,8 @@ interface Fill { kind: "fill"; px: FillPixels }
 type Mark = Stroke | Picture | Fill | "clear";
 
 const BASE_WIDTH: Record<StrokeKind, number> = { pen: 18, eraser: 40 };
+/** How far outside the pad a press still starts a stroke, in view pixels: a finger landing just off the edge draws what it drags in. */
+const START_MARGIN = 40;
 
 function paint(r: Raster, m: Mark): Patch {
   if (m === "clear") return r.paper(hexRgb(PAPER));
@@ -108,6 +110,18 @@ export class DrawPad {
     return !this.marks.length || this.marks[this.marks.length - 1].mark === "clear";
   }
 
+  /** Pen strokes and fills since the last clear; a picture laid down counts as a whole drawing. */
+  get lines(): number {
+    let n = 0;
+    for (let i = this.marks.length - 1; i >= 0; i--) {
+      const m = this.marks[i].mark;
+      if (m === "clear") break;
+      if (m.kind === "picture") return Infinity;
+      if (m.kind === "pen" || m.kind === "fill") n++;
+    }
+    return n;
+  }
+
   get canUndo(): boolean {
     return this.marks.length > 0;
   }
@@ -166,9 +180,11 @@ export class DrawPad {
     const k = PAD_PX / w;
     const pts = e.points.map((p) => [(p.x - x) * k, (p.y - y) * (PAD_PX / h)] as const);
     if (e.phase === "down") {
-      const [px, py] = pts[0];
-      if (this.current || px < 0 || py < 0 || px > PAD_PX || py > PAD_PX) return;
-      const ix = Math.min(PAD_PX - 1, Math.floor(px)), iy = Math.min(PAD_PX - 1, Math.floor(py));
+      const [px, py] = pts[0], m = START_MARGIN * k;
+      if (this.current || px < -m || py < -m || px > PAD_PX + m || py > PAD_PX + m) return;
+      const ix = Math.max(0, Math.min(PAD_PX - 1, Math.floor(px))), iy = Math.max(0, Math.min(PAD_PX - 1, Math.floor(py)));
+      const off = px < 0 || py < 0 || px >= PAD_PX || py >= PAD_PX;
+      if (off && this.tool.kind !== "pen" && this.tool.kind !== "eraser") return;
       if (this.tool.kind === "fill") { this.fill(ix, iy); return; }
       if (this.tool.kind === "pick") { const [r, g, b] = this.raster.pixel(ix, iy); this.onPick?.(r, g, b); return; }
       this.current = { id: e.id, stroke: { kind: this.tool.kind, color: this.tool.color, width: BASE_WIDTH[this.tool.kind] * SIZES[this.size], points: [px, py] } };
@@ -187,7 +203,14 @@ export class DrawPad {
     this.current = null;
     // a tap that ended where it started is a dot
     if (stroke.points.length === 4 && stroke.points[0] === stroke.points[2] && stroke.points[1] === stroke.points[3]) stroke.points.length = 2;
-    this.add(stroke);
+    const patch = paint(this.raster, stroke);
+    this.liveDirty = true;
+    // begun off the pad and never on it: nothing to keep, or to undo
+    if (!patch.at.length) return;
+    this.undone.length = 0;
+    this.marks.push({ mark: stroke, patch });
+    this.revision++;
+    this.show();
   }
 
   /** Refused (null from fillPixels) when the region reaches the pad's edge: it would flood the background. */

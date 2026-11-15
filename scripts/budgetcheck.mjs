@@ -115,10 +115,13 @@ try {
     await page.evaluate((i) => { const s = window.sketchbattle.screen; s.sel = s.items.findIndex((it) => it.id === i); }, id);
     await page.waitForTimeout(200);
   };
+  // three lines: fewer and DONE DRAWING asks first (create.ts)
   const scribble = async (page, n = 0) => {
-    await page.mouse.move((700 + n * 40) * k, 300 * k); await page.mouse.down();
-    for (const [x, y] of [[900, 500], [700, 700], [1100, 600], [800, 350]]) await page.mouse.move((x + n * 40) * k, y * k, { steps: 8 });
-    await page.mouse.up();
+    for (const [dx, dy] of [[0, 0], [60, 120], [-60, 200]]) {
+      await page.mouse.move((700 + n * 40 + dx) * k, (300 + dy) * k); await page.mouse.down();
+      for (const [x, y] of [[900, 500], [700, 700], [1100, 600], [800, 350]]) await page.mouse.move((x + n * 40 + dx) * k, (y + dy / 2) * k, { steps: 8 });
+      await page.mouse.up();
+    }
   };
   /** From the title: NEW CHARACTER, draw, DONE DRAWING, CREATE CHARACTER; lands on the library. */
   const drawOne = async (page, n, shots = {}) => {

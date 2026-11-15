@@ -7,17 +7,66 @@ import { DrawPad, COLORS, SIZES } from "./pad";
 import { ColorWheel } from "./colorwheel";
 import { decodePng, isPng, type Pixels } from "./png";
 
-const LEFT = 90, COL_W = 340;
-/** Swatch width: the colour wheel takes a ninth slot in advanced mode. */
-const swatchW = () => (settings.advanced ? 37 : 42);
-/** Tool cards: the eyedropper takes a fourth slot in advanced mode. */
-const TOOLS = () => (settings.advanced ? ["pencil", "eraser", "fill", "pick"] : ["pencil", "eraser", "fill"]);
-const toolW = () => (settings.advanced ? 79 : 108);
+interface Rect { x: number; y: number; w: number; h: number }
+/** A row of equal cards across `w`, `gap` apart. */
+interface Row extends Rect { gap: number }
+
+/** Where a draw pad and its tools go, in view pixels. */
+export interface PadLayout {
+  pad: Rect;
+  /** The swatches: a grid of `w`-wide cells from (x, y), `cols` across (one more with ADVANCED's wheel swatch); `dot` is a swatch's radius. */
+  colors: { x: number; y: number; w: number; h: number; cols: number; advancedCols: number; dot: number };
+  tools: Row & { font: number };
+  /** The brush sizes: `cols` to a row (all five by default), `h` each row's height. */
+  sizes: Row & { cols?: number };
+  history: Row & { font: number };
+  clear: Rect & { font: number };
+  advanced: Rect & { font: number };
+  wheel: { cx: number; cy: number; r: number };
+  /** Where "fill leaks to the edge" is said. */
+  leak: { x: number; y: number };
+}
+
+/** A mouse's: tools in a column left of the pad, the colour wheel over the screen's right column. */
+export const DESK_PAD: PadLayout = {
+  pad: { x: 510, y: 90, w: 900, h: 900 },
+  colors: { x: 90, y: 100, w: 340, h: 64, cols: 8, advancedCols: 9, dot: 14 },
+  tools: { x: 90, y: 214, w: 340, h: 84, gap: 8, font: 30 },
+  sizes: { x: 90, y: 422, w: 340, h: 90, gap: 10 },
+  history: { x: 90, y: 590, w: 340, h: 84, gap: 8, font: 36 },
+  clear: { x: 90, y: 700, w: 340, h: 84, font: 36 },
+  advanced: { x: 90, y: 810, w: 340, h: 70, font: 30 },
+  wheel: { cx: 1660, cy: 405, r: 170 },
+  leak: { x: 260, y: 924 },
+};
 
 /**
- * The tool column left of a draw pad: colours, a custom colour, pencil, eraser, fill, sizes, undo, redo, clear.
- * The ADVANCED toggle adds a colour wheel in the screen's right column, above its buttons, a swatch holding its
- * last pick, and an eyedropper that sets the wheel from the drawing. Ctrl+Z undoes and Ctrl+Shift+Z or Ctrl+Y redoes while attached.
+ * A finger's: the pad as tall as the screen allows (clear of its edges, where phones keep their back gestures), the
+ * colours, tools, sizes and wheel in big cards left of it, UNDO, REDO and CLEAR top right.
+ */
+export const TOUCH_PAD: PadLayout = {
+  pad: { x: 460, y: 40, w: 1000, h: 1000 },
+  colors: { x: 24, y: 40, w: 412, h: 230, cols: 4, advancedCols: 5, dot: 26 },
+  tools: { x: 24, y: 284, w: 412, h: 116, gap: 10, font: 40 },
+  sizes: { x: 24, y: 414, w: 412, h: 108, gap: 10, cols: 3 },
+  history: { x: 1496, y: 40, w: 400, h: 124, gap: 12, font: 44 },
+  clear: { x: 1496, y: 184, w: 400, h: 110, font: 40 },
+  advanced: { x: 24, y: 936, w: 412, h: 104, font: 38 },
+  wheel: { cx: 230, cy: 788, r: 140 },
+  leak: { x: 960, y: 110 },
+};
+
+const row = (r: Row, n: number, i: number): Rect => {
+  const w = (r.w - r.gap * (n - 1)) / n;
+  return { x: r.x + i * (w + r.gap), y: r.y, w, h: r.h };
+};
+/** Tool cards: the eyedropper takes a fourth slot in advanced mode. */
+const TOOLS = () => (settings.advanced ? ["pencil", "eraser", "fill", "pick"] : ["pencil", "eraser", "fill"]);
+
+/**
+ * The tools beside a draw pad: colours, a custom colour, pencil, eraser, fill, sizes, undo, redo, clear, laid out by
+ * a PadLayout. The ADVANCED toggle adds a colour wheel, a swatch holding its last pick, and an eyedropper that sets
+ * the wheel from the drawing. Ctrl+Z undoes and Ctrl+Shift+Z or Ctrl+Y redoes while attached.
  */
 export class PadTools {
   private readonly onKey = (e: KeyboardEvent) => {
@@ -26,7 +75,7 @@ export class PadTools {
     else if (e.code === "KeyZ") { e.preventDefault(); this.pad.undo(); }
   };
 
-  private wheel = new ColorWheel(1660, 405, 170);
+  private wheel: ColorWheel;
   /** The last colour picked on the wheel, kept for its swatch. */
   private custom: string | null = null;
   private unsubscribe: (() => void) | null = null;
@@ -34,7 +83,9 @@ export class PadTools {
   /** The tool the eyedropper hands back to once it has picked. */
   private beforePick: "pen" | "fill" = "pen";
 
-  constructor(readonly pad: DrawPad) {
+  constructor(readonly pad: DrawPad, readonly layout: PadLayout = DESK_PAD) {
+    pad.rect = layout.pad;
+    this.wheel = new ColorWheel(layout.wheel.cx, layout.wheel.cy, layout.wheel.r);
     pad.onPick = (r, g, b) => {
       this.wheel.setRgb(r, g, b);
       this.custom = this.wheel.color;
@@ -71,15 +122,24 @@ export class PadTools {
   }
 
   buttons(): Button[] {
-    const b: Button[] = [];
-    COLORS.forEach((_, i) => b.push({ id: `color${i}`, x: LEFT + i * swatchW(), y: 100, w: swatchW(), h: 64, text: "", custom: true }));
-    if (settings.advanced) b.push({ id: "wheel", x: LEFT + COLORS.length * swatchW(), y: 100, w: swatchW(), h: 64, text: "", custom: true });
-    TOOLS().forEach((id, i) => b.push({ id, x: LEFT + i * (toolW() + 8), y: 214, w: toolW(), h: 84, text: "", custom: true }));
-    SIZES.forEach((_, i) => b.push({ id: `size${i}`, x: LEFT + i * 70, y: 422, w: 60, h: 90, text: "", custom: true }));
-    b.push({ id: "undo", x: LEFT, y: 590, w: COL_W / 2 - 4, h: 84, text: "UNDO", size: 36, disabled: !this.pad.canUndo });
-    b.push({ id: "redo", x: LEFT + COL_W / 2 + 4, y: 590, w: COL_W / 2 - 4, h: 84, text: "REDO", size: 36, disabled: !this.pad.canRedo });
-    b.push({ id: "clear", x: LEFT, y: 700, w: COL_W, h: 84, text: "CLEAR", size: 36, disabled: this.pad.blank });
-    b.push({ id: "advanced", x: LEFT, y: 810, w: COL_W, h: 70, text: "ADVANCED", size: 30, checked: settings.advanced });
+    const L = this.layout, b: Button[] = [];
+    const cols = settings.advanced ? L.colors.advancedCols : L.colors.cols;
+    const rows = Math.ceil((COLORS.length + (settings.advanced ? 1 : 0)) / cols);
+    const sw = L.colors.w / cols, sh = L.colors.h / rows;
+    const swatch = (id: string, i: number) => b.push({ id, x: L.colors.x + (i % cols) * sw, y: L.colors.y + Math.floor(i / cols) * sh, w: sw, h: sh, text: "", custom: true });
+    COLORS.forEach((_, i) => swatch(`color${i}`, i));
+    if (settings.advanced) swatch("wheel", COLORS.length);
+    const tools = TOOLS();
+    tools.forEach((id, i) => b.push({ id, ...row(L.tools, tools.length, i), text: "", custom: true }));
+    const per = L.sizes.cols ?? SIZES.length;
+    SIZES.forEach((_, i) => {
+      const at = row(L.sizes, per, i % per);
+      b.push({ id: `size${i}`, ...at, y: at.y + Math.floor(i / per) * (L.sizes.h + L.sizes.gap), text: "", custom: true });
+    });
+    b.push({ id: "undo", ...row(L.history, 2, 0), text: "UNDO", size: L.history.font, disabled: !this.pad.canUndo });
+    b.push({ id: "redo", ...row(L.history, 2, 1), text: "REDO", size: L.history.font, disabled: !this.pad.canRedo });
+    b.push({ id: "clear", ...L.clear, text: "CLEAR", size: L.clear.font, disabled: this.pad.blank });
+    b.push({ id: "advanced", ...L.advanced, text: "ADVANCED", size: L.advanced.font, checked: settings.advanced });
     return b;
   }
 
@@ -115,7 +175,8 @@ export class PadTools {
     const toolCard = (id: string, text: string, active: boolean) => {
       const b = at(id);
       card(ctx, b.x, b.y, b.w, b.h, INK, active || focus === id);
-      title(ctx, text, b.x + b.w / 2, b.y + 54, settings.advanced ? 26 : 30, active ? INK : PENCIL, "center", b.w - 12);
+      const font = this.layout.tools.font * (settings.advanced ? 0.87 : 1);
+      title(ctx, text, b.x + b.w / 2, b.y + b.h / 2 + font * 0.4, font, active ? INK : PENCIL, "center", b.w - 12);
     };
     toolCard("pencil", "pencil", tool.kind === "pen");
     toolCard("eraser", "eraser", tool.kind === "eraser");
@@ -129,16 +190,14 @@ export class PadTools {
       ctx.beginPath(); ctx.arc(b.x + b.w / 2, b.y + b.h / 2, 3 + size * 10, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     });
-    if (performance.now() - this.pad.leakedAt < 1800) {
-      const b = at("advanced");
-      label(ctx, "fill leaks to the edge", b.x + b.w / 2, b.y + b.h + 44, 28, "#c0392b");
-    }
+    if (performance.now() - this.pad.leakedAt < 1800) label(ctx, "fill leaks to the edge", this.layout.leak.x, this.layout.leak.y, this.layout === DESK_PAD ? 28 : 40, "#c0392b");
     COLORS.forEach((color, i) => {
       const b = at(`color${i}`);
       const active = tool.kind !== "eraser" && tool.kind !== "pick" && tool.color === color;
       ctx.save();
       ctx.fillStyle = color;
-      ctx.beginPath(); ctx.arc(b.x + b.w / 2, b.y + 32, active ? 18 : 14, 0, Math.PI * 2); ctx.fill();
+      const dot = this.layout.colors.dot;
+      ctx.beginPath(); ctx.arc(b.x + b.w / 2, b.y + b.h / 2, active ? dot * 1.3 : dot, 0, Math.PI * 2); ctx.fill();
       ctx.lineWidth = active || focus === b.id ? 4 : 1.5; ctx.strokeStyle = INK; ctx.stroke();
       ctx.restore();
     });
@@ -146,17 +205,17 @@ export class PadTools {
   }
 
   private drawWheelSwatch(ctx: CanvasRenderingContext2D, w: Button, focus: string | undefined): void {
-    const tool = this.pad.tool, wx = w.x + w.w / 2, wy = w.y + 32;
+    const tool = this.pad.tool, wx = w.x + w.w / 2, wy = w.y + w.h / 2, dot = this.layout.colors.dot;
     const active = tool.kind !== "eraser" && tool.kind !== "pick" && tool.color === this.custom && !COLORS.includes(tool.color);
     const rainbow = ctx.createConicGradient(0, wx, wy);
     ["#f00", "#ff0", "#0f0", "#0ff", "#00f", "#f0f", "#f00"].forEach((c, i) => rainbow.addColorStop(i / 6, c));
     ctx.save();
     ctx.fillStyle = rainbow;
-    ctx.beginPath(); ctx.arc(wx, wy, active ? 18 : 14, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(wx, wy, active ? dot * 1.3 : dot, 0, Math.PI * 2); ctx.fill();
     ctx.lineWidth = active || focus === w.id ? 4 : 1.5; ctx.strokeStyle = INK; ctx.stroke();
     if (this.custom) {
       ctx.fillStyle = this.custom;
-      ctx.beginPath(); ctx.arc(wx, wy, active ? 10 : 8, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(wx, wy, (active ? 10 : 8) * dot / 14, 0, Math.PI * 2); ctx.fill();
       ctx.lineWidth = 1.5; ctx.stroke();
     }
     ctx.restore();

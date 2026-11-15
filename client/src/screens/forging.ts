@@ -1,6 +1,7 @@
 import { VIEW_H, VIEW_W } from "../render/camera";
 import type { MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
+import { fingers } from "../input/fingers";
 import { sfx } from "../audio/audio";
 import { library } from "../account";
 import { libraryChoices, myLibrary, refreshLibrary } from "../fighters";
@@ -16,6 +17,9 @@ import type { Nav } from "./nav";
 
 const POLL_S = 2;
 const ART = 560;
+/** Text and buttons: a mouse's, and a finger's (read on a phone). */
+const DESK = { button: { h: 110, size: 36, big: 44 }, label: 34, below: 26, status: 38, error: 24 };
+const TOUCH = { button: { h: 140, size: 46, big: 54 }, label: 50, below: 40, status: 46, error: 34 };
 
 /** The forge at work on one character: its stage while it runs, the fighter once it's done. */
 export class ForgeScreen implements Screen {
@@ -29,6 +33,7 @@ export class ForgeScreen implements Screen {
   private shown: number | null = null;
 
   private retrying = false;
+  private readonly look = fingers() ? TOUCH : DESK;
 
   constructor(private nav: Nav, private entry: LibraryEntry) {}
 
@@ -37,14 +42,14 @@ export class ForgeScreen implements Screen {
   }
 
   private buttons(): Button[] {
-    const y = VIEW_H - 150, w = 520;
-    const library: Button = { id: "back", x: VIEW_W / 2 + 20, y, w, h: 110, text: "GO TO MY CHARACTERS", size: 36 };
+    const { h, size, big } = this.look.button, y = VIEW_H - 40 - h, w = 520;
+    const library: Button = { id: "back", x: VIEW_W / 2 + 20, y, w, h, text: "GO TO MY CHARACTERS", size };
     if (this.entry.status === "ready") return [
-      { id: "battle", x: VIEW_W / 2 - w - 20, y, w, h: 110, text: "BATTLE WITH IT", size: 44 },
+      { id: "battle", x: VIEW_W / 2 - w - 20, y, w, h, text: "BATTLE WITH IT", size: big },
       library,
     ];
     if (this.entry.retryable) return [
-      { id: "retry", x: VIEW_W / 2 - w - 20, y, w, h: 110, text: "TRY AGAIN", size: 44, disabled: this.retrying },
+      { id: "retry", x: VIEW_W / 2 - w - 20, y, w, h, text: "TRY AGAIN", size: big, disabled: this.retrying },
       library,
     ];
     return [{ ...library, x: VIEW_W / 2 - w / 2 }];
@@ -77,10 +82,10 @@ export class ForgeScreen implements Screen {
       drawCharacterArt(ctx, e, x, y, ART, this.t);
       if (e.status === "failed") {
         const status = characterStatus(e, this.t);
-        if (status) wrapped(ctx, status.text, VIEW_W / 2, y + ART + 60, 1200, 38, status.color, 2);
+        if (status) wrapped(ctx, status.text, VIEW_W / 2, y + ART + 60, 1200, this.look.status, status.color, 2);
       } else this.drawProgress(ctx, e, y + ART + 50, dt);
     }
-    if (this.pollError) label(ctx, this.pollError, VIEW_W / 2, VIEW_H - 190, 24, RED);
+    if (this.pollError) label(ctx, this.pollError, VIEW_W / 2, VIEW_H - 80 - this.look.button.h, this.look.error, RED);
     this.menu.draw(ctx, this.buttons());
   }
 
@@ -101,9 +106,10 @@ export class ForgeScreen implements Screen {
     inkRect(ctx, x, y, w, h, INK, 2);
     const dots = ".".repeat(1 + (Math.floor(this.t * 2) % 3));
     const resting = e.status === "queued" ? myLibrary.forge?.resting : null;
-    label(ctx, `${resting ? "Waiting in line" : p.label}${dots}`, VIEW_W / 2, y + h + 50, 34, e.status === "queued" ? PENCIL : INK);
+    const { label: big, below: small } = this.look;
+    label(ctx, `${resting ? "Waiting in line" : p.label}${dots}`, VIEW_W / 2, y + h + 16 + big, big, e.status === "queued" ? PENCIL : INK);
     const below = resting ? (resting.until ? `back ${forgeOpens(resting.until)}` : resting.reason!) : p.etaS !== null ? etaWords(p.etaS) : "";
-    if (below) label(ctx, below, VIEW_W / 2, y + h + 92, 26, PENCIL);
+    if (below) label(ctx, below, VIEW_W / 2, y + h + big * 1.47 + small * 1.6, small, PENCIL);
   }
 
   private retry(): void {
