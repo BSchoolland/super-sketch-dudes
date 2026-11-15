@@ -7,7 +7,7 @@ import { fighterLoad } from "../gen";
 import type { FighterChoice } from "../fighters";
 import { CharacterShelf } from "./shelf";
 import { StagePicker, type MatchSetup, type PickerAction } from "./stage";
-import { ACTION_Y, PORTRAIT_MID, SETUP, drawEmptySlot, drawSlotCard, drawTeamTag, slotWidth, slotX, type SlotFighter } from "./battle/slots";
+import { drawEmptySlot, drawSlotCard, drawTeamTag, portraitMid, setup, slotWidth, slotX, type SlotFighter } from "./battle/slots";
 import { TEAM_COLORS } from "../render/hud";
 import { PENCIL } from "../render/paper";
 import { VIEW_H, VIEW_W } from "../render/camera";
@@ -24,10 +24,16 @@ import { MatchTelemetry } from "../telemetry/match";
 import { swap, type Handoff } from "../handoff";
 import { MESH_VERSION, roomMesh, type PeerMesh } from "../net/mesh";
 import { activity } from "../activity";
-import { bg, card, hint, label, title, hover, clicked, button, backButton, goTo, arrows, settings, saveSettings, type Screen, INK } from "./ui";
+import { bg, card, hint, keyHint, keysInHand, label, title, hover, clicked, button, backButton, backRect, goTo, arrows, grow, small, tapWord, settings, saveSettings, type Screen, INK } from "./ui";
+import { TextField } from "./textfield";
 
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-const LIST_Y = 170, ROW_H = 84, LIST_MAX = 5, CODE_Y = LIST_Y + LIST_MAX * ROW_H + 60;
+/** JOIN ROOM's list of public lobbies and the code under it; a small screen has fewer, taller rows. */
+const LIST_Y = 170;
+const joinLayout = (): { rowH: number; rows: number; codeY: number } => {
+  const rowH = small() ? 116 : 84, rows = small() ? 4 : 5;
+  return { rowH, rows, codeY: LIST_Y + rows * rowH + 60 };
+};
 
 /**
  * How BATTLE sent you here. VS BOTS ("bots") and SAME KEYBOARD ("local") are private rooms that never show their code;
@@ -82,6 +88,8 @@ export class OnlineScreen implements Screen {
   /** What this player can pick in a room: their ready characters. */
   private shelf: CharacterShelf;
   private mine: FighterChoice | null;
+  /** JOIN ROOM's code on a touchscreen: an <input> laid unseen over the code boxes, so a tap raises the phone's keyboard. */
+  private codeField: TextField | null = null;
 
   /** Pick up where another bundle left off: back in its room, and in its match if there was one. */
   static resume(onExit: () => Screen, h: Handoff): Screen {
@@ -129,7 +137,7 @@ export class OnlineScreen implements Screen {
 
   /** `fighter` is the one to bring into the room; a room that's resumed keeps whatever was picked there. */
   constructor(private onExit: () => Screen, entry: OnlineEntry | null, fighter: FighterChoice | null, context?: OnlineContext) {
-    this.shelf = new CharacterShelf(SETUP.shelfY);
+    this.shelf = new CharacterShelf(setup().shelfY);
     this.mine = this.shelf.choices.find((c) => c.id === fighter?.id) ?? null;
     if (this.mine) this.shelf.show(this.mine.id);
     if (context) this.context = context;
@@ -213,8 +221,9 @@ export class OnlineScreen implements Screen {
   }
 
   private updateJoin(m: MenuInput): Screen | null {
+    this.syncCodeField();
     if (this.t - this.polled > 2) { this.polled = this.t; this.context.transport.sendLobby({ t: "rooms" }); }
-    const rows = Math.min(LIST_MAX, this.rooms.length);
+    const rows = Math.min(joinLayout().rows, this.rooms.length);
     if (this.sel > rows) this.sel = rows;
     let submit = false;
     const typed = consumeTypedChars();
@@ -235,6 +244,34 @@ export class OnlineScreen implements Screen {
     if (m.confirm || m.start) return this.join(this.sel < rows ? this.rooms[this.sel].code : this.code.join(""));
     if (m.back) return this.exit();
     return null;
+  }
+
+  /** The code's <input> while JOIN ROOM is up on a touchscreen; typing into it fills the boxes. */
+  private syncCodeField(): void {
+    if (this.phase !== "join" || keysInHand()) { this.dropCodeField(); return; }
+    if (this.codeField) return;
+    const field = new TextField({
+      maxLength: 4, upper: true, quiet: true,
+      onSubmit: () => { field.el.blur(); this.join(this.code.join("")); },
+      onCancel: () => field.el.blur(),
+    });
+    this.codeField = field;
+    field.el.style.opacity = "0";
+    // the boxes start empty, to be typed into
+    this.code = ["", "", "", ""];
+    this.codePos = 0;
+    field.el.addEventListener("input", () => {
+      const chars = [...field.value.toUpperCase()].filter((c) => CODE_CHARS.includes(c)).slice(0, 4);
+      field.value = chars.join("");
+      this.code = [0, 1, 2, 3].map((i) => chars[i] ?? "");
+      this.codePos = Math.min(chars.length, 3);
+      this.sel = Math.min(joinLayout().rows, this.rooms.length);
+    });
+  }
+
+  private dropCodeField(): void {
+    this.codeField?.remove();
+    this.codeField = null;
   }
 
   private join(code: string): null {
@@ -610,41 +647,47 @@ export class OnlineScreen implements Screen {
       const selected = index === this.sel;
       card(ctx, VIEW_W / 2 - 360, y, 720, 140, INK, selected);
       title(ctx, name, VIEW_W / 2, y + 66, 44, INK);
-      label(ctx, description, VIEW_W / 2, y + 110, 21, selected ? INK : "rgba(41,39,34,0.8)");
+      label(ctx, description, VIEW_W / 2, y + 110, grow(21, 11), selected ? INK : "rgba(41,39,34,0.8)", "center", 700, 680);
     });
     if (backButton(ctx)) goTo(this.exit());
-    hint(ctx, "click, or up/down + Enter · Esc: back");
+    keyHint(ctx, "click, or up/down + Enter · Esc: back");
   }
 
   private drawJoin(ctx: CanvasRenderingContext2D): void {
-    const x = VIEW_W / 2 - 480, w = 960;
-    const rows = this.rooms.slice(0, LIST_MAX);
-    if (!rows.length) label(ctx, "no public lobbies right now", VIEW_W / 2, LIST_Y + 120, 30, PENCIL);
+    const { rowH, rows: most, codeY } = joinLayout();
+    const x = VIEW_W / 2 - 480, w = 960, h = rowH - 14;
+    const rows = this.rooms.slice(0, most);
+    if (!rows.length) label(ctx, "no public lobbies right now", VIEW_W / 2, LIST_Y + 120, grow(30, 12), PENCIL);
+    const name = grow(28, 13), who = grow(22, 11);
     rows.forEach((room, i) => {
-      const y = LIST_Y + i * ROW_H;
-      if (hover(x, y, w, ROW_H - 14)) { this.sel = i; document.body.style.cursor = "pointer"; }
-      if (clicked(x, y, w, ROW_H - 14)) this.join(room.code);
-      card(ctx, x, y, w, ROW_H - 14, INK, i === this.sel);
-      label(ctx, `${room.host}'s lobby`, x + 28, y + 45, 28, INK, "left", 900);
-      label(ctx, room.members.join(" · "), x + w - 28, y + 45, 22, PENCIL, "right", 700, w / 2);
+      const y = LIST_Y + i * rowH;
+      if (hover(x, y, w, h)) { this.sel = i; document.body.style.cursor = "pointer"; }
+      if (clicked(x, y, w, h)) this.join(room.code);
+      card(ctx, x, y, w, h, INK, i === this.sel);
+      label(ctx, `${room.host}'s lobby`, x + 28, y + h / 2 + 10 + (name - 28) * 0.36, name, INK, "left", 900, w / 2 - 40);
+      label(ctx, room.members.join(" · "), x + w - 28, y + h / 2 + 10 + (who - 22) * 0.36, who, PENCIL, "right", 700, w / 2);
     });
-    const onCode = this.sel >= rows.length;
-    label(ctx, "OR ENTER A ROOM CODE", VIEW_W / 2, CODE_Y - 20, 26, onCode ? INK : PENCIL);
+    const field = this.codeField, typing = !!field && document.activeElement === field.el;
+    const onCode = this.sel >= rows.length || typing;
+    label(ctx, field ? "OR TAP TO ENTER A ROOM CODE" : "OR ENTER A ROOM CODE", VIEW_W / 2, codeY - 20, grow(26, 12), onCode ? INK : PENCIL);
     this.code.forEach((char, index) => {
       const cx = VIEW_W / 2 - 330 + index * 130;
-      if (clicked(cx, CODE_Y, 100, 120)) { this.codePos = index; this.sel = rows.length; }
-      card(ctx, cx, CODE_Y, 100, 120, INK, onCode && index === this.codePos);
-      title(ctx, char, cx + 50, CODE_Y + 84, 64, INK);
+      if (clicked(cx, codeY, 100, 120)) { this.codePos = index; this.sel = rows.length; }
+      card(ctx, cx, codeY, 100, 120, INK, onCode && index === this.codePos);
+      title(ctx, char, cx + 50, codeY + 84, 64, INK);
     });
-    if (button(ctx, VIEW_W / 2 + 200, CODE_Y + 22, 180, 76, "JOIN", { key: "Enter", size: 30, focused: onCode })) this.join(this.code.join(""));
+    field?.place(VIEW_W / 2 - 330, codeY, 3 * 130 + 100, 120, 64);
+    const join = small() ? { x: VIEW_W / 2 + 200, y: codeY, w: 240, h: 120, size: 40 } : { x: VIEW_W / 2 + 200, y: codeY + 22, w: 180, h: 76, size: 30 };
+    if (button(ctx, join.x, join.y, join.w, join.h, "JOIN", { key: "Enter", size: join.size, focused: onCode })) this.join(this.code.join(""));
     if (backButton(ctx)) goTo(this.exit());
-    hint(ctx, "click a lobby, or type a code · Esc: back");
+    keyHint(ctx, "click a lobby, or type a code · Esc: back");
   }
 
   private drawWaiting(ctx: CanvasRenderingContext2D): void {
     title(ctx, this.waitingFor, VIEW_W / 2, VIEW_H / 2, 70, INK);
-    if (this.waitingFor !== "CONNECTING…") label(ctx, "you're in when it ends", VIEW_W / 2, VIEW_H / 2 + 50, 28, PENCIL);
-    if (button(ctx, VIEW_W / 2 - 120, VIEW_H / 2 + 100, 240, 70, "CANCEL", { key: "Esc", size: 26 })) goTo(this.exit());
+    if (this.waitingFor !== "CONNECTING…") label(ctx, "you're in when it ends", VIEW_W / 2, VIEW_H / 2 + 50, grow(28, 12), PENCIL);
+    const b = small() ? { w: 320, h: 120, size: 40 } : { w: 240, h: 70, size: 26 };
+    if (button(ctx, VIEW_W / 2 - b.w / 2, VIEW_H / 2 + 100, b.w, b.h, "CANCEL", { key: "Esc", size: b.size })) goTo(this.exit());
   }
 
   private drawLobby(ctx: CanvasRenderingContext2D): void {
@@ -655,15 +698,16 @@ export class OnlineScreen implements Screen {
       this.onPicker(this.picker.draw(ctx, this.t, `${host?.name ?? "the host"} is picking the stage`));
       return;
     }
+    const SETUP = setup(), aside = grow(24, 11);
     if (this.context.hidden) {
       title(ctx, this.context.hidden === "local" ? "SAME KEYBOARD" : "VS BOTS", VIEW_W / 2, SETUP.titleY, 52);
-      if (this.notice) label(ctx, this.notice, VIEW_W / 2 + 160, SETUP.titleY - 4, 24, PENCIL, "left");
+      if (this.notice) label(ctx, this.notice, VIEW_W / 2 + 160, SETUP.titleY - 4, aside, PENCIL, "left");
     } else if (room.call) {
       title(ctx, "THIS CALL", VIEW_W / 2, SETUP.titleY, 52);
-      label(ctx, `room ${room.code}`, VIEW_W / 2 + 200, SETUP.titleY - 4, 24, PENCIL, "left");
+      label(ctx, `room ${room.code}`, VIEW_W / 2 + 200, SETUP.titleY - 4, aside, PENCIL, "left");
     } else {
       title(ctx, `ROOM ${room.code}`, VIEW_W / 2, SETUP.titleY, 52);
-      label(ctx, room.public ? "public" : "private", VIEW_W / 2 + 190, SETUP.titleY - 4, 24, PENCIL, "left");
+      label(ctx, room.public ? "public" : "private", VIEW_W / 2 + 190, SETUP.titleY - 4, aside, PENCIL, "left");
     }
     const me = room.members.find((candidate) => candidate.id === this.context.id);
     const picked = this.shelf.draw(ctx, this.t, me?.fighter ?? null, !me || me.ready || this.phase !== "lobby");
@@ -678,7 +722,7 @@ export class OnlineScreen implements Screen {
       if (!member) {
         // the first free slot is where the host adds a bot; people joining take bots' places
         if (hosting && slot === room.members.length + bots.length) {
-          if (button(ctx, slotX(slot, SLOTS), slotY, slotW, slotH, "+ ADD BOT", { size: 30, focused: this.focus === "addBot" })) this.addBot();
+          if (button(ctx, slotX(slot, SLOTS), slotY, slotW, slotH, "+ ADD BOT", { size: grow(30, 13), focused: this.focus === "addBot" })) this.addBot();
         } else drawEmptySlot(ctx, slot, this.context.hidden ? "" : "WAITING", SLOTS);
         continue;
       }
@@ -687,62 +731,73 @@ export class OnlineScreen implements Screen {
       const x = drawSlotCard(ctx, slot, room.teams ? "" : who, this.slotFighter(member), { ready: member.ready, focused: member.id === this.context.id && this.focus === "fighter", count: SLOTS, ...this.teamLook(member.team) });
       if (room.teams && drawTeamTag(ctx, slot, member.team, who, { count: SLOTS, canSwitch: mine, focused: mine && this.focus === "team" })) { this.focus = "team"; this.stepTeam(1); }
       if (mine && !this.alone()) {
-        if (button(ctx, x + 40, slotY + slotH - 84, slotW - 80, 64, member.ready ? "UNREADY" : "READY", { key: "Enter", size: 26, focused: this.focus === "ready" })) this.toggleReady();
-      } else if (!mine) label(ctx, member.ready ? "READY" : "CHOOSING", x + slotW / 2, slotY + slotH - 42, 24);
+        const r = small() ? { x: x + 16, y: slotY + slotH - 100, w: slotW - 32, h: 88, size: 34 } : { x: x + 40, y: slotY + slotH - 84, w: slotW - 80, h: 64, size: 26 };
+        if (button(ctx, r.x, r.y, r.w, r.h, member.ready ? "UNREADY" : "READY", { key: "Enter", size: r.size, focused: this.focus === "ready" })) this.toggleReady();
+      } else if (!mine) label(ctx, member.ready ? "READY" : "CHOOSING", x + slotW / 2, slotY + slotH - 42, grow(24, 11));
     }
     if (this.phase === "loading") {
-      label(ctx, `loading ${".".repeat(1 + (Math.floor(this.t * 3) % 3))}`, VIEW_W / 2, ACTION_Y + 46, 36, PENCIL);
+      label(ctx, `loading ${".".repeat(1 + (Math.floor(this.t * 3) % 3))}`, VIEW_W / 2, SETUP.actionY + 46, 36, PENCIL);
       return;
     }
     const canStart = this.canStart();
     const isHost = room.host === this.context.id;
-    const by = ACTION_Y;
+    const by = SETUP.actionY;
     if (isHost) {
-      if (button(ctx, VIEW_W / 2 - 170, by, 340, 84, "START", { key: "Enter", size: 36, focused: this.focus === "start", disabled: !canStart })) this.openStagePick();
-      if (button(ctx, VIEW_W / 2 + 200, by + 10, 260, 64, room.teams ? "TEAMS: ON" : "TEAMS: OFF", { size: 26, focused: this.focus === "teams" })) { this.focus = "teams"; this.toggleTeams(); }
-    } else label(ctx, canStart ? "waiting for the host to press START" : "everyone readies up, then the host starts", VIEW_W / 2, by + 52, 24, INK);
-    if (button(ctx, 40, VIEW_H - 100, 200, 64, this.context.hidden ? "BACK" : room.call ? "MENU" : "LEAVE", { key: "Esc", size: 26, focused: this.focus === "leave" })) this.leave();
+      const start = small() ? { h: 110, size: 44 } : { h: 84, size: 36 };
+      if (button(ctx, VIEW_W / 2 - 170, by, 340, start.h, "START", { key: "Enter", size: start.size, focused: this.focus === "start", disabled: !canStart })) this.openStagePick();
+      const teams = small() ? { y: by, w: 300, h: 110, size: 34 } : { y: by + 10, w: 260, h: 64, size: 26 };
+      if (button(ctx, VIEW_W / 2 + 200, teams.y, teams.w, teams.h, room.teams ? "TEAMS: ON" : "TEAMS: OFF", { size: teams.size, focused: this.focus === "teams" })) { this.focus = "teams"; this.toggleTeams(); }
+    } else label(ctx, canStart ? "waiting for the host to press START" : "everyone readies up, then the host starts", VIEW_W / 2, by + 52, grow(24, 12), INK);
+    const back = backRect();
+    if (button(ctx, back.x, back.y, back.w, back.h, this.context.hidden ? "BACK" : room.call ? "MENU" : "LEAVE", { key: "Esc", size: small() ? 40 : 26, focused: this.focus === "leave" })) this.leave();
     const fighters = room.members.length + bots.length;
     const friends = bots.some((b) => b.level === 0);
     const kb2 = bots.some((b) => b.level === 0 && b.device === "kb2");
     // with a friend on keyboard 2, both players' keys under START: who uses which side
     if (kb2 && this.alone()) {
+      if (!keysInHand()) return;
       label(ctx, keysOf("kb1"), VIEW_W / 2, VIEW_H - 40, 20, "rgba(41,39,34,0.8)");
       label(ctx, keysOf("kb2"), VIEW_W / 2, VIEW_H - 14, 20, "rgba(41,39,34,0.8)");
       return;
     }
-    hint(ctx, friends && !this.alone() ? "friends on this computer can only play local games for now: remove them to play online"
-      : kb2 ? keysOf("kb2")
-      : room.teams && fighters >= 2 && this.oneTeam() ? "everyone's on one team: click a team to switch sides"
-      : isHost && !canStart ? (fighters < 2 ? "add a bot, or a friend: press . (keyboard 2) or A on another controller" : "START unlocks when everyone is ready")
-      : isHost && room.members.length + bots.length < SLOTS ? "a friend here can join: press . (keyboard 2) or A on another controller" : "click a character, or left/right, to pick");
+    const keys = keysInHand();
+    if (friends && !this.alone()) hint(ctx, "friends on this computer can only play local games for now: remove them to play online");
+    else if (kb2) keyHint(ctx, keysOf("kb2"));
+    else if (room.teams && fighters >= 2 && this.oneTeam()) hint(ctx, `everyone's on one team: ${tapWord()} a team to switch sides`);
+    else if (isHost && !canStart) hint(ctx, fighters >= 2 ? "START unlocks when everyone is ready" : keys ? "add a bot, or a friend: press . (keyboard 2) or A on another controller" : "add a bot to start");
+    else if (isHost && room.members.length + bots.length < SLOTS) keyHint(ctx, "a friend here can join: press . (keyboard 2) or A on another controller");
+    else hint(ctx, keys ? "click a character, or left/right, to pick" : "tap a character to pick it");
   }
 
   /** A bot's card: the host steps its fighter and level and can remove it; everyone else just sees it. */
   private drawBot(ctx: CanvasRenderingContext2D, slot: number, i: number, bot: RoomBot, isHost: boolean): void {
-    const { slotY, slotH } = SETUP, slotW = slotWidth(SLOTS);
+    const SETUP = setup(), { slotY, slotH } = SETUP, slotW = slotWidth(SLOTS);
     const friend = bot.level === 0;
     const who = friend ? `PLAYER ${slot + 1}` : `CPU ${(this.context.room?.bots ?? []).slice(0, i + 1).filter((b) => b.level > 0).length}`;
     const teams = !!this.context.room?.teams;
     const x = drawSlotCard(ctx, slot, teams ? "" : who, this.botFighter(bot), { focused: isHost && this.focus === `botFighter:${i}`, count: SLOTS, ...this.teamLook(bot.team) });
     if (teams && drawTeamTag(ctx, slot, bot.team, who, { count: SLOTS, canSwitch: isHost, focused: isHost && this.focus === `botTeam:${i}` })) { this.focus = `botTeam:${i}`; this.stepBotTeam(i, 1); }
-    const ly = slotY + SETUP.lineY;
+    const ly = slotY + SETUP.lineY, cx = x + slotW / 2, py = slotY + portraitMid() + 14;
+    // on a small screen each arrow's target is its half of the portrait (or of the level's line), and REMOVE is card-wide
+    const big = small();
+    const fighterArrows = (): number => (big ? arrows(ctx, cx, py, slotW / 2 - 44, 52, { w: slotW / 2 - 6, h: SETUP.portraitH }) : arrows(ctx, cx, py, slotW / 2 - 34, 40));
+    const remove = (): boolean => (big ? button(ctx, x + 16, slotY + slotH - 82, slotW - 32, 70, "REMOVE", { size: 30 }) : button(ctx, cx - 80, slotY + slotH - 52, 160, 40, "REMOVE", { size: 20 }));
     if (friend) {
-      label(ctx, bot.device === "kb2" ? "keyboard 2" : `pad ${Number(bot.device?.slice(3) ?? 0) + 1}`, x + slotW / 2, ly, 24, PENCIL, "center", 800);
+      label(ctx, bot.device === "kb2" ? "keyboard 2" : `pad ${Number(bot.device?.slice(3) ?? 0) + 1}`, cx, ly, grow(24, 11), PENCIL, "center", 800);
       if (isHost) {
-        const d = arrows(ctx, x + slotW / 2, slotY + PORTRAIT_MID + 14, slotW / 2 - 34, 40);
+        const d = fighterArrows();
         if (d) this.stepBotFighter(i, d);
-        if (button(ctx, x + slotW / 2 - 80, slotY + slotH - 52, 160, 40, "REMOVE", { size: 20 })) this.removeBot(i);
+        if (remove()) this.removeBot(i);
       }
       return;
     }
-    label(ctx, tierName(bot.level), x + slotW / 2, ly, 26, isHost && this.focus === `botLevel:${i}` ? INK : PENCIL, "center", 900);
+    label(ctx, tierName(bot.level), cx, ly, grow(26, 12), isHost && this.focus === `botLevel:${i}` ? INK : PENCIL, "center", 900, big && isHost ? slotW - 120 : undefined);
     if (!isHost) return;
-    const d = arrows(ctx, x + slotW / 2, slotY + PORTRAIT_MID + 14, slotW / 2 - 34, 40);
+    const d = fighterArrows();
     if (d) { this.focus = `botFighter:${i}`; this.stepBotFighter(i, d); }
-    const l = arrows(ctx, x + slotW / 2, ly, slotW / 2 - 40, 30);
+    const l = big ? arrows(ctx, cx, ly, slotW / 2 - 44, 40, { w: slotW / 2 - 6, h: 76 }) : arrows(ctx, cx, ly, slotW / 2 - 40, 30);
     if (l) { this.focus = `botLevel:${i}`; this.stepBotLevel(i, l); }
-    if (button(ctx, x + slotW / 2 - 80, slotY + slotH - 52, 160, 40, "REMOVE", { size: 20 })) this.removeBot(i);
+    if (remove()) this.removeBot(i);
   }
 
   /** A card's colour in a team battle: its team's, washed over the card. */
@@ -763,8 +818,9 @@ export class OnlineScreen implements Screen {
   }
 
   private drawError(ctx: CanvasRenderingContext2D): void {
-    title(ctx, this.error, VIEW_W / 2, VIEW_H / 2, 62, "#ff4d2e");
-    if (button(ctx, VIEW_W / 2 - 120, VIEW_H / 2 + 60, 240, 70, "BACK", { key: "Esc", size: 26 })) goTo(this.exit());
+    title(ctx, this.error, VIEW_W / 2, VIEW_H / 2, 62, "#ff4d2e", "center", small() ? VIEW_W - 120 : undefined);
+    const b = small() ? { w: 320, h: 120, size: 40 } : { w: 240, h: 70, size: 26 };
+    if (button(ctx, VIEW_W / 2 - b.w / 2, VIEW_H / 2 + 60, b.w, b.h, "BACK", { key: "Esc", size: b.size })) goTo(this.exit());
   }
 
   abandon(): void {
@@ -781,6 +837,7 @@ export class OnlineScreen implements Screen {
   }
 
   private dispose(): void {
+    this.dropCodeField();
     for (const unsubscribe of this.unsubscribers) unsubscribe();
     this.unsubscribers.length = 0;
   }

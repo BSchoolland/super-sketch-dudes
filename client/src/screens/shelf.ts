@@ -1,15 +1,15 @@
 import { VIEW_W } from "../render/camera";
 import { PENCIL } from "../render/paper";
 import { allChoices, type FighterChoice } from "../fighters";
-import { clicked, hover, label } from "./ui";
+import { clicked, hover, label, small } from "./ui";
 import { drawCharacterCell, preloadArt, PRELOAD_ROWS } from "./character";
 import { ScrollView } from "./scroll";
 
 const CELL = 170, GAP = 44, COLS = 8, ROW_H = CELL + 56;
 /** Room above the first row for the drawing pinned to a fighter's corner. */
 const PAD_TOP = 16;
-/** How tall the shelf is, names included. */
-export const SHELF_H = 410;
+/** How tall the shelf is, names included: two rows, or on a small screen one (it scrolls). */
+export const shelfHeight = (): number => (small() ? PAD_TOP + ROW_H : 410);
 
 /**
  * Your ready characters in a grid across the top of a battle setup, drawn like MY CHARACTERS, scrolling
@@ -21,7 +21,7 @@ export class CharacterShelf {
 
   constructor(y: number) {
     const w = COLS * CELL + (COLS - 1) * GAP;
-    this.scroll = new ScrollView({ x: (VIEW_W - w) / 2, y, w, h: SHELF_H });
+    this.scroll = new ScrollView({ x: (VIEW_W - w) / 2, y, w, h: shelfHeight() });
   }
 
   get choices(): FighterChoice[] {
@@ -39,6 +39,7 @@ export class CharacterShelf {
   /** Draws the grid with `picked` boxed; returns the character clicked this frame, unless `locked`. */
   draw(ctx: CanvasRenderingContext2D, t: number, picked: string | null, locked: boolean): FighterChoice | null {
     const choices = this.choices, scroll = this.scroll, v = scroll.view;
+    v.h = shelfHeight();
     scroll.tick(this.drawnAt < 0 ? 0 : Math.min(0.1, t - this.drawnAt), PAD_TOP + Math.ceil(choices.length / COLS) * ROW_H);
     this.drawnAt = t;
     if (!choices.length) { label(ctx, "no characters ready yet", VIEW_W / 2, v.y + v.h / 2, 32, PENCIL); return null; }
