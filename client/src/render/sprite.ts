@@ -22,7 +22,7 @@ export interface CellImages {
   card: { paper: HTMLCanvasElement; pad: number; onCard: HTMLCanvasElement | null; size: number } | null;
 }
 const cache = new Map<string, CellImages>();
-const CELL_REV = "2";
+const CELL_REV = "3";
 
 /** Canvas pixels per world unit at the camera's closest zoom; the app sets it on every resize. */
 let pixelsPerUnit = 1.25;
