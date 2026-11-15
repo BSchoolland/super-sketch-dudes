@@ -21,15 +21,24 @@ from scipy import ndimage
 
 CELLS = ["idle", "walk", "jump", "atk-fwd", "atk-up", "atk-down", "hit", "launched", "block"]
 
-def key_paper(im):
-    """Paper -> transparent. Paper is near-white and low saturation; ink and marker stay."""
-    a = np.asarray(im.convert("RGB")).astype(np.int16)
-    r, g, b = a[..., 0], a[..., 1], a[..., 2]
-    lum = (r + g + b) / 3
-    sat = a.max(axis=2) - a.min(axis=2)
-    # alpha ramps from paper (lum>=228, sat<18) to ink; keeps pencil greys and coloured marker
-    alpha = np.clip((236 - lum) / 40, 0, 1)
-    alpha = np.maximum(alpha, np.clip((sat - 14) / 30, 0, 1))
+def key_paper(im, rim=8):
+    """Paper -> transparent; ink and marker stay. The paper is whatever fills the image's outer `rim` px
+    (the image model sometimes draws on cream rather than white), and alpha starts ramping only past
+    that paper's own grain, so a tinted, noisy page keys to nothing instead of a faint speckled box."""
+    a = np.asarray(im.convert("RGB")).astype(np.float32)
+    lum = a.mean(axis=2)
+    chroma = a - lum[..., None]
+    border = np.ones(lum.shape, bool)
+    border[rim:-rim, rim:-rim] = False
+    paper_lum = np.median(lum[border])
+    paper_chroma = np.median(chroma[border], axis=0)
+    dark = paper_lum - lum
+    tint = np.linalg.norm(chroma - paper_chroma, axis=2)
+    # the paper's grain, robustly (ink touching the rim doesn't count): median + 5 MADs from the paper
+    def grain(d): m = np.median(d); return m + 5 * 1.4826 * np.median(np.abs(d - m))
+    # alpha ramps over 40 levels of darkening or 25 of colour, from just past the grain
+    alpha = np.clip((dark - max(4, grain(dark[border]))) / 40, 0, 1)
+    alpha = np.maximum(alpha, np.clip((tint - max(8, grain(tint[border]))) / 25, 0, 1))
     out = np.dstack([np.clip(a, 0, 255).astype(np.uint8), (alpha * 255).astype(np.uint8)])
     return Image.fromarray(out, "RGBA")
 
