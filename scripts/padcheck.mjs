@@ -1,4 +1,5 @@
 // Fakes a standard gamepad in the page and checks the fighter obeys it: stick right runs, X jumps, A attacks, right stick smashes.
+// Twice: P1 on the pad, and P1 on keyboard 1 (a fight started with the mouse), which answers any pad nobody else holds.
 import { chromium } from "playwright";
 const base = process.argv[2] ?? "http://localhost:5175/";
 const browser = await chromium.launch();
@@ -10,23 +11,27 @@ await page.addInitScript(() => {
   window.__pad = pad;
   navigator.getGamepads = () => [pad, null, null, null];
 });
-await page.goto(`${base}?quick=1&p1=pad0&p2=cpu&cpu=0&f=lampjack,tank&stage=proving`);
-await page.waitForFunction(() => window.sketchbattle?.screen, null, { timeout: 20000 });
-await page.waitForTimeout(500);
-const setPad = (axes, buttons) => page.evaluate(([a, b]) => { const p = window.__pad; p.axes = a; p.buttons.forEach((x, i) => { x.pressed = b.includes(i); x.value = b.includes(i) ? 1 : 0; }); }, [axes, buttons]);
-const fighter = () => page.evaluate(() => { const f = window.sketchbattle.screen.match.state.fighters[0]; return { action: f.action, move: f.move, x: Math.round(f.x), vx: +f.vx.toFixed(1), grounded: f.grounded }; });
-const results = {};
-await setPad([1, 0, 0, 0], []); await page.waitForTimeout(400); results.run = await fighter();
-await setPad([0, 0, 0, 0], []); await page.waitForTimeout(400);
-await setPad([0, 0, 0, 0], [2]); await page.waitForTimeout(60); await setPad([0, 0, 0, 0], []); await page.waitForTimeout(120); results.jump = await fighter();
-await page.waitForTimeout(1400);
-await setPad([0, 0, 0, 0], [0]); await page.waitForTimeout(60); await setPad([0, 0, 0, 0], []); await page.waitForTimeout(60); results.attack = await fighter();
-await page.waitForTimeout(700);
-await setPad([0, 0, 1, 0], []); await page.waitForTimeout(60); await setPad([0, 0, 0, 0], []); await page.waitForTimeout(80); results.cstick = await fighter();
-await page.waitForTimeout(900);
-await setPad([0, -1, 0, 0], []); await page.waitForTimeout(60); await setPad([0, 0, 0, 0], []); await page.waitForTimeout(120); results.tapJump = await fighter();
-console.log(JSON.stringify(results, null, 1));
-const ok = results.run.action === "run" && !results.jump.grounded && results.attack.move === "jab1" && results.cstick.move === "fsmash" && !results.tapJump.grounded;
+let ok = true;
+for (const p1 of ["pad0", "kb1"]) {
+  await page.goto(`${base}?quick=1&p1=${p1}&p2=cpu&cpu=0&f=woodstove,rocket&stage=proving`);
+  await page.waitForFunction(() => window.sketchbattle?.screen, null, { timeout: 20000 });
+  await page.waitForTimeout(500);
+  const setPad = (axes, buttons) => page.evaluate(([a, b]) => { const p = window.__pad; p.axes = a; p.buttons.forEach((x, i) => { x.pressed = b.includes(i); x.value = b.includes(i) ? 1 : 0; }); }, [axes, buttons]);
+  const fighter = () => page.evaluate(() => { const f = window.sketchbattle.screen.match.state.fighters[0]; return { action: f.action, move: f.move, x: Math.round(f.x), vx: +f.vx.toFixed(1), grounded: f.grounded }; });
+  const results = {};
+  await setPad([1, 0, 0, 0], []); await page.waitForTimeout(400); results.run = await fighter();
+  await setPad([0, 0, 0, 0], []); await page.waitForTimeout(400);
+  await setPad([0, 0, 0, 0], [2]); await page.waitForTimeout(60); await setPad([0, 0, 0, 0], []); await page.waitForTimeout(120); results.jump = await fighter();
+  await page.waitForTimeout(1400);
+  await setPad([0, 0, 0, 0], [0]); await page.waitForTimeout(60); await setPad([0, 0, 0, 0], []); await page.waitForTimeout(60); results.attack = await fighter();
+  await page.waitForTimeout(700);
+  await setPad([0, 0, 1, 0], []); await page.waitForTimeout(60); await setPad([0, 0, 0, 0], []); await page.waitForTimeout(80); results.cstick = await fighter();
+  await page.waitForTimeout(900);
+  await setPad([0, -1, 0, 0], []); await page.waitForTimeout(60); await setPad([0, 0, 0, 0], []); await page.waitForTimeout(120); results.tapJump = await fighter();
+  const pass = results.run.action === "run" && !results.jump.grounded && results.attack.move === "jab1" && results.cstick.move === "fsmash" && !results.tapJump.grounded;
+  console.log(p1, JSON.stringify(results), pass ? "ok" : "FAIL");
+  ok &&= pass;
+}
 console.log(ok ? "PAD OK" : "PAD FAIL");
 if (errors.length) console.error(errors.join("\n"));
 await browser.close();

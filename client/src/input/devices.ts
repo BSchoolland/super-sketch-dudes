@@ -38,13 +38,15 @@ window.addEventListener("blur", () => keys.clear());
 /** Each keyboard's last horizontal direction: where a smash with no direction held goes. */
 const lastX = new Map<DeviceId, 1 | -1>();
 
-const padPrev = new Map<number, { ax: number; ay: number; cx: number; cy: number; jumpFlick: number; cFlick: number }>();
+// the menus read every pad each tick too, so they keep their own last frame and never eat a fighter's flick
+const padPrev = new Map<string, { ax: number; ay: number; cx: number; cy: number; jumpFlick: number; cFlick: number }>();
 
-function padState(index: number) {
+function padState(index: number, menu: boolean) {
   const gp = navigator.getGamepads?.()[index];
   if (!gp) return null;
-  let prev = padPrev.get(index);
-  if (!prev) { prev = { ax: 0, ay: 0, cx: 0, cy: 0, jumpFlick: 0, cFlick: 0 }; padPrev.set(index, prev); }
+  const key = `${index}${menu ? ":menu" : ""}`;
+  let prev = padPrev.get(key);
+  if (!prev) { prev = { ax: 0, ay: 0, cx: 0, cy: 0, jumpFlick: 0, cFlick: 0 }; padPrev.set(key, prev); }
   return { gp, prev };
 }
 
@@ -85,7 +87,7 @@ export function readDevice(dev: DeviceId, opts: { tapJump: boolean; menu?: boole
     return { x, y, cx, cy, b: bits };
   }
   const idx = Number(dev.slice(3));
-  const s = padState(idx);
+  const s = padState(idx, !!opts.menu);
   if (!s) return { ...EMPTY_INPUT };
   const { gp, prev } = s;
   const btn = (i: number) => !!gp.buttons[i]?.pressed || (gp.buttons[i]?.value ?? 0) > 0.5;
@@ -115,6 +117,24 @@ export function readDevice(dev: DeviceId, opts: { tapJump: boolean; menu?: boole
   prev.ax = ax; prev.ay = ay; prev.cx = cx; prev.cy = cy;
   return { x: q(ax), y: q(ay), cx: sendC ? q(cx) : 0, cy: sendC ? q(cy) : 0, b: bits };
 }
+
+/**
+ * A player's input in a match. Keyboard 1's player also plays with every pad no other player in the match holds,
+ * so a fight started with the mouse still answers the controller in hand.
+ */
+export function readPlayer(dev: DeviceId, held: (DeviceId | null)[], opts: { tapJump: boolean }): InputFrame {
+  let frame = readDevice(dev, opts);
+  if (dev !== "kb1") return frame;
+  // every pad is read each frame (its flicks are edges), and the first one in use plays when the keyboard is idle
+  for (const i of connectedPads()) {
+    const pad: DeviceId = `pad${i}`;
+    if (held.includes(pad)) continue;
+    const p = readDevice(pad, opts);
+    if (idle(frame)) frame = p;
+  }
+  return frame;
+}
+const idle = (f: InputFrame): boolean => !f.x && !f.y && !f.cx && !f.cy && !(f.b & ~B.DIGITAL);
 
 /** Menu navigation: edge-triggered directions and confirm/back from every device at once. */
 export interface MenuInput { up: boolean; down: boolean; left: boolean; right: boolean; confirm: boolean; back: boolean; start: boolean; any: boolean; from: DeviceId | null }
