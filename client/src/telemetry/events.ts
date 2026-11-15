@@ -17,8 +17,8 @@ let bundle = "";
 const consoleError = console.error;
 
 /** `quality` is the frame pacer's resolution step: dpr already includes it. */
-export interface View { w: number; h: number; turned: boolean; dpr: number; canvasW: number; canvasH: number; scale: number; quality: number }
-export const view: View = { w: 0, h: 0, turned: false, dpr: 1, canvasW: 0, canvasH: 0, scale: 0, quality: 1 };
+export interface View { w: number; h: number; dpr: number; canvasW: number; canvasH: number; scale: number; quality: number }
+export const view: View = { w: 0, h: 0, dpr: 1, canvasW: 0, canvasH: 0, scale: 0, quality: 1 };
 
 export function randomHex(chars: number): string {
   const bytes = crypto.getRandomValues(new Uint8Array(Math.ceil(chars / 2)));
@@ -78,8 +78,8 @@ function snap(e: WideEvent): WideEventRecord {
 function summarize(s: WideEvent): void {
   const screens = (s.business.screens as [string, number][] | undefined) ?? [];
   const matches = (s.business.matches as string[] | undefined)?.length ?? 0;
-  const last = screens[screens.length - 1]?.[0] ?? "no screen";
-  s.set("summary", { message: `${screens.length} screens, now ${last} · ${matches} online matches · ${view.w}x${view.h}@${view.dpr}` });
+  const last = screens[screens.length - 1]?.[0] ?? (s.business.phoneCard ? "the phone card" : "no screen");
+  s.set("summary", { message: `${screens.length} screens, now ${last} · ${matches} online matches · ${view.w ? `${view.w}x${view.h}@${view.dpr}` : `page ${innerWidth}x${innerHeight}`}` });
 }
 
 function flush(beacon = false): void {
@@ -123,6 +123,8 @@ export interface TelemetryStart {
   continues?: string;
   /** See Page.launch. */
   launch?: string;
+  /** The page shows the phone card (client/src/phone.ts) instead of the game. */
+  phoneCard?: boolean;
 }
 
 /** Starts the page session's event and the page hooks; the returned stop ends it (the bundle is being swapped out). */
@@ -138,6 +140,7 @@ export function startTelemetry(opts: TelemetryStart): () => void {
   s.set("source", visitSource({ referrer: document.referrer, url: location.href, launch: opts.launch }, sessionStorage, localStorage, trace, Date.now(), (key, problem) => s.issue("warn", "source", `${key} in storage was ${problem}; this page's arrival replaced it`)));
   s.set("view", view);
   if (opts.continues) s.set("continues", true);
+  if (opts.phoneCard) s.set("phoneCard", { gamepad: null });
   const hidden = { count: 0, ms: 0, since: 0 };
   s.set("hidden", hidden);
 
@@ -193,7 +196,7 @@ export function startTelemetry(opts: TelemetryStart): () => void {
 
 /** The canvas geometry app.ts computed; a history of changes goes on the session. */
 export function noteView(next: View): void {
-  const changed = next.w !== view.w || next.h !== view.h || next.turned !== view.turned || next.dpr !== view.dpr || next.scale !== view.scale;
+  const changed = next.w !== view.w || next.h !== view.h || next.dpr !== view.dpr || next.scale !== view.scale;
   Object.assign(view, next);
   if (changed && session) sessionList("views", { ...next, at: Date.now() - session.t0 }, 20);
   // a running match checks the view itself, every draw
@@ -212,14 +215,14 @@ export function noteActivity(a: { key: string; platform: string }): void {
   session.set("activity", { instance: a.key, platform: a.platform });
 }
 
+/** A gamepad connected while the phone card was up, which started the game. */
+export function notePhoneCardGamepad(pad: Gamepad): void {
+  if (!session) throw new Error("wide events used before startTelemetry");
+  if (!session.business.phoneCard) throw new Error("a gamepad came through a phone card that wasn't shown");
+  session.set("phoneCard", { gamepad: { id: pad.id.slice(0, 100), at: Math.round((Date.now() - session.t0) / 100) / 10 } });
+}
+
 export function noteScreen(name: string): void {
   if (!session) throw new Error("wide events used before startTelemetry");
   sessionList("screens", [name, Math.round((Date.now() - session.t0) / 100) / 10]);
-}
-
-/** A match (local or online) the player played on the touch controls: how the funnel tells touch players apart. */
-export function noteTouchMatch(): void {
-  if (!session) throw new Error("wide events used before startTelemetry");
-  const had = (session.business.touch as { matches: number } | undefined)?.matches ?? 0;
-  session.set("touch", { matches: had + 1 });
 }

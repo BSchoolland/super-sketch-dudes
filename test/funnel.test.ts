@@ -13,9 +13,9 @@ function event(kind: EventKind, source: "client" | "server", trace: string, pare
   return { at: "", id: `e${++n}`, kind, source, trace, parent, level: "info", headline: null, t0, t1: t0 + 60_000, seq: 3, final: true, issues: [], business, ...extra };
 }
 const arrival = (referrer: string | null, at: number, ref: string | null = null): Arrival => ({ referrer, ref, utm: { source: null, medium: null, campaign: null }, landing: "/sketch-battle/", at });
-interface SessionOpts { player?: { id: string; name: string }; screens?: string[]; source?: VisitSource; ua?: string; seq?: number; touchMatches?: number }
+interface SessionOpts { player?: { id: string; name: string }; screens?: string[]; source?: VisitSource; ua?: string; seq?: number; phoneCard?: boolean }
 function session(trace: string, t0: number, o: SessionOpts = {}): StoredEvent {
-  return event("session", "client", trace, null, t0, { ...(o.screens ? { screens: o.screens.map((s, i) => [s, i]) } : {}), ...(o.source ? { source: o.source } : {}), ...(o.touchMatches ? { touch: { matches: o.touchMatches } } : {}) }, {
+  return event("session", "client", trace, null, t0, { ...(o.screens ? { screens: o.screens.map((s, i) => [s, i]) } : {}), ...(o.source ? { source: o.source } : {}), ...(o.phoneCard ? { phoneCard: { gamepad: null } } : {}) }, {
     seq: o.seq ?? 3,
     client: { session: trace, build: "dev", bundle: "", ua: o.ua ?? UA, w: 1280, h: 720, dpr: 1, player: o.player ?? null },
   });
@@ -54,12 +54,14 @@ describe("funnel", () => {
     expect(f.total).toMatchObject({ arrived: 4, signedIn: 4, played: 3, bots: 1, online: 2 });
   });
 
-  it("tells the players who played a match on the touch controls", () => {
+  it("counts the visitors who got the phone card, a gamepad through it or not, and doesn't call the card screenless", () => {
     const f = funnel([
-      session("s-phone", T0, { player: { id: "email-t", name: "Tam" }, screens: ["TitleScreen", "BattleMenuScreen", "OnlineScreen", "LoadingScreen", "VersusScreen"], touchMatches: 2 }),
+      session("s-phone", T0, { phoneCard: true, seq: 1 }),
+      session("s-pad", T0, { player: { id: "guest-p", name: "Pad" }, screens: ["TitleScreen", "BattleMenuScreen", "OnlineScreen", "LoadingScreen", "VersusScreen"], phoneCard: true }),
       session("s-desk", T0, { player: { id: "email-k", name: "Kit" }, screens: ["TitleScreen", "BattleMenuScreen", "OnlineScreen", "LoadingScreen", "VersusScreen"] }),
     ], T0 - DAY, "UTC", STAFF);
-    expect(f.total).toMatchObject({ arrived: 2, bots: 2, touch: 1 });
+    expect(f.total).toMatchObject({ arrived: 3, bots: 2, phoneCard: 2 });
+    expect(f.screenless).toBe(0);
   });
 
   it("counts a visit on a later calendar day, or a browser that first arrived on an earlier one, as coming back", () => {

@@ -49,19 +49,17 @@ function playerCard(hud: HudState, i: number, key: string, s: number, name: stri
   return canvas;
 }
 
-/** `band`: the span of the bottom edge the cards keep to, all of it by default. */
-export function drawHud(ctx: CanvasRenderingContext2D, state: State, hud: HudState, dt: number, names: string[], band: { left: number; right: number } | null = null): void {
+export function drawHud(ctx: CanvasRenderingContext2D, state: State, hud: HudState, dt: number, names: string[]): void {
   const n = state.fighters.length;
   const colors = fighterColors(state);
   const cardW = CARD_W, gap = 40;
   const total = n * cardW + (n - 1) * gap;
-  const left = band?.left ?? 30, right = band?.right ?? VIEW_W - 30, mid = (left + right) / 2;
-  const x0 = mid - total / 2;
+  const x0 = (VIEW_W - total) / 2;
   const y = VIEW_H - 150;
-  // cards that don't fit the band at full size (five or six, or beside touch controls): the row shrinks about its bottom middle
-  const k = Math.min(1, (right - left) / total);
+  // five or six cards don't fit the width at full size: the row shrinks about its bottom middle
+  const k = Math.min(1, (VIEW_W - 60) / total);
   ctx.save();
-  if (k < 1) { ctx.translate(mid, VIEW_H - 20); ctx.scale(k, k); ctx.translate(-mid, -(VIEW_H - 20)); }
+  if (k < 1) { ctx.translate(VIEW_W / 2, VIEW_H - 20); ctx.scale(k, k); ctx.translate(-VIEW_W / 2, -(VIEW_H - 20)); }
   const s = Math.min(2, Math.max(0.5, Math.round(ctx.getTransform().a * 4) / 4));
   ctx.textAlign = "left";
   state.fighters.forEach((f, i) => {

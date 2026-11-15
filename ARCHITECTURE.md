@@ -83,7 +83,7 @@ cells served at `fighters/<id>.png`). Every word of it is in `server/home-copy.t
 page with no strip. Its pictures are `client/public/` (`screenshots/`, `clip.mp4`, `og.jpg`, icons, `robots.txt`,
 `sitemap.xml`; `node scripts/homeshots.mjs` remakes them).
 
-The sections are `display: none` and the page can't scroll (an iPhone's browser aside: "The browser's bars") until the title screen's tab (bottom edge) opens them
+The sections are `display: none` and the page can't scroll (the phone card aside: "Phones") until the title screen's tab (bottom edge) opens them
 (`client/src/about.ts`): the page scrolls down to them and the game leaves the keys to the page. PLAY scrolls back up,
 and the page closes them when it's back at the top; any screen but the title closes them at once. Nothing of them
 loads before they open, so the game boots as it did without them. The Activity never shows the tab.
@@ -218,52 +218,20 @@ start of every sim frame from the latest device state; keyboard events are recor
 arrive so a press between frames is never lost. Gamepads are polled each frame. Each player
 slot has a device (keyboard layout 1, keyboard layout 2, or a gamepad index) and a bindings map.
 
-### Touch
+### Phones
 
-`input/touchpad.ts` is the on-screen controls as a device, DOM-free and unit-tested against the sim
-(`test/touch.test.ts`); `input/touch.ts` feeds it pointer events and decides when it is keyboard 1: while the last
-thing pressed was the screen (a key, mouse button or gamepad hands keyboard 1 back). Its frames carry `B.DIGITAL`, so
-the sim plays them by the keyboard's rules (tap ATTACK: tilt, hold: smash), with an analog stick. A thumb crosses the
-middle of a stick over several frames, so a fast push is sent as one frame at rest then the push, which the sim reads
-as a flick (dash from a walk, roll, spot dodge, platform drop); ATTACK within 8 frames of a flick adds a 2-frame
-right-stick pulse, the keyboard SMASH key's, for the smash. JUMP with ATTACK within 3 frames drops JUMP before the jump
-squat ends: a short hop. A match screen arms the controls every tick (`VersusScreen.armControls`, from app.ts) and
-they are live only while it runs; the HUD keeps to the space between them (`Renderer.hudBand`). A match played on them
-counts on the session's `touch.matches`, which the funnel's "on touch" column reads.
-
-### Held upright
-
-The game is always landscape. On the website's own page on a phone or tablet (the gate bars.ts uses below), a
-viewport taller than wide turns the stage (`#stage` in index.html: the canvas and `#overlay`, where the text fields
-are) a quarter clockwise at the screen's full size (`client/src/turn.ts`, `html.turned`), so the player just turns the
-phone; with the phone's rotation lock on, the game reads right held sideways. Menus and matches alike, mid-match too:
-a turn is a resize. Pointer events arrive in screen coordinates and `toView` (input/pointer.ts) turns them back, so
-taps, the controls, the draw pad and the text fields need nothing of their own. While the about sections are open
-nothing is turned: they are a web page, read upright, and PLAY brings the turned game back.
-`node scripts/turncheck.mjs` checks it in emulation.
-
-### The browser's bars
-
-`client/src/bars.ts` keeps a phone's browser bars out of the game, on the website's own page only (not the Activity,
-not the shell, not inside any iframe) and only where the primary pointer is coarse; a desktop gets none of it, not
-even the manifest link. Opened from the home screen (`manifest.webmanifest`, display fullscreen, added at run time;
-`apple-mobile-web-app-capable` in index.html) there are no bars. Otherwise:
-
-- Android and iPads: a touch on the canvas goes fullscreen and locks landscape, except while a match screen is up or
-  the about sections are open. Opening the sections leaves fullscreen: in it, Chrome won't let a reader zoom them.
-- iPhones (every iPhone browser is WebKit, with no Fullscreen API; the bars collapse only when a finger scrolls the
-  page): `html.swipe` makes the page scrollable and 300vh tall, and a "SWIPE UP TO PLAY" card covers the game until
-  the viewport has grown to the screen's height (upright, to within 110px of it, the status bar staying) or by 40px,
-  for a browser whose bars tuck to a strip. Turned, the card's box stays upright, so its swipe scrolls the page, and
-  its words turn with the game: "SWIPE LEFT", the arrow pointing up the screen.
-  After 6 s it offers "tap to play anyway", for the rest of the page's life. Once the bars are tucked nothing may
-  scroll the page or they come back: the canvas is `touch-action: none`, and a document listener cancels every
-  touchmove and pinch except on the card, in the open about sections, or in a text box with more to show. The card
-  stays down while the sections are open or a text field has the keyboard.
-
-What happened is on the session's `bars` list (mode, the card shown and why it went, with the viewport and screen).
-`node scripts/barscheck.mjs` checks it in emulation (WebKit iPhone, Chromium Android, a desktop, an iframe): the bars
-are a viewport shorter than the screen there, so a real phone is still the only test of the swipe itself.
+The game is played with a keyboard, mouse or controller. A device with no fine pointer (`(any-pointer: fine)` false:
+no mouse, trackpad or pen) and no connected gamepad gets a card instead (`client/src/phone.ts`): the game's name,
+that it's played on a computer, and SHARE THE LINK (`navigator.share`, or the address copied to the clipboard). Its
+words are `phoneCard` in `server/home-copy.ts`. main.ts decides before any of the game loads: the game is a separate
+chunk (`import("./app")`), so a phone downloads main, the small shared chunk (telemetry, the copy) and the CSS, and
+none of the game's code, fighters or music. Under the card (`html.phone`) the about sections are an ordinary
+scrolling, zooming page; the card's "about" tab and the page's PLAY links move between them. Touchscreen laptops,
+Chromebooks and iPads with a trackpad have a fine pointer too and get the game; a finger there is a pointer like the
+mouse (taps, the draw pad). A gamepad connecting while the card is up (`gamepadconnected`) takes the card down and
+starts the game. The Discord Activity never shows the card (Discord doesn't offer it on phones).
+The session event carries `phoneCard: { gamepad: null | { id, at } }` from its first snapshot, and the funnel counts
+the visitors who got it ("phone card"). `node scripts/phonecheck.mjs` checks it in emulation.
 
 ## Rendering
 

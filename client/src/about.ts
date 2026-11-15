@@ -13,27 +13,16 @@ export const hasAbout = sections !== null;
 
 export const aboutOpen = (): boolean => root.classList.contains("about");
 
-const watchers = new Set<() => void>();
-/** `fn` runs whenever the sections open or close. */
-export function onAbout(fn: () => void): void {
-  watchers.add(fn);
-}
-
-function set(open: boolean): void {
-  root.classList.toggle("about", open);
-  for (const fn of watchers) fn();
-}
-
 export function openAbout(): void {
   if (!sections || !clip) throw new Error("this page has no about sections");
-  set(true);
+  root.classList.add("about");
   sections.scrollIntoView({ block: "start" });
   // closing them before it starts interrupts it
   clip.play().catch((error: unknown) => { if (!(error instanceof DOMException && error.name === "AbortError")) throw error; });
 }
 
 function shut(): void {
-  set(false);
+  root.classList.remove("about");
   clip!.pause();
 }
 
