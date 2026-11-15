@@ -8,7 +8,7 @@ import { activity } from "../activity";
 import { myLibrary, refreshLibrary } from "../fighters";
 import { forgeWords } from "./character";
 import { myMaps, refreshMaps } from "../maps";
-import { bg, card, hint, label, title, hover, clicked, goTo, type Screen, INK } from "./ui";
+import { bg, card, grow, keyHint, keysInHand, label, small, title, hover, clicked, goTo, type Screen, INK } from "./ui";
 import { pointer } from "../input/pointer";
 import { drawAvatar } from "./images";
 import { MenuBrawl } from "./brawl";
@@ -20,14 +20,23 @@ import { MENU_CARD } from "../../../shared/stages/menu";
 import { HOME_COPY } from "../../../server/home-copy";
 import { aboutOpen, hasAbout, openAbout } from "../about";
 
-const MENU_Y = MENU_CARD.y0, MENU_STEP = MENU_CARD.step;
+const MENU_Y = MENU_CARD.y0;
+/** The bottom the menu's cards stay above: the brawl's floor. */
+const MENU_FLOOR = 990;
+
+/** The menu's cards, `n` of them: taller on a small screen, as far as the room above the floor allows. */
+function menuCards(n: number): { x: number; w: number; h: number; step: number } {
+  const gap = MENU_CARD.step - MENU_CARD.h;
+  const h = Math.min(grow(MENU_CARD.h, 42), (MENU_FLOOR - MENU_Y - gap * (n - 1)) / n);
+  return { x: MENU_CARD.x, w: MENU_CARD.w, h, step: h + gap };
+}
 
 export type Mode = "battle" | "library" | "create" | "maps" | "settings" | "feedback";
 
 const NOTE = { x: 36, y: 24, w: 290, h: 120 };
 /** `sel` for the FEEDBACK note in the top left, above the menu, and a guest's SIGN IN in the top right. */
 const FEEDBACK = -1, SIGN_IN = -2;
-const SIGN_IN_BOX = { x: VIEW_W - 40 - 220, y: 30, w: 220, h: 76 };
+const signInBox = (): { x: number; y: number; w: number; h: number } => (small() ? { x: VIEW_W - 30 - 280, y: 24, w: 280, h: 110 } : { x: VIEW_W - 40 - 220, y: 30, w: 220, h: 76 });
 
 function drawFeedbackNote(ctx: CanvasRenderingContext2D, sel: boolean): void {
   const { x, y, w, h } = NOTE;
@@ -45,10 +54,17 @@ function drawFeedbackNote(ctx: CanvasRenderingContext2D, sel: boolean): void {
 
 /** The tab on the bottom edge that opens the page's about sections. */
 const ABOUT = { x: VIEW_W - 430, y: VIEW_H - 46, w: 168, h: 50 };
+/** How much bigger the tab is drawn on a small screen, grown from the middle of its bottom edge. */
+const aboutZoom = (): number => (small() ? 1.5 : 1);
+function aboutRect(): { x: number; y: number; w: number; h: number } {
+  const k = aboutZoom(), { x, y, w, h } = ABOUT;
+  return { x: x + (w - w * k) / 2, y: y + h - h * k, w: w * k, h: h * k };
+}
 
 function drawAboutTab(ctx: CanvasRenderingContext2D, over: boolean): void {
-  const { x, y, w, h } = ABOUT;
+  const { x, y, w, h } = ABOUT, k = aboutZoom();
   ctx.save();
+  if (k !== 1) { ctx.translate(x + w / 2, y + h); ctx.scale(k, k); ctx.translate(-(x + w / 2), -(y + h)); }
   ctx.translate(x, y);
   inkPath(ctx, [[0, h], [2, 9], [12, 0], [w - 12, 0], [w - 2, 9], [w, h]], false, 11);
   ctx.fillStyle = PAPER;
@@ -76,30 +92,33 @@ function drawPlayerBadge(ctx: CanvasRenderingContext2D, signInFocused: boolean):
   const p = account.player;
   if (!p) return;
   if (playingAsGuest()) {
-    const b = SIGN_IN_BOX;
+    const b = signInBox(), size = grow(38, 15);
     card(ctx, b.x, b.y, b.w, b.h, "", signInFocused);
-    title(ctx, "SIGN IN", b.x + b.w / 2, b.y + 52, 38, INK);
-    label(ctx, p.name, b.x - 18, b.y + 50, 28, PENCIL, "right", 700);
+    title(ctx, "SIGN IN", b.x + b.w / 2, b.y + b.h / 2 + 14 + (size - 38) * 0.37, size, INK);
+    label(ctx, p.name, b.x - 18, b.y + b.h / 2 + 12, grow(28, 12), PENCIL, "right", 700);
     return;
   }
   const r = 30, cx = VIEW_W - 40 - r, cy = 30 + r;
   drawAvatar(ctx, p, cx, cy, r);
-  label(ctx, p.name, cx - r - 16, cy + 10, 30, INK, "right", 800);
+  label(ctx, p.name, cx - r - 16, cy + 10, grow(30, 13), INK, "right", 800);
 }
 
 /** The privacy notice and terms, small in the bottom left; a click opens one in place of the game. False: `live` is off. */
 export function drawLegalLinks(ctx: CanvasRenderingContext2D, live: boolean): void {
-  const y = VIEW_H - 14, size = 22;
+  const y = VIEW_H - 14, size = grow(22, 12);
+  // on a small screen the target reaches past the word, up and to the sides
+  const pad = small() ? size * 0.6 : 4, above = small() ? size * 2 : size, below = small() ? 14 : 10;
   ctx.save();
   ctx.font = `700 ${size}px ${FONT}`;
   let x = 22;
   for (const [text, page] of [["privacy", "privacy"], ["terms", "terms"]] as const) {
     const w = ctx.measureText(text).width;
-    const over = live && hover(x - 4, y - size, w + 8, size + 10);
+    const hit = { x: x - pad, y: y - above, w: w + pad * 2, h: above + below };
+    const over = live && hover(hit.x, hit.y, hit.w, hit.h);
     label(ctx, text, x, y, size, over ? INK : "rgba(41,39,34,0.5)", "left", 700);
     if (over) { inkLine(ctx, x, y + 4, x + w, y + 4, INK, 1.2); document.body.style.cursor = "pointer"; }
-    if (live && clicked(x - 4, y - size, w + 8, size + 10)) location.href = `${site.base}${page}`;
-    x += w + 22;
+    if (live && clicked(hit.x, hit.y, hit.w, hit.h)) location.href = `${site.base}${page}`;
+    x += w + (small() ? size * 1.4 : 22);
   }
   ctx.restore();
 }
@@ -117,6 +136,11 @@ export class TitleScreen implements Screen {
       ...(myMaps.canCreate ? [{ id: "maps" as const, name: "MAPS", desc: "Build a stage to fight on" }] : []),
       { id: "settings", name: "SETTINGS", desc: "Change settings" },
     ];
+  }
+  /** Where menu row `i` is drawn and tapped. */
+  rowRect(i: number): { x: number; y: number; w: number; h: number } {
+    const { x, w, h, step } = menuCards(this.items.length);
+    return { x, y: MENU_Y + i * step, w, h };
   }
   /** How many forges are left, or why there are none, from the library fetch. */
   private get forgeNote(): string {
@@ -173,16 +197,16 @@ export class TitleScreen implements Screen {
     const under = live && pointer.present && this.brawl ? this.brawl.at(pointer.x, pointer.y) : null;
     const tapped = live && pointer.clicked && this.brawl ? this.brawl.at(pointer.tapX, pointer.tapY) : null;
     if (tapped) { sfx.menuConfirm(); goTo(this.onInspect(tapped.id)); }
-    const x = MENU_CARD.x, w = MENU_CARD.w, h = MENU_CARD.h;
+    const size = grow(42, 16);
     this.items.forEach((it, i) => {
-      const y = MENU_Y + i * MENU_STEP;
+      const { x, y, w, h } = this.rowRect(i);
       if (live && !under && hover(x, y, w, h)) { this.sel = i; document.body.style.cursor = "pointer"; }
       if (live && !tapped && clicked(x, y, w, h)) goTo(this.pick(it.id));
       card(ctx, x, y, w, h, "", i === this.sel);
-      title(ctx, it.name, x + w / 2, y + 60, 42, INK);
+      title(ctx, it.name, x + w / 2, y + h / 2 + 16 + (size - 42) * 0.38, size, INK);
       // the forge's word on the card itself, not only under it when it's picked: resting, or none left
       const st = myLibrary.forge;
-      if (it.id === "create" && st && (st.wall || st.resting)) label(ctx, st.resting ? "resting" : "none left", x + w - 14, y + h - 12, 20, PENCIL, "right");
+      if (it.id === "create" && st && (st.wall || st.resting)) label(ctx, st.resting ? "resting" : "none left", x + w - 14, y + h - 12, grow(20, 10), PENCIL, "right");
       if (it.id === "library" && isNew("characters")) drawNewSticker(ctx, x + w - 20, y + 8);
     });
     // the brawl plays over the menu: fighters stand on the cards and the logo
@@ -191,18 +215,19 @@ export class TitleScreen implements Screen {
     if (live && clicked(NOTE.x, NOTE.y, NOTE.w, NOTE.h)) goTo(this.pick("feedback"));
     drawFeedbackNote(ctx, this.sel === FEEDBACK);
     if (playingAsGuest()) {
-      const b = SIGN_IN_BOX;
+      const b = signInBox();
       if (live && !under && hover(b.x, b.y, b.w, b.h)) { this.sel = SIGN_IN; document.body.style.cursor = "pointer"; }
       if (live && !tapped && clicked(b.x, b.y, b.w, b.h)) { sfx.menuConfirm(); goTo(this.onSignIn()); }
     }
     drawPlayerBadge(ctx, this.sel === SIGN_IN);
     const desc = this.sel === FEEDBACK ? "Ideas, bugs, anything: Ben reads these" : this.sel === SIGN_IN ? "Keep your characters on any device, with Discord or Google" : this.items[this.sel].desc;
-    label(ctx, desc, VIEW_W / 2, MENU_Y + this.items.length * MENU_STEP + 30, 26, INK, "center");
-    hint(ctx, "click, or arrows + Enter · gamepad: stick + A");
+    // what the picked row does: on a touchscreen nothing is picked before it's tapped, and a small screen has no room
+    if (keysInHand() && !small()) label(ctx, desc, VIEW_W / 2, this.rowRect(this.items.length).y + 30, 26, INK, "center");
+    keyHint(ctx, "click, or arrows + Enter · gamepad: stick + A");
     label(ctx, `build ${__BUILD__}`, VIEW_W - 20, VIEW_H - 16, 14, "rgba(41,39,34,0.5)", "right", 400);
     if (!activity) drawLegalLinks(ctx, live && !under && !tapped);
     if (hasAbout && !activity) {
-      const b = ABOUT, over = live && !under && hover(b.x, b.y, b.w, b.h);
+      const b = aboutRect(), over = live && !under && hover(b.x, b.y, b.w, b.h);
       if (over) document.body.style.cursor = "pointer";
       if (live && !tapped && clicked(b.x, b.y, b.w, b.h)) openAbout();
       drawAboutTab(ctx, over);
