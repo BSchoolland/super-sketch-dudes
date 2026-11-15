@@ -420,11 +420,7 @@ export class CharacterSelect {
         const w = small() ? 340 : 260, h = small() ? 110 : 70;
         if (button(ctx, VIEW_W / 2 - w / 2, CANCEL_Y, w, h, "CANCEL", { size: small() ? 40 : 30, key: "Esc" }) && !this.used) { this.cancel(); this.used = true; }
       }
-      // on the band fights; anywhere else backs out of it
-      if (ready && !this.used && pointer.clicked && t - this.bandAt > BAND_IN / 2) {
-        if (this.underBand(pointer.tapY)) this.act.fight();
-        else this.cancel();
-      }
+      if (ready && !this.used && pointer.clicked && t - this.bandAt > BAND_IN / 2) this.act.fight();
     } else this.bandAt = null;
   }
 
