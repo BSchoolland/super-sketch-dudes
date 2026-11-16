@@ -4,15 +4,20 @@ import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { fileURLToPath } from "node:url";
 import type { Judgements, NameVerdict } from "../shared/moderation";
 
 const run = promisify(execFile);
 const BENBOT = path.join(os.homedir(), "Projects/benbot/scripts");
 const SEND = process.env.DISCORD_SEND ?? path.join(BENBOT, "discord-send");
 const JOBS = process.env.BENBOT_JOBS ?? path.join(BENBOT, "jobs");
-/** Read by BenBot's moderation-review job (~/Projects/benbot/jobs/moderation-review.md). */
-export const REVIEW_QUEUE = path.join(path.dirname(fileURLToPath(import.meta.url)), "runs", "moderation-review.jsonl");
+/**
+ * Read by BenBot's moderation-review job (~/Projects/benbot/jobs/moderation-review.md). Outside every checkout: the
+ * worker runs from a worktree that moves with each deploy, and the review job must find the queue wherever that is.
+ */
+export const MODERATION_DIR = process.env.MODERATION_DIR ?? path.join(os.homedir(), "ssd-growth", "moderation");
+export const REVIEW_QUEUE = path.join(MODERATION_DIR, "moderation-review.jsonl");
+/** The review job's own record of what it has decided. */
+export const REVIEWED = path.join(MODERATION_DIR, "moderation-reviewed.jsonl");
 
 export interface Submission { jobId: string; fighterId: string; playerName: string; name: string; drawing: string }
 
@@ -65,6 +70,10 @@ export async function alertUnavailable(s: Submission, why: string): Promise<void
 
 /** An unjudged character, now forged, for BenBot's moderation-review job to look at (and take down if it fails). */
 export async function queueReview(s: Submission): Promise<void> {
-  fs.appendFileSync(REVIEW_QUEUE, JSON.stringify({ ...s, at: Date.now() }) + "\n");
+  // the drawing goes with it: the job's run folder belongs to the worker's checkout
+  const drawing = path.join(MODERATION_DIR, "drawings", `${s.fighterId}.png`);
+  fs.mkdirSync(path.dirname(drawing), { recursive: true });
+  fs.copyFileSync(s.drawing, drawing);
+  fs.appendFileSync(REVIEW_QUEUE, JSON.stringify({ ...s, drawing, at: Date.now() }) + "\n");
   await run(JOBS, ["run", "moderation-review"]);
 }
