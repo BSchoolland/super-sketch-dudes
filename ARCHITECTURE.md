@@ -411,7 +411,10 @@ else, which plays the website with a warning on the session event).
 - Rooms: the room a player is in (one that shows its code) goes to CrazyGames with `updateRoom` (their invite UI uses
   it); INVITE in the lobby copies `inviteLink({ room })`. A page opened from an invite lands in that room, instant
   multiplayer opens a new private room, and an invite accepted while playing opens once no match is on.
-- Privacy and terms open in a new tab with `?from=crazygames`, which hides their link to the website's game.
+- Privacy and terms open in a new tab with `?from=crazygames`, which hides their link to the website's game. The
+  title has no about tab: the about sections are the website's landing page.
+- None of the phone handling (`bars.ts`: the swipe card, fullscreen, the turned stage, the mobile note): CrazyGames'
+  page owns the screen. Touch controls still work. It is submitted as desktop-only.
 - No ads: Basic Launch has them off.
 - The session's `source` ref is `crazygames`, and `crazygames` holds the SDK's environment and how the player arrived.
 

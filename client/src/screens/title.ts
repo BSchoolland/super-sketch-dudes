@@ -233,7 +233,8 @@ export class TitleScreen implements Screen {
     keyHint(ctx, "click, or arrows + Enter · gamepad: stick + A");
     label(ctx, `build ${__BUILD__}`, VIEW_W - 20, VIEW_H - 16, 14, "rgba(41,39,34,0.5)", "right", 400);
     if (!activity) drawLegalLinks(ctx, live && !under && !tapped);
-    if (hasAbout && !activity) {
+    // the website's landing page, with links out of the game
+    if (hasAbout && !activity && !crazyGames) {
       const b = aboutRect(), over = live && !under && hover(b.x, b.y, b.w, b.h);
       if (over) document.body.style.cursor = "pointer";
       if (live && !tapped && clicked(b.x, b.y, b.w, b.h)) openAbout();
