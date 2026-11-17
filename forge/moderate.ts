@@ -54,7 +54,7 @@ const NAME_STANCE = {
   lenient: "leniently, the player is someone I'd give the benefit of the doubt to",
 };
 
-const namePrompt = (stance: keyof typeof NAME_STANCE, name: string): string => `A player of my fighting game asked to change their player name.  Everyone sees it: on their characters, their maps, in lobbies and in matches.  A lot of the players are middle schoolers.  I need you to check whether the name is okay.  You should judge pretty ${NAME_STANCE[stance]}.
+const namePrompt = (stance: keyof typeof NAME_STANCE, name: string): string => `A player of my fighting game asked to change their player name.  Everyone sees it: on their characters, their maps, in lobbies and in matches.  A lot of the players are high schoolers.  I need you to check whether the name is okay.  You should judge pretty ${NAME_STANCE[stance]}.
 
 Name: "${name}"
 
