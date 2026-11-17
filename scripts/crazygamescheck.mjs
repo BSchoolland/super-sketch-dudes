@@ -1,16 +1,17 @@
 // The CrazyGames build end to end, with CrazyGames stubbed: the page's SDK (?crazygames=stub, dev builds only) and
 // CrazyGames' token keys (scripts/fake-crazygames.mjs, which a DEV_LOGIN server trusts through CRAZYGAMES_JWKS).
 // Starts its own fake CrazyGames, server (scratch data dir), Vite and scripts/fake-forge.mjs, then:
-//   1. a guest lands on the title: loading events, no Discord/Google/email anywhere, privacy/terms open in a new tab
-//      and link nowhere but each other (no way to the website's copy of the game)
+//   1. a guest lands on the title: loading events, no Discord/Google/email anywhere, no about tab, privacy/terms open
+//      in a new tab and link nowhere but each other (no way to the website's copy of the game); on a phone, none of
+//      the website's phone handling (swipe card, fullscreen, turned stage, mobile note), and a tap still plays
 //   2. the guest plays VS BOTS (gameplay start/stop around the match and its pause, happytime on the win) and draws a
 //      character (gameplay while drawing)
 //   3. the guest logs in to CrazyGames from SIGN IN: they're crazygames-<id>, named by CrazyGames, and keep the
 //      character; a reload logged in keeps them; SETTINGS has no CHANGE NAME or SIGN OUT; a failed login shows the
 //      CrazyGames door (SIGN IN WITH CRAZYGAMES, BACK, nothing else)
 //   4. instant multiplayer: Ann lands in a private room, tells CrazyGames about it, INVITE copies a link; Bob opens the
-//      link logged in and lands in her room; both see CrazyGames names; they play a match; Cat accepts an invite from
-//      CrazyGames' UI while on the title and lands there too
+//      link logged in and lands in her room; both see CrazyGames names; Cat accepts an invite from CrazyGames' UI
+//      while on the title and lands there too; Ann and Bob pick, Bob's FIGHT! opens Ann's stage screen, they play
 //   5. every page asked nothing of any host but this one; the session events say crazygames
 // Usage: node scripts/crazygamescheck.mjs [--shots <dir>]   (SERVER_PORT, VITE_PORT override 3431 / 5631)
 import { chromium } from "playwright";
@@ -60,14 +61,23 @@ try {
   /** Hosts a page asked for that aren't this site or the fake CrazyGames. */
   const offsite = [];
   const fakeHost = new URL(fake.url).host;
-  async function page(name, url) {
-    const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  async function page(name, url, device = { viewport: { width: 1280, height: 720 } }) {
+    const context = await browser.newContext(device);
     await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin });
     const p = await context.newPage();
     p.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
     // the dud's login is meant to fail: the fake won't mint for its name
     const expected = name === "dud" ? /sign-in failed|wouldn't mint|status of 400/ : null;
     p.on("console", (m) => { if (m.type() === "error" && !expected?.test(m.text())) errors.push(`${name} console: ${m.text()}`); });
+    // the first-fighter tour's cards would take the keys this script presses
+    await p.addInitScript((accountKey) => {
+      const get = Storage.prototype.getItem;
+      Storage.prototype.getItem = function (key) {
+        if (key !== "sketchbattle.tour") return get.call(this, key);
+        const id = JSON.parse(get.call(this, accountKey) ?? "null")?.player?.id;
+        return JSON.stringify(id ? { [id]: "done" } : {});
+      };
+    }, ACCOUNT_KEY);
     p.on("request", (r) => { const host = new URL(r.url()).host; if (!["", `localhost:${VITE_PORT}`, fakeHost].includes(host) && !r.url().startsWith("data:")) offsite.push(`${name}: ${r.url()}`); });
     if (url) await p.goto(url);
     return p;
@@ -122,7 +132,23 @@ try {
   if (shots) await popup.screenshot({ path: path.join(shots, "01b-privacy-from-crazygames.png"), fullPage: true });
   if (!(await screen(bea))) fail("clicking privacy navigated the game away");
   await popup.close();
-  console.log(`  ${beaGuest.name} (${beaGuest.id}); loadingStart, loadingStop; privacy opens in a new tab and the game stays`);
+  await tap(bea, 1920 - 430 + 84, 1080 - 46 + 25);
+  await bea.waitForTimeout(300);
+  if (await bea.evaluate(() => document.documentElement.classList.contains("about"))) fail("the about tab opened the website's landing page");
+  console.log(`  ${beaGuest.name} (${beaGuest.id}); loadingStart, loadingStop; privacy opens in a new tab and the game stays; no about tab`);
+  const phone = await page("phone", stub(), { viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 });
+  await on(phone, "TitleScreen");
+  await phone.waitForTimeout(800);
+  const handled = await phone.evaluate(() => ({ classes: document.documentElement.className, note: !!document.getElementById("mobile-note"), manifest: !!document.querySelector("link[rel=manifest]") }));
+  if (/handheld|turned/.test(handled.classes) || handled.note || handled.manifest) fail(`the phone got the website's phone handling: ${JSON.stringify(handled)}`);
+  await shot(phone, "01c-title-phone");
+  const row = await phone.evaluate(() => { const s = window.sketchbattle.screen; return s.rowRect(s.items.findIndex((i) => i.id === "battle")); });
+  const [rx, ry] = await at(phone, row.x + row.w / 2, row.y + row.h / 2);
+  await phone.touchscreen.tap(rx, ry);
+  await on(phone, "BattleMenuScreen");
+  if (await phone.evaluate(() => !!document.fullscreenElement)) fail("a tap on the phone went fullscreen");
+  await phone.close();
+  console.log("  on a phone: no swipe card, fullscreen, turned stage or mobile note; a tap on BATTLE opens it");
 
   console.log("2. the guest plays VS BOTS, then draws");
   await choose(bea, "battle");
@@ -132,7 +158,8 @@ try {
   await inLobby(bea, 1);
   if ((await calls(bea)).some((c) => c.startsWith("updateRoom"))) fail("a VS BOTS room was offered to CrazyGames to invite into");
   await pickHouse(bea, "rocket");
-  await bea.waitForFunction(() => window.sketchbattle.screen.canStart(), null, { timeout: 20000 });
+  await bea.evaluate(() => window.sketchbattle.screen.pickBot(0, { id: "wizard", name: "WIZARD", bundleUrl: `/house/wizard/bundle.json?v=${window.sketchbattle.build}`, house: true, entry: null }));
+  await bea.waitForFunction(() => window.sketchbattle.screen.canFight(), null, { timeout: 20000 });
   await bea.evaluate(() => window.sketchbattle.screen.startMatch({ stage: "rooftops", stocks: 3, time: 0, map: null }));
   await on(bea, "VersusScreen", 30000);
   await bea.waitForTimeout(5000);
@@ -176,7 +203,7 @@ try {
   await on(bea, "LibraryScreen");
   await bea.waitForFunction(() => (window.sketchbattle.screen.entries ?? []).some((e) => e.status === "ready"), null, { timeout: 60000 });
   const made = await bea.evaluate(() => window.sketchbattle.screen.entries.find((e) => e.status === "ready"));
-  console.log(`  VS BOTS: gameplayStart, gameplayStop on pause, start on resume, stop and one happytime on a win; drawing is gameplay; ${made.name} forged (${made.id})`);
+  console.log(`  VS BOTS: gameplayStart, gameplayStop on pause, start on resume, stop and one happytime on a win; drawing is gameplay; ${made.name} made (${made.id})`);
 
   console.log("3. the guest logs in to CrazyGames");
   for (let i = 0; i < 3 && (await screen(bea)) !== "TitleScreen"; i++) await press(bea, "Escape");
@@ -248,8 +275,11 @@ try {
   await Promise.all([inLobby(ann, 2), inLobby(bob, 2)]);
   await pickHouse(ann, "rocket"); await pickHouse(bob, "wizard");
   await Promise.all([ann, bob].map((p) => p.waitForFunction(() => window.sketchbattle.screen.lobbyDebug().members.every((m) => m.fighter))));
-  for (const p of [ann, bob]) await p.evaluate(() => window.sketchbattle.screen.toggleReady());
-  await ann.waitForFunction(() => window.sketchbattle.screen.canStart());
+  await ann.waitForFunction(() => window.sketchbattle.screen.canFight());
+  await shot(ann, "08b-charselect-both-picked");
+  // a guest's FIGHT! goes to the host as a `fight` message, which opens the host's stage screen
+  await bob.evaluate(() => window.sketchbattle.screen.fight());
+  await ann.waitForFunction(() => window.sketchbattle.screen.context.room.picking, null, { timeout: 10000 });
   await ann.evaluate(() => window.sketchbattle.screen.startMatch({ stage: "rooftops", stocks: 3, time: 0, map: null }));
   await Promise.all([ann, bob].map((p) => p.waitForFunction(() => typeof window.sketchbattle.screen.netDebug === "function", null, { timeout: 20000 })));
   await ann.waitForTimeout(3800);
@@ -261,7 +291,7 @@ try {
   if (f < 150 || hashes[0] === null || hashes[0] !== hashes[1]) fail(`the match: frames ${frames}, hashes at ${f} ${hashes.join(" vs ")}`);
   for (const [name, p] of [["Ann", ann], ["Bob", bob]]) if (!(await calls(p)).includes("gameplayStart")) fail(`${name}'s match never started gameplay`);
   await shot(ann, "09-match-crazygames-users");
-  console.log(`  Ann_Stub vs Bob_Stub played to frame ${Math.min(...frames)}, hashes agree at ${f}`);
+  console.log(`  Bob's FIGHT! opened Ann's stage screen; Ann_Stub vs Bob_Stub played to frame ${Math.min(...frames)}, hashes agree at ${f}`);
 
   console.log("5. off-site requests and session events");
   if (offsite.length) fail(`pages asked other hosts:\n${offsite.slice(0, 10).join("\n")}`);
