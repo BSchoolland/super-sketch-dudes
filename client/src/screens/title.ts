@@ -213,7 +213,7 @@ export class TitleScreen implements Screen {
       title(ctx, it.name, x + w / 2, y + h / 2 + 16 + (size - 42) * 0.38, size, INK);
       // the forge's word on the card itself, not only under it when it's picked: resting, or none left
       const st = myLibrary.forge;
-      if (it.id === "create" && st && (st.wall || st.resting)) label(ctx, st.resting ? "resting" : "none left", x + w - 14, y + h - 12, grow(20, 10), PENCIL, "right");
+      if (it.id === "create" && st && (st.wall || st.resting)) label(ctx, st.resting ? "paused" : "none left", x + w - 14, y + h - 12, grow(20, 10), PENCIL, "right");
       if (it.id === "library" && isNew("characters")) drawNewSticker(ctx, x + w - 20, y + 8);
     });
     // the brawl plays over the menu: fighters stand on the cards and the logo
