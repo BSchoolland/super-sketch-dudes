@@ -220,6 +220,21 @@ export function setPublic(owner: string, id: string, pub: boolean): LibraryEntry
   return e;
 }
 
+/** The owner's say on whether the game's videos may show it. Null if it isn't one of theirs. */
+export function setFeature(owner: string, id: string, on: boolean): LibraryEntry | null {
+  const e = libraryOf(owner).find((c) => c.id === id);
+  if (!e) return null;
+  if (on) e.feature = true; else delete e.feature;
+  write(owner);
+  return e;
+}
+
+/**
+ * Has a page anyone can open by its link (server/share.ts): finished, public, no moderator holds it, not deleted (a
+ * taken-down one isn't on file at all). A guest's counts: sharing is how a newcomer's first character finds friends.
+ */
+export const isShareable = (c: LibraryEntry): boolean => c.status === "ready" && !!c.bundleUrl && c.public && !c.held && !c.deleted;
+
 /** Shown to other players (COMMUNITY, the menu brawl): its owner made it public, has an account, and no moderator holds it. */
 export const isListed = (c: LibraryEntry): boolean => c.public && !c.held && !isGuest(c.owner);
 
@@ -257,7 +272,7 @@ export function everyCharacter(): LibraryEntry[] {
   return [...cache.values()].flatMap((lib) => lib.characters.filter((c) => c.status === "ready" && c.bundleUrl && !c.deleted));
 }
 
-/** Adds or replaces the entry (by id) in its owner's library. A replacement keeps what the owner set on it (public, deleted). */
+/** Adds or replaces the entry (by id) in its owner's library. A replacement keeps what the owner set on it (public, deleted, feature) and a hold. */
 export function upsertCharacter(entry: LibraryEntry, player?: Player): LibraryEntry {
   const lib = load(entry.owner);
   if (player) lib.player = player;
@@ -267,6 +282,7 @@ export function upsertCharacter(entry: LibraryEntry, player?: Player): LibraryEn
     entry = { ...entry, public: was.public };
     if (was.deleted) entry.deleted = true;
     if (was.held) entry.held = true;
+    if (was.feature) entry.feature = true;
     lib.characters[i] = entry;
   } else lib.characters.push(entry);
   write(entry.owner);

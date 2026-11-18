@@ -66,6 +66,8 @@ export interface LibraryEntry {
   held?: boolean;
   /** It failed through no fault of the player: TRY AGAIN forges it once more without using up a forge of theirs. */
   retryable?: boolean;
+  /** Its owner (an account) is OK with it appearing in the game's videos. */
+  feature?: boolean;
 }
 
 /**
@@ -107,6 +109,20 @@ export interface CommunityCharacter extends Pick<LibraryEntry, "id" | "name" | "
   saved: boolean;
   /** The caller made it. */
   mine: boolean;
+}
+/** A character someone opened a share link to: anyone's, as long as it's shareable (server/share.ts). */
+export interface SharedCharacter extends CommunityCharacter {
+  /** In COMMUNITY, so SAVE can take it (a guest's or a starter can be shared but not saved). */
+  saveable: boolean;
+}
+/** One character the game's videos may show: GET /api/characters/videos. URLs are absolute. */
+export interface VideoCharacter {
+  id: string;
+  name: string;
+  tagline: string | null;
+  owner: string;
+  page: string;
+  art: { idle: string; drawing: string; card: string; bundle: string; sheet: string | null };
 }
 /** BEST: the hand-picked ones, newest pick first, then the rest by `bestScore`. */
 export type CommunitySort = "best" | "new";
