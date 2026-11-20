@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { readEvents } from "../server/eventlog";
-import { funnel, STEPS, UNRECORDED, type Counts, type Step } from "../server/funnel";
+import { funnel, shareFunnel, STEPS, UNRECORDED, type Counts, type Step } from "../server/funnel";
 import { cliArgs, dataDir, parseSince } from "./lib/cli";
 
 const USAGE = `npm run funnel -- [--since 14d] [--tz America/Chicago] [--data <dir>]
@@ -15,7 +15,8 @@ const since = parseSince(sinceArg);
 const timeZone = value("--tz") ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
 const data = dataDir(value("--data"), import.meta.url);
 const staff = new Set<string>(JSON.parse(fs.readFileSync(path.join(data, "staff.json"), "utf8")));
-const f = funnel(readEvents(data), since, timeZone, staff);
+const events = readEvents(data);
+const f = funnel(events, since, timeZone, staff);
 
 const HEAD: Record<Step, string> = { arrived: "arrived", guest: "as guest", drew: "drew", forged: "forged", forgeDone: "forge done", played: "played", bots: "vs bots", online: "online", touch: "on touch", signedIn: "signed in", cameBack: "came back" };
 const width = Math.max(12, ...f.rows.map((r) => r.source.length));
@@ -40,3 +41,11 @@ as guest: played as a guest (guest-… player) · drew: opened the draw pad · f
 and one produced a fighter · vs bots: a local match (practice and map tests don't count) ·
 online: a relay match started (either side's record) · played: either · on touch: played a match on the touch controls · signed in: made or used an account (Discord, Google, email) ·
 came back: page sessions on two or more calendar days`);
+
+const shared = shareFunnel(events, since, staff);
+if (shared.length) {
+  const w = Math.max(12, ...shared.map((r) => r.fighter.length));
+  console.log(`\nShared characters: SHARE presses, the visitors who pressed it, and newcomers (whose first-ever arrival was a share link to it)`);
+  console.log(`${"character".padEnd(w)}  shares  sharers  newcomers`);
+  for (const r of shared) console.log(`${r.fighter.padEnd(w)}  ${String(r.shares).padStart(6)}  ${String(r.sharers).padStart(7)}  ${String(r.newcomers).padStart(9)}`);
+}

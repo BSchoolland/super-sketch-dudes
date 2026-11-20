@@ -36,3 +36,5 @@ export const SHARE_REF = "share";
 export const shareLink = (site: string, id: string): string => `${site}${characterPath(id)}?ref=${SHARE_REF}`;
 /** A fighter id as a page path may carry it. */
 export const SHARE_ID_RE = /^[\w-]{1,80}$/;
+/** One SHARE press, on the page session's `shares` list (client/src/share.ts). `how`: the share sheet or the clipboard. */
+export interface ShareEvent { fighter: string; mine: boolean; how: "sheet" | "copy" }

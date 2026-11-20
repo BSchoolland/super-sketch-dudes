@@ -33,6 +33,7 @@ import { site, setSiteBase } from "./base";
 import { swap, type Handoff } from "./handoff";
 import { TitleScreen } from "./screens/title";
 import { closeAbout } from "./about";
+import { sharedIdOf, sharing } from "./share";
 import { startBars } from "./bars";
 import { onStage, stageSize, turned } from "./turn";
 import { tourButtons, tourCardUp, tourDraw, tourSaw, tourTick, tourUpdate } from "./screens/tour";
@@ -74,6 +75,8 @@ export async function mount(opts: MountOptions): Promise<AppController> {
   const canvas = opts.canvas;
   const launch = activityLaunch(opts.params, location.host, import.meta.env.DEV);
   const crazyLaunch = launch ? null : crazyGamesLaunch(opts.params, location.pathname, site.base, import.meta.env.DEV);
+  // no links out of CrazyGames' frame
+  sharing.shown = !crazyLaunch;
   const stopTelemetry = startTelemetry({ canvas, bundle: swap.hash, continues: opts.resume?.session, ...(launch ? { launch: "discord-activity" } : crazyLaunch ? { launch: "crazygames" } : {}) });
   // the website's own page: not the Activity, not CrazyGames, not the swappable shell (it would start them again at every swap)
   if (!launch && !crazyLaunch && !shellSwap) startBars(canvas);
@@ -138,13 +141,17 @@ export async function mount(opts: MountOptions): Promise<AppController> {
     if (restored && !fresh) await markPlayed().catch((error: unknown) => everywhere("warn", "played", `marking this visit failed: ${error instanceof Error ? error.message : String(error)}`));
     if (!signedIn()) await guestSignIn().catch((error: unknown) => { console.error("guest sign-in failed", error); signInError = error instanceof Error ? error.message : String(error); });
   }
-  // the Activity opens on the voice channel's room; the website on the title, or once on why a sign-in didn't work;
-  // CrazyGames on the room of the invite it was opened from, or a fresh private room for instant multiplayer
+  /** A character's page (`<base>c/<id>`, a share link): the game opens on that character, once. */
+  let landing = launch || crazyLaunch ? null : sharedIdOf(location.pathname, site.base);
+  // the Activity opens on the voice channel's room; the website on the title, or once on why a sign-in didn't work, or
+  // on the character a link was to; CrazyGames on the room of the invite it was opened from, or a fresh private room
+  // for instant multiplayer
   const home = (): Screen => {
     if (launch) return signedIn() ? nav.call() : signInScreen(nav, signInError);
     const error = signInError;
     signInError = "";
     if (error) return signInScreen(nav, error);
+    if (landing && signedIn()) { const id = landing; landing = null; return nav.community(id); }
     const first = signedIn() ? takeFirstRoom() : undefined;
     if (first !== undefined) return nav.room(first);
     return signedIn() ? nav.title() : nav.guest();

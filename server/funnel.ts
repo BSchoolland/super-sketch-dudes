@@ -1,4 +1,5 @@
 import { sourceLabel } from "../shared/source";
+import { SHARE_REF, type ShareEvent } from "../shared/share";
 import { isGuest } from "../shared/account";
 import type { StoredEvent } from "./eventlog";
 import { sourceOf, visitors } from "./visitors";
@@ -86,4 +87,38 @@ export function funnel(events: StoredEvent[], since: number, timeZone: string, s
   const rows = [...bySource].map(([source, counts]) => ({ source, counts })).sort((a, b) => b.counts.arrived - a.counts.arrived || a.source.localeCompare(b.source));
   const orphanForges = [...forged].filter((owner) => !all.has(owner)).length;
   return { rows, total, sessions: new Set(sessions.map((s) => s.trace)).size, excluded, screenless, orphanForges };
+}
+
+export interface ShareRow { fighter: string; shares: number; sharers: number; newcomers: number }
+
+/** The fighter a share link landed on, from the arrival's path (`…/c/<id>`). */
+export function sharedFighterOf(landing: string): string | null {
+  const m = /\/c\/([^/]+)$/.exec(landing);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+/**
+ * Per character: SHARE presses and the visitors who pressed them, and newcomers: visitors whose browser first ever
+ * arrived through a share link to it. Visitors as in the funnel (bots and staff left out).
+ */
+export function shareFunnel(events: StoredEvent[], since: number, staff: Set<string>): ShareRow[] {
+  const { humans } = visitors(events, since, staff);
+  const rows = new Map<string, { shares: number; sharers: Set<string>; newcomers: number }>();
+  const row = (fighter: string) => {
+    let r = rows.get(fighter);
+    if (!r) rows.set(fighter, (r = { shares: 0, sharers: new Set(), newcomers: 0 }));
+    return r;
+  };
+  for (const { key, sessions } of humans) {
+    for (const s of sessions) for (const sh of (s.business.shares as ShareEvent[] | undefined) ?? []) {
+      const r = row(sh.fighter);
+      r.shares++;
+      r.sharers.add(key);
+    }
+    const first = sourceOf(sessions[0])?.first;
+    const fighter = first?.ref === SHARE_REF ? sharedFighterOf(first.landing) : null;
+    if (fighter) row(fighter).newcomers++;
+  }
+  return [...rows].map(([fighter, r]) => ({ fighter, shares: r.shares, sharers: r.sharers.size, newcomers: r.newcomers }))
+    .sort((a, b) => b.newcomers - a.newcomers || b.shares - a.shares || a.fighter.localeCompare(b.fighter));
 }

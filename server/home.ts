@@ -3,19 +3,19 @@ import path from "node:path";
 import type express from "express";
 import { HOME_COPY as C } from "./home-copy";
 import { communityCharacters, rankedCommunity } from "./library";
+import { SITE } from "../shared/share";
 
 /**
  * The front page is the game's own index.html with the about sections after the canvas and the head's title, description
  * and sharing tags, so a search engine or a link preview reads one page; client/src/about.ts opens the sections from
  * the title screen. The pictures are client/public/{screenshots,clip.*,og.jpg}; the strip's are served here.
  */
-const SITE = "https://supersketchdudes.com/";
 /** Fighters in the strip: BEST's order, one per creator. */
 const STRIP = 6;
 const SHOTS = ["draw", "alive", "fight"] as const;
 type Fighter = { id: string; name: string; tagline: string };
 
-const esc = (s: string): string => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+export const esc = (s: string): string => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 /** Puts `content` in place of index.html's <!--name-->…<!--/name-->. */
 function fill(html: string, name: string, content: string): string {
@@ -25,7 +25,7 @@ function fill(html: string, name: string, content: string): string {
 }
 
 /** The strip's characters: listed ones only (public, unheld, an account's, not deleted), from COMMUNITY's BEST. */
-function strip(): Fighter[] {
+export function strip(): Fighter[] {
   const creators = new Set<string>();
   const out: Fighter[] = [];
   for (const { entry } of rankedCommunity("best")) {
@@ -47,26 +47,37 @@ function head(): string {
     screenshot: SHOTS.map((s) => `${SITE}screenshots/${s}.webp`),
     potentialAction: { "@type": "PlayAction", target: SITE },
   };
-  return `<title>${esc(C.title)}</title>
-  <meta name="description" content="${esc(C.description)}" />
-  <link rel="canonical" href="${SITE}" />
+  return metaTags({ title: C.title, description: C.description, url: SITE, image: `${SITE}og.jpg`, imageType: "image/jpeg", imageAlt: C.ogImageAlt, ld }) + ABOUT_STYLE;
+}
+
+/** What a page tells search engines and link previews. `description` null leaves its tags out. `ld` is JSON-LD. */
+export interface PageMeta { title: string; description: string | null; url: string; image: string; imageType: string; imageAlt: string; ld: object }
+
+export function metaTags(m: PageMeta): string {
+  const desc = m.description === null ? "" : `
+  <meta name="description" content="${esc(m.description)}" />
+  <meta property="og:description" content="${esc(m.description)}" />
+  <meta name="twitter:description" content="${esc(m.description)}" />`;
+  return `<title>${esc(m.title)}</title>${desc}
+  <link rel="canonical" href="${esc(m.url)}" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="${esc(C.name)}" />
-  <meta property="og:title" content="${esc(C.title)}" />
-  <meta property="og:description" content="${esc(C.description)}" />
-  <meta property="og:url" content="${SITE}" />
-  <meta property="og:image" content="${SITE}og.jpg" />
-  <meta property="og:image:type" content="image/jpeg" />
+  <meta property="og:title" content="${esc(m.title)}" />
+  <meta property="og:url" content="${esc(m.url)}" />
+  <meta property="og:image" content="${esc(m.image)}" />
+  <meta property="og:image:type" content="${m.imageType}" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="${esc(C.ogImageAlt)}" />
+  <meta property="og:image:alt" content="${esc(m.imageAlt)}" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="${esc(C.title)}" />
-  <meta name="twitter:description" content="${esc(C.description)}" />
-  <meta name="twitter:image" content="${SITE}og.jpg" />
-  <meta name="twitter:image:alt" content="${esc(C.ogImageAlt)}" />
-  <script type="application/ld+json">${JSON.stringify(ld).replace(/</g, "\\u003c")}</script>
-  <style>
+  <meta name="twitter:title" content="${esc(m.title)}" />
+  <meta name="twitter:image" content="${esc(m.image)}" />
+  <meta name="twitter:image:alt" content="${esc(m.imageAlt)}" />
+  <script type="application/ld+json">${JSON.stringify(m.ld).replace(/</g, "\\u003c")}</script>
+`;
+}
+
+const ABOUT_STYLE = `  <style>
 #about { display: none; position: relative; margin-top: 100vh; padding-bottom: 1rem; color: #292722; font: 1.25rem/1.45 "Patrick Hand", "Comic Sans MS", cursive; -webkit-user-select: text; user-select: text;
   background: #f4efe4; background-image: linear-gradient(rgba(100,105,103,.09) 1px, transparent 1px), linear-gradient(90deg, rgba(100,105,103,.09) 1px, transparent 1px);
   background-size: 32px 32px; border-top: 3px solid #292722; box-shadow: 0 -8px 0 rgba(41,39,34,.08); }
@@ -114,7 +125,6 @@ html.about #about { display: block; }
 @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
 @media (prefers-reduced-motion: reduce) { #about .play:hover, #about .play:focus-visible { transform: rotate(-.4deg); } }
   </style>`;
-}
 
 /** The about sections. `base`: the game's path, where PLAY goes (client/src/about.ts scrolls up to it instead). */
 function about(base: string, fighters: Fighter[]): string {
@@ -170,7 +180,12 @@ ${C.facts.map((f) => `<li>${esc(f)}</li>`).join("\n")}
 
 /** The game's index.html with the head's tags and the about sections. Vite's dev server uses it too, with no strip. */
 export function frontPage(index: string, base: string, fighters: Fighter[]): string {
-  return fill(fill(index, "front-head", head()), "front-body", about(base, fighters));
+  return gamePage(index, head(), base, fighters);
+}
+
+/** The game's index.html with `headTags` (its title and sharing tags) and the about sections. */
+export function gamePage(index: string, headTags: string, base: string, fighters: Fighter[]): string {
+  return fill(fill(index, "front-head", headTags), "front-body", about(base, fighters));
 }
 
 /**

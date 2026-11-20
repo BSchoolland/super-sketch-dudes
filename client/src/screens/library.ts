@@ -6,11 +6,13 @@ import { sfx } from "../audio/audio";
 import { library, playingAsGuest } from "../account";
 import { libraryChoices, myLibrary, practiceDummy, refreshDummy, refreshLibrary } from "../fighters";
 import type { LibraryEntry } from "../../../shared/account";
-import { backRect, bg, grow, hover, label, small, title, type Screen } from "./ui";
+import { backRect, bg, grow, hover, label, small, title, type Screen, INK } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
 import { drawCharacterArt, drawCharacterCell, forgeWords, preloadArt, PRELOAD_ROWS, RED } from "./character";
 import { wrapped } from "./text";
-import { CharacterDetail, COL_W, COL_X, moveRows, type MoveRow } from "./charcard";
+import { CharacterDetail, DEMO, moveRows, type MoveRow } from "./charcard";
+import { canShare, shareCharacter } from "../share";
+import { SHARE_COPY } from "../../../shared/share";
 import { DrawPad } from "./pad";
 import { picturePixels } from "./padtools";
 import { PAD } from "./create";
@@ -23,7 +25,10 @@ const X0 = (VIEW_W - (COLS * ART + (COLS - 1) * GAP)) / 2;
 /** Room above the first row for the drawing pinned to a fighter's corner. */
 const PAD_TOP = 30;
 
-/** CHARACTERS, MINE tab: the library as a grid (yours, the ones you saved, the starters); one of them big, with PRACTICE and DELETE. */
+/**
+ * CHARACTERS, MINE tab: the library as a grid (yours, the ones you saved, the starters); one of them big, with PRACTICE,
+ * SHARE and DELETE, and on your own its sharing: listed in COMMUNITY, and OK for the game's videos.
+ */
 export class LibraryScreen implements Screen {
   t = 0;
   private menu = new ButtonMenu();
@@ -39,6 +44,8 @@ export class LibraryScreen implements Screen {
   private deleteArmed = -1;
   private problem = "";
   private next: Screen | null = null;
+  /** What SHARE last said ("link copied"), and when. */
+  private shareNote: { text: string; at: number } | null = null;
 
   constructor(private nav: Nav) {}
 
@@ -70,14 +77,18 @@ export class LibraryScreen implements Screen {
     const b: Button[] = [];
     if (e.status === "ready") b.push({ id: "practice", x: 0, y, w, h: 110, text: "PRACTICE", size: 44, disabled: !practiceDummy.choice });
     if (e.retryable) b.push({ id: "retry", x: 0, y, w, h: 110, text: "TRY AGAIN", size: 44 });
+    if (canShare(e)) b.push({ id: "share", x: 0, y, w, h: 110, text: SHARE_COPY.share, size: 44 });
     b.push({ id: "copy", x: 0, y, w, h: 110, text: "COPY DRAWING", size: 34 });
     if (!e.starter) b.push({ id: "delete", x: 0, y, w, h: 110, text: armed ? "SURE?" : e.saved ? "UNSAVE" : "DELETE", size: 44 });
     b.push({ id: "back", x: 0, y, w, h: 110, text: "BACK", size: 44 });
     const x0 = (VIEW_W - (b.length * w + (b.length - 1) * gap)) / 2;
     b.forEach((btn, i) => { btn.x = x0 + i * (w + gap); });
-    // your own character's sharing sits under its moves, in the right column
-    const rows = this.rows(e), last = rows[rows.length - 1];
-    if (!e.starter && !e.saved && e.status === "ready" && last && !playingAsGuest()) b.push({ id: "public", x: COL_X, y: last.y + last.h + 36, w: COL_W, h: small() ? 100 : 80, text: "SHARE WITH EVERYONE", size: small() ? 36 : 32, checked: !!e.public });
+    // your own character's sharing sits under its preview: in COMMUNITY, and OK for the videos
+    if (ownReady(e) && this.detail && !playingAsGuest()) {
+      const top = SHARING_Y + 30, h = small() ? 100 : 80, half = (DEMO.w - 20) / 2, size = small() ? 36 : 32;
+      b.push({ id: "public", x: DEMO.x, y: top, w: half, h, text: "SHARE WITH EVERYONE", size, checked: !!e.public });
+      b.push({ id: "feature", x: DEMO.x + half + 20, y: top, w: half, h, text: SHARE_COPY.featureOptIn, size, checked: !!e.feature });
+    }
     // the moves come after the row, so focus starts on it and the preview starts out standing still
     for (const r of this.rows(e)) b.push({ id: `m${r.i}`, x: r.x, y: r.y, w: r.w, h: r.h, text: "", custom: true });
     return b;
@@ -139,6 +150,8 @@ export class LibraryScreen implements Screen {
     if (pressed === "copy") { sfx.menuConfirm(); this.copyDrawing(e); }
     if (pressed === "retry") this.retry(e);
     if (pressed === "public") this.flipPublic(e);
+    if (pressed === "feature") this.flipFeature(e);
+    if (pressed === "share") this.share(e);
     if (pressed === "delete") {
       if (this.deleteArmed >= 0 && this.t - this.deleteArmed < 3) this.remove(e);
       else this.deleteArmed = this.t;
@@ -164,6 +177,23 @@ export class LibraryScreen implements Screen {
         console.error(`public ${e.id} failed`, error);
         this.problem = error instanceof Error ? error.message : String(error);
       },
+    );
+  }
+
+  private flipFeature(e: LibraryEntry): void {
+    library.setFeature(e.id, !e.feature).then(
+      ({ character }) => { e.feature = character.feature; void refreshLibrary(); },
+      (error: unknown) => {
+        console.error(`feature ${e.id} failed`, error);
+        this.problem = error instanceof Error ? error.message : String(error);
+      },
+    );
+  }
+
+  private share(e: LibraryEntry): void {
+    shareCharacter(e, ownReady(e)).then(
+      (text) => { this.shareNote = text ? { text, at: this.t } : null; },
+      (error: unknown) => { this.shareNote = null; this.problem = error instanceof Error ? error.message : String(error); },
     );
   }
 
@@ -218,8 +248,8 @@ export class LibraryScreen implements Screen {
       const focused = this.detailMenu.focused(this.detailButtons(e));
       const active = rows.find((r) => hover(r.x, r.y, r.w, r.h)) ?? rows.find((r) => focused?.id === `m${r.i}`) ?? null;
       this.detail.draw(ctx, rows, active, dt);
-      const last = rows[rows.length - 1];
-      if (!e.starter && !e.saved && e.status === "ready" && last && playingAsGuest()) label(ctx, "sign in to share it with everyone", COL_X, last.y + last.h + 70, grow(28, 12), PENCIL, "left", 700, COL_W);
+      if (ownReady(e) && canShare(e)) label(ctx, SHARE_COPY.ownNote, DEMO.x, SHARING_Y, grow(28, 12), INK, "left", 700, DEMO.w);
+      if (ownReady(e) && playingAsGuest()) label(ctx, "sign in to share it with everyone", DEMO.x, SHARING_Y + 80, grow(28, 12), PENCIL, "left", 700, DEMO.w);
     } else {
       drawCharacterArt(ctx, e, 160, 110, 640, this.t);
       title(ctx, "FAILED", 870, 200, 96, RED, "left");
@@ -227,5 +257,12 @@ export class LibraryScreen implements Screen {
       if (e.retryable) wrapped(ctx, "TRY AGAIN is free: it doesn't count against today's characters", 870, 280 + h + 30, 860, grow(26, 12), PENCIL, 3, "left");
     }
     this.detailMenu.draw(ctx, this.detailButtons(e));
+    if (this.shareNote && this.t - this.shareNote.at < 3) label(ctx, this.shareNote.text, VIEW_W / 2, VIEW_H - 170, grow(28, 12), INK);
   }
 }
+
+/** One of the player's own, finished: its sharing is theirs to set. */
+const ownReady = (e: LibraryEntry): boolean => !e.starter && !e.saved && e.status === "ready";
+
+/** Under the preview: what sharing does, then the two boxes. */
+const SHARING_Y = 760;

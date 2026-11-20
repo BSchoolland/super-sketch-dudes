@@ -4,9 +4,14 @@ import type { DeviceId, MenuInput } from "../input/devices";
 import { consumeTaps } from "../input/pointer";
 import { sfx } from "../audio/audio";
 import { library, seeNews } from "../account";
-import { practiceDummy, refreshDummy, refreshLibrary } from "../fighters";
-import { COMMUNITY_SORTS, type CommunityCharacter, type CommunitySort } from "../../../shared/account";
-import { backRect, bg, card, grow, hover, label, small, title, type Screen, INK } from "./ui";
+import { allChoices, myLibrary } from "../fighters";
+import { shareCharacter, sharing } from "../share";
+import { SHARE_COPY } from "../../../shared/share";
+import { localMatch } from "./localmatch";
+import { DEFAULT_TIER } from "../../../shared/cpu-skill";
+import { practiceDummy, refreshDummy, refreshLibrary, type FighterChoice } from "../fighters";
+import { COMMUNITY_SORTS, type CommunityCharacter, type CommunitySort, type SharedCharacter } from "../../../shared/account";
+import { backRect, bg, card, grow, hover, label, settings, small, title, type Screen, INK } from "./ui";
 import { ButtonMenu, type Button } from "./buttons";
 import { drawCharacterCell, preloadArt, PRELOAD_ROWS, RED } from "./character";
 import { CharacterDetail, moveRows, type MoveRow } from "./charcard";
@@ -24,7 +29,10 @@ const searchBox = (): { x: number; y: number; w: number; h: number } => (small()
 const SORT_W = 220;
 const SORT_NAME: Record<CommunitySort, string> = { best: "BEST", new: "NEWEST" };
 
-/** CHARACTERS, COMMUNITY tab: everyone's public characters, the best or the newest first; one big with SAVE. An admin's has the button that picks it for BEST. */
+/**
+ * CHARACTERS, COMMUNITY tab: everyone's public characters, the best or the newest first; one big with FIGHT IT, SAVE and
+ * SHARE. An admin's has the button that picks it for BEST. A share link (and the title-screen brawl) opens straight on one.
+ */
 export class CommunityScreen implements Screen {
   t = 0;
   private menu = new ButtonMenu();
@@ -38,9 +46,11 @@ export class CommunityScreen implements Screen {
   /** Bumped on every sort switch so a page that lands late for the old sort is dropped. */
   private fetchId = 0;
   private loading = false;
-  private selected: CommunityCharacter | null = null;
+  private selected: SharedCharacter | null = null;
   private detail: CharacterDetail | null = null;
   private saving = false;
+  /** What SHARE last said ("link copied"), and when. */
+  private shareNote: { text: string; at: number } | null = null;
   /** Where to go once a save lands: MINE, with it at the top. */
   private next: Screen | null = null;
   private scroll = new ScrollView({ x: X0, y: TOP, w: COLS * ART + (COLS - 1) * GAP, h: BOTTOM - TOP });
@@ -52,7 +62,7 @@ export class CommunityScreen implements Screen {
   private query = "";
   private typedAt = 0;
 
-  /** `open`: a character to show straight away (clicked in the title-screen brawl); BACK from it goes to the title. */
+  /** `open`: a character to show straight away (a share link's, or clicked in the title-screen brawl); BACK from it goes to the title. */
   constructor(private nav: Nav, private open?: string) {}
 
   enter(): void {
@@ -66,7 +76,9 @@ export class CommunityScreen implements Screen {
     void refreshDummy();
     this.load(0);
     if (this.open) {
-      library.communityOne(this.open).then(
+      // FIGHT IT plays your newest character, once the library is here
+      if (!myLibrary.entries) void refreshLibrary();
+      library.shared(this.open).then(
         ({ character }) => { this.selected = character; this.detail = new CharacterDetail(character, character); this.detailMenu.focus = 0; },
         (error: unknown) => {
           console.error(`community character ${this.open} failed`, error);
@@ -131,16 +143,18 @@ export class CommunityScreen implements Screen {
     return b;
   }
 
-  private detailButtons(c: CommunityCharacter): Button[] {
-    const y = VIEW_H - 150, w = 320, gap = 24;
-    const b: Button[] = [
-      { id: "save", x: 0, y, w, h: 110, text: c.mine ? "YOURS" : c.saved ? "SAVED" : "SAVE", size: 44, disabled: c.mine || this.saving },
-      { id: "practice", x: 0, y, w, h: 110, text: "PRACTICE", size: 44, disabled: !practiceDummy.choice },
-      { id: "back", x: 0, y, w, h: 110, text: "BACK", size: 44 },
-    ];
-    if (this.picker) b.push({ id: "best", x: 0, y, w, h: 110, text: c.best ? "TAKE OFF BEST" : "PUT IN BEST", size: 32, disabled: this.saving });
-    const x0 = (VIEW_W - (b.length * w + (b.length - 1) * gap)) / 2;
-    b.forEach((btn, i) => { btn.x = x0 + i * (w + gap); });
+  private detailButtons(c: SharedCharacter): Button[] {
+    const y = VIEW_H - 150, h = 110, gap = 24;
+    const b: Button[] = [{ id: "fight", x: 0, y, w: 0, h, text: SHARE_COPY.fightIt, size: 56 }];
+    if (c.saveable || c.mine) b.push({ id: "save", x: 0, y, w: 0, h, text: c.mine ? "YOURS" : c.saved ? "SAVED" : "SAVE", size: 44, disabled: c.mine || this.saving });
+    b.push({ id: "practice", x: 0, y, w: 0, h, text: "PRACTICE", size: 44, disabled: !practiceDummy.choice });
+    if (sharing.shown) b.push({ id: "share", x: 0, y, w: 0, h, text: SHARE_COPY.share, size: 44 });
+    b.push({ id: "back", x: 0, y, w: 0, h, text: "BACK", size: 44 });
+    if (this.picker) b.push({ id: "best", x: 0, y, w: 0, h, text: c.best ? "TAKE OFF BEST" : "PUT IN BEST", size: 32, disabled: this.saving });
+    // FIGHT IT is the big one; the rest share what's left of the row
+    const fightW = 420, w = Math.min(320, (VIEW_W - 80 - fightW - (b.length - 1) * gap) / (b.length - 1));
+    let x = (VIEW_W - (fightW + (b.length - 1) * (w + gap))) / 2;
+    for (const btn of b) { btn.w = btn.id === "fight" ? fightW : w; btn.x = x; x += btn.w + gap; }
     for (const r of this.rows(c)) b.push({ id: `m${r.i}`, x: r.x, y: r.y, w: r.w, h: r.h, text: "", custom: true });
     return b;
   }
@@ -179,7 +193,7 @@ export class CommunityScreen implements Screen {
     if (pressed === "search") this.search?.el.focus();
     if (pressed?.startsWith("c")) {
       const c = this.entries[Number(pressed.slice(1))];
-      this.selected = c;
+      this.selected = { ...c, saveable: true };
       this.detail = new CharacterDetail(c, c);
       this.detailMenu.focus = 0;
     }
@@ -188,8 +202,10 @@ export class CommunityScreen implements Screen {
     return null;
   }
 
-  private updateDetail(c: CommunityCharacter, m: MenuInput, taps: ReturnType<typeof consumeTaps>): Screen | null {
+  private updateDetail(c: SharedCharacter, m: MenuInput, taps: ReturnType<typeof consumeTaps>): Screen | null {
     const pressed = this.detailMenu.update(this.detailButtons(c), m, taps);
+    if (pressed === "fight") return this.fight(c);
+    if (pressed === "share") this.share(c);
     if (pressed === "save") this.toggleSave(c);
     if (pressed === "best") this.toggleBest(c);
     // leaving practice comes back to this character
@@ -200,6 +216,29 @@ export class CommunityScreen implements Screen {
       if (this.open) { this.search?.remove(); return this.nav.title(); }
     }
     return null;
+  }
+
+  /**
+   * VS BOTS against it, now: you play your newest character of your own (a house fighter if you have none, or if this
+   * one is yours), it plays a bot at your bot level. Leaving the match comes back here.
+   */
+  private fight(c: SharedCharacter): Screen {
+    const { mine, house } = allChoices();
+    const own = c.mine ? undefined : mine.find((f) => f.entry && !f.entry.saved && !f.entry.starter);
+    const you = own ?? house[Math.floor(Math.random() * house.length)];
+    const rival: FighterChoice = { id: c.id, name: c.name ?? "?", bundleUrl: c.bundleUrl, house: false, entry: null };
+    return localMatch(
+      [{ fighter: you, source: { device: this.device, cpu: 0 } }, { fighter: rival, source: { device: null, cpu: settings.cpuTier || DEFAULT_TIER } }],
+      { stage: "proving", stocks: settings.stocks, time: settings.time, map: null },
+      () => this,
+    );
+  }
+
+  private share(c: SharedCharacter): void {
+    shareCharacter(c, c.mine).then(
+      (text) => { this.shareNote = text ? { text, at: this.t } : null; },
+      (error: unknown) => { this.shareNote = null; this.problem = error instanceof Error ? error.message : String(error); },
+    );
   }
 
   private toggleSave(c: CommunityCharacter): void {
@@ -291,11 +330,12 @@ export class CommunityScreen implements Screen {
     if (this.search) this.search.el.style.textAlign = "left";
   }
 
-  private drawDetail(ctx: CanvasRenderingContext2D, c: CommunityCharacter, dt: number): void {
+  private drawDetail(ctx: CanvasRenderingContext2D, c: SharedCharacter, dt: number): void {
     const rows = this.rows(c);
     const focused = this.detailMenu.focused(this.detailButtons(c));
     const active = rows.find((r) => hover(r.x, r.y, r.w, r.h)) ?? rows.find((r) => focused?.id === `m${r.i}`) ?? null;
     this.detail!.draw(ctx, rows, active, dt);
     this.detailMenu.draw(ctx, this.detailButtons(c));
+    if (this.shareNote && this.t - this.shareNote.at < 3) label(ctx, this.shareNote.text, VIEW_W / 2, VIEW_H - 170, grow(28, 12), INK);
   }
 }
