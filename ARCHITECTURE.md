@@ -90,6 +90,26 @@ and the page closes them when it's back at the top; any screen but the title clo
 loads before they open, so the game boots as it did without them. The Activity never shows the tab.
 `node scripts/frontcheck.mjs` checks all of it on the built server.
 
+## Character pages and sharing
+
+Every shareable character has a page at `<base>c/<id>` (`server/share.ts`): ready, public, not held, not deleted (a
+taken-down one isn't on file), a guest's included (`isShareable`, library.ts). It is the game's index.html with the
+about sections, its head the character's: title "<NAME> · Super Sketch Dudes", its tagline as the description,
+canonical, og/twitter tags and a CreativeWork JSON-LD. Its og:image is `<base>c/<id>/card.png?v=<version>`, a 1200x630
+card (`server/share-card.ts`, sharp, Patrick Hand from the built client's fonts/) made once per version (name and
+bundle) into `<data>/cards/`. Anything else is a plain 404 page with no card; both are decided on every request and
+sent no-cache with no validators, so a hold or a take-down stops them at once. Every word is in `shared/share.ts`.
+
+The game opens on the character a page is for (app.ts `home`, CommunityScreen with it open, through
+`GET /api/characters/shared/:id`): FIGHT IT is VS BOTS against it at once (you play your newest own character, or a
+random house fighter), SAVE only when COMMUNITY lists it, SHARE (client/src/share.ts) the device's share sheet or the
+clipboard, with `?ref=share` (the website's address inside the Activity too; no SHARE in the CrazyGames build).
+MY CHARACTERS has SHARE and, for an account's own, "OK to feature in our videos" (`feature` on the entry, PATCH
+/library/:id). `GET /api/characters/videos` (forge token or a staff account) lists the opted-in shareable characters
+for the video pipeline. A SHARE goes on the session's `shares`; `npm run funnel` counts shares and newcomers (a first
+arrival through a share link) per character, and those arrivals are the funnel's `share` source.
+`node scripts/sharecheck.mjs` walks it in real pages.
+
 ## Community characters
 
 A player file (`server/library.ts`) holds the player's own characters and `saved`: ids of other

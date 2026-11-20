@@ -203,7 +203,9 @@ try {
   await on(bea, "LibraryScreen");
   await bea.waitForFunction(() => (window.sketchbattle.screen.entries ?? []).some((e) => e.status === "ready"), null, { timeout: 60000 });
   const made = await bea.evaluate(() => window.sketchbattle.screen.entries.find((e) => e.status === "ready"));
-  console.log(`  VS BOTS: gameplayStart, gameplayStop on pause, start on resume, stop and one happytime on a win; drawing is gameplay; ${made.name} made (${made.id})`);
+  // no links out of CrazyGames' frame: their character has no SHARE
+  if (await bea.evaluate(() => { const s = window.sketchbattle.screen; return s.detailButtons(s.entries.find((e) => e.status === "ready")).some((b) => b.id === "share"); })) fail("SHARE shows inside CrazyGames");
+  console.log(`  VS BOTS: gameplayStart, gameplayStop on pause, start on resume, stop and one happytime on a win; drawing is gameplay; ${made.name} made (${made.id}), with no SHARE`);
 
   console.log("3. the guest logs in to CrazyGames");
   for (let i = 0; i < 3 && (await screen(bea)) !== "TitleScreen"; i++) await press(bea, "Escape");
