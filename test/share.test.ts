@@ -99,6 +99,8 @@ describe("a character's page", () => {
       const ld = JSON.parse(/<script type="application\/ld\+json">(.*?)<\/script>/s.exec(html)![1]);
       expect(ld).toMatchObject({ "@type": "CreativeWork", url: "https://supersketchdudes.com/c/gen-ann-ok", creator: { name: "Ann" }, isPartOf: { "@type": "VideoGame" } });
       expect(html.indexOf(`<canvas id="game">`)).toBeLessThan(html.indexOf(`<div id="about">`));
+      // the about sections are there, hidden until the title's tab opens them
+      expect(html).toContain("#about { display: none;");
     }
   });
 

@@ -47,7 +47,7 @@ function head(): string {
     screenshot: SHOTS.map((s) => `${SITE}screenshots/${s}.webp`),
     potentialAction: { "@type": "PlayAction", target: SITE },
   };
-  return metaTags({ title: C.title, description: C.description, url: SITE, image: `${SITE}og.jpg`, imageType: "image/jpeg", imageAlt: C.ogImageAlt, ld }) + ABOUT_STYLE;
+  return metaTags({ title: C.title, description: C.description, url: SITE, image: `${SITE}og.jpg`, imageType: "image/jpeg", imageAlt: C.ogImageAlt, ld });
 }
 
 /** What a page tells search engines and link previews. `description` null leaves its tags out. `ld` is JSON-LD. */
@@ -185,7 +185,7 @@ export function frontPage(index: string, base: string, fighters: Fighter[]): str
 
 /** The game's index.html with `headTags` (its title and sharing tags) and the about sections. */
 export function gamePage(index: string, headTags: string, base: string, fighters: Fighter[]): string {
-  return fill(fill(index, "front-head", headTags), "front-body", about(base, fighters));
+  return fill(fill(index, "front-head", headTags + ABOUT_STYLE), "front-body", about(base, fighters));
 }
 
 /**
