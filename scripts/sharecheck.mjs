@@ -2,12 +2,12 @@
 // dist/server.mjs on a scratch data dir with made-up characters (listed ones, a guest's, a held one, a private one), then:
 //   1. A link unfurler reads a character's page: title, description, canonical, og/twitter tags, JSON-LD; the card is a
 //      1200x630 PNG (saved for looking at). Anything held, private or missing is a 404 with no card.
-//   2. A guest opens the share link on a desktop: the game opens on the character; one click on FIGHT IT and they are in
-//      a match against it, as a bot. Their session records ref=share and the character's page.
-//   3. SHARE copies the link (?ref=share) and says so; the session event lists the share.
+//   2. A guest opens the share link on a desktop: the game opens on the character's page (SAVE, PRACTICE; no SHARE on
+//      someone else's character). Their session records ref=share and the character's page.
+//   3. A guest's own character's link opens its page too (no SAVE: COMMUNITY doesn't list it).
 //   4. The owner, on MY CHARACTERS: SHARE, the line on what it does, and OK to feature in our videos, which the staff
 //      list follows on and off.
-//   5. A phone (sideways and upright): the link, one tap on FIGHT IT, a match.
+//   5. A phone (sideways and upright): the link opens the character's page at the screen's width.
 // Usage: node scripts/sharecheck.mjs [--shots <dir>]   (screenshots default to /tmp/ssd-share; SERVER_PORT 4810)
 import { chromium } from "playwright";
 import { spawn, execFileSync } from "node:child_process";
@@ -79,13 +79,6 @@ const detailButton = (p, id) => p.evaluate((id) => {
   const b = s.detailButtons(s.selected).find((x) => x.id === id);
   return b ? { x: b.x + b.w / 2, y: b.y + b.h / 2, disabled: !!b.disabled } : null;
 }, id);
-const inMatchAgainst = (p, id) => p.waitForFunction((id) => {
-  const s = window.sketchbattle?.screen;
-  if (s?.constructor.name !== "VersusScreen" || !s.match?.state) return false;
-  const f = s.match.state.fighters, src = s.match.sources;
-  return f.length === 2 && f[1].id === id && src[1].cpu > 0 && !src[1].device && !!src[0].device;
-}, id, { timeout: 30000 });
-
 /** The tags a link unfurler reads, from the page's head. */
 function tags(html) {
   const meta = {};
@@ -165,7 +158,7 @@ try {
   await missing.waitForFunction(() => location.pathname === "/" && window.sketchbattle?.screen, null, { timeout: 30000 });
   console.log("  the 404 page's link goes to the game");
 
-  console.log("2. a guest follows the link and fights it");
+  console.log("2. a guest follows the link");
   const desk = await page("desktop", DESKTOP, { permissions: ["clipboard-read", "clipboard-write"] });
   const shared = "gen-maker2-0";
   await desk.goto(`${site}/c/${shared}?ref=share`);
@@ -178,36 +171,20 @@ try {
   await desk.screenshot({ path: path.join(shots, "desktop-1-character.png") });
   const save = await detailButton(desk, "save");
   if (!save || save.disabled) fail("a listed character's page has no SAVE");
-  const fight = await detailButton(desk, "fight");
-  if (!fight) fail("no FIGHT IT");
-  await desk.mouse.click(...toCss(desk, fight.x, fight.y));
-  await inMatchAgainst(desk, shared);
-  await sleep(1500);
-  await desk.screenshot({ path: path.join(shots, "desktop-2-fighting.png") });
-  console.log(`  ${who} landed on ${shared}'s page and one click on FIGHT IT is a match against it as a bot`);
-  await desk.keyboard.press("Escape");
-  await sleep(300);
-
-  console.log("3. SHARE copies the link");
-  await desk.goto(`${site}/c/gen-guest-0?ref=share`);
-  await onCharacter(desk, "gen-guest-0");
-  if (await detailButton(desk, "save")) fail("a guest's character offers SAVE (COMMUNITY doesn't list it)");
-  const share = await detailButton(desk, "share");
-  if (!share) fail("no SHARE");
-  await desk.mouse.click(...toCss(desk, share.x, share.y));
-  await desk.waitForFunction(() => window.sketchbattle.screen.shareNote?.text === "link copied", null, { timeout: 5000 });
-  const copied = await desk.evaluate(() => navigator.clipboard.readText());
-  if (copied !== `${site}/c/gen-guest-0?ref=share`) fail(`SHARE copied ${copied}`);
-  await desk.screenshot({ path: path.join(shots, "desktop-3-copied.png") });
-  const trace = await desk.evaluate(() => JSON.parse(sessionStorage.getItem("sketchbattle.visit")).session);
+  if (!(await detailButton(desk, "practice"))) fail("a character's page has no PRACTICE");
+  if (await detailButton(desk, "share")) fail("someone else's character offers SHARE");
+  if (await detailButton(desk, "fight")) fail("a character's page still has FIGHT IT");
+  console.log(`  ${who} landed on ${shared}'s page: SAVE and PRACTICE, no SHARE on someone else's character`);
   await desk.goto(`${site}/robots.txt`);
   await sleep(1000);
   const events = fs.readFileSync(path.join(data, "events.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
-  const sessions = events.filter((e) => e.kind === "session" && e.client?.player?.id === who);
-  const shares = sessions.flatMap((e) => e.business.shares ?? []);
-  if (!shares.some((s) => s.fighter === "gen-guest-0" && s.how === "copy" && s.mine === false)) fail(`no share on ${who}'s session events: ${JSON.stringify(shares)}`);
-  if (!sessions.some((e) => e.business.source?.first?.ref === "share")) fail("no session event with ref=share");
-  console.log(`  the clipboard has ${copied}; "link copied" shows; the session event (${trace}) has the share and ref=share`);
+  if (!events.some((e) => e.kind === "session" && e.client?.player?.id === who && e.business.source?.first?.ref === "share")) fail("no session event with ref=share");
+
+  console.log("3. a guest's character's link");
+  await desk.goto(`${site}/c/gen-guest-0?ref=share`);
+  await onCharacter(desk, "gen-guest-0");
+  if (await detailButton(desk, "save")) fail("a guest's character offers SAVE (COMMUNITY doesn't list it)");
+  console.log("  its page opens, without SAVE");
 
   console.log("4. the owner's own page: SHARE and the video opt-in");
   const videos = async () => (await (await fetch(`${site}/api/characters/videos`, { headers: { "x-forge-token": TOKEN } })).json()).characters.map((c) => c.id);
@@ -252,15 +229,9 @@ try {
   await ownPhone.screenshot({ path: path.join(shots, "owner-3-phone-library.png") });
   console.log("  MY CHARACTERS: SHARE copies the link; OK to feature puts it on the staff list, and unticking takes it off at once");
 
-  console.log("5. phones: the link, one tap on FIGHT IT");
+  console.log("5. phones: the link opens the character's page");
   for (const [name, device] of [["phone", PHONE], ["upright", UPRIGHT]]) {
     const p = await page(name, device);
-    const cdp = await p.context().newCDPSession(p);
-    const tap = async (x, y) => {
-      await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ id: 1, x, y, radiusX: 8, radiusY: 8, force: 1 }] });
-      await sleep(60);
-      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
-    };
     await p.goto(`${site}/c/gen-maker1-0?ref=share`);
     await onCharacter(p, "gen-maker1-0");
     await sleep(2500);
@@ -268,12 +239,7 @@ try {
     // the page is the screen's width: nothing of the hidden about sections widens it
     const width = await p.evaluate(() => innerWidth);
     if (width !== device.viewport.width) fail(`${name}: the page is ${width} CSS pixels wide on a ${device.viewport.width} screen`);
-    const f = await detailButton(p, "fight");
-    await tap(...toCss(p, f.x, f.y));
-    await inMatchAgainst(p, "gen-maker1-0");
-    await sleep(1500);
-    await p.screenshot({ path: path.join(shots, `${name}-2-fighting.png`) });
-    console.log(`  ${name}: one tap and it's a match against gen-maker1-0`);
+    console.log(`  ${name}: gen-maker1-0's page, ${width} CSS pixels wide`);
   }
 
   if (errors.length) fail(`page errors:\n${errors.join("\n")}`);

@@ -30,7 +30,7 @@ const SORT_W = 220;
 const SORT_NAME: Record<CommunitySort, string> = { best: "BEST", new: "NEWEST" };
 
 /**
- * CHARACTERS, COMMUNITY tab: everyone's public characters, the best or the newest first; one big with FIGHT IT, SAVE and
+ * CHARACTERS, COMMUNITY tab: everyone's public characters, the best or the newest first; one big with SAVE, PRACTICE and
  * SHARE. An admin's has the button that picks it for BEST. A share link (and the title-screen brawl) opens straight on one.
  */
 export class CommunityScreen implements Screen {
@@ -76,8 +76,6 @@ export class CommunityScreen implements Screen {
     void refreshDummy();
     this.load(0);
     if (this.open) {
-      // FIGHT IT plays your newest character, once the library is here
-      if (!myLibrary.entries) void refreshLibrary();
       library.shared(this.open).then(
         ({ character }) => { this.selected = character; this.detail = new CharacterDetail(character, character); this.detailMenu.focus = 0; },
         (error: unknown) => {
@@ -145,16 +143,15 @@ export class CommunityScreen implements Screen {
 
   private detailButtons(c: SharedCharacter): Button[] {
     const y = VIEW_H - 150, h = 110, gap = 24;
-    const b: Button[] = [{ id: "fight", x: 0, y, w: 0, h, text: SHARE_COPY.fightIt, size: 56 }];
+    const b: Button[] = [];
     if (c.saveable || c.mine) b.push({ id: "save", x: 0, y, w: 0, h, text: c.mine ? "YOURS" : c.saved ? "SAVED" : "SAVE", size: 44, disabled: c.mine || this.saving });
     b.push({ id: "practice", x: 0, y, w: 0, h, text: "PRACTICE", size: 44, disabled: !practiceDummy.choice });
-    if (sharing.shown) b.push({ id: "share", x: 0, y, w: 0, h, text: SHARE_COPY.share, size: 44 });
+    if (sharing.shown && c.mine) b.push({ id: "share", x: 0, y, w: 0, h, text: SHARE_COPY.share, size: 44 });
     b.push({ id: "back", x: 0, y, w: 0, h, text: "BACK", size: 44 });
     if (this.picker) b.push({ id: "best", x: 0, y, w: 0, h, text: c.best ? "TAKE OFF BEST" : "PUT IN BEST", size: 32, disabled: this.saving });
-    // FIGHT IT is the big one; the rest share what's left of the row
-    const fightW = 420, w = Math.min(320, (VIEW_W - 80 - fightW - (b.length - 1) * gap) / (b.length - 1));
-    let x = (VIEW_W - (fightW + (b.length - 1) * (w + gap))) / 2;
-    for (const btn of b) { btn.w = btn.id === "fight" ? fightW : w; btn.x = x; x += btn.w + gap; }
+    const w = Math.min(320, (VIEW_W - 80 - (b.length - 1) * gap) / b.length);
+    let x = (VIEW_W - (b.length * w + (b.length - 1) * gap)) / 2;
+    for (const btn of b) { btn.w = w; btn.x = x; x += w + gap; }
     for (const r of this.rows(c)) b.push({ id: `m${r.i}`, x: r.x, y: r.y, w: r.w, h: r.h, text: "", custom: true });
     return b;
   }
@@ -204,7 +201,6 @@ export class CommunityScreen implements Screen {
 
   private updateDetail(c: SharedCharacter, m: MenuInput, taps: ReturnType<typeof consumeTaps>): Screen | null {
     const pressed = this.detailMenu.update(this.detailButtons(c), m, taps);
-    if (pressed === "fight") return this.fight(c);
     if (pressed === "share") this.share(c);
     if (pressed === "save") this.toggleSave(c);
     if (pressed === "best") this.toggleBest(c);
@@ -216,22 +212,6 @@ export class CommunityScreen implements Screen {
       if (this.open) { this.search?.remove(); return this.nav.title(); }
     }
     return null;
-  }
-
-  /**
-   * VS BOTS against it, now: you play your newest character of your own (a house fighter if you have none, or if this
-   * one is yours), it plays a bot at your bot level. Leaving the match comes back here.
-   */
-  private fight(c: SharedCharacter): Screen {
-    const { mine, house } = allChoices();
-    const own = c.mine ? undefined : mine.find((f) => f.entry && !f.entry.saved && !f.entry.starter);
-    const you = own ?? house[Math.floor(Math.random() * house.length)];
-    const rival: FighterChoice = { id: c.id, name: c.name ?? "?", bundleUrl: c.bundleUrl, house: false, entry: null };
-    return localMatch(
-      [{ fighter: you, source: { device: this.device, cpu: 0 } }, { fighter: rival, source: { device: null, cpu: settings.cpuTier || DEFAULT_TIER } }],
-      { stage: "proving", stocks: settings.stocks, time: settings.time, map: null },
-      () => this,
-    );
   }
 
   private share(c: SharedCharacter): void {

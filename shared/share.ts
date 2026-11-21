@@ -1,5 +1,5 @@
 // ===== EVERY WORD OF CHARACTER SHARING =====
-// The character pages (server/share.ts: the head, the share card, the 404 page) and the game's SHARE, FIGHT IT and
+// The character pages (server/share.ts: the head, the share card, the 404 page) and the game's SHARE and
 // feature opt-in. Players, link previews and search engines read all of it. Plain text: whoever shows it escapes it.
 // Never say "forge" here.
 export const SHARE_COPY = {
@@ -16,8 +16,6 @@ export const SHARE_COPY = {
   notFoundHeading: "This character isn't here",
   notFoundText: "It may have been made private or taken down, or the link is wrong.",
   notFoundPlay: "PLAY SUPER SKETCH DUDES",
-
-  fightIt: "FIGHT IT",
   share: "SHARE",
   copied: "link copied",
   copyFailed: (url: string) => `couldn't copy the link: ${url}`,
