@@ -190,8 +190,10 @@ export class CommunityScreen implements Screen {
     if (pressed === "search") this.search?.el.focus();
     if (pressed?.startsWith("c")) {
       const c = this.entries[Number(pressed.slice(1))];
-      this.selected = { ...c, saveable: true };
-      this.detail = new CharacterDetail(c, c);
+      // the detail and the selection are the same object: the moves list (and so the demo) only shows for its own entry
+      const picked: SharedCharacter = { ...c, saveable: true };
+      this.selected = picked;
+      this.detail = new CharacterDetail(picked, picked);
       this.detailMenu.focus = 0;
     }
     // the next page while the last loaded rows are still a screen away

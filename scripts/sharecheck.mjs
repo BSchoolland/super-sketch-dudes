@@ -217,6 +217,22 @@ try {
   await ownPhone.screenshot({ path: path.join(shots, "owner-3-phone-library.png") });
   console.log("  MY CHARACTERS: SHARE copies the link; no video opt-in");
 
+  console.log("4b. a character opened from the COMMUNITY grid shows its moves and their demo");
+  await owner.goto(`${site}/?dev=maker0`);
+  await owner.waitForFunction(() => window.sketchbattle?.screen?.constructor.name === "TitleScreen", null, { timeout: 30000 });
+  await ownCharacter(owner);
+  await owner.keyboard.press("Escape");
+  await owner.waitForFunction(() => window.sketchbattle.screen.constructor.name === "LibraryScreen" && !window.sketchbattle.screen.selected, null, { timeout: 10000 });
+  const tab = await owner.evaluate(() => { const b = window.sketchbattle.screen.gridButtons().find((x) => x.id === "tab"); return { x: b.x + b.w / 2, y: b.y + b.h / 2 }; });
+  await owner.mouse.click(...toCss(owner, tab.x, tab.y));
+  await owner.waitForFunction(() => window.sketchbattle.screen.constructor.name === "CommunityScreen" && (window.sketchbattle.screen.entries ?? []).length > 0, null, { timeout: 10000 });
+  const cell = await owner.evaluate(() => { const b = window.sketchbattle.screen.gridButtons().find((x) => x.id === "c0"); return { x: b.x + b.w / 2, y: b.y + b.h / 2 }; });
+  await owner.mouse.click(...toCss(owner, cell.x, cell.y));
+  await owner.waitForFunction(() => { const s = window.sketchbattle.screen; return s.selected && s.rows(s.selected).length > 0; }, null, { timeout: 15000 });
+  await sleep(1500);
+  await owner.screenshot({ path: path.join(shots, "community-grid-detail.png") });
+  console.log("  the moves list (and with it the demo) shows for a character picked in the grid");
+
   console.log("5. phones: the link opens the character's page");
   for (const [name, device] of [["phone", PHONE], ["upright", UPRIGHT]]) {
     const p = await page(name, device);
