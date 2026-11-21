@@ -8,7 +8,7 @@ import type { LibraryEntry } from "../shared/account";
 import { drawingUrlOf, enqueueJob, entryOf, jobOf, newFighterId, retryJob, reviseCharacter, standingOf, storeCharacter } from "./forge";
 import { admit, resetAllowance, staffIds } from "./budget";
 import { clientIp } from "./school";
-import { isListed, communityCharacters, rankedCommunity, bestIds, lookOf, saveCount, setBest, setLooks, dummyEntry, everyCharacter, findCharacter, libraryOf, removeCharacter, saveCharacter, savedOf, setDummy, setFeature, setPublic, setStarters, starterEntries, starterIds, setHeld, takeDown, unsaveCharacter, upsertCharacter } from "./library";
+import { isListed, communityCharacters, rankedCommunity, bestIds, lookOf, saveCount, setBest, setLooks, dummyEntry, everyCharacter, findCharacter, libraryOf, removeCharacter, saveCharacter, savedOf, setDummy, setPublic, setStarters, starterEntries, starterIds, setHeld, takeDown, unsaveCharacter, upsertCharacter } from "./library";
 import { HOUSE_ROSTER } from "../shared/house";
 import { drawWeighted } from "./weighted";
 
@@ -38,17 +38,16 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
     res.json({ saved: false });
   });
 
-  // { public } or { feature } (OK to show in the game's videos: accounts only) on one of your own characters
+  // { public } on one of your own characters
   api.patch("/library/:id", (req, res) => {
     const player = playerOf(req);
     if (!player) return res.status(401).json({ error: "not signed in" });
     const body = req.body ?? {};
     const keys = Object.keys(body);
-    if (keys.length !== 1 || !["public", "feature"].includes(keys[0])) return res.status(400).json({ error: "send one of public or feature" });
-    const [key] = keys, on = body[key];
-    if (typeof on !== "boolean") return res.status(400).json({ error: `${key} must be true or false` });
-    if (key === "feature" && isGuest(player.id)) return res.status(403).json({ error: "sign in to offer a character for the videos" });
-    const entry = key === "public" ? setPublic(player.id, req.params.id, on) : setFeature(player.id, req.params.id, on);
+    if (keys.length !== 1 || keys[0] !== "public") return res.status(400).json({ error: "send public" });
+    const on = body.public;
+    if (typeof on !== "boolean") return res.status(400).json({ error: "public must be true or false" });
+    const entry = setPublic(player.id, req.params.id, on);
     if (!entry) return res.status(404).json({ error: "not in your library" });
     res.json({ character: entry });
   });

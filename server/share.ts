@@ -1,14 +1,12 @@
 import fs from "node:fs";
-import path from "node:path";
 import type express from "express";
-import { isGuest, type LibraryEntry, type SharedCharacter, type VideoCharacter } from "../shared/account";
+import type { LibraryEntry, SharedCharacter } from "../shared/account";
 import { SHARE_COPY as C, SHARE_ID_RE, SITE, characterPath } from "../shared/share";
 import { HOME_COPY } from "./home-copy";
 import { esc, gamePage, metaTags, strip } from "./home";
-import { bestIds, communityCharacters, everyCharacter, findCharacter, isShareable, nameOf, playCount, saveCount, savedOf } from "./library";
+import { bestIds, communityCharacters, findCharacter, isShareable, nameOf, playCount, saveCount, savedOf } from "./library";
 import { cardOf, cardVersion, forgetCards, type CardFiles } from "./share-card";
 import { playerOf } from "./auth";
-import { staffIds } from "./budget";
 
 /**
  * A page per character, at <base>c/<id>: the game booting straight to it (client/src/app.ts), with the head a crawler
@@ -26,8 +24,6 @@ export function shareableCharacter(id: string): LibraryEntry | null {
 
 const pageUrl = (id: string): string => `${SITE}${characterPath(id)}`;
 const cardUrl = (e: LibraryEntry): string => `${pageUrl(e.id)}/card.png?v=${cardVersion(e)}`;
-/** A file under /gen, as an address on the live site. */
-const genUrl = (url: string): string => new URL(url, SITE).href;
 
 function characterHead(e: LibraryEntry): string {
   const name = e.name ?? "?";
@@ -112,7 +108,7 @@ function asShared(e: LibraryEntry, caller: string): SharedCharacter {
   };
 }
 
-/** The game's side of sharing: a shared character for its page, and the characters the videos may show. */
+/** The game's side of sharing: a shared character for its page. */
 export function attachShareApi(api: express.Router, forgeToken: string): void {
   api.get("/characters/shared/:id", (req, res) => {
     const e = shareableCharacter(req.params.id);
@@ -120,22 +116,4 @@ export function attachShareApi(api: express.Router, forgeToken: string): void {
     res.json({ character: asShared(e, playerOf(req)?.id ?? "") });
   });
 
-  // for the video pipeline: shareable characters whose owners said OK; the forge token or a staff account
-  api.get("/characters/videos", (req, res) => {
-    const token = !!forgeToken && req.get("x-forge-token") === forgeToken;
-    const player = playerOf(req);
-    if (!token && !player) return res.status(401).json({ error: "the forge token or a staff account" });
-    if (!token && !staffIds().has(player!.id)) return res.status(403).json({ error: "staff only" });
-    const characters: VideoCharacter[] = everyCharacter()
-      .filter((e) => e.feature && isShareable(e) && !isGuest(e.owner))
-      .sort((a, b) => b.createdAt - a.createdAt)
-      .map((e) => ({
-        id: e.id, name: e.name ?? "?", tagline: e.tagline, owner: nameOf(e.owner) ?? "?", page: pageUrl(e.id),
-        art: {
-          idle: genUrl(`${path.posix.dirname(e.bundleUrl!)}/idle.png`), drawing: genUrl(e.drawingUrl), card: cardUrl(e),
-          bundle: genUrl(e.bundleUrl!), sheet: e.sheetUrl ? genUrl(e.sheetUrl) : null,
-        },
-      }));
-    res.json({ characters });
-  });
 }

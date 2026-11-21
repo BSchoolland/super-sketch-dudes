@@ -5,8 +5,7 @@
 //   2. A guest opens the share link on a desktop: the game opens on the character's page (SAVE, PRACTICE; no SHARE on
 //      someone else's character). Their session records ref=share and the character's page.
 //   3. A guest's own character's link opens its page too (no SAVE: COMMUNITY doesn't list it).
-//   4. The owner, on MY CHARACTERS: SHARE, the line on what it does, and OK to feature in our videos, which the staff
-//      list follows on and off.
+//   4. The owner, on MY CHARACTERS: SHARE copies the link, beside the line on what it does.
 //   5. A phone (sideways and upright): the link opens the character's page at the screen's width.
 // Usage: node scripts/sharecheck.mjs [--shots <dir>]   (screenshots default to /tmp/ssd-share; SERVER_PORT 4810)
 import { chromium } from "playwright";
@@ -186,9 +185,7 @@ try {
   if (await detailButton(desk, "save")) fail("a guest's character offers SAVE (COMMUNITY doesn't list it)");
   console.log("  its page opens, without SAVE");
 
-  console.log("4. the owner's own page: SHARE and the video opt-in");
-  const videos = async () => (await (await fetch(`${site}/api/characters/videos`, { headers: { "x-forge-token": TOKEN } })).json()).characters.map((c) => c.id);
-  if ((await videos()).length) fail("something is opted in from the start");
+  console.log("4. the owner's own page: SHARE");
   const owner = await page("owner", DESKTOP, { permissions: ["clipboard-read", "clipboard-write"] });
   await owner.goto(`${site}/c/gen-maker0-0?dev=maker0`);
   await onCharacter(owner, "gen-maker0-0");
@@ -200,34 +197,25 @@ try {
   const libButton = (id) => owner.evaluate((id) => {
     const s = window.sketchbattle.screen;
     const b = s.selected && s.detailButtons(s.selected).find((x) => x.id === id);
-    return b ? { x: b.x + b.w / 2, y: b.y + b.h / 2, checked: b.checked } : null;
+    return b ? { x: b.x + b.w / 2, y: b.y + b.h / 2 } : null;
   }, id);
-  await owner.waitForFunction(() => { const s = window.sketchbattle.screen; return s.selected && s.detailButtons(s.selected).some((b) => b.id === "feature"); }, null, { timeout: 10000 });
+  await owner.waitForFunction(() => { const s = window.sketchbattle.screen; return s.selected && s.detailButtons(s.selected).some((b) => b.id === "share"); }, null, { timeout: 10000 });
   await sleep(2500);
   await owner.screenshot({ path: path.join(shots, "owner-1-library.png") });
-  const feature = await libButton("feature");
-  if (feature.checked) fail("OK to feature is ticked from the start");
-  await owner.mouse.click(...toCss(owner, feature.x, feature.y));
-  await owner.waitForFunction(() => window.sketchbattle.screen.selected.feature === true, null, { timeout: 5000 });
-  if ((await videos()).join() !== "gen-maker0-0") fail(`the staff list after opting in: ${await videos()}`);
-  await sleep(300);
-  await owner.screenshot({ path: path.join(shots, "owner-2-opted-in.png") });
+  if (await libButton("feature")) fail("MY CHARACTERS still has the video opt-in");
   const ownShare = await libButton("share");
-  if (!ownShare) fail("your own character has no SHARE");
   await owner.mouse.click(...toCss(owner, ownShare.x, ownShare.y));
   await owner.waitForFunction(() => window.sketchbattle.screen.shareNote?.text === "link copied", null, { timeout: 5000 });
   if ((await owner.evaluate(() => navigator.clipboard.readText())) !== `${site}/c/gen-maker0-0?ref=share`) fail("your own SHARE copied something else");
-  await owner.mouse.click(...toCss(owner, feature.x, feature.y));
-  await owner.waitForFunction(() => !window.sketchbattle.screen.selected.feature, null, { timeout: 5000 });
-  if ((await videos()).length) fail(`the staff list after withdrawing: ${await videos()}`);
+  await owner.screenshot({ path: path.join(shots, "owner-2-copied.png") });
   const ownPhone = await page("owner phone", PHONE);
   await ownPhone.goto(`${site}/?dev=maker0`);
   await ownPhone.waitForFunction(() => window.sketchbattle?.screen?.constructor.name === "TitleScreen", null, { timeout: 30000 });
   await ownCharacter(ownPhone);
-  await ownPhone.waitForFunction(() => { const s = window.sketchbattle.screen; return s.selected && s.detailButtons(s.selected).some((b) => b.id === "feature"); }, null, { timeout: 10000 });
+  await ownPhone.waitForFunction(() => { const s = window.sketchbattle.screen; return s.selected && s.detailButtons(s.selected).some((b) => b.id === "share"); }, null, { timeout: 10000 });
   await sleep(2500);
   await ownPhone.screenshot({ path: path.join(shots, "owner-3-phone-library.png") });
-  console.log("  MY CHARACTERS: SHARE copies the link; OK to feature puts it on the staff list, and unticking takes it off at once");
+  console.log("  MY CHARACTERS: SHARE copies the link; no video opt-in");
 
   console.log("5. phones: the link opens the character's page");
   for (const [name, device] of [["phone", PHONE], ["upright", UPRIGHT]]) {

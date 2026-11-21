@@ -104,9 +104,7 @@ The game opens on the character a page is for (app.ts `home`, CommunityScreen wi
 `GET /api/characters/shared/:id`): SAVE only when COMMUNITY lists it, PRACTICE, and SHARE only on your own character
 (client/src/share.ts: the device's share sheet or the clipboard, with `?ref=share`; the website's address inside the
 Activity too; no SHARE in the CrazyGames build). Someone else's character has no SHARE and no FIGHT IT (Ben's call).
-MY CHARACTERS has SHARE and, for an account's own, "OK to feature in our videos" (`feature` on the entry, PATCH
-/library/:id). `GET /api/characters/videos` (forge token or a staff account) lists the opted-in shareable characters
-for the video pipeline. A SHARE goes on the session's `shares`; `npm run funnel` counts shares and newcomers (a first
+MY CHARACTERS has SHARE. A SHARE goes on the session's `shares`; `npm run funnel` counts shares and newcomers (a first
 arrival through a share link) per character, and those arrivals are the funnel's `share` source.
 `node scripts/sharecheck.mjs` walks it in real pages.
 

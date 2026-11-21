@@ -237,8 +237,6 @@ export const library = {
   dummy: () => api<{ character: LibraryEntry | null }>("/dummy"),
   remove: (id: string) => api<void>(`/library/${id}`, { method: "DELETE" }),
   setPublic: (id: string, pub: boolean) => api<{ character: LibraryEntry }>(`/library/${id}`, { method: "PATCH", body: JSON.stringify({ public: pub }) }),
-  /** OK (or not) to show it in the game's videos: an account's own characters only. */
-  setFeature: (id: string, on: boolean) => api<{ character: LibraryEntry }>(`/library/${id}`, { method: "PATCH", body: JSON.stringify({ feature: on }) }),
   save: (id: string) => api<{ saved: boolean }>(`/library/saved/${id}`, { method: "POST" }),
   unsave: (id: string) => api<{ saved: boolean }>(`/library/saved/${id}`, { method: "DELETE" }),
   /** One shareable character, by id (a share link's, or one clicked in the brawl): 404 once it's private, held or gone. */

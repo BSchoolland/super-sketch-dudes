@@ -73,7 +73,7 @@ attachAuth(api, {
 attachForge(api, { token: FORGE_TOKEN, dataDir: DATA_DIR, genBase: `${BASE}/gen` });
 // typed names wait for the moderator's judges, which the forge worker runs
 attachNameJudging(api, { token: FORGE_TOKEN, rename: applyName });
-// before the characters: their GET /characters/:id would take /characters/videos
+// before the characters: their GET /characters/:id would take /characters/shared
 attachShareApi(api, FORGE_TOKEN);
 attachCharacters(api, FORGE_TOKEN, DATA_DIR);
 // player-made maps, for the accounts in map-makers.json

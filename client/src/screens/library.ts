@@ -27,7 +27,7 @@ const PAD_TOP = 30;
 
 /**
  * CHARACTERS, MINE tab: the library as a grid (yours, the ones you saved, the starters); one of them big, with PRACTICE,
- * SHARE and DELETE, and on your own its sharing: listed in COMMUNITY, and OK for the game's videos.
+ * SHARE and DELETE, and on your own its sharing: listed in COMMUNITY.
  */
 export class LibraryScreen implements Screen {
   t = 0;
@@ -83,11 +83,10 @@ export class LibraryScreen implements Screen {
     b.push({ id: "back", x: 0, y, w, h: 110, text: "BACK", size: 44 });
     const x0 = (VIEW_W - (b.length * w + (b.length - 1) * gap)) / 2;
     b.forEach((btn, i) => { btn.x = x0 + i * (w + gap); });
-    // your own character's sharing sits under its preview: in COMMUNITY, and OK for the videos
+    // your own character's sharing sits under its preview: in COMMUNITY or not
     if (ownReady(e) && this.detail && !playingAsGuest()) {
       const top = SHARING_Y + 30, h = small() ? 100 : 80, half = (DEMO.w - 20) / 2, size = small() ? 36 : 32;
       b.push({ id: "public", x: DEMO.x, y: top, w: half, h, text: "SHARE WITH EVERYONE", size, checked: !!e.public });
-      b.push({ id: "feature", x: DEMO.x + half + 20, y: top, w: half, h, text: SHARE_COPY.featureOptIn, size, checked: !!e.feature });
     }
     // the moves come after the row, so focus starts on it and the preview starts out standing still
     for (const r of this.rows(e)) b.push({ id: `m${r.i}`, x: r.x, y: r.y, w: r.w, h: r.h, text: "", custom: true });
@@ -150,7 +149,6 @@ export class LibraryScreen implements Screen {
     if (pressed === "copy") { sfx.menuConfirm(); this.copyDrawing(e); }
     if (pressed === "retry") this.retry(e);
     if (pressed === "public") this.flipPublic(e);
-    if (pressed === "feature") this.flipFeature(e);
     if (pressed === "share") this.share(e);
     if (pressed === "delete") {
       if (this.deleteArmed >= 0 && this.t - this.deleteArmed < 3) this.remove(e);
@@ -175,16 +173,6 @@ export class LibraryScreen implements Screen {
       ({ character }) => { e.public = character.public; void refreshLibrary(); },
       (error: unknown) => {
         console.error(`public ${e.id} failed`, error);
-        this.problem = error instanceof Error ? error.message : String(error);
-      },
-    );
-  }
-
-  private flipFeature(e: LibraryEntry): void {
-    library.setFeature(e.id, !e.feature).then(
-      ({ character }) => { e.feature = character.feature; void refreshLibrary(); },
-      (error: unknown) => {
-        console.error(`feature ${e.id} failed`, error);
         this.problem = error instanceof Error ? error.message : String(error);
       },
     );

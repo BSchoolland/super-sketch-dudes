@@ -1,6 +1,5 @@
 // ===== EVERY WORD OF CHARACTER SHARING =====
-// The character pages (server/share.ts: the head, the share card, the 404 page) and the game's SHARE and
-// feature opt-in. Players, link previews and search engines read all of it. Plain text: whoever shows it escapes it.
+// The character pages (server/share.ts: the head, the share card, the 404 page) and the game's SHARE. Players, link previews and search engines read all of it. Plain text: whoever shows it escapes it.
 // Never say "forge" here.
 export const SHARE_COPY = {
   /** The page's <title> and its sharing title. */
@@ -21,7 +20,6 @@ export const SHARE_COPY = {
   copyFailed: (url: string) => `couldn't copy the link: ${url}`,
   /** Under your own character: what sharing it does. */
   ownNote: "Share it and your friends can fight it",
-  featureOptIn: "OK to feature in our videos",
 } as const;
 
 /** The live site, which a character's link always points at (the Discord Activity's own address isn't one to send). */

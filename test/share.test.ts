@@ -190,53 +190,6 @@ describe("the game's shared character", () => {
   });
 });
 
-describe("the feature opt-in", () => {
-  const videos = async (o: { session?: string; token?: boolean }) => api("/characters/videos", o);
-  const ids = async (): Promise<string[]> => ((await (await videos({ token: true })).json()).characters as { id: string }[]).map((c) => c.id);
-  const feature = (id: string, on: unknown, session: string) => api(`/library/${id}`, { method: "PATCH", session, body: JSON.stringify({ feature: on }) });
-
-  it("is off by default, and only the owner of an account can turn it on", async () => {
-    expect(await ids()).toEqual([]);
-    expect((await feature("gen-ann-ok", true, bob.session)).status).toBe(404);
-    expect((await feature("gen-ann-ok", "yes", ann.session)).status).toBe(400);
-    expect((await api("/library/gen-ann-ok", { method: "PATCH", session: ann.session, body: JSON.stringify({ feature: true, public: true }) })).status).toBe(400);
-    expect((await api("/library/gen-ann-ok", { method: "PATCH", body: JSON.stringify({ feature: true }) })).status).toBe(401);
-    const g = await guest();
-    put(entry("gen-guest-own", g.player.id));
-    expect((await feature("gen-guest-own", true, g.session)).status).toBe(403);
-    const on = await feature("gen-ann-ok", true, ann.session);
-    expect(on.status).toBe(200);
-    expect((await on.json()).character.feature).toBe(true);
-    expect(await ids()).toEqual(["gen-ann-ok"]);
-  });
-
-  it("lists the owner's name, the character's name and tagline, and its art, for the token or a staff account only", async () => {
-    expect((await videos({})).status).toBe(401);
-    expect((await videos({ session: bob.session })).status).toBe(403);
-    const list = (await (await videos({ session: staff.session })).json()).characters;
-    expect(list).toEqual([{
-      id: "gen-ann-ok", name: `<b>"ANN" & CO</b>`, tagline: "gen-ann-ok hits hard", owner: "Ann", page: "https://supersketchdudes.com/c/gen-ann-ok",
-      art: {
-        idle: "https://supersketchdudes.com/gen/gen-ann-ok/v1/idle.png", drawing: "https://supersketchdudes.com/gen/drawings/gen-ann-ok.png",
-        card: expect.stringMatching(/^https:\/\/supersketchdudes.com\/c\/gen-ann-ok\/card.png\?v=[0-9a-f]{10}$/),
-        bundle: "https://supersketchdudes.com/gen/gen-ann-ok/v1/bundle.json", sheet: null,
-      },
-    }]);
-  });
-
-  it("keeps through the character's updates, leaves the list while it isn't shareable, and is gone the moment it's withdrawn", async () => {
-    upsertCharacter({ ...findCharacter("gen-ann-ok")!, feature: undefined, tagline: "a new tagline" });
-    expect(findCharacter("gen-ann-ok")!.feature).toBe(true);
-    setHeld("gen-ann-ok", true);
-    expect(await ids()).toEqual([]);
-    setHeld("gen-ann-ok", false);
-    expect(await ids()).toEqual(["gen-ann-ok"]);
-    expect((await feature("gen-ann-ok", false, ann.session)).status).toBe(200);
-    expect(await ids()).toEqual([]);
-    expect(findCharacter("gen-ann-ok")!.feature).toBeUndefined();
-  });
-});
-
 describe("share attribution", () => {
   const T0 = Date.UTC(2026, 10, 1, 15);
   const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/156.0.0.0 Safari/537.36";
