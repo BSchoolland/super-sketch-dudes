@@ -60,3 +60,23 @@ describe("a projectile's end", () => {
     }
   });
 });
+
+describe("a bouncing projectile that comes to rest", () => {
+  it("stays on the floor instead of sinking through it (a minion or a dropped item settling on a platform)", async () => {
+    await loadHouse("woodstove"); await loadHouse("slugbert");
+    const s = createMatch({ stage: "proving", players: [{ fighter: "woodstove" }, { fighter: "slugbert" }], seed: 3 });
+    const [a, v] = s.fighters;
+    for (let i = 0; i < 30; i++) step(s, [EMPTY_INPUT, EMPTY_INPUT]);
+    expect(a.grounded).toBe(true);
+    const floor = a.y;
+    v.x = a.x + 600;
+    // the way a summoned minion is dropped: falling, bouncing for as long as it lives
+    spawnProjectile(s, a, "settler", a.x - 150, floor - 6, 0, 1, 600, { frames: [99, 99], x: 0, y: 0, r: 1, damage: 0, angle: 0, base: 0, growth: 0 }, { g: 0.45, bounce: 99999 });
+    for (let i = 0; i < 300; i++) {
+      step(s, [EMPTY_INPUT, EMPTY_INPUT]);
+      const p = s.projectiles.find((q) => q.kind === "settler");
+      expect(p, `frame ${i}`).toBeTruthy();
+      expect(p!.y, `frame ${i}`).toBeLessThanOrEqual(floor + 1);
+    }
+  });
+});

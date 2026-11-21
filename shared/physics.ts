@@ -208,7 +208,8 @@ export function stepProjectiles(state: State, stage: Stage): void {
     if (p.data.bounce) {
       for (let i = 0; i < stage.platforms.length; i++) {
         const t = platTop(state, stage, i);
-        if (p.x >= t.x1 && p.x <= t.x2 && p.y >= t.y && p.y - p.vy < t.y && p.vy > 0) {
+        // <=: one that has settled sits exactly on the top, and gravity's next nudge must land it again, not let it through
+        if (p.x >= t.x1 && p.x <= t.x2 && p.y >= t.y && p.y - p.vy <= t.y && p.vy > 0) {
           p.y = t.y; p.vy = -p.vy * 0.55; p.vx *= 0.8; p.data.bounces = (p.data.bounces ?? 0) + 1;
           if (p.data.bounces > p.data.bounce) { p.dead = true; p.end = "landed"; }
         }
