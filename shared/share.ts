@@ -6,6 +6,8 @@ export const SHARE_COPY = {
   pageTitle: (name: string) => `${name} · Super Sketch Dudes`,
   /** The share card's alt text. */
   cardAlt: (name: string) => `${name}, a hand-drawn fighter in Super Sketch Dudes`,
+  /** On the page, under the character's name and tagline. */
+  pageIntro: "Someone drew this character in Super Sketch Dudes, a free browser platform fighter where you draw any character and battle with it. Play as it free, no download.",
   /** Small on the share card, under the name. */
   cardGame: "SUPER SKETCH DUDES",
   /** What the phone's share sheet sends with the link. */

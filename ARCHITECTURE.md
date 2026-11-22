@@ -81,8 +81,8 @@ https://supersketchdudes.com/ is the game, and search engines and link previews 
 index.html with the title, description, canonical, sharing tags and JSON-LD in its head and the about sections after
 the canvas, on each request, with a strip of COMMUNITY's BEST (one per creator, listed characters only, their idle
 cells served at `fighters/<id>.png`). Every word of it is in `server/home-copy.ts`; Vite's dev server renders the same
-page with no strip. Its pictures are `client/public/` (`screenshots/`, `clip.mp4`, `og.jpg`, icons, `robots.txt`,
-`sitemap.xml`; `node scripts/homeshots.mjs` remakes them).
+page with no strip. Its pictures are `client/public/` (`screenshots/`, `clip.mp4`, `og.jpg`, icons, `robots.txt`;
+`node scripts/homeshots.mjs` remakes them).
 
 The sections are `display: none` and the page can't scroll (an iPhone's browser aside: "The browser's bars") until the title screen's tab (bottom edge) opens them
 (`client/src/about.ts`): the page scrolls down to them and the game leaves the keys to the page. PLAY scrolls back up,
@@ -94,8 +94,13 @@ loads before they open, so the game boots as it did without them. The Activity n
 
 Every shareable character has a page at `<base>c/<id>` (`server/share.ts`): ready, public, not held, not deleted (a
 taken-down one isn't on file), a guest's included (`isShareable`, library.ts). It is the game's index.html with the
-about sections, its head the character's: title "<NAME> · Super Sketch Dudes", its tagline as the description,
-canonical, og/twitter tags and a CreativeWork JSON-LD. Its og:image is `<base>c/<id>/card.png?v=<version>`, a 1200x630
+about sections, the first one the character's (its name as the h1, its tagline, a line on what the game is, and its
+idle cell when COMMUNITY lists it) in place of the clip, its head the character's: title "<NAME> · Super Sketch Dudes",
+its tagline as the description, canonical, og/twitter tags and a CreativeWork JSON-LD. Neither names its creator (many
+players are children). Search engines get only the characters in `<data>/seo-characters.json` (a JSON array of ids,
+kept by hand and read on every request; the server won't start without it, `[]` for none), because many characters
+are someone else's franchise: `/sitemap.xml` is the front page and those that are shareable now, and every other
+character's page says noindex. Its og:image is `<base>c/<id>/card.png?v=<version>`, a 1200x630
 card (`server/share-card.ts`, sharp, Patrick Hand from the built client's fonts/) made once per version (name and
 bundle) into `<data>/cards/`. Anything else is a plain 404 page with no card; both are decided on every request and
 sent no-cache with no validators, so a hold or a take-down stops them at once. Every word is in `shared/share.ts`.

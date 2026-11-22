@@ -129,9 +129,9 @@ app.get([...at("/"), ...at("/index.html")], (req, res, next) => {
 if (BASE !== PLAY) app.get(/^\/play(\/|$)/, (req, res) => res.redirect(301, req.originalUrl.slice(PLAY.length) || "/"));
 // the game page; Discord and Google send the signed-in browser back to /auth with the token in the URL fragment
 attachHome(app, { at, base: `${BASE}/`, indexFile: path.join(clientDir, "index.html"), genDir });
-// a page per shareable character, and its link preview card; the built client has the font under fonts/, the source under public/fonts/
+// a page per shareable character, its link preview card, and the sitemap of the ones search engines may index; the built client has the font under fonts/, the source under public/fonts/
 const fontFile = path.join(clientDir, ...(clientDir.endsWith(path.join("dist", "client")) ? [] : ["public"]), "fonts", "PatrickHand-Regular.ttf");
-attachSharePages(app, { at, base: `${BASE}/`, indexFile: path.join(clientDir, "index.html"), files: { genDir, cardDir: path.join(DATA_DIR, "cards"), fontFile } });
+attachSharePages(app, { at, base: `${BASE}/`, indexFile: path.join(clientDir, "index.html"), files: { genDir, cardDir: path.join(DATA_DIR, "cards"), fontFile }, seoFile: path.join(DATA_DIR, "seo-characters.json") });
 // house fighters keep their URLs across builds, so they're kept only briefly, with no ETag or Last-Modified: a browser
 // downloads them again rather than revalidating (Safari can turn a 304 into an empty body)
 app.use(at("/house"), express.static(path.join(clientDir, "house"), { maxAge: "5m", etag: false, lastModified: false }));

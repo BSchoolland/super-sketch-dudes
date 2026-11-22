@@ -107,9 +107,12 @@ html.about #about { display: block; }
 #about .fighters li { padding: .4rem .6rem .7rem; text-align: center; overflow: hidden; }
 #about .fighters li:nth-child(odd) { transform: rotate(-.6deg); }
 #about .fighters li:nth-child(even) { transform: rotate(.5deg); }
-#about .fighters img { width: 150%; max-width: none; aspect-ratio: 1; margin: -30% -25% -16%; }
+#about .fighters img, #about .portrait img { width: 150%; max-width: none; aspect-ratio: 1; margin: -30% -25% -16%; }
 #about .fighters b { display: block; font-weight: normal; font-size: 1.4rem; line-height: 1.1; }
 #about .fighters small { display: block; color: #625e55; font-size: 1rem; line-height: 1.2; margin-top: .2rem; }
+#about .hero h1.name { white-space: normal; overflow-wrap: anywhere; }
+#about .intro { margin-bottom: 1.4rem; }
+#about .portrait { width: 100%; max-width: 26rem; justify-self: center; overflow: hidden; transform: rotate(.5deg); }
 #about .facts { padding-left: 1.3rem; margin: 0; }
 #about .facts li { margin: .3rem 0; }
 #about .where li { padding: .8rem 1.1rem 1rem; }
@@ -126,13 +129,9 @@ html.about #about { display: block; }
 @media (prefers-reduced-motion: reduce) { #about .play:hover, #about .play:focus-visible { transform: rotate(-.4deg); } }
   </style>`;
 
-/** The about sections. `base`: the game's path, where PLAY goes (client/src/about.ts scrolls up to it instead). */
-function about(base: string, fighters: Fighter[]): string {
-  const shot = (i: number): string =>
-    `<img src="${base}screenshots/${SHOTS[i]}.webp" width="960" height="540" loading="lazy" decoding="async" alt="${esc(C.steps[i].alt)}">`;
-  return `<div id="about">
-<main>
-<header class="hero">
+/** The front page's first section: the game's name, its pitch and the clip. */
+function frontHero(base: string): string {
+  return `<header class="hero">
 <div>
 <h1><span>SUPER</span>SKETCH DUDES</h1>
 <p class="pitch">${esc(C.pitch)}</p>
@@ -143,7 +142,16 @@ function about(base: string, fighters: Fighter[]): string {
 <source src="${base}clip.mp4" type="video/mp4">
 </video>
 </header>
+`;
+}
 
+/** The about sections after `hero`. `base`: the game's path, where PLAY goes (client/src/about.ts scrolls up to it instead). */
+function about(base: string, hero: string, fighters: Fighter[]): string {
+  const shot = (i: number): string =>
+    `<img src="${base}screenshots/${SHOTS[i]}.webp" width="960" height="540" loading="lazy" decoding="async" alt="${esc(C.steps[i].alt)}">`;
+  return `<div id="about">
+<main>
+${hero}
 <section>
 <h2>${esc(C.howTitle)}</h2>
 <ol class="steps">
@@ -180,12 +188,12 @@ ${C.facts.map((f) => `<li>${esc(f)}</li>`).join("\n")}
 
 /** The game's index.html with the head's tags and the about sections. Vite's dev server uses it too, with no strip. */
 export function frontPage(index: string, base: string, fighters: Fighter[]): string {
-  return gamePage(index, head(), base, fighters);
+  return gamePage(index, head(), base, frontHero(base), fighters);
 }
 
-/** The game's index.html with `headTags` (its title and sharing tags) and the about sections. */
-export function gamePage(index: string, headTags: string, base: string, fighters: Fighter[]): string {
-  return fill(fill(index, "front-head", headTags + ABOUT_STYLE), "front-body", about(base, fighters));
+/** The game's index.html with `headTags` (its title and sharing tags) and the about sections, `hero` first. */
+export function gamePage(index: string, headTags: string, base: string, hero: string, fighters: Fighter[]): string {
+  return fill(fill(index, "front-head", headTags + ABOUT_STYLE), "front-body", about(base, hero, fighters));
 }
 
 /**

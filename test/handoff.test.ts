@@ -21,6 +21,7 @@ let servers: ChildProcess[] = [];
 afterEach(() => { for (const s of servers) s.kill("SIGKILL"); servers = []; });
 
 async function boot(dataDir: string, port: number, build: string): Promise<ChildProcess> {
+  fs.writeFileSync(path.join(dataDir, "seo-characters.json"), "[]");
   const child = spawn(path.join("node_modules", ".bin", "tsx"), ["server/index.ts"], { env: { ...process.env, PORT: String(port), SKETCHBATTLE_DATA: dataDir, BUILD: build }, stdio: "ignore" });
   servers.push(child);
   await until(() => fetch(`http://127.0.0.1:${port}/api/health`).then((r) => r.ok, () => false), "the server to answer", 15000);

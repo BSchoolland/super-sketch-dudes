@@ -23,6 +23,7 @@ const shotsAt = process.argv.indexOf("--shots");
 const shots = shotsAt > 0 ? process.argv[shotsAt + 1] : "/tmp/ssd-touch-shots";
 fs.mkdirSync(shots, { recursive: true });
 const data = fs.mkdtempSync(path.join(os.tmpdir(), "touchcheck-"));
+fs.writeFileSync(path.join(data, "seo-characters.json"), "[]");
 fs.writeFileSync(path.join(data, "staff.json"), "[]");
 const base = `http://localhost:${VITE_PORT}/`;
 const children = [];

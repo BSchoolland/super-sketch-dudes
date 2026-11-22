@@ -22,6 +22,7 @@ const shotsAt = process.argv.indexOf("--shots");
 const shots = shotsAt > 0 ? process.argv[shotsAt + 1] : "/tmp/ssd-share";
 fs.mkdirSync(shots, { recursive: true });
 const data = fs.mkdtempSync(path.join(os.tmpdir(), "sharecheck-"));
+fs.writeFileSync(path.join(data, "seo-characters.json"), "[]");
 const site = `http://localhost:${SERVER_PORT}`;
 const LIVE = "https://supersketchdudes.com/";
 const fail = (message) => { throw new Error(message); };

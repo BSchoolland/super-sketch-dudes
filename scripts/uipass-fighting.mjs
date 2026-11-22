@@ -281,6 +281,7 @@ async function up(url, what) {
 }
 
 const data = fs.mkdtempSync(path.join(os.tmpdir(), "uipass-fighting-"));
+fs.writeFileSync(path.join(data, "seo-characters.json"), "[]");
 fs.writeFileSync(path.join(data, "staff.json"), "[]");
 const browsers = {};
 const errors = [];

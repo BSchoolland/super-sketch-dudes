@@ -25,6 +25,7 @@ const SERVER_PORT = Number(process.env.SERVER_PORT ?? 3431), VITE_PORT = Number(
 const shotsAt = process.argv.indexOf("--shots");
 const shots = shotsAt > 0 ? process.argv[shotsAt + 1] : null;
 const data = fs.mkdtempSync(path.join(os.tmpdir(), "crazygamescheck-"));
+fs.writeFileSync(path.join(data, "seo-characters.json"), "[]");
 const origin = `http://localhost:${VITE_PORT}`, base = `${origin}/`;
 const children = [];
 const fail = (message) => { throw new Error(message); };

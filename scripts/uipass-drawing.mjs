@@ -27,6 +27,7 @@ const survey = process.argv.includes("--survey");
 const only = arg("--only")?.split(",") ?? null;
 const shotsRoot = arg("--shots") ?? "/tmp/ssd-uipass/drawing";
 const data = fs.mkdtempSync(path.join(os.tmpdir(), "uipass-drawing-"));
+fs.writeFileSync(path.join(data, "seo-characters.json"), "[]");
 fs.writeFileSync(path.join(data, "forge-budget.json"), JSON.stringify({
   perWeek: 1000, weekStartsAt: new Date(Date.now() - 3_600_000).toISOString(), paused: null, perPlayerPerDay: 1, waitingPerPlayer: 1, guest: { lifetime: 1, perIpPerDay: 50 },
 }));

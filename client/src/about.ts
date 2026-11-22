@@ -1,11 +1,11 @@
 /**
  * The front page's about sections, which the server puts under the canvas (server/home.ts). They are shown, and the
  * page scrolls, only while open: the title screen's tab opens them, PLAY or scrolling back to the top closes them.
- * Nothing of them loads until then; the clip plays only while they're open.
+ * Nothing of them loads until then; the clip (the front page's; a character's page has its picture instead) plays only
+ * while they're open.
  */
 const sections = document.getElementById("about");
-const clip = sections?.querySelector("video");
-if (sections && !clip) throw new Error("the about sections have no clip");
+const clip = sections?.querySelector("video") ?? null;
 const root = document.documentElement;
 
 /** This page has the sections (the front page; not the shell's). */
@@ -25,16 +25,16 @@ function set(open: boolean): void {
 }
 
 export function openAbout(): void {
-  if (!sections || !clip) throw new Error("this page has no about sections");
+  if (!sections) throw new Error("this page has no about sections");
   set(true);
   sections.scrollIntoView({ block: "start" });
   // closing them before it starts interrupts it
-  clip.play().catch((error: unknown) => { if (!(error instanceof DOMException && error.name === "AbortError")) throw error; });
+  clip?.play().catch((error: unknown) => { if (!(error instanceof DOMException && error.name === "AbortError")) throw error; });
 }
 
 function shut(): void {
   set(false);
-  clip!.pause();
+  clip?.pause();
 }
 
 /** At once, wherever the page was: something other than the title screen is up. */

@@ -20,6 +20,7 @@ const ONLY_SCREENS = arg("screens", "")?.split(",").filter(Boolean);
 const SERVER_PORT = Number(process.env.SERVER_PORT ?? 4241), VITE_PORT = Number(process.env.VITE_PORT ?? 6341);
 const base = `http://localhost:${VITE_PORT}/`;
 const data = fs.mkdtempSync(path.join(os.tmpdir(), "uipass-menus-"));
+fs.writeFileSync(path.join(data, "seo-characters.json"), "[]");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const fail = (message) => { throw new Error(message); };
 
