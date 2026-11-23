@@ -8,7 +8,7 @@ import type { LibraryEntry } from "../shared/account";
 import { drawingUrlOf, enqueueJob, entryOf, jobOf, newFighterId, retryJob, reviseCharacter, standingOf, storeCharacter } from "./forge";
 import { admit, resetAllowance, staffIds } from "./budget";
 import { clientIp } from "./school";
-import { isListed, isShareable, communityCharacters, rankedCommunity, bestIds, lookOf, saveCount, setBest, setLooks, dummyEntry, everyCharacter, findCharacter, libraryOf, removeCharacter, saveCharacter, savedOf, setDummy, setPublic, setStarters, starterEntries, starterIds, setHeld, takeDown, unsaveCharacter, upsertCharacter } from "./library";
+import { isListed, communityCharacters, rankedCommunity, bestIds, lookOf, saveCount, setBest, setLooks, dummyEntry, everyCharacter, findCharacter, libraryOf, removeCharacter, saveCharacter, savedOf, setDummy, setPublic, setStarters, starterEntries, starterIds, setHeld, takeDown, unsaveCharacter, upsertCharacter } from "./library";
 import { HOUSE_ROSTER } from "../shared/house";
 import { drawWeighted } from "./weighted";
 
@@ -259,11 +259,10 @@ export function attachCharacters(api: express.Router, forgeToken = "", dataDir =
     res.json({ characters: drawWeighted(pool, n) });
   });
 
-  // finished characters, for the tools: just enough to load and name them. Without the forge token only the shareable
-  // ones, so a private or held drawing is never listed publicly.
+  // every finished character, for the tools (forge token only): just enough to load and name them
   api.get("/characters/everyone", (req, res) => {
-    const all = !!forgeToken && req.get("x-forge-token") === forgeToken;
-    res.json({ characters: everyCharacter().filter((c) => all || isShareable(c)).map((c) => ({ id: c.id, name: c.name, bundleUrl: c.bundleUrl })) });
+    if (!forgeToken || req.get("x-forge-token") !== forgeToken) return res.status(401).json({ error: "bad token" });
+    res.json({ characters: everyCharacter().map((c) => ({ id: c.id, name: c.name, bundleUrl: c.bundleUrl })) });
   });
 
   api.get("/characters/:id", (req, res) => {

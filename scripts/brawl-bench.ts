@@ -10,17 +10,21 @@ import { registerFighter } from "../shared/fighters/index";
 import { buildGenerated, type GeneratedBundle } from "../shared/gen/load";
 import { HOUSE_ROSTER } from "../shared/house";
 import { loadHouse } from "../test/house";
+import { loadForgeEnv } from "../forge/env";
 
 interface Row { kills: number; deaths: number; survivedSec: number; dealt: number; drops: number }
 type Totals = Record<string, Row>;
 
 const MINUTES = Number(process.argv[2] ?? 120), PARALLEL = Number(process.argv[3] ?? 8), SITE = process.argv[4] ?? "https://supersketchdudes.com";
 const worker = process.env.BRAWL_SEED !== undefined;
+loadForgeEnv();
+const TOKEN = process.env.FORGE_TOKEN ?? "";
 
 async function loadEveryone(): Promise<Record<string, string>> {
   const names: Record<string, string> = {};
   for (const h of HOUSE_ROSTER) { await loadHouse(h.id); names[h.id] = h.name; }
-  const res = await fetch(`${SITE}/api/characters/everyone`);
+  if (!TOKEN) throw new Error("FORGE_TOKEN must be set: everyone's characters need the forge token");
+  const res = await fetch(`${SITE}/api/characters/everyone`, { headers: { "x-forge-token": TOKEN } });
   if (!res.ok) throw new Error(`everyone's characters: HTTP ${res.status}`);
   const { characters } = (await res.json()) as { characters: { id: string; name: string; bundleUrl: string }[] };
   for (const c of characters) {

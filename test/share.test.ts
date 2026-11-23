@@ -197,16 +197,11 @@ describe("a character's page", () => {
 });
 
 describe("everyone's characters, for the tools", () => {
-  const ids = async (token: boolean): Promise<string[]> => ((await (await api("/characters/everyone", { token })).json()) as { characters: { id: string }[] }).characters.map((c) => c.id);
-
-  it("lists only shareable characters without the forge token, and every finished one with it", async () => {
-    const open = await ids(false);
-    expect(open).toContain("gen-ann-ok");
-    for (const id of ["gen-ann-held", "gen-ann-private", "gen-ann-deleted", "gen-ann-queued"]) expect(open).not.toContain(id);
-    const all = await ids(true);
-    expect(all).toContain("gen-ann-held");
-    expect(all).toContain("gen-ann-private");
-    expect(all).not.toContain("gen-ann-deleted");
+  it("needs the forge token, and then lists every finished character", async () => {
+    expect((await api("/characters/everyone")).status).toBe(401);
+    const ids = ((await (await api("/characters/everyone", { token: true })).json()) as { characters: { id: string }[] }).characters.map((c) => c.id);
+    expect(ids).toEqual(expect.arrayContaining(["gen-ann-ok", "gen-ann-held", "gen-ann-private"]));
+    expect(ids).not.toContain("gen-ann-deleted");
   });
 });
 
