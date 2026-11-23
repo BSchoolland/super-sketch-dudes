@@ -17,7 +17,7 @@ const PARALLEL = 3;
 const GIVE_UP = 3;
 
 const done = new Set(fs.existsSync(RESULTS) ? fs.readFileSync(RESULTS, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l).id as string) : []);
-const everyone = (await (await fetch(`${SITE}/api/characters/everyone`)).json()).characters as { id: string; name: string | null }[];
+const everyone = (await (await fetch(`${SITE}/api/characters/everyone`, { headers: { "x-forge-token": TOKEN } })).json()).characters as { id: string; name: string | null }[];
 const todo = everyone.filter((c) => !done.has(c.id));
 console.log(`${everyone.length} characters, ${done.size} already judged, ${todo.length} to go`);
 
