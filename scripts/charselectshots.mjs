@@ -19,7 +19,6 @@ const want = (part) => !ONLY.length || ONLY.includes(part);
 const SERVER_PORT = Number(process.env.SERVER_PORT ?? 4541), VITE_PORT = Number(process.env.VITE_PORT ?? 6641);
 const base = `http://localhost:${VITE_PORT}/`;
 const data = fs.mkdtempSync(path.join(os.tmpdir(), "charselect-"));
-fs.writeFileSync(path.join(data, "seo-characters.json"), "[]");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const problems = [];
 const check = (ok, what) => { if (!ok) problems.push(what); console.log(`  ${ok ? "ok" : "PROBLEM"}: ${what}`); };

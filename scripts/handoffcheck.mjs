@@ -11,7 +11,6 @@ import { openOnline } from "./menu-nav.mjs";
 const PORT = Number(process.env.PORT ?? 3091);
 const url = `http://localhost:${PORT}/`;
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "sb-handoffcheck-"));
-fs.writeFileSync(path.join(dataDir, "seo-characters.json"), "[]");
 const log = (...a) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...a);
 let server = null;
 

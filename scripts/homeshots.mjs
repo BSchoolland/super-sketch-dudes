@@ -36,7 +36,6 @@ const webp = (png, name, width) => execFileSync("cwebp", ["-quiet", "-q", "78", 
 let browser;
 try {
   fs.mkdirSync(data);
-  fs.writeFileSync(path.join(data, "seo-characters.json"), "[]");
   run("npx", ["tsx", "server/index.ts"], { PORT: String(SERVER_PORT), SKETCHBATTLE_DATA: data, DEV_LOGIN: "1", FORGE_TOKEN: TOKEN });
   await up(`http://localhost:${SERVER_PORT}/api/health`, "server");
   run("npx", ["vite", "--config", "client/vite.config.ts", "--port", String(VITE_PORT), "--strictPort"], { SKETCHBATTLE_SERVER: `http://localhost:${SERVER_PORT}` });

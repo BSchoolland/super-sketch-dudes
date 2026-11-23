@@ -97,10 +97,7 @@ taken-down one isn't on file), a guest's included (`isShareable`, library.ts). I
 about sections, the first one the character's (its name as the h1, its tagline, a line on what the game is, and its
 idle cell when COMMUNITY lists it) in place of the clip, its head the character's: title "<NAME> · Super Sketch Dudes",
 its tagline as the description, canonical, og/twitter tags and a CreativeWork JSON-LD. Neither names its creator (many
-players are children). Search engines get only the characters in `<data>/seo-characters.json` (a JSON array of ids,
-kept by hand and read on every request; the server won't start without it, `[]` for none), because many characters
-are someone else's franchise: `/sitemap.xml` is the front page and those that are shareable now, and every other
-character's page says noindex. Its og:image is `<base>c/<id>/card.png?v=<version>`, a 1200x630
+players are children). `/sitemap.xml` is the front page and every character that's shareable now, so search engines index all of them. Its og:image is `<base>c/<id>/card.png?v=<version>`, a 1200x630
 card (`server/share-card.ts`, sharp, Patrick Hand from the built client's fonts/) made once per version (name and
 bundle) into `<data>/cards/`. Anything else is a plain 404 page with no card; both are decided on every request and
 sent no-cache with no validators, so a hold or a take-down stops them at once. Every word is in `shared/share.ts`.

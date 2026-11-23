@@ -9,7 +9,7 @@ import { attachAuth } from "../server/auth";
 import { attachForge } from "../server/forge";
 import { attachCharacters } from "../server/characters";
 import { attachShareApi, attachSharePages } from "../server/share";
-import { initLibrary, saveCharacter, setHeld, upsertCharacter, findCharacter } from "../server/library";
+import { initLibrary, saveCharacter, setHeld, upsertCharacter, findCharacter, everyCharacter, isShareable } from "../server/library";
 import { initEvents } from "../server/events";
 import { funnel, shareFunnel, sharedFighterOf } from "../server/funnel";
 import type { StoredEvent } from "../server/eventlog";
@@ -51,7 +51,6 @@ beforeAll(async () => {
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "sb-share-"));
   fs.writeFileSync(path.join(dataDir, "staff.json"), JSON.stringify(["dev-staffer"]));
   fs.writeFileSync(path.join(dataDir, "index.html"), INDEX);
-  fs.writeFileSync(path.join(dataDir, "seo-characters.json"), JSON.stringify(["gen-ann-ok", "gen-ann-held", "gen-nobody", "gen-seo-later"]));
   const app = express();
   app.use(express.json());
   const router = express.Router();
@@ -62,7 +61,7 @@ beforeAll(async () => {
   attachForge(router, { token: TOKEN, dataDir, genBase: "/gen" });
   attachShareApi(router, TOKEN);
   attachCharacters(router, TOKEN, dataDir);
-  attachSharePages(app, { at: (p) => [p, `/sb${p}`], base: "/sb/", indexFile: path.join(dataDir, "index.html"), files: { genDir: path.join(dataDir, "gen"), cardDir: path.join(dataDir, "cards"), fontFile: FONT }, seoFile: path.join(dataDir, "seo-characters.json") });
+  attachSharePages(app, { at: (p) => [p, `/sb${p}`], base: "/sb/", indexFile: path.join(dataDir, "index.html"), files: { genDir: path.join(dataDir, "gen"), cardDir: path.join(dataDir, "cards"), fontFile: FONT } });
   server = http.createServer(app);
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
   port = (server.address() as { port: number }).port;
@@ -121,9 +120,9 @@ describe("a character's page", () => {
     expect(guests).not.toContain("Guest Maker");
   });
 
-  it("says noindex unless seo-characters.json lists it", async () => {
+  it("lets search engines index every character's page", async () => {
     expect(await (await get("/c/gen-ann-ok")).text()).not.toContain("noindex");
-    expect(await (await get("/c/gen-bob")).text()).toContain(`<meta name="robots" content="noindex" />`);
+    expect(await (await get("/c/gen-bob")).text()).not.toContain("noindex");
   });
 
   it("has a 1200x630 PNG card, made once and kept", async () => {
@@ -205,13 +204,13 @@ describe("the sitemap", () => {
     return [...(await res.text()).matchAll(/<loc>(.*?)<\/loc>/g)].map((m) => m[1]);
   };
 
-  it("is the front page and the listed characters that are shareable now: not a held or missing one, nor an unlisted one", async () => {
-    expect(await locs()).toEqual(["https://supersketchdudes.com/", "https://supersketchdudes.com/c/gen-ann-ok"]);
+  it("is the front page and every character that's shareable now, following holds without a restart", async () => {
+    const shareable = everyCharacter().filter(isShareable).map((e) => `https://supersketchdudes.com/c/${e.id}`);
+    expect(await locs()).toEqual(["https://supersketchdudes.com/", ...shareable]);
+    expect(await locs()).toContain("https://supersketchdudes.com/c/gen-ann-ok");
+    expect(await locs()).not.toContain("https://supersketchdudes.com/c/gen-ann-held");
     const xml = await (await get("/sb/sitemap.xml")).text();
     expect(xml).toContain(`<url><loc>https://supersketchdudes.com/c/gen-ann-ok</loc><lastmod>1970-01-01</lastmod></url>`);
-  });
-
-  it("follows seo-characters.json and holds without a restart", async () => {
     put(entry("gen-seo-later", bob.player.id, { createdAt: Date.UTC(2026, 10, 20, 23) }));
     expect(await locs()).toContain("https://supersketchdudes.com/c/gen-seo-later");
     expect(await (await get("/sitemap.xml")).text()).toContain("<lastmod>2026-11-20</lastmod>");
@@ -219,21 +218,6 @@ describe("the sitemap", () => {
     expect(await locs()).not.toContain("https://supersketchdudes.com/c/gen-seo-later");
     expect((await api("/characters/gen-seo-later/release", { method: "POST", token: true })).status).toBe(204);
     expect(await locs()).toContain("https://supersketchdudes.com/c/gen-seo-later");
-    const file = path.join(dataDir, "seo-characters.json");
-    const before = fs.readFileSync(file, "utf8");
-    fs.writeFileSync(file, JSON.stringify(["gen-bob"]));
-    expect(await locs()).toEqual(["https://supersketchdudes.com/", "https://supersketchdudes.com/c/gen-bob"]);
-    expect(await (await get("/c/gen-bob")).text()).not.toContain("noindex");
-    fs.writeFileSync(file, before);
-  });
-
-  it("keeps the server from starting without seo-characters.json, or with one that isn't a list of ids", () => {
-    const opts = (seoFile: string) => ({ at: (p: string) => [p], base: "/", indexFile: path.join(dataDir, "index.html"), files: { genDir: path.join(dataDir, "gen"), cardDir: path.join(dataDir, "cards"), fontFile: FONT }, seoFile });
-    expect(() => attachSharePages(express(), opts(path.join(dataDir, "nope.json")))).toThrow(/seo-characters|nope\.json/);
-    for (const [name, body] of [["obj.json", `{"ids":[]}`], ["num.json", `[1]`], ["path.json", `["../x"]`]]) {
-      fs.writeFileSync(path.join(dataDir, name), body);
-      expect(() => attachSharePages(express(), opts(path.join(dataDir, name))), name).toThrow(/JSON array of fighter ids/);
-    }
   });
 });
 

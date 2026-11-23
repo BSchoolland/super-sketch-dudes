@@ -96,7 +96,6 @@ const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
 const runDir = path.join(HERE, "runs", `${stamp}-${scenarioName}`);
 const dataDir = path.join(runDir, "data");
 fs.mkdirSync(path.join(dataDir, "gen"), { recursive: true });
-fs.writeFileSync(path.join(dataDir, "seo-characters.json"), "[]");
 for (const p of players) {
   const m = /\/gen\/(gen-[\w-]+)\//.exec(p.bundleUrl);
   if (!m) throw new Error(`${p.name}'s fighter isn't a generated one: ${p.bundleUrl}`);

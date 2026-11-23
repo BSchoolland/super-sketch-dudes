@@ -13,7 +13,6 @@ const SERVER_PORT = 3160, VITE_PORT = 5360, TOKEN = "forgeshots";
 const out = process.argv[2] ?? "/tmp/ssd-forge-shots";
 fs.mkdirSync(out, { recursive: true });
 const data = fs.mkdtempSync(path.join(os.tmpdir(), "forgeshots-"));
-fs.writeFileSync(path.join(data, "seo-characters.json"), "[]");
 const base = `http://localhost:${VITE_PORT}/`, server = `http://localhost:${SERVER_PORT}`;
 const children = [];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
