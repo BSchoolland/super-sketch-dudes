@@ -439,6 +439,11 @@ function releaseLedge(f: Fighter): void {
   f.ledgeCooldown = C.LEDGE_COOLDOWN;
 }
 
+const GROUND_ONLY = new Set<Action>([
+  "idle", "walk", "dash", "run", "runTurn", "skid", "crouch", "crouchStart", "jumpSquat", "land", "attackHold", "smashCharge",
+  "shield", "shieldDrop", "shieldStun", "parry", "spotDodge", "roll", "knockdown", "getup", "getupRoll", "tech", "techRoll",
+]);
+
 export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: InputFrame, stage: Stage): void {
   const def = defOf(f);
   const s = def.stats;
@@ -465,6 +470,13 @@ export function stepFighter(state: State, f: Fighter, input: InputFrame, prev: I
     f.hitlag--;
     if (f.hitlag === 0 && f.pending) applyPending(f, input);
     return;
+  }
+
+  // something lifted it off the ground (wind, a hook) without changing what it's doing: standing states have no gravity and never land
+  if (!f.grounded && f.ledge < 0 && GROUND_ONLY.has(f.action)) {
+    f.shieldHeld = false;
+    f.jumpsLeft = Math.min(f.jumpsLeft, s.jumps - 1);
+    setAction(f, "air");
   }
 
   f.frame++;
