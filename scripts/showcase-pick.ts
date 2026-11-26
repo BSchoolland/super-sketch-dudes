@@ -48,7 +48,7 @@ for (const c of list) {
 
 interface Fight {
   score: number; stage: string; seed: number; ids: string[]; names: string[]; secs: number;
-  real: boolean; selfKO: boolean; close: number; hits: number[]; moves: number[]; bigUses: number[]; bigLands: number[]; heavy: number; blocked: number; winner: number;
+  real: boolean; selfKO: boolean; close: number; hits: number[]; moves: number[]; bigKinds: number[]; bigUses: number[]; bigLands: number[]; heavy: number; blocked: number; winner: number;
 }
 
 const isBig = (m: string) => /special|smash/i.test(m);
@@ -56,12 +56,12 @@ const isBig = (m: string) => /special|smash/i.test(m);
 function fight(ids: string[], stage: string, seed: number, tier: number): Fight {
   const s = createMatch({ stage, players: ids.map((fighter) => ({ fighter, cpu: tier })), rules: { stocks: 1, time: 0 }, seed });
   const shows = ids.map((id) => showOf(roster[id]).big);
-  const moves = [new Set<string>(), new Set<string>()], bigUses = [0, 0], hits = [0, 0], bigLands = [0, 0];
+  const moves = [new Set<string>(), new Set<string>()], bigKinds = [new Set<string>(), new Set<string>()], bigUses = [0, 0], hits = [0, 0], bigLands = [0, 0];
   let ko: { slot: number; by: number } | null = null, heavy = 0, blocked = 0;
   while (!s.ended && s.frame < MAX_FRAMES) {
     step(s, [cpuInput(s, 0, tier), cpuInput(s, 1, tier)]);
     for (const e of s.events) {
-      if (e.t === "move") { moves[e.slot].add(e.move); if (isBig(e.move)) bigUses[e.slot]++; }
+      if (e.t === "move") { moves[e.slot].add(e.move); if (isBig(e.move)) { bigUses[e.slot]++; bigKinds[e.slot].add(e.move); } }
       if (e.t === "hit" && e.victim >= 0) {
         hits[e.attacker]++;
         const big = shows[e.attacker];
@@ -79,10 +79,11 @@ function fight(ids: string[], stage: string, seed: number, tier: number): Fight 
   const close = Math.min(...dealt) / Math.max(1, ...dealt);
   const variety = Math.min(moves[0].size, moves[1].size) + 0.5 * Math.max(moves[0].size, moves[1].size);
   const length = secs < 12 ? secs / 12 : secs > 45 ? 45 / secs : 1;
-  const score = real ? (variety * 2 + Math.min(...bigUses) * 3 + Math.min(...hits) * 0.5 + close * 10) * length : 0;
+  // distinct showpieces and landed big hits count, raw special counts are capped so one spammed projectile can't win
+  const score = real ? (variety * 3 + Math.min(...bigKinds.map((k) => k.size)) * 6 + Math.min(...bigLands) * 4 + Math.min(8, ...bigUses) + Math.min(...hits) * 0.3 + close * 10) * length : 0;
   return {
     score: +score.toFixed(1), stage, seed, ids, names: ids.map((x) => names[x]), secs: +secs.toFixed(1), real, selfKO: !!ko && !real,
-    close: +close.toFixed(2), hits, moves: moves.map((x) => x.size), bigUses, bigLands, heavy, blocked, winner: s.winner,
+    close: +close.toFixed(2), hits, moves: moves.map((x) => x.size), bigKinds: bigKinds.map((k) => k.size), bigUses, bigLands, heavy, blocked, winner: s.winner,
   };
 }
 
