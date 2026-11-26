@@ -18,7 +18,10 @@ sketch-battle/
     fighters/index.ts  the roster
     stages/          one file per stage: geometry (platforms, ledges, blast zones); registerStage for player maps
     maps.ts          player-made maps: the editor's document, its validation, and the stage derived from it
-    cpu.ts           bot controller: reads state, returns an input record
+    cpu.ts           bot controller: reads state, returns an input record (the difficulty tiers)
+    cpu-kit.ts, cpu-survive.ts  what every CPU sees and presses; DI, the ledge and recovery
+    cpu-showman.ts   the showman (SHOWMAN_TIER, cpu=showman): fights for the camera, for promo clips; cpu-show.ts
+                     is what it finds cool in a fighter, cpu-launch.ts where a hit would send someone
     rules.ts         stocks, time, KO, sudden death
   client/
     index.html, vite.config.ts (base "/")
@@ -491,6 +494,9 @@ sqlite dependency to lean on; `server/eventlog.ts` reads it back, newest snapsho
   skips the menus; `&training=1` starts training mode; `?sheet=sable` opens the pose sheet.
 - `npm run check`: typecheck + lint-determinism + vitest.
 - `scripts/stagecheck.ts`: CPU matches per stage, with the share of KOs that were self-destructs.
+- `tsx scripts/showcase-pick.ts [fighters] [seeds] [stages] [tiers=5,showman]`: 1-stock CPU fights between the most played
+  community characters, scored for a promo clip; a summary per tier on the same matchups and seeds, the best fights as JSON.
+  A pick is recorded with `?quick=1&p1=cpu&p2=cpu&cpu=showman&stocks=1&seed=<seed>&stage=<stage>&f=<ids>`.
 - `scripts/deploy.sh`: build, rsync to personal-server as user `ssd` (`ssd-server` in ~/.ssh/config: /home/ssd/sketch-battle), its own pm2 `sketch-battle` on 3008.
   `.github/workflows/deploy.yml` runs it on every push to master, over SSH with the `DEPLOY_SSH_KEY` secret.
 

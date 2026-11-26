@@ -2,6 +2,8 @@
 
 export const CPU_TIERS = ["PATHETIC", "WEAK", "NORMAL", "FORMIDABLE", "UNFAIR"] as const;
 export const DEFAULT_TIER = 3;
+/** Not a difficulty: the CPU that fights to put on a show (cpu-showman.ts), for promo clips. Nothing in the game offers it. */
+export const SHOWMAN_TIER = 100;
 
 export interface Skill {
   /** Frames between something happening to the opponent and the CPU seeing it. */

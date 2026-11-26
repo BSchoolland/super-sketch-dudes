@@ -1,6 +1,8 @@
 import { createMatch, step, cloneState, type MatchConfig } from "../../shared/sim";
 import { cpuInput } from "../../shared/cpu";
 import { profileOf } from "../../shared/cpu-profile";
+import { showOf } from "../../shared/cpu-show";
+import { SHOWMAN_TIER } from "../../shared/cpu-skill";
 import { defOf } from "../../shared/fighter";
 import { B, EMPTY_INPUT, type InputFrame } from "../../shared/input";
 import type { GameEvent, State } from "../../shared/types";
@@ -34,7 +36,11 @@ export class LocalMatch implements MatchDriver {
     this.state = createMatch(cfg);
     this.sources = sources;
     // the CPU probes each fighter's specials on first use; do it now rather than in the first frame
-    sources.forEach((s, i) => { if (!s.device && s.cpu > 0) profileOf(defOf(this.state.fighters[i])); });
+    sources.forEach((s, i) => {
+      if (s.device || s.cpu <= 0) return;
+      profileOf(defOf(this.state.fighters[i]));
+      if (s.cpu === SHOWMAN_TIER) showOf(defOf(this.state.fighters[i]));
+    });
     this.lastInputs = sources.map(() => ({ ...EMPTY_INPUT }));
   }
   sample(): InputFrame[] {

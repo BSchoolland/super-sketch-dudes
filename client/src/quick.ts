@@ -5,7 +5,7 @@ import { fighterLoad } from "./gen";
 import { houseChoice, isHouseId } from "./fighters";
 import { HOUSE_ROSTER } from "../../shared/house";
 import { roster } from "../../shared/fighters/index";
-import { DEFAULT_TIER } from "../../shared/cpu-skill";
+import { DEFAULT_TIER, SHOWMAN_TIER } from "../../shared/cpu-skill";
 import { VersusScreen } from "./screens/versus";
 import type { Screen } from "./screens/ui";
 
@@ -23,13 +23,13 @@ export async function loadFighters(ids: string[]): Promise<void> {
 
 /**
  * ?quick=1&p2=cpu&cpu=9&f=slugbert,woodstove&stage=rooftops&seed=3&boxes=1 skips the menus into a
- * match; &training=1 makes it training. No sign-in needed.
+ * match; &training=1 makes it training; cpu=showman is the CPU that fights for the camera (promo clips). No sign-in needed.
  */
 export async function quickMatch(params: URLSearchParams, exit: () => Screen): Promise<VersusScreen> {
   const ids = (params.get("f") ?? "slugbert,woodstove").split(",").filter(Boolean);
   await loadFighters(ids);
   const p2 = params.get("p2") ?? "cpu";
-  const cpu = Number(params.get("cpu") ?? DEFAULT_TIER);
+  const cpu = params.get("cpu") === "showman" ? SHOWMAN_TIER : Number(params.get("cpu") ?? DEFAULT_TIER);
   const p1 = params.get("p1") ?? "kb1";
   const sources: SlotSource[] = ids.map((_, i) =>
     i === 0 ? (p1 === "cpu" ? { device: null, cpu } : { device: p1 as DeviceId, cpu: 0 })
