@@ -3,7 +3,7 @@ import { library } from "./account";
 import { site } from "./base";
 import { fighterLoad, type FighterLoad } from "./gen";
 import { roster } from "../../shared/fighters/index";
-import { HOUSE_ROSTER, houseBundlePath, type HouseId } from "../../shared/house";
+import { HOUSE_ROSTER, houseBundlePath, houseStartersIn, type HouseId } from "../../shared/house";
 import type { ForgeStanding, LibraryEntry } from "../../shared/account";
 import type { FighterDef } from "../../shared/types";
 
@@ -75,7 +75,9 @@ export function forgetLibrary(): void {
   myLibrary.forge = null;
 }
 
-/** What a player can fight with: their ready characters, then the house. */
+/** What a player can fight with: their ready characters, then the house (less any they have as a starter). */
 export function allChoices(): { mine: FighterChoice[]; house: FighterChoice[] } {
-  return { mine: libraryChoices(myLibrary.entries ?? []), house: houseChoices() };
+  const mine = libraryChoices(myLibrary.entries ?? []);
+  const twice = houseStartersIn(mine.map((c) => c.id));
+  return { mine, house: houseChoices().filter((c) => !twice.has(c.id as HouseId)) };
 }

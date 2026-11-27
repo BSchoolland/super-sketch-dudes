@@ -7,8 +7,15 @@ export const HOUSE_ROSTER = [
   { id: "woodstove", name: "WOODSTOVE" },
   { id: "slugbert", name: "SLUGBERT" },
   { id: "rocket", name: "ROCKET" },
-  { id: "wizard", name: "FIRE WIZARD" },
+  // the same character as the FIRE WIZARD starter every library shows
+  { id: "wizard", name: "FIRE WIZARD", starter: "gen-3358-bba1c9" },
 ] as const;
 export type HouseId = (typeof HOUSE_ROSTER)[number]["id"];
 /** Bundle URL relative to the site base (cell URLs inside the bundle are relative to it too). */
 export const houseBundlePath = (id: HouseId): string => `house/${id}/bundle.json`;
+
+/** The house fighters made from a starter in `ids`: the same character, so a roster shows only the starter. */
+export function houseStartersIn(ids: Iterable<string>): Set<HouseId> {
+  const have = new Set(ids);
+  return new Set(HOUSE_ROSTER.flatMap((h) => ("starter" in h && have.has(h.starter) ? [h.id] : [])));
+}
